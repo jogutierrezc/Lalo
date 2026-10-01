@@ -68,7 +68,8 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
   }
 
   const boundedText = trimmedText.slice(0, MAX_TTS_LENGTH);
-  const apiKey = process.env.FISH_AUDIO_API_KEY;
+  const rawKey = process.env.FISH_AUDIO_API_KEY || '';
+  const apiKey = rawKey.replace(/^["']|["']$/g, '').trim();
 
   // Si no hay API key en .env, devolvemos el audio de simulación sin fallar
   if (!apiKey) {
@@ -86,10 +87,10 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
   }
 
   const selectedModel = model || 's2.1-pro-free';
-  console.log(`[TTS Engine] Enviando a Fish Audio V1 (${selectedModel}): "${boundedText.slice(0, 30)}..."`);
+  console.log(`[TTS Engine] Enviando a Fish Audio V1 (${selectedModel}, ref: ${reference_id || 'default'}): "${boundedText.slice(0, 30)}..."`);
 
   try {
-    const fishResponse = await fetch('https://api.fish.audio/v1/tts', {
+    let fishResponse = await fetch('https://api.fish.audio/v1/tts', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -104,6 +105,26 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
         latency: 'normal',
       }),
     });
+
+    // Si la llamada con voz personalizada falla (ej. 400 por ID no existente),
+    // reintentamos automáticamente con la voz base del modelo
+    if (!fishResponse.ok && reference_id) {
+      console.warn(`[Fish Audio] Voz personalizada "${reference_id}" no respondió OK (${fishResponse.status}). Reintentando con voz base...`);
+      fishResponse = await fetch('https://api.fish.audio/v1/tts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          model: selectedModel,
+        },
+        body: JSON.stringify({
+          text: boundedText,
+          format: 'mp3',
+          normalize: true,
+          latency: 'normal',
+        }),
+      });
+    }
 
     if (!fishResponse.ok) {
       console.warn(`[Fish Audio API] Retornó status ${fishResponse.status}. Usando fallback para no interrumpir el stream.`);

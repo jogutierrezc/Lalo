@@ -16,15 +16,49 @@ import { SanitizedTTSMessage } from '../utils/twitchSanitizer';
 import { loadSettings } from '../types/settings';
 import { MessageSquare, Volume2, Radio, VolumeX } from 'lucide-react';
 
-export const Widget: React.FC = () => {
-  const [settings, setSettings] = useState(loadSettings);
+function getURLParam(key: string): string | null {
+  const searchVal = new URLSearchParams(window.location.search).get(key);
+  if (searchVal) return searchVal;
 
-  // Leer canal desde query params (?channel=laloplay_) o desde configuración guardada
-  const activeChannel = new URLSearchParams(window.location.search).get('channel') || settings.channel || 'laloplay_';
+  const hash = window.location.hash;
+  const qIndex = hash.indexOf('?');
+  if (qIndex !== -1) {
+    return new URLSearchParams(hash.slice(qIndex)).get(key);
+  }
+  return null;
+}
+
+export const Widget: React.FC = () => {
+  const [settings, setSettings] = useState(() => {
+    const base = loadSettings();
+    const channelParam = getURLParam('channel');
+    const voiceParam = getURLParam('voice') || getURLParam('reference_id');
+    const modelParam = getURLParam('model');
+    const announceParam = getURLParam('announce');
+
+    return {
+      ...base,
+      channel: channelParam || base.channel || 'laloplay_',
+      referenceId: voiceParam || base.referenceId,
+      model: modelParam || base.model || 's2.1-pro-free',
+      announceSender: announceParam !== null ? announceParam === 'true' || announceParam === '1' : base.announceSender,
+    };
+  });
+
+  const activeChannel = settings.channel || 'laloplay_';
 
   // Sincronizar cambios en localStorage
   useEffect(() => {
-    const handleStorage = () => setSettings(loadSettings());
+    const handleStorage = () => {
+      const updated = loadSettings();
+      setSettings((prev) => ({
+        ...prev,
+        ...updated,
+        channel: getURLParam('channel') || updated.channel,
+        referenceId: getURLParam('voice') || getURLParam('reference_id') || updated.referenceId,
+        model: getURLParam('model') || updated.model,
+      }));
+    };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
   }, []);

@@ -45,8 +45,8 @@ export const Dashboard: React.FC = () => {
   const [testUser, setTestUser] = useState('SuperViewer');
   const [testPreview, setTestPreview] = useState<string | null>(null);
 
-  // URL del Widget para OBS
-  const widgetUrl = `${window.location.origin}/#widget`;
+  // URL del Widget para OBS (con parámetros de canal, voz y modelo incorporados)
+  const widgetUrl = `${window.location.origin}/widget?channel=${encodeURIComponent(settings.channel)}&voice=${encodeURIComponent(settings.referenceId)}&model=${encodeURIComponent(settings.model || 's2.1-pro-free')}`;
 
   // Guardar configuración
   const handleSave = () => {
