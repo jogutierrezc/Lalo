@@ -51,11 +51,11 @@ describe('twitchSanitizer — Trigger !s y Reglas de Sanitización', () => {
     expect(result?.cleanText).toBe('vamonoss yaa');
   });
 
-  it('debe truncar mensajes que superen los 200 caracteres de longitud', () => {
-    const longText = '!s ' + 'palabra '.repeat(40); // > 280 caracteres
+  it('debe truncar mensajes que superen los 1000 caracteres de longitud', () => {
+    const longText = '!s ' + 'palabra '.repeat(160); // > 1280 caracteres
     const result = sanitizeTwitchMessage(longText);
     expect(result).not.toBeNull();
-    expect(result?.cleanText.length).toBeLessThanOrEqual(205);
+    expect(result?.cleanText.length).toBeLessThanOrEqual(1005);
     expect(result?.cleanText.endsWith('...')).toBe(true);
   });
 

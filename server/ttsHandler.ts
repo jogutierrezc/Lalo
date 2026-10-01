@@ -8,7 +8,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const MAX_TTS_LENGTH = 300;
+const MAX_TTS_LENGTH = 1200;
 
 export interface TTSProcessResult {
   status: number;

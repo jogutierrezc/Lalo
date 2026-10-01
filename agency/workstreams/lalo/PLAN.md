@@ -36,3 +36,11 @@
 - [x] 6.1: Unit testing of `twitchSanitizer` with Vitest (8/8 passed).
 - [x] 6.2: `reviewer_code` code quality gate (race condition fix, GSAP unmount cleanup, blob URL revocation).
 - [x] 6.3: `reviewer_security` security audit (CORS restriction, server-only secret storage, payload length limit, CSS injection prevention).
+
+## Phase 7: Free Model Support, 1000-Char Limit & Live Auto-Update
+- [x] 7.1: Integration of Fish Audio `s2.1-pro-free` model with custom voice reference (`37f9f4eec7624089a49b188d47588f2c`).
+- [x] 7.2: Expansion of TTS reading limit to 1000 characters (`twitchSanitizer`, server proxy, Vercel serverless function).
+- [x] 7.3: Adaptive card UI with dynamic font scaling (text-lg / text-base / text-sm) and scroll containment for OBS.
+- [x] 7.4: Resilient watchdog timer scaling (proportional to message length up to 180s) preventing premature cutoffs.
+- [x] 7.5: Zero-touch OBS auto-updater checking deployment build hash via `/api/version` to reload active browser sources automatically.
+

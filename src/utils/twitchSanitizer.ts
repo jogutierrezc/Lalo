@@ -37,8 +37,8 @@ export interface SanitizedTTSMessage {
 }
 
 const TRIGGER_PREFIX = '!s ';
-const MAX_TTS_LENGTH = 200;
-const MAX_RAW_INPUT_LENGTH = 500;
+const MAX_TTS_LENGTH = 1000;
+const MAX_RAW_INPUT_LENGTH = 2500;
 
 // Expresión regular para validar color hexadecimal seguro
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;
@@ -114,11 +114,11 @@ export function sanitizeTwitchMessage(
     return null;
   }
 
-  // 9. Limitar longitud máxima a MAX_TTS_LENGTH (200 caracteres)
+  // 9. Limitar longitud máxima a MAX_TTS_LENGTH (1000 caracteres)
   if (text.length > MAX_TTS_LENGTH) {
     const sub = text.slice(0, MAX_TTS_LENGTH);
     const lastSpace = sub.lastIndexOf(' ');
-    text = (lastSpace > 160 ? sub.slice(0, lastSpace) : sub).trim() + '...';
+    text = (lastSpace > MAX_TTS_LENGTH - 40 ? sub.slice(0, lastSpace) : sub).trim() + '...';
   }
 
   const username = meta?.username || 'viewer';

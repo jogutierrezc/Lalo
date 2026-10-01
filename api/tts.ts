@@ -12,7 +12,7 @@
  * - CORS universal y compatibilidad total con Node.js en Vercel Serverless.
  */
 
-const MAX_TTS_LENGTH = 300;
+const MAX_TTS_LENGTH = 1200;
 
 interface TTSProcessResult {
   status: number;

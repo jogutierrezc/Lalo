@@ -297,7 +297,7 @@ export const Widget: React.FC = () => {
 
       try {
         const controller = new AbortController();
-        const fetchTimeout = setTimeout(() => controller.abort(), 12000);
+        const fetchTimeout = setTimeout(() => controller.abort(), 40000);
 
         // Preparar texto a sintetizar anunciando el nombre del usuario si está habilitado
         const cleanUserName = (message.displayName || message.username || 'Usuario')
@@ -360,8 +360,8 @@ export const Widget: React.FC = () => {
           finalizePlayback();
         };
 
-        // Watchdog de seguridad (máximo 25s o proporcional al texto)
-        const maxDurationMs = Math.max(8000, message.cleanText.length * 200);
+        // Watchdog de seguridad (proporcional al texto de hasta 1000 caracteres)
+        const maxDurationMs = Math.max(15000, message.cleanText.length * 220);
         watchdogTimer = setTimeout(() => {
           console.warn('[Audio Watchdog] Tiempo límite alcanzado. Pasando al siguiente mensaje.');
           finalizePlayback();
@@ -418,7 +418,7 @@ export const Widget: React.FC = () => {
               }
             };
 
-            const speechTimeoutMs = Math.max(3500, Math.min(15000, message.cleanText.length * 120));
+            const speechTimeoutMs = Math.max(8000, Math.min(180000, message.cleanText.length * 180));
             const speechWatchdog = setTimeout(finishSpeech, speechTimeoutMs);
 
             utterance.onstart = () => {
@@ -509,7 +509,7 @@ export const Widget: React.FC = () => {
       {currentMessage && (
         <div
           ref={cardRef}
-          className="max-w-xl w-full mx-auto glass-panel rounded-2xl p-5 shadow-glass border border-white/10 relative overflow-hidden backdrop-blur-xl pointer-events-auto"
+          className="max-w-xl md:max-w-2xl w-full mx-auto glass-panel rounded-2xl p-5 shadow-glass border border-white/10 relative overflow-hidden backdrop-blur-xl pointer-events-auto"
           style={{
             boxShadow: `0 12px 40px -10px ${currentMessage.userColor}33, 0 0 20px -2px rgba(145, 70, 255, 0.15)`,
           }}
@@ -523,7 +523,7 @@ export const Widget: React.FC = () => {
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-3">
               <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-md text-sm uppercase ring-2 ring-white/10"
+                className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-md text-sm uppercase ring-2 ring-white/10 shrink-0"
                 style={{ backgroundColor: currentMessage.userColor || '#9146FF' }}
               >
                 {currentMessage.displayName.charAt(0)}
@@ -552,7 +552,7 @@ export const Widget: React.FC = () => {
             </div>
 
             {/* Estado del ecualizador */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 shrink-0">
               {isAudioLoading ? (
                 <div className="flex items-center gap-1.5 text-xs text-purple-300 animate-pulse">
                   <Volume2 className="w-4 h-4 text-purple-400 animate-spin" />
@@ -573,8 +573,16 @@ export const Widget: React.FC = () => {
             </div>
           </div>
 
-          <div className="relative">
-            <p className="text-zinc-100 text-lg font-medium leading-relaxed tracking-normal break-words drop-shadow-sm">
+          <div className="relative max-h-64 overflow-y-auto no-scrollbar">
+            <p
+              className={`text-zinc-100 font-medium leading-relaxed tracking-normal break-words drop-shadow-sm ${
+                currentMessage.cleanText.length > 400
+                  ? 'text-sm'
+                  : currentMessage.cleanText.length > 200
+                  ? 'text-base'
+                  : 'text-lg'
+              }`}
+            >
               "{currentMessage.cleanText}"
             </p>
           </div>
