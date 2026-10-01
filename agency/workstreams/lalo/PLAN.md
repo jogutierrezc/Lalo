@@ -67,3 +67,8 @@
 - [x] 10.5: Adaptive Visual Container & Typography: Upgraded card to `max-h-[28rem]` with fluid font scaling (`text-xs` for >650 chars down from `text-lg`).
 - [x] 10.6: Kinetic GSAP Auto-Scroll: Dynamically advances the text container smoothly down to the bottom while audio is speaking if text exceeds card height.
 - [x] 10.7: Extended Safety Watchdog: Proportional watchdog timer (`Math.max(20000, text.length * 250)`) ensuring 1000-character audio plays completely to the very last word.
+## Phase 11: Singing Voice Optimization & Prosody Alignment
+- [x] 11.1: Spanish Singing Tag Expansion: Added aliases (`canta`, `cantar`, `cantando`, `canción`, `cancion`, `tarareo`, `tararear`, `musica`, `música`, `melodia`, `melodía`, `musical`) to `emotionMapper.ts`, `api/tts.ts`, and `server/ttsHandler.ts`.
+- [x] 11.2: Dedicated Singing Phrasing: Formatted announcement as `"{user} canta."` with period sentence boundary instead of colon to prevent breaking Fish Audio's musical prosody.
+- [x] 11.3: Natural Song Preview & Test Defaults: Updated Dashboard "🎵 Cantando" button to prefill a realistic singing verse (`Cumpleaños feliz, te deseamos a ti, que los cumplas muy feliz`) instead of dry prose.
+- [x] 11.4: Unit Test Coverage: Added verification test for all singing variants in `tests/emotionMapper.test.ts` (17/17 tests passing).

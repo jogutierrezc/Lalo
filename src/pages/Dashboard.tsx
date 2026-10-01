@@ -406,7 +406,9 @@ export const Dashboard: React.FC = () => {
                       type="button"
                       onClick={() => {
                         const tag = emo.example;
-                        const defaultMsg = '¡Esto es una prueba de voz con emoción en el stream!';
+                        const defaultMsg = emo.tag === 'singing'
+                          ? 'Cumpleaños feliz, te deseamos a ti, que los cumplas muy feliz.'
+                          : '¡Esto es una prueba de voz con emoción en el stream!';
                         if (!testText.startsWith('!s ')) {
                           setTestText(`!s ${tag} ${defaultMsg}`);
                         } else {
@@ -457,9 +459,11 @@ export const Dashboard: React.FC = () => {
                   <div className="pt-2 border-t border-white/5">
                     <span className="text-[10px] uppercase font-mono text-purple-400 block mb-0.5">Audio TTS (Fish Audio S2):</span>
                     <p className="text-purple-200 italic font-mono text-xs">
-                      "{(settings.announceTemplate || '{user} dice: {message}')
-                        .replace('{user}', testUser || 'Streamer')
-                        .replace('{message}', normalizeTextForFishAudio(testPreview))}"
+                      "{detectedEmotion?.tag === 'singing'
+                        ? `${testUser || 'Streamer'} canta. [singing] ${normalizeTextForFishAudio(testPreview).replace(/^\[singing\]\s*/i, '')}`
+                        : (settings.announceTemplate || '{user} dice: {message}')
+                            .replace('{user}', testUser || 'Streamer')
+                            .replace('{message}', normalizeTextForFishAudio(testPreview))}"
                     </p>
                   </div>
                 )}

@@ -53,5 +53,18 @@ describe('emotionMapper — Mapeo de emociones y expresiones', () => {
     expect(AVAILABLE_EMOTIONS.length).toBeGreaterThanOrEqual(10);
     expect(AVAILABLE_EMOTIONS.some((e) => e.label === 'Feliz')).toBe(true);
     expect(AVAILABLE_EMOTIONS.some((e) => e.label === 'Susurro')).toBe(true);
+    expect(AVAILABLE_EMOTIONS.some((e) => e.label === 'Cantando')).toBe(true);
+  });
+
+  it('reconoce múltiples variantes de la habilidad cantada ([canto], [cantar], [canción], [música])', () => {
+    expect(extractPrimaryEmotion('[canto] esta es una canción')?.tag).toBe('singing');
+    expect(extractPrimaryEmotion('[canta] esta es una canción')?.tag).toBe('singing');
+    expect(extractPrimaryEmotion('[cantar] esta es una canción')?.tag).toBe('singing');
+    expect(extractPrimaryEmotion('[canción] esta es una canción')?.tag).toBe('singing');
+    expect(extractPrimaryEmotion('[música] esta es una canción')?.tag).toBe('singing');
+    expect(extractPrimaryEmotion('[singing] this is a song')?.tag).toBe('singing');
+
+    const normalized = normalizeTextForFishAudio('[cantar] Cumpleaños feliz [música] la la la');
+    expect(normalized).toBe('[singing] Cumpleaños feliz [singing] la la la');
   });
 });

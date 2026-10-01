@@ -511,12 +511,28 @@ export const Widget: React.FC = () => {
         // Traducir etiquetas de emoción al formato canónico en inglés para Fish Audio S2 (ej. [feliz] -> [happy])
         const normalizedMessageText = normalizeTextForFishAudio(message.cleanText);
 
-        const template = settings.announceTemplate || '{user} dice: {message}';
-        const spokenText = settings.announceSender !== false
-          ? template
+        const isSinging = message.emotion?.tag === 'singing';
+        let spokenText: string;
+
+        if (settings.announceSender !== false) {
+          if (isSinging) {
+            // Para canciones: anunciar que el usuario "canta" y delimitar con punto
+            // para que Fish Audio inicie la prosodia musical limpia desde el inicio del verso
+            const singingTemplate = settings.announceTemplate
+              ? settings.announceTemplate.replace(/dice:?/i, 'canta.')
+              : '{user} canta.';
+            const intro = singingTemplate.replace('{user}', cleanUserName).replace('{message}', '').trim();
+            const cleanSong = normalizedMessageText.replace(/^\[singing\]\s*/i, '');
+            spokenText = `${intro} [singing] ${cleanSong}`.trim();
+          } else {
+            const template = settings.announceTemplate || '{user} dice: {message}';
+            spokenText = template
               .replace('{user}', cleanUserName)
-              .replace('{message}', normalizedMessageText)
-          : normalizedMessageText;
+              .replace('{message}', normalizedMessageText);
+          }
+        } else {
+          spokenText = normalizedMessageText;
+        }
 
         // Llamada al endpoint backend con el modelo gratuito s2.1-pro-free
         const response = await fetch('/api/tts', {
