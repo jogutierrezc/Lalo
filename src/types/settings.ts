@@ -14,7 +14,7 @@ export interface TTSSettings {
 export const DEFAULT_SETTINGS: TTSSettings = {
   channel: 'laloplay_',
   model: 's2.1-pro-free',
-  referenceId: '7f92f8afb8ec43bf81429cc1c9199cb1',
+  referenceId: '37f9f4eec7624089a49b188d47588f2c', // Voz oficial clonada de LaloPlay
   volume: 0.85,
   speed: 1.0,
   theme: 'glass-dark',
@@ -30,7 +30,16 @@ export function loadSettings(): TTSSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+
+    // Migración automática de valores antiguos almacenados en caché de OBS
+    if (parsed.referenceId === '7f92f8afb8ec43bf81429cc1c9199cb1' || !parsed.referenceId) {
+      parsed.referenceId = '37f9f4eec7624089a49b188d47588f2c';
+    }
+    if (parsed.model === 's2.1-pro' || !parsed.model) {
+      parsed.model = 's2.1-pro-free';
+    }
+    return parsed;
   } catch {
     return DEFAULT_SETTINGS;
   }

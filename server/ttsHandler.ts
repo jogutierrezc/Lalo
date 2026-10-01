@@ -9,6 +9,71 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const MAX_TTS_LENGTH = 1200;
+const LALOPLAY_CLONED_VOICE = '37f9f4eec7624089a49b188d47588f2c';
+const OLD_PRESET_VOICE = '7f92f8afb8ec43bf81429cc1c9199cb1';
+
+const EMOTION_MAP: Record<string, string> = {
+  feliz: 'happy',
+  alegre: 'happy',
+  contento: 'happy',
+  happy: 'happy',
+  susurro: 'whispering',
+  susurrando: 'whispering',
+  whisper: 'whispering',
+  whispering: 'whispering',
+  enojado: 'angry',
+  enfadado: 'angry',
+  molesto: 'angry',
+  furioso: 'angry',
+  angry: 'angry',
+  triste: 'sad',
+  tristeza: 'sad',
+  sad: 'sad',
+  risa: 'laughing',
+  riendo: 'laughing',
+  laugh: 'laughing',
+  laughing: 'laughing',
+  grito: 'shouting',
+  gritando: 'shouting',
+  shout: 'shouting',
+  shouting: 'shouting',
+  llorando: 'crying',
+  llanto: 'crying',
+  cry: 'crying',
+  crying: 'crying',
+  miedo: 'scared',
+  asustado: 'scared',
+  scared: 'scared',
+  emocionado: 'excited',
+  hype: 'excited',
+  excited: 'excited',
+  sorprendido: 'surprised',
+  surprised: 'surprised',
+  canto: 'singing',
+  cantando: 'singing',
+  sing: 'singing',
+  singing: 'singing',
+  calmado: 'calm',
+  tranquilo: 'calm',
+  calm: 'calm',
+  suspiro: 'sigh',
+  sigh: 'sigh',
+  bostezo: 'yawn',
+  sueno: 'yawn',
+  sueño: 'yawn',
+  yawn: 'yawn',
+  nervioso: 'nervous',
+  nervous: 'nervous',
+};
+
+function normalizeServerText(text: string): string {
+  if (!text || !text.includes('[') || !text.includes(']')) return text;
+  return text.replace(/\[([a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30})\]/g, (match, raw) => {
+    const key = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const mapped = EMOTION_MAP[key];
+    return mapped ? `[${mapped}]` : match;
+  });
+}
 
 export interface TTSProcessResult {
   status: number;
@@ -17,14 +82,15 @@ export interface TTSProcessResult {
   headers?: Record<string, string>;
 }
 
-export async function processTTSRequest(text: string, reference_id?: string, model = 's2.1-pro-free'): Promise<TTSProcessResult> {
+export async function processTTSRequest(text: string, reference_id?: string, _model = 's2.1-pro-free'): Promise<TTSProcessResult> {
   const trimmedText = (text || '').trim();
 
   if (!trimmedText) {
     throw new Error('Parámetro text requerido');
   }
 
-  const boundedText = trimmedText.slice(0, MAX_TTS_LENGTH);
+  // Normalizar emociones en servidor para compatibilidad total con enlaces antiguos en stream
+  const boundedText = normalizeServerText(trimmedText.slice(0, MAX_TTS_LENGTH));
   const rawKey = process.env.FISH_AUDIO_API_KEY || '';
   const apiKey = rawKey.replace(/^["']|["']$/g, '').trim();
 
@@ -32,12 +98,17 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
     throw new Error('FISH_AUDIO_API_KEY no configurada en el servidor');
   }
 
-  // Sanitización de modelo y reference_id (evita que un punto final en la URL como "model=s2.1-pro-free." cause error 402 en Fish Audio)
-  const rawModel = (model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
-  const selectedModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
-  const cleanRefId = (reference_id || '').trim().replace(/[.,;/\\]+$/, '');
+  // Sanitización de modelo: forzar siempre s2.1-pro-free
+  const selectedModel = 's2.1-pro-free';
 
-  console.log(`[TTS Engine] Enviando a Fish Audio V1 (${selectedModel}, ref: ${cleanRefId || 'default'}): "${boundedText.slice(0, 30)}..."`);
+  // Sanitización de reference_id: si viene de un enlace antiguo sin voz o con voz vieja,
+  // usar SIEMPRE la voz clonada oficial de LaloPlay (37f9f4ee...)
+  const cleanRefId = (reference_id || '').trim().replace(/[.,;/\\]+$/, '');
+  const effectiveRefId = (!cleanRefId || cleanRefId === OLD_PRESET_VOICE || cleanRefId === 'default' || cleanRefId === 'undefined')
+    ? LALOPLAY_CLONED_VOICE
+    : cleanRefId;
+
+  console.log(`[TTS Engine] Enviando a Fish Audio V1 (${selectedModel}, ref: ${effectiveRefId}): "${boundedText.slice(0, 30)}..."`);
 
   try {
     let fishResponse = await fetch('https://api.fish.audio/v1/tts', {
@@ -49,7 +120,7 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
       },
       body: JSON.stringify({
         text: boundedText,
-        reference_id: cleanRefId || undefined,
+        reference_id: effectiveRefId,
         format: 'mp3',
         normalize: true,
         latency: 'normal',

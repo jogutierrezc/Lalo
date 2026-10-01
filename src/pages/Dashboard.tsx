@@ -35,6 +35,7 @@ import {
 
 // Voces de referencia de muestra de Fish Audio (o custom reference_ids)
 const PRESET_VOICES = [
+  { id: '37f9f4eec7624089a49b188d47588f2c', name: '🎙️ Voz Oficial Clonada (LaloPlay)', lang: 'es' },
   { id: '7f92f8afb8ec43bf81429cc1c9199cb1', name: 'Español — Narrador Dinámico (Voz 1)', lang: 'es-ES' },
   { id: '9f5e2786a4104724a2efdc22b31f7cf6', name: 'Español — Amigable & Streamer (Voz 2)', lang: 'es-LATAM' },
   { id: 'e1d2c3b4a5f607182930415263748596', name: 'Español — Robot Cyberpunk AI', lang: 'es' },

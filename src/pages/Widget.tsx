@@ -51,21 +51,30 @@ function renderMessageContent(text: string) {
   });
 }
 
+const LALOPLAY_DEFAULT_VOICE = '37f9f4eec7624089a49b188d47588f2c';
+const OLD_PRESET_VOICE = '7f92f8afb8ec43bf81429cc1c9199cb1';
+
 export const Widget: React.FC = () => {
   const [settings, setSettings] = useState(() => {
     const base = loadSettings();
-    const channelParam = getURLParam('channel');
-    const voiceParam = getURLParam('voice') || getURLParam('reference_id');
-    const modelParam = getURLParam('model');
-    const announceParam = getURLParam('announce');
+    const channelParam = getURLParam('channel') || getURLParam('c');
+    const voiceParam = getURLParam('voice') || getURLParam('reference_id') || getURLParam('v');
+    const modelParam = getURLParam('model') || getURLParam('m');
+    const announceParam = getURLParam('announce') || getURLParam('a');
 
     const rawModel = (modelParam || base.model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
     const cleanModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
 
+    // Resolver voz: si no se especificó o es la antigua voz de muestra, asignar la voz clonada oficial
+    const rawVoice = (voiceParam || base.referenceId || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
+    const cleanVoice = (!rawVoice || rawVoice === OLD_PRESET_VOICE || rawVoice === 'default' || rawVoice === 'undefined')
+      ? LALOPLAY_DEFAULT_VOICE
+      : rawVoice;
+
     return {
       ...base,
       channel: channelParam || base.channel || 'laloplay_',
-      referenceId: voiceParam || base.referenceId,
+      referenceId: cleanVoice,
       model: cleanModel,
       announceSender: announceParam !== null ? announceParam === 'true' || announceParam === '1' : base.announceSender,
     };
@@ -150,6 +159,51 @@ export const Widget: React.FC = () => {
       if (bus) bus.close();
     };
   }, [enqueueManualMessage]);
+
+  // Observador de despliegues seguro para OBS Studio:
+  // Detecta si se publica un nuevo commit en Vercel y actualiza el overlay de forma transparente
+  // ÚNICAMENTE cuando está inactivo y con cooldown de 3 minutos para prevenir cualquier bucle.
+  useEffect(() => {
+    let initialDeployment: string | null = null;
+    let isChecking = false;
+
+    const checkDeployment = async () => {
+      if (isChecking) return;
+      isChecking = true;
+      try {
+        const res = await fetch(`/api/version?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverDeployment = data?.deployment;
+
+        if (!initialDeployment) {
+          initialDeployment = serverDeployment;
+        } else if (serverDeployment && initialDeployment !== serverDeployment) {
+          // Nueva versión detectada en Vercel mientras el stream sigue abierto
+          if (!isProcessingRef.current && !isPlaying && messageQueue.length === 0) {
+            const lastReload = Number(sessionStorage.getItem('last_auto_update_ts') || '0');
+            if (Date.now() - lastReload > 180000) {
+              sessionStorage.setItem('last_auto_update_ts', Date.now().toString());
+              console.log('[OBS Widget] Nueva versión detectada en Vercel. Recargando overlay en estado inactivo...');
+              window.location.reload();
+            }
+          }
+        }
+      } catch {
+        // Ignorar fallos temporales de conexión
+      } finally {
+        isChecking = false;
+      }
+    };
+
+    const initialTimer = setTimeout(checkDeployment, 8000);
+    const intervalTimer = setInterval(checkDeployment, 45000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(intervalTimer);
+    };
+  }, [isPlaying, messageQueue.length]);
 
   // Animación de entrada GSAP (Back overshoot elástico)
   useEffect(() => {

@@ -6,7 +6,8 @@ export const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<'dashboard' | 'widget'>(() => {
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
-    if (path.includes('/widget') || hash.includes('#widget')) {
+    const search = window.location.search.toLowerCase();
+    if (path.includes('/widget') || hash.includes('#widget') || search.includes('channel=')) {
       return 'widget';
     }
     return 'dashboard';
@@ -16,7 +17,8 @@ export const App: React.FC = () => {
     const handleLocationChange = () => {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
-      if (path.includes('/widget') || hash.includes('#widget')) {
+      const search = window.location.search.toLowerCase();
+      if (path.includes('/widget') || hash.includes('#widget') || search.includes('channel=')) {
         setCurrentRoute('widget');
       } else {
         setCurrentRoute('dashboard');
