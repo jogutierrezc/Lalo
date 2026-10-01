@@ -50,6 +50,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 interface TTSRequestBody {
   text?: string;
   reference_id?: string;
+  model?: string;
 }
 
 /**
@@ -58,14 +59,14 @@ interface TTSRequestBody {
  */
 app.post('/api/tts', async (req: Request<{}, {}, TTSRequestBody>, res: Response): Promise<void> => {
   try {
-    const { text, reference_id } = req.body;
+    const { text, reference_id, model } = req.body;
 
     if (!text || typeof text !== 'string') {
       res.status(400).json({ error: 'Parámetro text requerido' });
       return;
     }
 
-    const result = await processTTSRequest(text, reference_id);
+    const result = await processTTSRequest(text, reference_id, model);
 
     res.status(result.status);
     res.setHeader('Content-Type', result.contentType);

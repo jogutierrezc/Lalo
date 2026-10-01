@@ -72,17 +72,20 @@ export const Dashboard: React.FC = () => {
   const triggerTestTTS = () => {
     handleSave();
     const raw = testText.trim().startsWith('!s ') ? testText : `!s ${testText}`;
+
+    // 1. Enviar vía BroadcastChannel para que llegue a OBS Browser Source y pestañas abiertas
+    try {
+      const bus = new BroadcastChannel('lalo_tts_bus');
+      bus.postMessage({ type: 'ENQUEUE', text: raw, user: testUser });
+      bus.close();
+    } catch {
+      // Ignorar si no está soportado
+    }
+
+    // 2. Disparador en la misma ventana si está presente
     const win = window as unknown as { __LALO_TTS_TEST_TRIGGER__?: (text: string, user: string) => void };
     if (typeof win.__LALO_TTS_TEST_TRIGGER__ === 'function') {
       win.__LALO_TTS_TEST_TRIGGER__(raw, testUser);
-    } else {
-      // Disparar evento personalizado para pestañas separadas
-      window.dispatchEvent(
-        new CustomEvent('lalo-tts-test', {
-          detail: { text: raw, user: testUser },
-        })
-      );
-      alert(`Mensaje enviado a la cola. Abre ${widgetUrl} en OBS o en otra pestaña para escuchar.`);
     }
   };
 
@@ -206,9 +209,26 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Selector de Modelo de Fish Audio */}
+              <div>
+                <label className="text-xs font-medium text-zinc-300 block mb-1.5">Modelo de IA (Fish Audio)</label>
+                <select
+                  value={settings.model || 's2.1-pro-free'}
+                  onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+                  className="w-full bg-[#121218] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all mb-3"
+                >
+                  <option value="s2.1-pro-free" className="bg-zinc-900 text-emerald-400 font-semibold">
+                    ✨ s2.1-pro-free (Modelo Gratuito — Sin Costo / Recomendado)
+                  </option>
+                  <option value="s2.1-pro" className="bg-zinc-900 text-white">
+                    s2.1-pro (Modelo Pro — Requiere Créditos Pagos)
+                  </option>
+                </select>
+              </div>
+
               {/* Selector de Voz */}
               <div>
-                <label className="text-xs font-medium text-zinc-300 block mb-1.5">Voz Clonada / Modelo (Reference ID)</label>
+                <label className="text-xs font-medium text-zinc-300 block mb-1.5">Voz Clonada / Catálogo (Reference ID)</label>
                 <select
                   value={PRESET_VOICES.some(v => v.id === settings.referenceId) ? settings.referenceId : 'custom'}
                   onChange={(e) => {

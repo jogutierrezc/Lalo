@@ -60,7 +60,7 @@ export interface TTSProcessResult {
   headers?: Record<string, string>;
 }
 
-export async function processTTSRequest(text: string, reference_id?: string): Promise<TTSProcessResult> {
+export async function processTTSRequest(text: string, reference_id?: string, model = 's2.1-pro-free'): Promise<TTSProcessResult> {
   const trimmedText = (text || '').trim();
 
   if (!trimmedText) {
@@ -85,7 +85,8 @@ export async function processTTSRequest(text: string, reference_id?: string): Pr
     };
   }
 
-  console.log(`[TTS Engine] Enviando a Fish Audio V1: "${boundedText.slice(0, 30)}..."`);
+  const selectedModel = model || 's2.1-pro-free';
+  console.log(`[TTS Engine] Enviando a Fish Audio V1 (${selectedModel}): "${boundedText.slice(0, 30)}..."`);
 
   try {
     const fishResponse = await fetch('https://api.fish.audio/v1/tts', {
@@ -93,6 +94,7 @@ export async function processTTSRequest(text: string, reference_id?: string): Pr
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        model: selectedModel,
       },
       body: JSON.stringify({
         text: boundedText,

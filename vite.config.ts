@@ -19,6 +19,7 @@ function ttsDevServerPlugin(): Plugin {
               const parsed = JSON.parse(bodyData || '{}');
               const text = parsed.text || '';
               const reference_id = parsed.reference_id;
+              const model = parsed.model || 's2.1-pro-free';
 
               if (!text.trim()) {
                 res.statusCode = 400;
@@ -27,7 +28,7 @@ function ttsDevServerPlugin(): Plugin {
                 return;
               }
 
-              const result = await processTTSRequest(text, reference_id);
+              const result = await processTTSRequest(text, reference_id, model);
 
               res.statusCode = result.status;
               res.setHeader('Content-Type', result.contentType);

@@ -1,5 +1,6 @@
 export interface TTSSettings {
   channel: string;
+  model: string;
   referenceId: string;
   volume: number; // 0 to 1
   speed: number;  // 0.5 to 2.0
@@ -9,8 +10,9 @@ export interface TTSSettings {
 }
 
 export const DEFAULT_SETTINGS: TTSSettings = {
-  channel: 'ibai',
-  referenceId: '7f92f8afb8ec43bf81429cc1c9199cb1', // default voice reference id
+  channel: 'laloplay_',
+  model: 's2.1-pro-free',
+  referenceId: '7f92f8afb8ec43bf81429cc1c9199cb1',
   volume: 0.85,
   speed: 1.0,
   theme: 'glass-dark',
