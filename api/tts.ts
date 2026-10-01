@@ -36,8 +36,12 @@ async function processTTSRequest(text: string, reference_id?: string, model = 's
     throw new Error('FISH_AUDIO_API_KEY no configurada en las variables de entorno de Vercel');
   }
 
-  const selectedModel = model || 's2.1-pro-free';
-  console.log(`[TTS Engine Vercel] Solicitando Fish Audio (${selectedModel}, ref: ${reference_id || 'default'}): "${boundedText.slice(0, 30)}..."`);
+  // Sanitización de modelo y reference_id (evita que un punto final en la URL como "model=s2.1-pro-free." cause error 402 en Fish Audio)
+  const rawModel = (model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
+  const selectedModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
+  const cleanRefId = (reference_id || '').trim().replace(/[.,;/\\]+$/, '');
+
+  console.log(`[TTS Engine Vercel] Solicitando Fish Audio (${selectedModel}, ref: ${cleanRefId || 'default'}): "${boundedText.slice(0, 30)}..."`);
 
   let fishResponse = await fetch('https://api.fish.audio/v1/tts', {
     method: 'POST',
@@ -48,7 +52,7 @@ async function processTTSRequest(text: string, reference_id?: string, model = 's
     },
     body: JSON.stringify({
       text: boundedText,
-      reference_id: reference_id || undefined,
+      reference_id: cleanRefId || undefined,
       format: 'mp3',
       normalize: true,
       latency: 'normal',
@@ -57,7 +61,7 @@ async function processTTSRequest(text: string, reference_id?: string, model = 's
 
   // Si la voz personalizada falla (ej. 400 porque el ID no existe o no tiene permiso),
   // reintentamos automáticamente con la voz base del modelo para no dejar sin audio al stream
-  if (!fishResponse.ok && reference_id) {
+  if (!fishResponse.ok && cleanRefId) {
     console.warn(`[Fish Audio Vercel] Voz personalizada "${reference_id}" retornó ${fishResponse.status}. Reintentando con voz base por defecto...`);
     fishResponse = await fetch('https://api.fish.audio/v1/tts', {
       method: 'POST',

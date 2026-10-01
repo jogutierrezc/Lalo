@@ -32,8 +32,12 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
     throw new Error('FISH_AUDIO_API_KEY no configurada en el servidor');
   }
 
-  const selectedModel = model || 's2.1-pro-free';
-  console.log(`[TTS Engine] Enviando a Fish Audio V1 (${selectedModel}, ref: ${reference_id || 'default'}): "${boundedText.slice(0, 30)}..."`);
+  // Sanitización de modelo y reference_id (evita que un punto final en la URL como "model=s2.1-pro-free." cause error 402 en Fish Audio)
+  const rawModel = (model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
+  const selectedModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
+  const cleanRefId = (reference_id || '').trim().replace(/[.,;/\\]+$/, '');
+
+  console.log(`[TTS Engine] Enviando a Fish Audio V1 (${selectedModel}, ref: ${cleanRefId || 'default'}): "${boundedText.slice(0, 30)}..."`);
 
   try {
     let fishResponse = await fetch('https://api.fish.audio/v1/tts', {
@@ -45,7 +49,7 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
       },
       body: JSON.stringify({
         text: boundedText,
-        reference_id: reference_id || undefined,
+        reference_id: cleanRefId || undefined,
         format: 'mp3',
         normalize: true,
         latency: 'normal',
@@ -54,7 +58,7 @@ export async function processTTSRequest(text: string, reference_id?: string, mod
 
     // Si la llamada con voz personalizada falla (ej. 400 por ID no existente),
     // reintentamos automáticamente con la voz base del modelo
-    if (!fishResponse.ok && reference_id) {
+    if (!fishResponse.ok && cleanRefId) {
       console.warn(`[Fish Audio] Voz personalizada "${reference_id}" no respondió OK (${fishResponse.status}). Reintentando con voz base...`);
       fishResponse = await fetch('https://api.fish.audio/v1/tts', {
         method: 'POST',

@@ -18,12 +18,13 @@ import { MessageSquare, Volume2, Radio, VolumeX } from 'lucide-react';
 
 function getURLParam(key: string): string | null {
   const searchVal = new URLSearchParams(window.location.search).get(key);
-  if (searchVal) return searchVal;
+  if (searchVal) return searchVal.trim().replace(/[.,;/\\]+$/, '');
 
   const hash = window.location.hash;
   const qIndex = hash.indexOf('?');
   if (qIndex !== -1) {
-    return new URLSearchParams(hash.slice(qIndex)).get(key);
+    const hashVal = new URLSearchParams(hash.slice(qIndex)).get(key);
+    if (hashVal) return hashVal.trim().replace(/[.,;/\\]+$/, '');
   }
   return null;
 }
@@ -36,11 +37,14 @@ export const Widget: React.FC = () => {
     const modelParam = getURLParam('model');
     const announceParam = getURLParam('announce');
 
+    const rawModel = (modelParam || base.model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
+    const cleanModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
+
     return {
       ...base,
       channel: channelParam || base.channel || 'laloplay_',
       referenceId: voiceParam || base.referenceId,
-      model: modelParam || base.model || 's2.1-pro-free',
+      model: cleanModel,
       announceSender: announceParam !== null ? announceParam === 'true' || announceParam === '1' : base.announceSender,
     };
   });
