@@ -48,11 +48,19 @@ export const Dashboard: React.FC = () => {
   // URL del Widget para OBS (con parámetros de canal, voz y modelo incorporados)
   const widgetUrl = `${window.location.origin}/widget?channel=${encodeURIComponent(settings.channel)}&voice=${encodeURIComponent(settings.referenceId)}&model=${encodeURIComponent(settings.model || 's2.1-pro-free')}`;
 
-  // Guardar configuración
+  // Guardar configuración y notificar a los widgets activos
   const handleSave = () => {
     saveSettings(settings);
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
+
+    try {
+      const bus = new BroadcastChannel('lalo_tts_bus');
+      bus.postMessage({ type: 'RELOAD' });
+      bus.close();
+    } catch {
+      // Ignorar si no está soportado
+    }
   };
 
   // Copiar URL para OBS

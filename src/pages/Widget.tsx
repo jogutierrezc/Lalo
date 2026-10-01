@@ -107,6 +107,10 @@ export const Widget: React.FC = () => {
         if (event.data?.type === 'ENQUEUE' && event.data.text) {
           enqueueManualMessage(event.data.text, event.data.user || 'Streamer');
         }
+        if (event.data?.type === 'RELOAD') {
+          console.log('[Lalo Widget] Orden de recarga recibida desde el Dashboard.');
+          window.location.reload();
+        }
       };
     } catch {
       // BroadcastChannel no soportado en entornos antiguos
@@ -124,6 +128,52 @@ export const Widget: React.FC = () => {
       if (bus) bus.close();
     };
   }, [enqueueManualMessage]);
+
+  // Auto-actualizador transparente para fuentes de OBS Browser Source:
+  // Detecta nuevos despliegues en Vercel y recarga el overlay automáticamente cuando no hay audio activo
+  useEffect(() => {
+    const currentBuildId = typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : null;
+    let pendingUpdate = false;
+
+    const checkForUpdates = async () => {
+      try {
+        const response = await fetch(`/api/version?t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache' },
+        }).catch(() => fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' }));
+
+        if (!response || !response.ok) return;
+        const data = await response.json();
+
+        if (data?.buildId && currentBuildId && data.buildId !== currentBuildId) {
+          console.log(`[Lalo Auto-Update] Nueva versión detectada en Vercel (Remota: ${data.buildId}, Local: ${currentBuildId}).`);
+          pendingUpdate = true;
+        }
+      } catch {
+        // Ignorar fallos temporales de red en el sondeo
+      }
+    };
+
+    // Revisar actualizaciones cada 20 segundos
+    const pollTimer = setInterval(() => {
+      if (!isProcessingRef.current && !isPlaying && messageQueue.length === 0) {
+        if (pendingUpdate) {
+          console.log('[Lalo Auto-Update] Aplicando actualización de Vercel en estado inactivo...');
+          window.location.reload();
+          return;
+        }
+        checkForUpdates();
+      }
+    }, 20000);
+
+    // Revisar la primera vez tras 5 segundos
+    const initialTimer = setTimeout(checkForUpdates, 5000);
+
+    return () => {
+      clearInterval(pollTimer);
+      clearTimeout(initialTimer);
+    };
+  }, [isPlaying, messageQueue.length]);
 
   // Animación de entrada GSAP (Back overshoot elástico)
   useEffect(() => {
@@ -278,7 +328,8 @@ export const Widget: React.FC = () => {
         clearTimeout(fetchTimeout);
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData?.error || `HTTP ${response.status}`);
         }
 
         const blob = await response.blob();

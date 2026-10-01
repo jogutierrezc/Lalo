@@ -54,14 +54,32 @@ function createTTSMiddleware() {
       return;
     }
 
+    // Endpoint GET /api/version y /version.json
+    if ((req.url?.startsWith('/api/version') || req.url?.startsWith('/version.json')) && req.method === 'GET') {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.end(JSON.stringify({ buildId: BUILD_ID, timestamp: Date.now() }));
+      return;
+    }
+
     next();
   };
 }
+
+const BUILD_ID = Date.now().toString();
 
 function ttsDevServerPlugin(): Plugin {
   const middleware = createTTSMiddleware();
   return {
     name: 'tts-dev-server-plugin',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ buildId: BUILD_ID, timestamp: Date.now() }, null, 2),
+      });
+    },
     configureServer(server) {
       server.middlewares.use(middleware);
     },
@@ -73,6 +91,9 @@ function ttsDevServerPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), ttsDevServerPlugin()],
+  define: {
+    __APP_BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
   server: {
     port: 3000,
     watch: {
