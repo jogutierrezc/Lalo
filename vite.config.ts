@@ -59,7 +59,12 @@ function createTTSMiddleware() {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-      res.end(JSON.stringify({ buildId: BUILD_ID, timestamp: Date.now() }));
+      res.end(JSON.stringify({
+        status: 'ok',
+        version: '1.0.0',
+        deployment: process.env.VERCEL_GIT_COMMIT_SHA || 'development',
+        timestamp: Date.now(),
+      }));
       return;
     }
 

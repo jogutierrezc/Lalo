@@ -31,23 +31,34 @@ function getURLParam(key: string): string | null {
 }
 
 /**
- * Renderiza el texto del mensaje destacando las etiquetas de corchete [expresión]
- * con estilo visual de pill/chip en lugar de texto plano.
+ * Renderiza el texto del mensaje descomponiéndolo en palabras y etiquetas de corchete [expresión]
+ * preparadas para la animación cinética escalonada de GSAP (.msg-word).
  */
 function renderMessageContent(text: string) {
-  const parts = text.split(/(\[[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30}\])/g);
-  return parts.map((part, index) => {
-    if (part.startsWith('[') && part.endsWith(']')) {
+  const tokens = text.split(/(\[[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30}\]|\s+)/g);
+  return tokens.map((token, index) => {
+    if (!token) return null;
+
+    if (token.startsWith('[') && token.endsWith(']')) {
       return (
         <span
           key={index}
-          className="inline-block px-1.5 py-0.5 mx-0.5 rounded bg-purple-500/25 text-purple-200 border border-purple-500/40 text-[0.85em] font-semibold tracking-wide"
+          className="msg-word inline-block px-2 py-0.5 mx-0.5 rounded-lg bg-purple-500/25 text-purple-200 border border-purple-500/40 text-[0.86em] font-semibold tracking-wide shadow-sm"
         >
-          {part}
+          {token}
         </span>
       );
     }
-    return part;
+
+    if (/^\s+$/.test(token)) {
+      return token;
+    }
+
+    return (
+      <span key={index} className="msg-word inline-block">
+        {token}
+      </span>
+    );
   });
 }
 
@@ -121,13 +132,22 @@ export const Widget: React.FC = () => {
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState<boolean>(false);
 
-  // Referencias defensivas
+  // Referencias defensivas y de animación GSAP
   const isProcessingRef = useRef<boolean>(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
+  const textContainerRef = useRef<HTMLDivElement | null>(null);
   const barsRef = useRef<HTMLDivElement | null>(null);
+  const ambientGlowRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Tweens y timelines de animación GSAP
+  const entryTimelineRef = useRef<gsap.core.Timeline | null>(null);
   const equalizerTweenRef = useRef<gsap.core.Tween | null>(null);
+  const avatarTweenRef = useRef<gsap.core.Tween | null>(null);
+  const auraTweenRef = useRef<gsap.core.Tween | null>(null);
+  const glowTweenRef = useRef<gsap.core.Tween | null>(null);
 
   // Sincronización entre pestañas (Dashboard <-> Widget) vía BroadcastChannel
   useEffect(() => {
@@ -205,21 +225,52 @@ export const Widget: React.FC = () => {
     };
   }, [isPlaying, messageQueue.length]);
 
-  // Animación de entrada GSAP (Back overshoot elástico)
+  // Animación de entrada GSAP (Tarjeta elástica + Revelación cinética escalonada de palabras)
   useEffect(() => {
     if (currentMessage && cardRef.current) {
+      entryTimelineRef.current?.kill();
       gsap.killTweensOf(cardRef.current);
-      gsap.fromTo(
+
+      const tl = gsap.timeline();
+      entryTimelineRef.current = tl;
+
+      // 1. Tarjeta entra con overshoot elástico suave (back.out)
+      tl.fromTo(
         cardRef.current,
-        { y: 50, opacity: 0, scale: 0.94 },
+        { y: 45, opacity: 0, scale: 0.94 },
         {
           y: 0,
           opacity: 1,
           scale: 1,
-          duration: 0.55,
-          ease: 'back.out(1.7)',
+          duration: 0.5,
+          ease: 'back.out(1.4)',
         }
       );
+
+      // 2. Revelación cinética de palabras (.msg-word) escalonada
+      if (textContainerRef.current) {
+        const words = textContainerRef.current.querySelectorAll('.msg-word');
+        if (words.length > 0) {
+          gsap.killTweensOf(words);
+          // Velocidad adaptativa: palabras cortas juegan dinámicas, párrafos largos entran fluidos sin demoras
+          const staggerSpeed = Math.max(0.01, Math.min(0.035, 0.9 / words.length));
+
+          tl.fromTo(
+            words,
+            { opacity: 0, y: 12, scale: 0.92, filter: 'blur(4px)' },
+            {
+              opacity: 1,
+              y: 0,
+              scale: 1,
+              filter: 'blur(0px)',
+              duration: 0.35,
+              stagger: staggerSpeed,
+              ease: 'power2.out',
+            },
+            '-=0.25' // Se superpone con el aterrizaje de la tarjeta
+          );
+        }
+      }
     }
   }, [currentMessage]);
 
@@ -235,58 +286,155 @@ export const Widget: React.FC = () => {
 
     // Timeout de escape: garantiza que onCompleteCallback SIEMPRE se ejecute
     // incluso si OBS suspende el requestAnimationFrame de la pestaña oculta
-    const hardTimeout = setTimeout(triggerComplete, 450);
+    const hardTimeout = setTimeout(triggerComplete, 500);
 
     if (cardRef.current) {
+      entryTimelineRef.current?.kill();
       gsap.killTweensOf(cardRef.current);
-      gsap.to(cardRef.current, {
-        opacity: 0,
-        y: -20,
-        scale: 0.96,
-        duration: 0.35,
-        ease: 'power2.in',
+
+      const exitTl = gsap.timeline({
         onComplete: () => {
           clearTimeout(hardTimeout);
           triggerComplete();
         },
       });
+
+      // Si hay palabras visibles, desvanecerlas suavemente hacia arriba
+      if (textContainerRef.current) {
+        const words = textContainerRef.current.querySelectorAll('.msg-word');
+        if (words.length > 0) {
+          exitTl.to(words, {
+            y: -10,
+            opacity: 0,
+            duration: 0.18,
+            stagger: 0.005,
+            ease: 'power2.in',
+          });
+        }
+      }
+
+      // Salida rápida y elegante de la tarjeta
+      exitTl.to(
+        cardRef.current,
+        {
+          opacity: 0,
+          y: -22,
+          scale: 0.96,
+          duration: 0.3,
+          ease: 'power2.in',
+        },
+        '-=0.1'
+      );
     } else {
       clearTimeout(hardTimeout);
       triggerComplete();
     }
   }, []);
 
-  // Animación de ecualizador mientras habla
-  const startEqualizer = useCallback(() => {
-    if (!barsRef.current) return;
-    const bars = barsRef.current.querySelectorAll('.eq-bar');
-    if (!bars.length) return;
-
-    if (equalizerTweenRef.current) {
-      equalizerTweenRef.current.kill();
+  // Inicia la orquestación visual completa de "habla" con GSAP:
+  // 1. Avatar parlante: micro-vibración y rebote sutil al ritmo de la voz.
+  // 2. Ondas acústicas/Aura: anillos de pulso concéntricos expandiéndose hacia afuera.
+  // 3. Resplandor ambiental respirante: luz difusa que late detrás de la tarjeta.
+  // 4. Ecualizador armónico de 7 bandas: barras de frecuencia reactivas.
+  const startSpeakingAnimation = useCallback(() => {
+    // 1. Ecualizador reactivo
+    if (barsRef.current) {
+      const bars = barsRef.current.querySelectorAll('.eq-bar');
+      if (bars.length) {
+        equalizerTweenRef.current?.kill();
+        equalizerTweenRef.current = gsap.to(bars, {
+          scaleY: 'random(0.3, 1.9)',
+          duration: 0.16,
+          repeat: -1,
+          yoyo: true,
+          stagger: {
+            each: 0.035,
+            from: 'center',
+          },
+          ease: 'sine.inOut',
+        });
+      }
     }
 
-    equalizerTweenRef.current = gsap.to(bars, {
-      scaleY: 'random(0.3, 1.8)',
-      duration: 0.18,
-      repeat: -1,
-      yoyo: true,
-      stagger: {
-        each: 0.05,
-        from: 'random',
-      },
-      ease: 'sine.inOut',
-    });
+    // 2. Avatar con micro-movimiento vocal (como si hablara)
+    if (avatarRef.current) {
+      avatarTweenRef.current?.kill();
+      avatarTweenRef.current = gsap.to(avatarRef.current, {
+        scale: 1.07,
+        y: -2.5,
+        rotation: 'random(-1.2, 1.2)',
+        duration: 0.17,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut',
+      });
+    }
+
+    // 3. Anillos de sonido/aura emanando del avatar
+    if (cardRef.current) {
+      const auraRings = cardRef.current.querySelectorAll('.talking-aura-ring');
+      if (auraRings.length) {
+        auraTweenRef.current?.kill();
+        auraTweenRef.current = gsap.fromTo(
+          auraRings,
+          { scale: 0.95, opacity: 0.75 },
+          {
+            scale: 1.6,
+            opacity: 0,
+            duration: 1.15,
+            repeat: -1,
+            stagger: 0.55,
+            ease: 'power1.out',
+          }
+        );
+      }
+    }
+
+    // 4. Luz ambiental respirando con energía vocal
+    if (ambientGlowRef.current) {
+      glowTweenRef.current?.kill();
+      glowTweenRef.current = gsap.to(ambientGlowRef.current, {
+        scale: 1.35,
+        opacity: 0.45,
+        duration: 0.45,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut',
+      });
+    }
   }, []);
 
-  const stopEqualizer = useCallback(() => {
+  const stopSpeakingAnimation = useCallback(() => {
     if (equalizerTweenRef.current) {
       equalizerTweenRef.current.kill();
       equalizerTweenRef.current = null;
     }
+    if (avatarTweenRef.current) {
+      avatarTweenRef.current.kill();
+      avatarTweenRef.current = null;
+    }
+    if (auraTweenRef.current) {
+      auraTweenRef.current.kill();
+      auraTweenRef.current = null;
+    }
+    if (glowTweenRef.current) {
+      glowTweenRef.current.kill();
+      glowTweenRef.current = null;
+    }
+
     if (barsRef.current) {
       const bars = barsRef.current.querySelectorAll('.eq-bar');
       gsap.to(bars, { scaleY: 0.3, duration: 0.2, ease: 'power1.out' });
+    }
+    if (avatarRef.current) {
+      gsap.to(avatarRef.current, { scale: 1, y: 0, rotation: 0, duration: 0.2, ease: 'power2.out' });
+    }
+    if (cardRef.current) {
+      const auraRings = cardRef.current.querySelectorAll('.talking-aura-ring');
+      gsap.to(auraRings, { opacity: 0, scale: 0.95, duration: 0.2 });
+    }
+    if (ambientGlowRef.current) {
+      gsap.to(ambientGlowRef.current, { scale: 1, opacity: 0.2, duration: 0.3, ease: 'power1.out' });
     }
   }, []);
 
@@ -308,7 +456,7 @@ export const Widget: React.FC = () => {
         finalized = true;
 
         if (watchdogTimer) clearTimeout(watchdogTimer);
-        stopEqualizer();
+        stopSpeakingAnimation();
 
         animateExit(() => {
           setCurrentMessage(null);
@@ -381,7 +529,7 @@ export const Widget: React.FC = () => {
         audio.onplay = () => {
           setIsAudioLoading(false);
           setAutoplayBlocked(false);
-          startEqualizer();
+          startSpeakingAnimation();
         };
 
         audio.onended = () => {
@@ -458,7 +606,7 @@ export const Widget: React.FC = () => {
 
             utterance.onstart = () => {
               setIsAudioLoading(false);
-              startEqualizer();
+              startSpeakingAnimation();
             };
             utterance.onend = finishSpeech;
             utterance.onerror = finishSpeech;
@@ -476,7 +624,7 @@ export const Widget: React.FC = () => {
         }, 1200);
       }
     },
-    [settings, animateExit, startEqualizer, stopEqualizer]
+    [settings, animateExit, startSpeakingAnimation, stopSpeakingAnimation]
   );
 
   // Bucle FIFO estricto: Observa la cola y desencadena la siguiente tarjeta cuando isPlaying es falso
@@ -499,14 +647,13 @@ export const Widget: React.FC = () => {
         audioRef.current.src = '';
         audioRef.current = null;
       }
-      if (equalizerTweenRef.current) {
-        equalizerTweenRef.current.kill();
-      }
+      stopSpeakingAnimation();
+      entryTimelineRef.current?.kill();
       if (cardRef.current) {
         gsap.killTweensOf(cardRef.current);
       }
     };
-  }, []);
+  }, [stopSpeakingAnimation]);
 
   return (
     <div
@@ -549,19 +696,39 @@ export const Widget: React.FC = () => {
             boxShadow: `0 12px 40px -10px ${currentMessage.userColor}33, 0 0 20px -2px rgba(145, 70, 255, 0.15)`,
           }}
         >
-          {/* Luz ambiental */}
+          {/* Luz ambiental con respiración vocal GSAP */}
           <div
-            className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl opacity-20 pointer-events-none"
+            ref={ambientGlowRef}
+            className="absolute -top-12 -right-12 w-36 h-36 rounded-full blur-2xl opacity-20 pointer-events-none transition-opacity"
             style={{ backgroundColor: currentMessage.userColor }}
           />
 
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shadow-md text-sm uppercase ring-2 ring-white/10 shrink-0"
-                style={{ backgroundColor: currentMessage.userColor || '#9146FF' }}
-              >
-                {currentMessage.displayName.charAt(0)}
+              {/* Contenedor de Avatar con aura de voz interactiva */}
+              <div className="relative shrink-0 flex items-center justify-center">
+                {/* Ondas concéntricas de sonido / aura parlante */}
+                <span
+                  className="talking-aura-ring absolute -inset-1 rounded-2xl opacity-0 pointer-events-none border border-purple-400/50"
+                  style={{
+                    boxShadow: `0 0 16px ${currentMessage.userColor || '#9146FF'}88`,
+                  }}
+                />
+                <span
+                  className="talking-aura-ring absolute -inset-1.5 rounded-2xl opacity-0 pointer-events-none border border-fuchsia-400/40"
+                  style={{
+                    boxShadow: `0 0 24px ${currentMessage.userColor || '#9146FF'}66`,
+                  }}
+                />
+
+                {/* Avatar parlante animado con GSAP */}
+                <div
+                  ref={avatarRef}
+                  className="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-white shadow-lg text-sm uppercase ring-2 ring-white/15 relative z-10 transition-shadow select-none"
+                  style={{ backgroundColor: currentMessage.userColor || '#9146FF' }}
+                >
+                  {currentMessage.displayName.charAt(0)}
+                </div>
               </div>
 
               <div>
@@ -604,19 +771,24 @@ export const Widget: React.FC = () => {
               ) : (
                 <div
                   ref={barsRef}
-                  className="flex items-center gap-1 h-6 px-2.5 py-1 rounded-lg bg-black/30 border border-white/5"
+                  className="flex items-center gap-1 h-7 px-3 py-1 rounded-xl bg-black/40 border border-white/10 shadow-inner"
                 >
-                  <span className="eq-bar w-1 h-4 rounded-full bg-purple-400 origin-bottom" />
+                  <span className="eq-bar w-1 h-3 rounded-full bg-purple-400 origin-bottom" />
                   <span className="eq-bar w-1 h-5 rounded-full bg-fuchsia-400 origin-bottom" />
-                  <span className="eq-bar w-1 h-3 rounded-full bg-indigo-400 origin-bottom" />
-                  <span className="eq-bar w-1 h-5 rounded-full bg-purple-400 origin-bottom" />
+                  <span className="eq-bar w-1 h-4 rounded-full bg-indigo-400 origin-bottom" />
+                  <span className="eq-bar w-1 h-6 rounded-full bg-purple-300 origin-bottom" />
                   <span className="eq-bar w-1 h-4 rounded-full bg-pink-400 origin-bottom" />
+                  <span className="eq-bar w-1 h-5 rounded-full bg-fuchsia-400 origin-bottom" />
+                  <span className="eq-bar w-1 h-3 rounded-full bg-purple-400 origin-bottom" />
                 </div>
               )}
             </div>
           </div>
 
-          <div className="relative max-h-64 overflow-y-auto no-scrollbar">
+          <div
+            ref={textContainerRef}
+            className="relative max-h-64 overflow-y-auto no-scrollbar"
+          >
             <p
               className={`text-zinc-100 font-medium leading-relaxed tracking-normal break-words drop-shadow-sm ${
                 currentMessage.cleanText.length > 400

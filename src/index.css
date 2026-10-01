@@ -49,4 +49,16 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  /* Hardware-accelerated word transitions for kinetic text */
+  .msg-word {
+    will-change: transform, opacity, filter;
+    display: inline-block;
+  }
+
+  /* Talking avatar soundwave aura */
+  .talking-aura-ring {
+    will-change: transform, opacity;
+    pointer-events: none;
+  }
 }
