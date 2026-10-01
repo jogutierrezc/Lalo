@@ -67,19 +67,10 @@ function createTTSMiddleware() {
   };
 }
 
-const BUILD_ID = Date.now().toString();
-
 function ttsDevServerPlugin(): Plugin {
   const middleware = createTTSMiddleware();
   return {
     name: 'tts-dev-server-plugin',
-    generateBundle() {
-      this.emitFile({
-        type: 'asset',
-        fileName: 'version.json',
-        source: JSON.stringify({ buildId: BUILD_ID, timestamp: Date.now() }, null, 2),
-      });
-    },
     configureServer(server) {
       server.middlewares.use(middleware);
     },
@@ -91,9 +82,6 @@ function ttsDevServerPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), ttsDevServerPlugin()],
-  define: {
-    __APP_BUILD_ID__: JSON.stringify(BUILD_ID),
-  },
   server: {
     port: 3000,
     watch: {

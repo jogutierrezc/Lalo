@@ -55,7 +55,7 @@ export const Dashboard: React.FC = () => {
   // URL del Widget para OBS (con parámetros de canal, voz y modelo incorporados)
   const widgetUrl = `${window.location.origin}/widget?channel=${encodeURIComponent(settings.channel)}&voice=${encodeURIComponent(settings.referenceId)}&model=${encodeURIComponent(settings.model || 's2.1-pro-free')}`;
 
-  // Guardar configuración y notificar a los widgets activos
+  // Guardar configuración y notificar a los widgets activos sin recargar página
   const handleSave = () => {
     saveSettings(settings);
     setIsSaved(true);
@@ -63,7 +63,7 @@ export const Dashboard: React.FC = () => {
 
     try {
       const bus = new BroadcastChannel('lalo_tts_bus');
-      bus.postMessage({ type: 'RELOAD' });
+      bus.postMessage({ type: 'SETTINGS_UPDATE', settings });
       bus.close();
     } catch {
       // Ignorar si no está soportado
@@ -85,14 +85,15 @@ export const Dashboard: React.FC = () => {
     setDetectedEmotion(res?.emotion || null);
   }, [testText, testUser]);
 
-  // Disparar mensaje de prueba al widget
+  // Disparar mensaje de prueba al widget sin recargar
   const triggerTestTTS = () => {
-    handleSave();
+    saveSettings(settings);
     const raw = testText.trim().startsWith('!s ') ? testText : `!s ${testText}`;
 
     // 1. Enviar vía BroadcastChannel para que llegue a OBS Browser Source y pestañas abiertas
     try {
       const bus = new BroadcastChannel('lalo_tts_bus');
+      bus.postMessage({ type: 'SETTINGS_UPDATE', settings });
       bus.postMessage({ type: 'ENQUEUE', text: raw, user: testUser });
       bus.close();
     } catch {
