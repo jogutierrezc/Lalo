@@ -97,11 +97,12 @@ export const Widget: React.FC = () => {
       onCompleteCallback();
       return;
     }
+    gsap.killTweensOf(cardRef.current);
     gsap.to(cardRef.current, {
       opacity: 0,
       y: -20,
       scale: 0.96,
-      duration: 0.4,
+      duration: 0.35,
       ease: 'power2.in',
       onComplete: () => {
         onCompleteCallback();
@@ -166,6 +167,20 @@ export const Widget: React.FC = () => {
       let audioUrl: string | null = null;
       let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 
+      const handlePlaybackEnd = () => {
+        if (watchdogTimer) clearTimeout(watchdogTimer);
+        stopEqualizer();
+        animateExit(() => {
+          setCurrentMessage(null);
+          setIsPlaying(false);
+          setIsAudioLoading(false);
+          if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+          }
+          audioRef.current = null;
+        });
+      };
+
       try {
         // Timeout defensivo de 12 segundos para evitar bloqueo eterno de red
         const controller = new AbortController();
@@ -203,32 +218,13 @@ export const Widget: React.FC = () => {
         audio.playbackRate = settings.speed;
         audioRef.current = audio;
 
-        // Liberación de recursos y avance en la cola
-        const handlePlaybackEnd = () => {
-          if (watchdogTimer) clearTimeout(watchdogTimer);
-          stopEqualizer();
-          animateExit(() => {
-            setCurrentMessage(null);
-            setIsPlaying(false);
-            setIsAudioLoading(false);
-            if (audioUrl) {
-              URL.revokeObjectURL(audioUrl);
-            }
-            audioRef.current = null;
-          });
-        };
-
         audio.onplay = () => {
           setIsAudioLoading(false);
           startEqualizer();
         };
 
         audio.onended = handlePlaybackEnd;
-
-        audio.onerror = (e) => {
-          console.error('[Audio Error]', e);
-          handlePlaybackEnd();
-        };
+        audio.onerror = () => handlePlaybackEnd();
 
         // Watchdog de seguridad (máximo 25s o proporcional a longitud)
         const maxDurationMs = Math.max(10000, message.cleanText.length * 200);
@@ -240,14 +236,40 @@ export const Widget: React.FC = () => {
         await audio.play();
       } catch (err) {
         console.error('[Widget TTS Error]', err);
-        if (watchdogTimer) clearTimeout(watchdogTimer);
-        if (audioUrl) URL.revokeObjectURL(audioUrl);
-        stopEqualizer();
-        animateExit(() => {
-          setCurrentMessage(null);
-          setIsPlaying(false);
-          setIsAudioLoading(false);
-        });
+        setIsAudioLoading(false);
+
+        // Respaldo de emergencia con Web Speech API nativo del navegador si el servidor falla
+        if ('speechSynthesis' in window && window.speechSynthesis) {
+          try {
+            console.log('[Widget TTS Fallback] Reproduciendo voz con Web Speech API de respaldo.');
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(message.cleanText);
+            utterance.lang = 'es-ES';
+            utterance.rate = settings.speed;
+            utterance.volume = settings.volume;
+
+            utterance.onstart = () => {
+              setIsAudioLoading(false);
+              startEqualizer();
+            };
+            utterance.onend = () => {
+              handlePlaybackEnd();
+            };
+            utterance.onerror = () => {
+              handlePlaybackEnd();
+            };
+
+            window.speechSynthesis.speak(utterance);
+            return;
+          } catch {
+            // Si el sintetizador del navegador tampoco responde, cerrar limpiamente
+          }
+        }
+
+        // Si no hay sintetizador disponible, esperar 1.5s y cerrar limpiamente
+        setTimeout(() => {
+          handlePlaybackEnd();
+        }, 1500);
       }
     },
     [settings, animateEntrance, animateExit, startEqualizer, stopEqualizer]
