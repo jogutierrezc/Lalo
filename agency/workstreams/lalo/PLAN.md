@@ -52,4 +52,11 @@
 - [x] 8.5: Fallback safety: Web Speech API removes bracket tags to prevent literal reading when offline.
 - [x] 8.6: Streamer Dashboard interactive emotion suite: quick-test buttons, live insignia preview, and viewer guide.
 - [x] 8.7: Comprehensive unit tests in `emotionMapper.test.ts` (16/16 tests passing).
-
+## Phase 9: GSAP Kinetic Text & Talking Avatar Animation System
+- [x] 9.1: Kinetic Text Animation: Tokenization into `.msg-word` elements with staggered GSAP reveal (`staggerSpeed = Math.max(0.01, Math.min(0.035, 0.9 / words.length))`), scale, and subtle blur filter.
+- [x] 9.2: Talking Avatar Micro-Motion: Dynamic vocal bouncing (`scale: 1.07`, `y: -2.5`, `rotation: random(-1.2, 1.2)`) synchronized with audio playback (`startSpeakingAnimation`).
+- [x] 9.3: Soundwave Acoustic Aura: Concentric pulse rings (`talking-aura-ring`) radiating outward from the avatar.
+- [x] 9.4: Resonant Ambient Glow: Card backlight breathing dynamically to the cadence of the speech.
+- [x] 9.5: 7-Bar Harmonic Audio Equalizer: Organically randomized multi-frequency frequency bars.
+- [x] 9.6: Coordinated Exit Timeline: Smooth staggered word ascension combined with card fade-out.
+- [x] 9.7: OBS Chromium / CEF Safety: Full cleanup of all GSAP timelines & tweens on message completion and unmount.
