@@ -38,9 +38,9 @@ function createTTSMiddleware() {
           res.end(result.buffer);
         } catch (err) {
           console.error('[Vite TTS Middleware Error]', err);
-          res.statusCode = 500;
+          res.statusCode = 400;
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Error procesando síntesis TTS' }));
+          res.end(JSON.stringify({ error: 'Payload JSON inválido o malformado' }));
         }
       });
       return;
@@ -75,6 +75,9 @@ export default defineConfig({
   plugins: [react(), ttsDevServerPlugin()],
   server: {
     port: 3000,
+    watch: {
+      ignored: ['**/*.mp3', '**/*.wav', '**/dist/**', '**/.git/**', '**/test_*'],
+    },
   },
   preview: {
     port: 3000,
