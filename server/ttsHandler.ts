@@ -8,7 +8,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const MAX_TTS_LENGTH = 200;
+const MAX_TTS_LENGTH = 300;
 
 /**
  * Genera un buffer WAV de audio sintético suave para pruebas

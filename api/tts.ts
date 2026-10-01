@@ -3,18 +3,37 @@
  *
  * Handler Serverless para Vercel Functions.
  * Expone la ruta POST /api/tts directamente al desplegar en Vercel.
+ * Vercel activa esta función on-demand cuando se envía una petición desde OBS o el dashboard.
  */
 
 import { processTTSRequest } from '../server/ttsHandler';
 
 export default async function handler(req: any, res: any) {
+  // Cabeceras de CORS para permitir peticiones desde OBS Studio y cualquier origen
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     res.setHeader('Allow', ['POST']);
     return res.status(405).json({ error: 'Método no permitido. Usa POST.' });
   }
 
   try {
-    const { text, reference_id, model } = req.body || {};
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        return res.status(400).json({ error: 'Payload JSON inválido' });
+      }
+    }
+
+    const { text, reference_id, model } = body || {};
 
     if (!text || typeof text !== 'string') {
       return res.status(400).json({ error: 'Parámetro text requerido' });

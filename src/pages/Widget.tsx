@@ -211,6 +211,18 @@ export const Widget: React.FC = () => {
         const controller = new AbortController();
         const fetchTimeout = setTimeout(() => controller.abort(), 12000);
 
+        // Preparar texto a sintetizar anunciando el nombre del usuario si está habilitado
+        const cleanUserName = (message.displayName || message.username || 'Usuario')
+          .replace(/[_.-]+/g, ' ')
+          .trim();
+
+        const template = settings.announceTemplate || '{user} dice: {message}';
+        const spokenText = settings.announceSender !== false
+          ? template
+              .replace('{user}', cleanUserName)
+              .replace('{message}', message.cleanText)
+          : message.cleanText;
+
         // Llamada al endpoint backend con el modelo gratuito s2.1-pro-free
         const response = await fetch('/api/tts', {
           method: 'POST',
@@ -219,7 +231,7 @@ export const Widget: React.FC = () => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            text: message.cleanText,
+            text: spokenText,
             reference_id: settings.referenceId || undefined,
             model: settings.model || 's2.1-pro-free',
           }),
@@ -282,7 +294,14 @@ export const Widget: React.FC = () => {
         if ('speechSynthesis' in window && window.speechSynthesis) {
           try {
             window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(message.cleanText);
+            const cleanUserName = (message.displayName || message.username || 'Usuario')
+              .replace(/[_.-]+/g, ' ')
+              .trim();
+            const fallbackText = settings.announceSender !== false
+              ? `${cleanUserName} dice: ${message.cleanText}`
+              : message.cleanText;
+
+            const utterance = new SpeechSynthesisUtterance(fallbackText);
             utterance.lang = 'es-ES';
             utterance.rate = settings.speed;
             utterance.volume = settings.volume;
@@ -414,6 +433,9 @@ export const Widget: React.FC = () => {
                     style={{ color: currentMessage.userColor || '#f4f4f5' }}
                   >
                     {currentMessage.displayName}
+                  </span>
+                  <span className="text-xs font-semibold text-purple-400">
+                    dice:
                   </span>
                   <span className="text-[10px] font-mono text-zinc-400 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
                     !s

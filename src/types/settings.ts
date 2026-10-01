@@ -7,6 +7,8 @@ export interface TTSSettings {
   theme: 'glass-dark' | 'neon-purple' | 'cyberpunk';
   enableVisualizer: boolean;
   maxQueueSize: number;
+  announceSender: boolean;
+  announceTemplate: string;
 }
 
 export const DEFAULT_SETTINGS: TTSSettings = {
@@ -18,6 +20,8 @@ export const DEFAULT_SETTINGS: TTSSettings = {
   theme: 'glass-dark',
   enableVisualizer: true,
   maxQueueSize: 20,
+  announceSender: true,
+  announceTemplate: '{user} dice: {message}',
 };
 
 export const STORAGE_KEY = 'lalo_tts_settings';

@@ -21,7 +21,8 @@ import {
   Sliders,
   Radio,
   Layers,
-  ShieldCheck
+  ShieldCheck,
+  Megaphone
 } from 'lucide-react';
 import { loadSettings, saveSettings, TTSSettings } from '../types/settings';
 import { sanitizeTwitchMessage } from '../utils/twitchSanitizer';
@@ -299,6 +300,53 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Tarjeta 4: Identificación y Anuncio del Remitente */}
+          <div className="glass-panel rounded-2xl p-6 shadow-glass space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Megaphone className="w-5 h-5 text-purple-400" />
+                <div>
+                  <h2 className="text-base font-semibold text-white tracking-tight">Anunciar Quién Envía</h2>
+                  <p className="text-xs text-zinc-400">Identifica en voz alta al autor del mensaje antes de reproducir el texto</p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.announceSender !== false}
+                  onChange={(e) => setSettings({ ...settings, announceSender: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+              </label>
+            </div>
+
+            {settings.announceSender !== false && (
+              <div className="space-y-3 pt-2 border-t border-white/5">
+                <div>
+                  <label className="text-xs font-medium text-zinc-300 block mb-1">
+                    Formato de Anuncio en Voz
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.announceTemplate || '{user} dice: {message}'}
+                    onChange={(e) => setSettings({ ...settings, announceTemplate: e.target.value })}
+                    placeholder="{user} dice: {message}"
+                    className="w-full bg-[#121218] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 font-mono"
+                  />
+                  <span className="text-[11px] text-zinc-500 mt-1 block">
+                    Usa <code className="text-purple-300 font-mono">{'{user}'}</code> para el nombre y <code className="text-purple-300 font-mono">{'{message}'}</code> para el texto.
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-200">
+                  <span className="font-semibold block text-[11px] uppercase tracking-wider text-purple-300 mb-0.5">Ejemplo de audio resultante:</span>
+                  "{(settings.announceTemplate || '{user} dice: {message}').replace('{user}', 'Juan').replace('{message}', '¡Hola streamer!')}"
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Columna Derecha: Banco de Pruebas y Monitor (5 cols) */}
@@ -339,12 +387,24 @@ export const Dashboard: React.FC = () => {
                 />
               </div>
 
-              {/* Resultado del Sanitizer */}
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-xs">
-                <span className="text-[10px] uppercase font-mono text-zinc-500 block mb-1">Texto Sanitizado para TTS:</span>
-                <p className="text-purple-200 italic font-mono text-xs">
-                  {testPreview || 'Escribe un mensaje para previsualizar...'}
-                </p>
+              {/* Resultado del Sanitizer y Audio */}
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-xs space-y-2">
+                <div>
+                  <span className="text-[10px] uppercase font-mono text-zinc-500 block mb-0.5">Texto Sanitizado para Card:</span>
+                  <p className="text-zinc-200 font-mono text-xs">
+                    {testPreview || 'Escribe un mensaje para previsualizar...'}
+                  </p>
+                </div>
+                {settings.announceSender !== false && testPreview && (
+                  <div className="pt-2 border-t border-white/5">
+                    <span className="text-[10px] uppercase font-mono text-purple-400 block mb-0.5">Audio TTS a Sintetizar:</span>
+                    <p className="text-purple-200 italic font-mono text-xs">
+                      "{(settings.announceTemplate || '{user} dice: {message}')
+                        .replace('{user}', testUser || 'Streamer')
+                        .replace('{message}', testPreview)}"
+                    </p>
+                  </div>
+                )}
               </div>
 
               <button
