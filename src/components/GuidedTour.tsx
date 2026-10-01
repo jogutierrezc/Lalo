@@ -21,17 +21,20 @@ export interface TourStep {
 const TOUR_DONE_KEY = 'lalo_tts_tour_done';
 const RING_PAD = 6;
 
-export function isTourDone(): boolean {
+// La guía de Ajustes conserva su clave original; las demás añaden su id
+const doneKey = (id: string) => (id === 'ajustes' ? TOUR_DONE_KEY : `${TOUR_DONE_KEY}_${id}`);
+
+export function isTourDone(id = 'ajustes'): boolean {
   try {
-    return localStorage.getItem(TOUR_DONE_KEY) === '1';
+    return localStorage.getItem(doneKey(id)) === '1';
   } catch {
     return true; // sin almacenamiento no se puede recordar: mejor no insistir en cada visita
   }
 }
 
-function markTourDone() {
+function markTourDone(id: string) {
   try {
-    localStorage.setItem(TOUR_DONE_KEY, '1');
+    localStorage.setItem(doneKey(id), '1');
   } catch {
     // Ignorar si no está soportado
   }
@@ -39,7 +42,7 @@ function markTourDone() {
 
 const reduced = () => !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void }> = ({ steps, onClose }) => {
+export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?: string }> = ({ steps, onClose, id = 'ajustes' }) => {
   const [index, setIndex] = useState(0);
   const ringRef = useRef<HTMLDivElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
@@ -131,7 +134,7 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void }> = 
   const close = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
-    markTourDone();
+    markTourDone(id);
     if (reduced() || !dockRef.current) {
       onClose();
       return;
@@ -139,7 +142,7 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void }> = 
     // Salida más corta que la entrada
     gsap.to(ringRef.current, { opacity: 0, duration: 0.18, ease: 'power2.out' });
     gsap.to(dockRef.current, { yPercent: 100, opacity: 0, duration: 0.2, ease: 'power2.out', onComplete: onClose });
-  }, [onClose]);
+  }, [onClose, id]);
 
   const next = useCallback(() => {
     if (isLast) close();

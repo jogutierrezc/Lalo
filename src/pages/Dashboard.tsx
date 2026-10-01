@@ -10,7 +10,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, CircleHelp, Copy, ExternalLink, Play, RefreshCw, RotateCcw, Trash2, Upload } from 'lucide-react';
-import { loadSettings, saveSettings, TTSSettings } from '../types/settings';
+import { saveSettings } from '../types/settings';
+import { useSettings } from '../hooks/useSettings';
+import { postBus } from '../utils/bus';
+import { buildWidgetUrl } from '../utils/widgetUrl';
+import { PanelNav } from '../components/PanelNav';
+import { ThemeSwitch } from '../components/ThemeSwitch';
 import { sanitizeTwitchMessage } from '../utils/twitchSanitizer';
 import { AVAILABLE_EMOTIONS, normalizeTextForFishAudio, EmotionInfo } from '../utils/emotionMapper';
 import {
@@ -21,7 +26,6 @@ import {
   MAX_STICKER_BYTES,
   SCALE_MAX,
   SCALE_MIN,
-  encodeSticker,
   inkFor,
   normalizeAccent,
   stickerDataUri,
@@ -55,7 +59,7 @@ const TOUR_STEPS: TourStep[] = [
     body: (
       <>
         Lalo TTS lee en el stream los mensajes del chat que empiezan con <code>!s</code> y los muestra como una alerta animada. Te enseño lo esencial en
-        cinco pasos; lleva menos de un minuto y puedes usar el panel mientras tanto.
+        seis pasos; lleva alrededor de un minuto y puedes usar el panel mientras tanto.
       </>
     ),
   },
@@ -84,6 +88,11 @@ const TOUR_STEPS: TourStep[] = [
     title: 'Llévala a OBS',
     body: 'Copia la URL y pégala en una fuente de tipo Navegador. La URL guarda tu estilo y tu sonido: si cambias algo después, vuelve a copiarla.',
   },
+  {
+    target: 'nav',
+    title: 'Durante el directo, Control en vivo',
+    body: 'Ahí pausas la cola, saltas mensajes y decides quién puede usar el TTS: solo subs, con espera entre mensajes, con palabras bloqueadas, o por puntos del canal y bits.',
+  },
 ];
 
 const DEFAULT_TEMPLATE = '{user} dice: {message}';
@@ -96,16 +105,6 @@ const STAGE_POSITION: Record<AlertPosition, string> = {
   bc: 'items-end justify-center',
   br: 'items-end justify-end',
 };
-
-function broadcast(message: Record<string, unknown>) {
-  try {
-    const bus = new BroadcastChannel('lalo_tts_bus');
-    bus.postMessage(message);
-    bus.close();
-  } catch {
-    // Ignorar si no está soportado
-  }
-}
 
 const Field: React.FC<{ label: string; htmlFor?: string; hint?: React.ReactNode; children: React.ReactNode }> = ({
   label,
@@ -149,8 +148,7 @@ function Segmented<T extends string>({
 }
 
 export const Dashboard: React.FC = () => {
-  const [settings, setSettings] = useState<TTSSettings>(loadSettings);
-  const [saved, setSaved] = useState(true);
+  const { settings, update, saved } = useSettings();
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [reloadingWidget, setReloadingWidget] = useState(false);
   const [stickerError, setStickerError] = useState<string | null>(null);
@@ -173,40 +171,8 @@ export const Dashboard: React.FC = () => {
   const previewRef = useRef<HTMLDivElement | null>(null);
   const cancelDemoRef = useRef<(() => void) | null>(null);
 
-  const update = (patch: Partial<TTSSettings>) => {
-    setSaved(false);
-    setSettings((prev) => ({ ...prev, ...patch }));
-  };
-
-  // Guardado automático: persiste y avisa a los widgets abiertos en este navegador
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      saveSettings(settings);
-      broadcast({ type: 'SETTINGS_UPDATE', settings });
-      setSaved(true);
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [settings]);
-
-  // URL del widget para OBS. La apariencia viaja en la URL porque el navegador
-  // de OBS no comparte almacenamiento con este panel; el sticker va en el
-  // fragmento (#) para que no llegue al servidor.
-  const query = new URLSearchParams({
-    channel: settings.channel,
-    voice: settings.referenceId,
-    model: settings.model || 's2.1-pro-free',
-    announce: settings.announceSender !== false ? '1' : '0',
-    vol: String(settings.volume),
-    speed: String(settings.speed),
-    style: settings.alertStyle,
-    pos: settings.position,
-    accent: settings.accent.slice(1),
-    scale: String(settings.scale),
-    energy: settings.energy,
-  });
-  const stickerHash =
-    settings.alertStyle === 'sticker' && settings.stickerSvg ? `#?sticker=${encodeSticker(settings.stickerSvg)}` : '';
-  const widgetUrl = `${window.location.origin}/widget?${query.toString()}${stickerHash}`;
+  // URL del widget para OBS: lleva canal, voz, sonido, apariencia y reglas (ver utils/widgetUrl.ts)
+  const widgetUrl = buildWidgetUrl(window.location.origin, settings);
 
   const copyWidgetUrl = () => {
     navigator.clipboard.writeText(widgetUrl).catch(() => {});
@@ -217,7 +183,7 @@ export const Dashboard: React.FC = () => {
   // Forzar recarga remota del widget en OBS Studio sin interrumpir la transmisión
   const handleForceReloadWidget = () => {
     setReloadingWidget(true);
-    broadcast({ type: 'FORCE_RELOAD' });
+    postBus({ type: 'FORCE_RELOAD' });
     setTimeout(() => setReloadingWidget(false), 2500);
   };
 
@@ -267,8 +233,8 @@ export const Dashboard: React.FC = () => {
     const raw = testText.trim().startsWith('!s ') ? testText : `!s ${testText}`;
 
     // 1. Enviar vía BroadcastChannel para que llegue a las pestañas del widget abiertas
-    broadcast({ type: 'SETTINGS_UPDATE', settings });
-    broadcast({ type: 'ENQUEUE', text: raw, user: testUser });
+    postBus({ type: 'SETTINGS_UPDATE', settings });
+    postBus({ type: 'ENQUEUE', text: raw, user: testUser });
 
     // 2. Disparador en la misma ventana si está presente
     const win = window as unknown as { __LALO_TTS_TEST_TRIGGER__?: (text: string, user: string) => void };
@@ -319,17 +285,21 @@ export const Dashboard: React.FC = () => {
     <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
         {/* Barra de estado */}
-        <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[#3f4148] pb-4">
+        <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[color:var(--cb-line)] pb-4">
           <h1 className="cab-caps text-2xl" style={{ fontStretch: '70%', fontWeight: 800 }}>
             Lalo TTS
           </h1>
-          <span className="cab-caps text-[13px] text-[#aba698]">
-            Canal <b className="text-[#efe9dc]">{settings.channel || 'sin canal'}</b>
+          <PanelNav current="ajustes" />
+          <span className="cab-caps text-[13px] text-[color:var(--cb-mut)]">
+            Canal <b className="text-[color:var(--cb-fg)]">{settings.channel || 'sin canal'}</b>
           </span>
-          <span className="cab-caps text-[13px] text-[#aba698]">
-            Estilo <b className="text-[#efe9dc]">{ALERT_STYLES.find((s) => s.id === settings.alertStyle)?.name}</b>
+          <span className="cab-caps text-[13px] text-[color:var(--cb-mut)]">
+            Estilo <b className="text-[color:var(--cb-fg)]">{ALERT_STYLES.find((s) => s.id === settings.alertStyle)?.name}</b>
           </span>
-          <span className="cab-caps ml-auto text-[13px] text-[#aba698]" role="status">
+          <div className="ml-auto">
+            <ThemeSwitch />
+          </div>
+          <span className="cab-caps text-[13px] text-[color:var(--cb-mut)]" role="status">
             {saved ? 'Cambios guardados' : 'Guardando'}
           </span>
           <button type="button" className="cab-btn2" onClick={() => setTourOpen(true)} disabled={tourOpen}>
@@ -350,12 +320,12 @@ export const Dashboard: React.FC = () => {
               hint={
                 <>
                   Se conecta de forma anónima al chat público y solo lee los mensajes que empiezan con{' '}
-                  <code className="cab-mono text-[#efe9dc]">!s</code>.
+                  <code className="cab-mono text-[color:var(--cb-fg)]">!s</code>.
                 </>
               }
             >
               <div className="relative">
-                <span className="cab-mono pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#aba698]">twitch.tv/</span>
+                <span className="cab-mono pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--cb-mut)]">twitch.tv/</span>
                 <input
                   id="channel"
                   type="text"
@@ -409,7 +379,7 @@ export const Dashboard: React.FC = () => {
                 <>
                   El gratuito no consume créditos. La clave de Fish Audio vive en el servidor (
                   <code className="cab-mono">FISH_AUDIO_API_KEY</code>); sin ella el widget usa el modo simulación.{' '}
-                  <a href="https://fish.audio" target="_blank" rel="noreferrer" className="underline underline-offset-2 text-[#efe9dc]">
+                  <a href="https://fish.audio" target="_blank" rel="noreferrer" className="underline underline-offset-2 text-[color:var(--cb-fg)]">
                     Obtener clave
                   </a>
                 </>
@@ -717,30 +687,30 @@ export const Dashboard: React.FC = () => {
 
           <details>
             <summary>Cómo añadirlo a OBS Studio</summary>
-            <ol className="mt-3 grid max-w-[70ch] list-decimal gap-2 pl-5 text-[#aba698]">
+            <ol className="mt-3 grid max-w-[70ch] list-decimal gap-2 pl-5 text-[color:var(--cb-mut)]">
               <li>En OBS, añade una fuente de tipo Navegador.</li>
               <li>Pega la URL de arriba.</li>
               <li>Pon el ancho en 1920 y el alto en 1080, o el tamaño de tu lienzo.</li>
               <li>Marca «Controlar audio a través de OBS» si quieres ver el volumen en el mezclador.</li>
               <li>
-                El overlay queda invisible hasta que alguien escribe <code className="cab-mono text-[#efe9dc]">!s mensaje</code>.
+                El overlay queda invisible hasta que alguien escribe <code className="cab-mono text-[color:var(--cb-fg)]">!s mensaje</code>.
               </li>
               <li>
                 Con el directo en marcha, recarga el overlay con «Actualizar OBS», con{' '}
-                <code className="cab-mono text-[#efe9dc]">!s reload</code> en el chat, o con clic derecho en la fuente y «Actualizar».
+                <code className="cab-mono text-[color:var(--cb-fg)]">!s reload</code> en el chat, o con clic derecho en la fuente y «Actualizar».
               </li>
             </ol>
           </details>
           <details>
             <summary>Emociones que puede escribir el chat</summary>
             <p className="cab-hint mt-3 max-w-[70ch]">
-              Van entre corchetes dentro del comando, por ejemplo <code className="cab-mono text-[#efe9dc]">!s [susurro] no hagan ruido</code>. Cambian el tono
+              Van entre corchetes dentro del comando, por ejemplo <code className="cab-mono text-[color:var(--cb-fg)]">!s [susurro] no hagan ruido</code>. Cambian el tono
               de la voz y el gesto con el que entra el texto.
             </p>
             <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
               {AVAILABLE_EMOTIONS.map((emo) => (
                 <li key={emo.tag}>
-                  <code className="cab-mono text-[#efe9dc]">{emo.example}</code> <span className="text-[#aba698]">{emo.label}</span>
+                  <code className="cab-mono text-[color:var(--cb-fg)]">{emo.example}</code> <span className="text-[color:var(--cb-mut)]">{emo.label}</span>
                 </li>
               ))}
             </ul>

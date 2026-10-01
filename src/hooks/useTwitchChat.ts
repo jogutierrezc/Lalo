@@ -4,6 +4,11 @@
  * Hook de React para la conexión anónima a Twitch Chat mediante tmi.js y
  * gestión de cola FIFO con sanitización '!s ' estricta.
  *
+ * Aplica las reglas del streamer (rol, espera, bloqueos, tope de cola) y acepta
+ * tres disparadores: el comando !s, un canje de puntos del canal y los bits.
+ * Los canjes con texto y los cheers llegan por el chat público con sus
+ * etiquetas, así que no hace falta iniciar sesión en Twitch.
+ *
  * PREVENCIÓN DE MEMORY LEAKS (OBS Studio Browser Source):
  * OBS recarga o desmonta browser sources con frecuencia.
  * Este hook desconecta explícitamente el cliente tmi.js, desvincula todos
@@ -13,10 +18,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import tmi from 'tmi.js';
 import { sanitizeTwitchMessage, SanitizedTTSMessage } from '../utils/twitchSanitizer';
+import {
+  ControlCommand,
+  DEFAULT_MODERATION,
+  Moderation,
+  classifyTrigger,
+  evaluateMessage,
+  parseControl,
+  roleFromTags,
+  stripCheermotes,
+  truncateText,
+} from '../utils/moderation';
+
+export interface RejectedMessage {
+  id: string;
+  user: string;
+  username: string;
+  text: string;
+  reason: string;
+  at: number;
+}
 
 export interface UseTwitchChatOptions {
   channel?: string;
   enabled?: boolean;
+  moderation?: Moderation;
+  onControl?: (command: ControlCommand) => void;
+  onRejected?: (message: RejectedMessage) => void;
 }
 
 export interface UseTwitchChatReturn {
@@ -32,6 +60,17 @@ export interface UseTwitchChatReturn {
 export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChatReturn {
   const { channel = '', enabled = true } = options;
 
+  // Reglas y callbacks vigentes, leídos por los listeners sin reconectar el chat
+  const moderationRef = useRef<Moderation>(options.moderation || DEFAULT_MODERATION);
+  moderationRef.current = options.moderation || DEFAULT_MODERATION;
+  const onControlRef = useRef(options.onControl);
+  onControlRef.current = options.onControl;
+  const onRejectedRef = useRef(options.onRejected);
+  onRejectedRef.current = options.onRejected;
+  const queueLengthRef = useRef(0);
+  const lastAcceptedRef = useRef<Map<string, number>>(new Map());
+  const seenIdsRef = useRef<string[]>([]);
+
   const [messageQueue, setMessageQueue] = useState<SanitizedTTSMessage[]>([]);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -39,6 +78,10 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
   // Referencia al cliente de tmi.js para manipulación segura en cleanup
   const clientRef = useRef<tmi.Client | null>(null);
   const isMountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    queueLengthRef.current = messageQueue.length;
+  }, [messageQueue]);
 
   // Función para sacar el mensaje más antiguo de la cola (FIFO)
   const removeMessageFromQueue = useCallback((id?: string): SanitizedTTSMessage | null => {
@@ -74,8 +117,10 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
     });
 
     if (sanitized) {
-      setMessageQueue((prev) => [...prev, sanitized]);
-      return sanitized;
+      // Las pruebas del streamer no pasan por las reglas de moderación
+      const test: SanitizedTTSMessage = { ...sanitized, trigger: 'test' };
+      setMessageQueue((prev) => [...prev, test]);
+      return test;
     }
     return null;
   }, []);
@@ -116,43 +161,76 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       console.log(`[Twitch TMI] Desconectado del canal: #${cleanChannel}`);
     });
 
-    // Evento de recepción de mensajes en el chat
-    client.on('message', (_channel, tags, message, self) => {
-      if (self || !isMountedRef.current) return;
+    // Procesa un mensaje del chat: órdenes de control, disparador, sanitización y reglas
+    const handleChat = (tags: tmi.ChatUserstate, message: string) => {
+      const id = tags.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      // tmi.js puede entregar un mismo mensaje por más de un evento
+      if (seenIdsRef.current.includes(id)) return;
+      seenIdsRef.current = [...seenIdsRef.current.slice(-49), id];
 
-      // Comando especial de actualización remota para el streamer / moderadores
-      const isBroadcasterOrMod =
-        tags.badges?.broadcaster === '1' ||
-        tags.mod === true ||
-        tags.username?.toLowerCase() === cleanChannel;
+      const moderation = moderationRef.current;
+      const username = (tags.username || 'viewer').toLowerCase();
+      const displayName = tags['display-name'] || tags.username || 'viewer';
+      const role = roleFromTags(tags, cleanChannel);
 
-      const isReloadCommand = /^!s\s+(reload|update|actualizar|reiniciar)[.,!?;]*$/i.test(message.trim());
-
-      if (isReloadCommand && isBroadcasterOrMod) {
-        console.log('[Twitch Chat] Comando de recarga remota recibido. Actualizando overlay...');
-        window.location.reload();
+      // Órdenes del streamer y los moderadores: !s skip, !s pausa, !s block usuario...
+      const control = parseControl(message);
+      if (control && (role === 'broadcaster' || role === 'mod')) {
+        if (control.action === 'reload') {
+          console.log('[Twitch Chat] Comando de recarga remota recibido. Actualizando overlay...');
+          window.location.reload();
+          return;
+        }
+        onControlRef.current?.(control);
         return;
       }
 
-      const sanitized = sanitizeTwitchMessage(message, {
-        id: tags.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        username: tags.username || 'viewer',
-        displayName: tags['display-name'] || tags.username || 'viewer',
+      const trigger = classifyTrigger(moderation, message, tags);
+      if (!trigger) return;
+
+      // Canjes y bits no llevan el prefijo !s: se añade para reutilizar la sanitización
+      const body = tags.bits ? stripCheermotes(message) : message;
+      const sanitized = sanitizeTwitchMessage(/^!s\s/i.test(body.trim()) ? body : `!s ${body}`, {
+        id,
+        username,
+        displayName,
         color: tags.color || '#bf94ff',
         channel: cleanChannel,
         timestamp: tags['tmi-sent-ts'] ? Number(tags['tmi-sent-ts']) : Date.now(),
       });
+      if (!sanitized) return;
 
-      // Solo encolar si el mensaje cumplió con el trigger !s y fue validado
-      if (sanitized) {
-        setMessageQueue((prev) => {
-          // Evitar mensajes duplicados por ID
-          if (prev.some((m) => m.id === sanitized.id)) {
-            return prev;
-          }
-          return [...prev, sanitized];
-        });
+      const text = truncateText(sanitized.cleanText, moderation.maxLength);
+      const now = Date.now();
+      const verdict = evaluateMessage(moderation, {
+        username,
+        role,
+        text,
+        trigger,
+        now,
+        lastAccepted: lastAcceptedRef.current,
+        queueLength: queueLengthRef.current,
+      });
+
+      if (!verdict.ok) {
+        onRejectedRef.current?.({ id, user: displayName, username, text, reason: verdict.reason, at: now });
+        return;
       }
+
+      lastAcceptedRef.current.set(username, now);
+      queueLengthRef.current += 1;
+      const bits = Number(tags.bits) || undefined;
+      setMessageQueue((prev) => [...prev, { ...sanitized, cleanText: text, trigger, bits, role }]);
+    };
+
+    // Mensajes normales (incluye los canjes de puntos con texto) y cheers con bits
+    client.on('message', (_channel, tags, message, self) => {
+      if (self || !isMountedRef.current) return;
+      handleChat(tags, message);
+    });
+    client.on('cheer', (_channel, tags, message) => {
+      if (!isMountedRef.current) return;
+      handleChat(tags, message);
     });
 
     // Iniciar conexión

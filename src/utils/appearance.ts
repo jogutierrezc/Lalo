@@ -117,27 +117,38 @@ export function stickerDataUri(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-/** Codifica el SVG en base64url para llevarlo en el fragmento de la URL. */
-export function encodeSticker(svg: string): string {
+/** Codifica texto UTF-8 en base64url, apto para el fragmento de una URL. */
+export function encodeBase64Url(text: string): string {
   let binary = '';
-  new TextEncoder().encode(svg).forEach((byte) => {
+  new TextEncoder().encode(text).forEach((byte) => {
     binary += String.fromCharCode(byte);
   });
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-/** Decodifica y valida un sticker recibido por URL. Devuelve null si no es usable. */
-export function decodeSticker(param: string | null | undefined): string | null {
+/** Decodifica base64url a texto UTF-8. Devuelve null si el valor no es válido. */
+export function decodeBase64Url(param: string | null | undefined): string | null {
   if (!param) return null;
   try {
     const base64 = param.replace(/-/g, '+').replace(/_/g, '/');
     const binary = atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4));
-    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-    const result = validateStickerSvg(new TextDecoder().decode(bytes));
-    return result.ok ? result.svg : null;
+    return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
   } catch {
     return null;
   }
+}
+
+/** Codifica el SVG en base64url para llevarlo en el fragmento de la URL. */
+export function encodeSticker(svg: string): string {
+  return encodeBase64Url(svg);
+}
+
+/** Decodifica y valida un sticker recibido por URL. Devuelve null si no es usable. */
+export function decodeSticker(param: string | null | undefined): string | null {
+  const text = decodeBase64Url(param);
+  if (text === null) return null;
+  const result = validateStickerSvg(text);
+  return result.ok ? result.svg : null;
 }
 
 /** Normaliza una apariencia de origen no confiable (localStorage, BroadcastChannel). */

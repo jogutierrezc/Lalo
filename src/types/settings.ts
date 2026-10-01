@@ -1,6 +1,7 @@
 import { Appearance, DEFAULT_APPEARANCE, normalizeAppearance } from '../utils/appearance';
+import { DEFAULT_MODERATION, Moderation, normalizeModeration } from '../utils/moderation';
 
-export interface TTSSettings extends Appearance {
+export interface TTSSettings extends Appearance, Moderation {
   channel: string;
   model: string;
   referenceId: string;
@@ -8,7 +9,6 @@ export interface TTSSettings extends Appearance {
   speed: number;  // 0.5 to 2.0
   theme: 'glass-dark' | 'neon-purple' | 'cyberpunk';
   enableVisualizer: boolean;
-  maxQueueSize: number;
   announceSender: boolean;
   announceTemplate: string;
 }
@@ -21,10 +21,10 @@ export const DEFAULT_SETTINGS: TTSSettings = {
   speed: 1.0,
   theme: 'glass-dark',
   enableVisualizer: true,
-  maxQueueSize: 20,
   announceSender: true,
   announceTemplate: '{user} dice: {message}',
   ...DEFAULT_APPEARANCE,
+  ...DEFAULT_MODERATION,
 };
 
 export const STORAGE_KEY = 'lalo_tts_settings';
@@ -42,8 +42,8 @@ export function loadSettings(): TTSSettings {
     if (parsed.model === 's2.1-pro' || !parsed.model) {
       parsed.model = 's2.1-pro-free';
     }
-    // La apariencia guardada puede venir de una versión anterior o estar manipulada
-    return { ...parsed, ...normalizeAppearance(parsed) };
+    // La apariencia y las reglas guardadas pueden venir de una versión anterior o estar manipuladas
+    return { ...parsed, ...normalizeAppearance(parsed), ...normalizeModeration(parsed) };
   } catch {
     return DEFAULT_SETTINGS;
   }

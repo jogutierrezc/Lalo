@@ -38,6 +38,9 @@ export interface SanitizedTTSMessage {
   userColor: string;
   timestamp: number;
   emotion?: EmotionInfo | null;
+  trigger?: 'command' | 'reward' | 'bits' | 'test';
+  bits?: number;
+  role?: string;
 }
 
 const TRIGGER_PREFIX = '!s ';

@@ -9,13 +9,23 @@
  * - Canal BroadcastChannel para pruebas instantáneas desde el Dashboard.
  */
 
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import gsap from 'gsap';
-import { useTwitchChat } from '../hooks/useTwitchChat';
+import { RejectedMessage, useTwitchChat } from '../hooks/useTwitchChat';
 import { SanitizedTTSMessage } from '../utils/twitchSanitizer';
 import { normalizeTextForFishAudio } from '../utils/emotionMapper';
 import { loadSettings, TTSSettings } from '../types/settings';
 import { AlertPosition, appearanceFromParams, normalizeAppearance } from '../utils/appearance';
+import {
+  ControlCommand,
+  DEFAULT_TIMEOUT_MINUTES,
+  moderationFromParams,
+  needsApproval,
+  normalizeModeration,
+  normalizeUser,
+  pickNext,
+} from '../utils/moderation';
+import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus } from '../utils/bus';
 import { MotionOptions, playEnter, playExit, startSpeaking, stopSpeaking } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
 import { Radio, VolumeX } from 'lucide-react';
@@ -38,7 +48,7 @@ function getURLParam(key: string): string | null {
  * localStorage con el panel, así que la URL manda sobre lo guardado.
  */
 function urlOverrides(): Partial<TTSSettings> {
-  const overrides: Partial<TTSSettings> = appearanceFromParams(getURLParam);
+  const overrides: Partial<TTSSettings> = { ...appearanceFromParams(getURLParam), ...moderationFromParams(getURLParam) };
   const volume = parseFloat(getURLParam('vol') || '');
   if (Number.isFinite(volume)) overrides.volume = Math.min(1, Math.max(0, volume));
   const speed = parseFloat(getURLParam('speed') || '');
@@ -55,6 +65,66 @@ const POSITION_CLASS: Record<AlertPosition, string> = {
   bc: 'items-end justify-center',
   br: 'items-end justify-end',
 };
+
+// Bloqueos hechos desde el chat (!s block usuario): se guardan en el navegador de OBS
+const RUNTIME_BLOCKS_KEY = 'lalo_tts_runtime_blocks';
+
+function loadRuntimeBlocks(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RUNTIME_BLOCKS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.map(normalizeUser).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRuntimeBlocks(users: string[]) {
+  try {
+    localStorage.setItem(RUNTIME_BLOCKS_KEY, JSON.stringify(users));
+  } catch {
+    // Ignorar si no está soportado
+  }
+}
+
+const toLiveItem = (m: SanitizedTTSMessage): LiveItem => ({
+  id: m.id,
+  user: m.displayName,
+  username: m.username,
+  text: m.cleanText,
+  trigger: m.trigger,
+  bits: m.bits,
+});
+
+type LiveControl = (ControlCommand & { id?: string }) | { action: 'remove'; id?: string };
+
+// Bloqueos temporales (!s timeout usuario 10): usuario -> momento en que caduca
+const TIMEOUTS_KEY = 'lalo_tts_timeouts';
+
+function loadTimeouts(): Record<string, number> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TIMEOUTS_KEY) || '{}');
+    const result: Record<string, number> = {};
+    Object.entries(parsed || {}).forEach(([user, until]) => {
+      const name = normalizeUser(user);
+      if (name && typeof until === 'number' && until > Date.now()) result[name] = until;
+    });
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function saveTimeouts(timeouts: Record<string, number>) {
+  try {
+    localStorage.setItem(TIMEOUTS_KEY, JSON.stringify(timeouts));
+  } catch {
+    // Ignorar si no está soportado
+  }
+}
+
+const EMPTY_STATS: SessionStats = { read: 0, skipped: 0, rejected: 0, paid: 0, byUser: {} };
+
+const LOG_LIMIT = 30;
 
 const LALOPLAY_DEFAULT_VOICE = '37f9f4eec7624089a49b188d47588f2c';
 const OLD_PRESET_VOICE = '7f92f8afb8ec43bf81429cc1c9199cb1';
@@ -123,14 +193,77 @@ export const Widget: React.FC = () => {
     };
   }, []);
 
+  // Control en vivo: pausa, bloqueos hechos desde el chat y registro de lo leído o descartado
+  const [paused, setPaused] = useState(false);
+  const [runtimeBlocks, setRuntimeBlocks] = useState<string[]>(loadRuntimeBlocks);
+  const [log, setLog] = useState<LogItem[]>([]);
+  const [stats, setStats] = useState<SessionStats>(EMPTY_STATS);
+  const pushLog = useCallback((item: LogItem) => {
+    setLog((prev) => [item, ...prev].slice(0, LOG_LIMIT));
+    // Contadores de la sesión: el registro solo guarda los últimos mensajes
+    setStats((prev) => ({
+      read: prev.read + (item.status === 'read' ? 1 : 0),
+      skipped: prev.skipped + (item.status === 'skipped' ? 1 : 0),
+      rejected: prev.rejected + (item.status === 'rejected' ? 1 : 0),
+      paid: prev.paid + (item.status === 'read' && (item.trigger === 'reward' || item.trigger === 'bits') ? 1 : 0),
+      byUser: item.status === 'read' ? { ...prev.byUser, [item.user]: (prev.byUser[item.user] || 0) + 1 } : prev.byUser,
+    }));
+  }, []);
+
+  // Aprobación manual y solo texto: lo que diga el chat o el panel manda sobre la URL
+  const [approvalOverride, setApprovalOverride] = useState<boolean | null>(null);
+  const [textOnlyOverride, setTextOnlyOverride] = useState<boolean | null>(null);
+  const [approvedIds, setApprovedIds] = useState<string[]>([]);
+  const approval = approvalOverride ?? settings.approvalMode;
+  const textOnly = textOnlyOverride ?? settings.textOnly;
+  const textOnlyRef = useRef(textOnly);
+  textOnlyRef.current = textOnly;
+
+  // Bloqueos temporales: un reloj los hace caducar
+  const [timeouts, setTimeouts] = useState<Record<string, number>>(loadTimeouts);
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
+  const activeTimeouts = useMemo(
+    () =>
+      Object.entries(timeouts)
+        .filter(([, until]) => until > clock)
+        .map(([user, until]) => ({ user, until })),
+    [timeouts, clock]
+  );
+  const controlRef = useRef<(command: LiveControl) => void>(() => {});
+  const finalizeRef = useRef<((skipped?: boolean) => void) | null>(null);
+
+  const moderation = useMemo(
+    () =>
+      normalizeModeration({
+        ...settings,
+        blockedUsers: [...settings.blockedUsers, ...runtimeBlocks, ...activeTimeouts.map((t) => t.user)],
+      }),
+    [settings, runtimeBlocks, activeTimeouts]
+  );
+
+  const handleRejected = useCallback(
+    (m: RejectedMessage) =>
+      pushLog({ id: m.id, user: m.user, username: m.username, text: m.text, at: m.at, status: 'rejected', reason: m.reason }),
+    [pushLog]
+  );
+  const handleControl = useCallback((command: ControlCommand) => controlRef.current(command), []);
+
   const {
     messageQueue,
     isConnected,
     removeMessageFromQueue,
+    clearQueue,
     enqueueManualMessage
   } = useTwitchChat({
     channel: activeChannel,
     enabled: true,
+    moderation,
+    onControl: handleControl,
+    onRejected: handleRejected,
   });
 
   const [currentMessage, setCurrentMessage] = useState<SanitizedTTSMessage | null>(null);
@@ -171,7 +304,7 @@ export const Widget: React.FC = () => {
           console.log('[Lalo Widget] Configuración actualizada dinámicamente desde el Dashboard.');
           setSettings((prev) => {
             const merged = { ...prev, ...event.data.settings };
-            return { ...merged, ...normalizeAppearance(merged) };
+            return { ...merged, ...normalizeAppearance(merged), ...normalizeModeration(merged) };
           });
         }
         if (event.data?.type === 'FORCE_RELOAD' || event.data?.type === 'RELOAD') {
@@ -308,14 +441,21 @@ export const Widget: React.FC = () => {
       let finalized = false;
 
       // Limpieza final y avance incondicional a la siguiente tarjeta (idempotente)
-      const finalizePlayback = () => {
+      const finalizePlayback = (skipped = false) => {
         if (finalized) return;
         finalized = true;
 
         if (watchdogTimer) clearTimeout(watchdogTimer);
+        if (skipped) {
+          // Saltado por el streamer: cortar la voz ya
+          if (audioRef.current) audioRef.current.pause();
+          if ('speechSynthesis' in window && window.speechSynthesis) window.speechSynthesis.cancel();
+        }
+        pushLog({ ...toLiveItem(message), at: Date.now(), status: skipped ? 'skipped' : 'read' });
         stopSpeakingAnimation();
 
         animateExit(() => {
+          finalizeRef.current = null;
           setCurrentMessage(null);
           setIsAudioLoading(false);
           setIsPlaying(false);
@@ -329,6 +469,17 @@ export const Widget: React.FC = () => {
           }
         });
       };
+
+      finalizeRef.current = finalizePlayback;
+
+      // Solo texto: la alerta se muestra el tiempo que se tardaría en leerla, sin pedir audio
+      if (textOnlyRef.current) {
+        const seconds = Math.min(20, Math.max(3, message.cleanText.length * 0.065));
+        setIsAudioLoading(false);
+        startSpeakingAnimation(message.cleanText.length, seconds);
+        watchdogTimer = setTimeout(() => finalizePlayback(), seconds * 1000);
+        return;
+      }
 
       try {
         const controller = new AbortController();
@@ -497,19 +648,164 @@ export const Widget: React.FC = () => {
         }, 1200);
       }
     },
-    [settings, animateExit, startSpeakingAnimation, stopSpeakingAnimation]
+    [settings, animateExit, startSpeakingAnimation, stopSpeakingAnimation, pushLog]
   );
 
-  // Bucle FIFO estricto: Observa la cola y desencadena la siguiente tarjeta cuando isPlaying es falso
+  // Órdenes de control: llegan del chat (streamer y mods) o del control en vivo de este navegador
+  controlRef.current = (command: LiveControl) => {
+    const dropUser = (user: string) =>
+      messageQueue.filter((m) => m.username.toLowerCase() === user && m.trigger !== 'test').forEach((m) => removeMessageFromQueue(m.id));
+
+    switch (command.action) {
+      case 'skip':
+        finalizeRef.current?.(true);
+        break;
+      case 'pause':
+        setPaused(true);
+        break;
+      case 'resume':
+        setPaused(false);
+        break;
+      case 'clear':
+        messageQueue.forEach((m) => pushLog({ ...toLiveItem(m), at: Date.now(), status: 'skipped', reason: 'Cola vaciada' }));
+        clearQueue();
+        break;
+      case 'panic':
+        // Silencio: corta la voz, vacía la cola y deja todo en pausa
+        finalizeRef.current?.(true);
+        messageQueue.forEach((m) => pushLog({ ...toLiveItem(m), at: Date.now(), status: 'skipped', reason: 'Silencio' }));
+        clearQueue();
+        setPaused(true);
+        break;
+      case 'remove':
+      case 'reject': {
+        // Sin id, se rechaza el mensaje más antiguo que espera aprobación.
+        // removeMessageFromQueue quita el primero si no encuentra el id: comprobar antes.
+        const target = command.id
+          ? messageQueue.find((m) => m.id === command.id)
+          : messageQueue.find((m) => needsApproval(m, { approval, approvedIds, priorityPaid: false }));
+        if (target) {
+          pushLog({ ...toLiveItem(target), at: Date.now(), status: 'rejected', reason: command.action === 'reject' ? 'No aprobado' : 'Quitado' });
+          removeMessageFromQueue(target.id);
+        }
+        break;
+      }
+      case 'approve': {
+        const target = command.id
+          ? messageQueue.find((m) => m.id === command.id)
+          : messageQueue.find((m) => needsApproval(m, { approval, approvedIds, priorityPaid: false }));
+        if (target) setApprovedIds((prev) => [...prev.slice(-99), target.id]);
+        break;
+      }
+      case 'manual':
+        setApprovalOverride(true);
+        break;
+      case 'auto':
+        setApprovalOverride(false);
+        break;
+      case 'mute':
+        setTextOnlyOverride(true);
+        break;
+      case 'unmute':
+        setTextOnlyOverride(false);
+        break;
+      case 'timeout':
+        if (command.user) {
+          const user = command.user;
+          const until = Date.now() + (command.minutes || DEFAULT_TIMEOUT_MINUTES) * 60000;
+          setTimeouts((prev) => {
+            const next = { ...prev, [user]: until };
+            saveTimeouts(next);
+            return next;
+          });
+          dropUser(user);
+        }
+        break;
+      case 'block':
+        if (command.user) {
+          const user = command.user;
+          setRuntimeBlocks((prev) => {
+            const next = prev.includes(user) ? prev : [...prev, user];
+            saveRuntimeBlocks(next);
+            return next;
+          });
+          dropUser(user);
+        }
+        break;
+      case 'unblock':
+        if (command.user) {
+          const user = command.user;
+          setRuntimeBlocks((prev) => {
+            const next = prev.filter((u) => u !== user);
+            saveRuntimeBlocks(next);
+            return next;
+          });
+          setTimeouts((prev) => {
+            const next = { ...prev };
+            delete next[user];
+            saveTimeouts(next);
+            return next;
+          });
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  // Estado para el control en vivo: se publica con cada cambio y con un latido periódico
+  const publishRef = useRef<() => void>(() => {});
+  publishRef.current = () => {
+    const state: WidgetState = {
+      channel: activeChannel,
+      connected: isConnected,
+      paused,
+      approval,
+      textOnly,
+      timeouts: activeTimeouts,
+      stats,
+      now: currentMessage ? toLiveItem(currentMessage) : null,
+      queue: messageQueue.map((m) => ({ ...toLiveItem(m), pending: needsApproval(m, { approval, approvedIds, priorityPaid: false }) })),
+      log,
+      at: Date.now(),
+    };
+    postBus({ type: 'STATE', state });
+  };
+
   useEffect(() => {
-    if (!isPlaying && !isProcessingRef.current && messageQueue.length > 0) {
-      const nextMessage = messageQueue[0];
+    publishRef.current();
+  }, [activeChannel, isConnected, paused, approval, textOnly, approvedIds, activeTimeouts, stats, currentMessage, messageQueue, log]);
+
+  useEffect(() => {
+    const stop = listenBus((message: BusMessage) => {
+      if (message.type === 'CONTROL') controlRef.current({ action: message.action, id: message.id, user: message.user, minutes: message.minutes } as LiveControl);
+      if (message.type === 'STATE_REQUEST') publishRef.current();
+    });
+    const heartbeat = setInterval(() => publishRef.current(), 5000);
+    return () => {
+      stop();
+      clearInterval(heartbeat);
+    };
+  }, []);
+
+  // Al bloquear a alguien desde el panel, sus mensajes en espera salen de la cola
+  useEffect(() => {
+    const blocked = messageQueue.find((m) => m.trigger !== 'test' && moderation.blockedUsers.includes(m.username.toLowerCase()));
+    if (blocked) removeMessageFromQueue(blocked.id);
+  }, [moderation.blockedUsers, messageQueue, removeMessageFromQueue]);
+
+  // Bucle FIFO estricto: Observa la cola y desencadena la siguiente tarjeta cuando isPlaying es falso.
+  // En pausa, el mensaje que suena termina y la cola espera.
+  useEffect(() => {
+    if (!paused && !isPlaying && !isProcessingRef.current && messageQueue.length > 0) {
+      // El siguiente es el primero ya aprobado; con prioridad, antes los canjes y los bits
+      const nextMessage = pickNext(messageQueue, { approval, approvedIds, priorityPaid: settings.priorityPaid });
       if (nextMessage) {
         removeMessageFromQueue(nextMessage.id);
         playAudioForMessage(nextMessage);
       }
     }
-  }, [isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -553,6 +849,8 @@ export const Widget: React.FC = () => {
       <div className={`absolute right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-zinc-300 ${settings.position[0] === 't' ? 'bottom-4' : 'top-4'}`}>
         <Radio className={`w-3.5 h-3.5 ${isConnected ? 'text-emerald-400 animate-pulse' : 'text-zinc-600'}`} />
         <span className="font-mono">#{activeChannel}</span>
+        {paused && <span className="font-semibold text-amber-300">En pausa</span>}
+        {approval && <span className="font-semibold text-amber-300">Manual</span>}
         {messageQueue.length > 0 && (
           <span className="ml-1 px-1.5 py-0.5 rounded-full bg-purple-600 text-[10px] text-white font-mono font-bold">
             {messageQueue.length}
