@@ -1,0 +1,382 @@
+#!/bin/bash
+#
+# worktree-create — Create a git worktree for parallel agent sessions
+#
+# Usage:
+#   worktree-create <name> [--branch <branch>] [--from <ref>]
+#   worktree-create --workstream <ws> --agent <ag> [--branch <branch>] [--from <ref>]
+#   worktree-create --compute-only --workstream <ws> --agent <ag>
+#
+# Creates a worktree at .claude/worktrees/<name>/ on branch <name> (or --branch).
+# Aligns with Claude Code's built-in EnterWorktree convention.
+# Sets up dev environment if dependencies are detected.
+#
+# Naming convention (per dispatch #166/#169): when `--workstream` and `--agent`
+# are both provided, the worktree name is computed via the collapse rule:
+#
+#   if agent == workstream OR agent.startswith("workstream-"):
+#       name = agent               # devex+devex → devex, mdpal+mdpal-app → mdpal-app
+#   else:
+#       name = "workstream-agent"  # agency+captain → agency-captain
+#
+# The positional form is preserved for backward compat and ad-hoc worktrees
+# that don't belong to a workstream (e.g., fix branches, experiments).
+#
+# The `--compute-only` mode prints the computed name and exits without
+# creating anything — useful for tests and programmatic callers that want
+# to know the canonical name for a {workstream, agent} pair.
+#
+# Branch resolution is DWIM (v2.3.0), in this order:
+#
+#   1. An existing LOCAL branch                  → check it out
+#   2. An explicit --from <ref>                  → new branch at that ref
+#   3. An existing <remote>/<branch>             → new local tracking branch
+#   4. Nothing matches                           → new branch from current HEAD
+#
+# Case 2 is the local-first landing path: `pr-captain-land` cuts its scratch
+# worktree from a pristine `origin/<agent-branch>` under a `_land-` name that
+# exists nowhere else, so an explicit start point must outrank the DWIM search.
+#
+# Case 3 is the stale-PR-revival path, new in v2.3.0. Through v2.2.0 a branch
+# that existed only on a remote fell through to case 4 and produced an EMPTY
+# branch from HEAD, silently discarding the PR's content (this bit the revival
+# of PR #426).
+#
+# This is a FIRST-CLASS PRIMITIVE in Agency 2.0 — worktree isolation
+# enables multiple agent sessions to work in parallel without conflicts.
+
+set -euo pipefail
+
+VERSION="2.3.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Capture a caller-supplied project root BEFORE sourcing the helpers.
+# lib/_path-resolve re-derives AGENCY_PROJECT_ROOT from this script's own
+# location on source, unconditionally overwriting whatever the caller set.
+# Without this capture the `${AGENCY_PROJECT_ROOT:-...}` default below is dead
+# code, and a caller that points the tool at another checkout (tests, adopter
+# scripts) silently gets a worktree in the WRONG repo.
+CALLER_PROJECT_ROOT="${AGENCY_PROJECT_ROOT:-}"
+
+# Source helpers
+if [[ -f "$SCRIPT_DIR/lib/_log-helper" ]]; then
+    source "$SCRIPT_DIR/lib/_log-helper"
+fi
+if [[ -f "$SCRIPT_DIR/lib/_path-resolve" ]]; then
+    source "$SCRIPT_DIR/lib/_path-resolve"
+fi
+
+# --- Name computation (per #166/#169) ---
+# compute_worktree_name <workstream> <agent>
+#
+# Implements the collapse rule: if the agent name is the workstream or starts
+# with "workstream-", drop the workstream prefix; otherwise join with "-".
+# Prints the computed name to stdout. Exits 1 on invalid input.
+compute_worktree_name() {
+    local ws="$1"
+    local ag="$2"
+
+    if [[ -z "$ws" ]] || [[ -z "$ag" ]]; then
+        echo "compute_worktree_name: workstream and agent both required" >&2
+        return 1
+    fi
+
+    if [[ "$ag" == "$ws" ]] || [[ "$ag" == "${ws}-"* ]]; then
+        echo "$ag"
+    else
+        echo "${ws}-${ag}"
+    fi
+}
+
+# _require_value <flag> [next ...]
+#
+# Guard for option parsing: under `set -u` a trailing flag with no argument
+# ("worktree-create foo --branch") expands "$2" unbound and dies with a raw
+# bash error instead of a usage hint. Call with the remaining "$@".
+_require_value() {
+    if [[ $# -lt 2 ]]; then
+        echo "Error: $1 requires a value" >&2
+        exit 1
+    fi
+    # A value that looks like a flag is a missing value in disguise:
+    # "worktree-create foo --branch --from bar" would otherwise set
+    # BRANCH=--from and fail much later with a confusing git error. Nothing
+    # legal is rejected here — git forbids branch names starting with '-',
+    # and a committish cannot start with one either.
+    if [[ "$2" == -* ]]; then
+        echo "Error: $1 requires a value (got '$2', which looks like a flag)" >&2
+        exit 1
+    fi
+}
+
+# --- Flags ---
+show_help() {
+    cat <<HELP
+Usage:
+  worktree-create <name> [--branch <branch>] [--from <ref>]
+  worktree-create --workstream <ws> --agent <ag> [--branch <branch>] [--from <ref>]
+  worktree-create --compute-only --workstream <ws> --agent <ag>
+
+Creates a git worktree at .claude/worktrees/<name>/
+
+Options:
+  --workstream <ws> Workstream name (pairs with --agent to compute name)
+  --agent <ag>      Agent name (pairs with --workstream to compute name)
+  --branch <name>   Branch name (default: same as worktree name)
+  --from <ref>      Start point for a NEW branch. Accepts any committish,
+                    including a remote-tracking ref such as origin/main or
+                    origin/some-agent-branch. Outranks the remote-branch
+                    search below. It is an ERROR to pass --from when the
+                    branch already exists locally — the branch has a tip
+                    already, and silently ignoring the flag would put the
+                    worktree somewhere the caller did not ask for.
+  --compute-only    Print the computed name and exit (no worktree creation)
+  --version         Show version
+  --help            Show this help
+
+Naming rule when both --workstream and --agent are given:
+  agent == workstream OR agent starts with "workstream-"  → worktree = agent
+  otherwise                                                → worktree = workstream-agent
+
+Branch resolution (first match wins):
+  local branch <branch> exists      → check it out
+  --from <ref> given                → new branch at <ref>
+  <remote>/<branch> exists          → new local branch tracking it (origin wins
+                                      if several remotes carry the branch)
+  none of the above                 → new branch from current HEAD
+
+Remote-tracking refs are only as fresh as your last fetch — fetch before
+reviving a stale PR branch, or you will get an out-of-date worktree. The tool
+prints the resolved commit and its distance from HEAD so you can tell.
+
+Examples:
+  worktree-create --workstream devex --agent devex       → devex
+  worktree-create --workstream mdpal --agent mdpal-app   → mdpal-app
+  worktree-create --workstream agency --agent captain    → agency-captain
+HELP
+}
+
+# Short-circuit: --compute-only mode is pure naming logic, used by tests and
+# programmatic callers that want the canonical name without side effects.
+if [[ "${1:-}" == "--compute-only" ]]; then
+    shift
+    _ws=""
+    _ag=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --workstream) _require_value "$@"; _ws="$2"; shift 2 ;;
+            --agent) _require_value "$@"; _ag="$2"; shift 2 ;;
+            *) echo "Unknown option: $1" >&2; exit 1 ;;
+        esac
+    done
+    compute_worktree_name "$_ws" "$_ag"
+    exit $?
+fi
+
+NAME=""
+BRANCH=""
+WORKSTREAM=""
+AGENT=""
+FROM_REF=""
+FROM_SHA=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version|-v) echo "worktree-create $VERSION"; exit 0 ;;
+        --help|-h) show_help; exit 0 ;;
+        --branch) _require_value "$@"; BRANCH="$2"; shift 2 ;;
+        --from) _require_value "$@"; FROM_REF="$2"; shift 2 ;;
+        --workstream) _require_value "$@"; WORKSTREAM="$2"; shift 2 ;;
+        --agent) _require_value "$@"; AGENT="$2"; shift 2 ;;
+        -*) echo "Unknown option: $1" >&2; exit 1 ;;
+        *) NAME="$1"; shift ;;
+    esac
+done
+
+# If --workstream and --agent were given, compute NAME via the collapse rule.
+# Error if only one is given (ambiguous) or if positional name also given.
+if [[ -n "$WORKSTREAM" ]] || [[ -n "$AGENT" ]]; then
+    if [[ -z "$WORKSTREAM" ]] || [[ -z "$AGENT" ]]; then
+        echo "Error: --workstream and --agent must be given together" >&2
+        exit 1
+    fi
+    if [[ -n "$NAME" ]]; then
+        echo "Error: cannot mix positional name with --workstream/--agent" >&2
+        exit 1
+    fi
+    NAME="$(compute_worktree_name "$WORKSTREAM" "$AGENT")"
+fi
+
+if [[ -z "$NAME" ]]; then
+    echo "Error: worktree name is required" >&2
+    show_help >&2
+    exit 1
+fi
+
+# Validate name.
+#
+# A leading underscore is allowed so machine-created, short-lived worktrees can
+# be namespaced apart from human agent worktrees at a glance — `pr-captain-land`
+# cuts `_land-<branch>` scratch worktrees and deletes them at the end of the
+# landing. The rest of the character class is unchanged: still no slashes (they
+# would nest directories under .claude/worktrees/ and collide with git's ref
+# directory rules), no dots, no spaces.
+if ! [[ "$NAME" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]; then
+    echo "Error: name must start with a letter or underscore and contain only letters, numbers, underscores, hyphens" >&2
+    exit 1
+fi
+
+BRANCH="${BRANCH:-$NAME}"
+
+# NAME is regex-restricted above because it becomes a path component. BRANCH is
+# NOT — branch names legitimately contain slashes (fix/foo, the usual PR shape).
+# But it still has to be a legal git branch name, or `worktree add -b` fails
+# with a raw plumbing error. `--branch HEAD` is the easy way to hit this: it
+# matches refs/remotes/origin/HEAD, which exists in every clone.
+if ! git check-ref-format --branch "$BRANCH" >/dev/null 2>&1; then
+    echo "Error: '$BRANCH' is not a valid git branch name" >&2
+    exit 1
+fi
+
+PROJECT_ROOT="${CALLER_PROJECT_ROOT:-${AGENCY_PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}}"
+WORKTREE_DIR="$PROJECT_ROOT/.claude/worktrees/$NAME"
+
+# Check if worktree already exists
+if [[ -d "$WORKTREE_DIR" ]]; then
+    echo "Error: worktree '$NAME' already exists at $WORKTREE_DIR" >&2
+    exit 1
+fi
+
+# Create worktree
+echo "Creating worktree: $NAME"
+echo "  Branch: $BRANCH"
+if [[ -n "$FROM_REF" ]]; then
+    echo "  From:   $FROM_REF"
+fi
+echo "  Path: .claude/worktrees/$NAME/"
+
+mkdir -p "$PROJECT_ROOT/.claude/worktrees"
+
+# remotes_with_branch <branch>
+#
+# Print a space-separated list of remotes whose tracking ref carries <branch>
+# (empty if none). Never fails — the caller decides what an ambiguous result
+# means, which differs between the --from path (irrelevant) and the DWIM path
+# (fatal unless origin breaks the tie).
+#
+# Enumerating `git remote` and probing each with show-ref (rather than globbing
+# refs/remotes/*/<branch>) keeps this correct for slash-bearing branch names,
+# where a single `*` would otherwise have to span path components.
+remotes_with_branch() {
+    local branch="$1"
+    local r matches=""
+    while IFS= read -r r; do
+        [[ -z "$r" ]] && continue
+        if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/remotes/$r/$branch" 2>/dev/null; then
+            matches="$matches $r"
+        fi
+    done <<< "$(git -C "$PROJECT_ROOT" remote 2>/dev/null || true)"
+    echo "${matches# }"
+}
+
+# --- Resolve which of the four cases applies (see the header) ---
+LOCAL_EXISTS=0
+if git -C "$PROJECT_ROOT" show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null; then
+    LOCAL_EXISTS=1
+fi
+
+REMOTE=""
+REMOTE_MATCHES=""
+if [[ $LOCAL_EXISTS -eq 0 ]]; then
+    REMOTE_MATCHES="$(remotes_with_branch "$BRANCH")"
+    for _r in $REMOTE_MATCHES; do
+        if [[ "$_r" == "origin" ]]; then
+            REMOTE="origin"
+        elif [[ -z "$REMOTE" ]]; then
+            REMOTE="$_r"
+        fi
+    done
+    # `origin` wins when several remotes carry the same branch; when several do
+    # and none is `origin`, that is genuinely ambiguous. An explicit --from
+    # settles it, so only the DWIM path refuses.
+    if [[ -z "$FROM_REF" ]] && [[ "$REMOTE" != "origin" ]] \
+        && [[ $(echo "$REMOTE_MATCHES" | wc -w) -gt 1 ]]; then
+        echo "Error: branch '$BRANCH' exists on multiple remotes ($REMOTE_MATCHES)." >&2
+        echo "       Refusing to guess. Pass --from <remote>/$BRANCH, or create the local branch yourself." >&2
+        exit 1
+    fi
+fi
+
+if [[ $LOCAL_EXISTS -eq 1 ]]; then
+    # Local branch exists — use it. --from would be a lie here (the branch
+    # already has a tip); say so instead of silently ignoring it.
+    if [[ -n "$FROM_REF" ]]; then
+        echo "Error: --from $FROM_REF given but branch '$BRANCH' already exists" >&2
+        echo "  Refusing to guess. Delete the branch or drop --from." >&2
+        exit 1
+    fi
+    git -C "$PROJECT_ROOT" worktree add "$WORKTREE_DIR" "$BRANCH"
+elif [[ -n "$FROM_REF" ]]; then
+    # Explicit start point (e.g. origin/main, or an agent's remote branch — the
+    # local-first landing flow cuts its scratch worktree from pristine origin
+    # refs, never from a local tip). Explicit beats the DWIM search below.
+    # Resolve to a bare SHA and hand git THAT, not the caller's string. git
+    # re-scans its whole argv for options, including the trailing commit-ish
+    # position, so an unvalidated ref could be read as a `worktree add` flag.
+    # A resolved SHA can never look like one.
+    if ! FROM_SHA="$(git -C "$PROJECT_ROOT" rev-parse --verify --quiet "${FROM_REF}^{commit}")"; then
+        echo "Error: --from ref '$FROM_REF' does not resolve to a commit" >&2
+        exit 1
+    fi
+    if [[ -n "$REMOTE" ]]; then
+        # A remote branch of the same name exists but --from names a different
+        # start point. Honor the explicit flag, but never do it silently: an
+        # unnoticed shadow of a real remote branch is the exact failure this
+        # tool's branch resolution exists to prevent.
+        echo "  Note: '$BRANCH' also exists on '$REMOTE' — --from wins, NOT tracking $REMOTE/$BRANCH"
+    fi
+    git -C "$PROJECT_ROOT" worktree add -b "$BRANCH" "$WORKTREE_DIR" "$FROM_SHA"
+elif [[ -n "$REMOTE" ]]; then
+    # Remote-only branch — create a local branch tracking <remote>/<branch>.
+    #
+    # This is the stale-PR-revival path, and it deliberately applies even when
+    # --branch was not passed (i.e. when the branch name defaulted to the
+    # worktree name). Creating a fresh local branch that shadows an existing
+    # remote branch of the same name gives the agent an empty tree and makes
+    # their first push a non-fast-forward against their own real work.
+    #
+    # Report what is actually being checked out: a remote-tracking ref is only
+    # as fresh as the last fetch, and a months-stale branch looks identical to
+    # a current one unless we say so.
+    echo "  Branch exists on '$REMOTE' only — tracking $REMOTE/$BRANCH"
+    echo "    commit: $(git -C "$PROJECT_ROOT" log -1 --format='%h %cs %s' "$REMOTE/$BRANCH" 2>/dev/null || echo unknown)"
+    echo "    vs HEAD: $(git -C "$PROJECT_ROOT" rev-list --count "HEAD..$REMOTE/$BRANCH" 2>/dev/null || echo '?') ahead, $(git -C "$PROJECT_ROOT" rev-list --count "$REMOTE/$BRANCH..HEAD" 2>/dev/null || echo '?') behind"
+    echo "    (remote-tracking refs are only as fresh as your last fetch)"
+    git -C "$PROJECT_ROOT" worktree add --track -b "$BRANCH" "$WORKTREE_DIR" "$REMOTE/$BRANCH"
+else
+    # Create new branch from HEAD. If the caller expected to land on an
+    # existing remote branch, an un-fetched remote is the usual reason.
+    echo "  No local or remote branch '$BRANCH' — creating it fresh from HEAD"
+    echo "    (if you expected an existing remote branch, fetch first)"
+    git -C "$PROJECT_ROOT" worktree add -b "$BRANCH" "$WORKTREE_DIR"
+fi
+
+# Install dependencies if detected
+if [[ -f "$WORKTREE_DIR/package.json" ]]; then
+    echo "Installing dependencies..."
+    if [[ -f "$WORKTREE_DIR/pnpm-lock.yaml" ]]; then
+        (cd "$WORKTREE_DIR" && pnpm install --frozen-lockfile 2>/dev/null) || true
+    elif [[ -f "$WORKTREE_DIR/bun.lockb" ]] || [[ -f "$WORKTREE_DIR/bun.lock" ]]; then
+        (cd "$WORKTREE_DIR" && bun install 2>/dev/null) || true
+    elif [[ -f "$WORKTREE_DIR/yarn.lock" ]]; then
+        (cd "$WORKTREE_DIR" && yarn install --frozen-lockfile 2>/dev/null) || true
+    elif [[ -f "$WORKTREE_DIR/package-lock.json" ]]; then
+        (cd "$WORKTREE_DIR" && npm ci 2>/dev/null) || true
+    fi
+fi
+
+echo ""
+echo "Worktree '$NAME' created successfully!"
+echo ""
+echo "To work in it:"
+echo "  cd $WORKTREE_DIR && claude"

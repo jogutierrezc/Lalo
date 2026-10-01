@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+# What Problem: Agents skip critical session startup steps — especially
+# launching the dispatch monitor. Without a preflight check, sessions start
+# in a degraded state and agents miss dispatches, work on stale context,
+# or leave dirty state from previous sessions.
+#
+# How & Why: Preflight checklist that /session-resume calls as its final
+# step. Checks 5 conditions and reports pass/fail for each. Exits non-zero
+# if any check fails, so the calling skill knows to remediate.
+#
+# Usage: ./agency/tools/session-preflight [--quiet]
+#   --quiet  Only output failures (for scripted use)
+#
+# Written: 2026-04-14 during captain session (session lifecycle hardening)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+QUIET=false
+[[ "${1:-}" == "--quiet" ]] && QUIET=true
+
+PASS=0
+FAIL=0
+WARN=0
+
+# Colors
+GREEN="\033[0;32m"
+RED="\033[0;31m"
+YELLOW="\033[0;33m"
+RESET="\033[0m"
+
+report_pass() {
+    PASS=$((PASS + 1))
+    [[ "$QUIET" == "false" ]] && echo -e "  ${GREEN}✓${RESET} $1"
+}
+
+report_fail() {
+    FAIL=$((FAIL + 1))
+    echo -e "  ${RED}✗${RESET} $1"
+    echo -e "    ${RED}Fix:${RESET} $2"
+}
+
+report_warn() {
+    WARN=$((WARN + 1))
+    echo -e "  ${YELLOW}!${RESET} $1"
+    echo -e "    ${YELLOW}Action:${RESET} $2"
+}
+
+echo "Session Preflight"
+echo "─────────────────"
+
+# ── Check 1: Working tree clean ──────────────────────────────────────────
+# Issue #199: framework hooks themselves write to tracked and untracked
+# paths during SessionStart — the preflight's own callers are producing
+# dirty state. We filter known framework-owned churn patterns from the
+# dirty count so user-space dirt still fails, but framework-managed files
+# (tool-runs log, session-handoff writes, archived handoffs) don't.
+#
+# Paths filtered as framework-owned:
+#   - .claude/logs/                          (hook-generated logs)
+#   - agency/logs/                           (hook-generated logs, v46 location)
+#   - usr/*/captain/captain-handoff.md       (SessionStart handoff rewrite)
+#   - usr/*/captain/history/                 (archived handoffs, untracked)
+#   - usr/*/tool-runs.jsonl                  (tool-run log)
+#
+# Rationale (from issue #199): these are hook outputs the agent cannot
+# commit or stash sensibly without either polluting history with framework
+# churn or losing framework state. User can override the filter by setting
+# AGENCY_PREFLIGHT_STRICT_DIRTY=1 (all dirt fails).
+
+_is_framework_owned() {
+    # Takes a `git status --porcelain` path (without status prefix), returns
+    # 0 if the path matches a framework-owned pattern, 1 otherwise.
+    local path="$1"
+    case "$path" in
+        .claude/logs/*)                         return 0 ;;
+        agency/logs/*)                          return 0 ;;
+        usr/*/captain/captain-handoff.md)       return 0 ;;
+        usr/*/captain/history/*)                return 0 ;;
+        usr/*/tool-runs.jsonl)                  return 0 ;;
+    esac
+    return 1
+}
+
+porcelain=$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null || true)
+total_count=0
+user_count=0
+framework_count=0
+
+if [[ -n "$porcelain" ]]; then
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        total_count=$((total_count + 1))
+        # Strip the 2-char status prefix + space to get the path
+        path="${line:3}"
+        # Rename/copy entries look like "R  old -> new"; take the new side.
+        if [[ "$path" == *" -> "* ]]; then
+            path="${path#*-> }"
+        fi
+        if [[ "${AGENCY_PREFLIGHT_STRICT_DIRTY:-0}" != "1" ]] && _is_framework_owned "$path"; then
+            framework_count=$((framework_count + 1))
+        else
+            user_count=$((user_count + 1))
+        fi
+    done <<< "$porcelain"
+fi
+
+if [[ "$user_count" -eq 0 ]]; then
+    if [[ "$framework_count" -gt 0 ]]; then
+        report_pass "Working tree clean (framework-owned churn: $framework_count file(s) filtered)"
+    else
+        report_pass "Working tree clean"
+    fi
+else
+    report_fail "Working tree dirty ($user_count user-space file(s); $framework_count framework-owned filtered)" \
+        "Commit or stash user-space changes: ./agency/tools/git-safe status"
+fi
+
+# ── Check 2: Worktree synced with main ───────────────────────────────────
+
+current_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)
+if [[ "$current_branch" == "main" || "$current_branch" == "master" ]]; then
+    report_pass "On main — sync check skipped"
+else
+    # Check if main is an ancestor of HEAD (i.e., we've merged main)
+    main_ref=""
+    if git -C "$REPO_ROOT" rev-parse --verify main >/dev/null 2>&1; then
+        main_ref="main"
+    elif git -C "$REPO_ROOT" rev-parse --verify master >/dev/null 2>&1; then
+        main_ref="master"
+    fi
+
+    if [[ -n "$main_ref" ]]; then
+        if git -C "$REPO_ROOT" merge-base --is-ancestor "$main_ref" HEAD 2>/dev/null; then
+            report_pass "Branch includes latest $main_ref"
+        else
+            behind=$(git -C "$REPO_ROOT" rev-list HEAD.."$main_ref" --count 2>/dev/null || echo "?")
+            report_fail "Branch is $behind commits behind $main_ref" \
+                "Run: /worktree-sync"
+        fi
+    else
+        report_pass "No main/master ref found — sync check skipped"
+    fi
+fi
+
+# ── Check 3: Handoff exists and is non-empty ─────────────────────────────
+
+# Find handoff via the handoff tool
+handoff_output=$(bash "$SCRIPT_DIR/handoff" read 2>/dev/null || true)
+if [[ -n "$handoff_output" && "$handoff_output" != *"No handoff found"* ]]; then
+    report_pass "Handoff loaded"
+else
+    report_fail "No handoff found" \
+        "Run: ./agency/tools/handoff read"
+fi
+
+# ── Check 4: No unread dispatches remaining ──────────────────────────────
+
+# Retention sweep: auto-resolve stale commit-notify dispatches (the
+# git-safe-commit firehose) before counting, so "unread" reflects actionable
+# items, not months of FYI notices. Idempotent + cheap (one UPDATE, no-op when
+# nothing is old). Window from dispatches.commit_retention_days (default 7d).
+bash "$SCRIPT_DIR/dispatch" prune --type commit >/dev/null 2>&1 || true
+
+dispatch_check=$(bash "$SCRIPT_DIR/dispatch" check 2>/dev/null || true)
+if [[ -z "$dispatch_check" ]]; then
+    report_pass "No unread dispatches"
+elif echo "$dispatch_check" | grep -q "flag(s)"; then
+    # Has flags but no dispatches — that's fine for preflight
+    report_pass "No unread dispatches (flags pending — process when ready)"
+else
+    report_warn "Unread dispatches detected" \
+        "Run: dispatch list, then dispatch read <id>"
+fi
+
+# ── Check 5: Dispatch monitor reminder ───────────────────────────────────
+# Issue #201: Check 5 used to hard-code report_warn, so every preflight
+# reported "1 action" regardless of whether the monitor was already running.
+# That undermined trust in the check. We cannot directly detect Monitor
+# tool tasks from bash (they're harness-side), so the check is now
+# informational by default. Agents who want a real assertion can set
+# AGENCY_PREFLIGHT_MONITOR_STRICT=1 to force the warn behavior.
+if [[ "${AGENCY_PREFLIGHT_MONITOR_STRICT:-0}" == "1" ]]; then
+    report_warn "Dispatch monitor — verify it is running" \
+        "Run: /monitor-dispatches (if not already started this session)"
+else
+    [[ "$QUIET" == "false" ]] && echo "  ℹ  Dispatch monitor — start with /monitor-dispatches if not already running (informational)"
+fi
+
+# ── Summary ──────────────────────────────────────────────────────────────
+
+echo ""
+echo "─────────────────"
+echo -e "Preflight: ${GREEN}$PASS passed${RESET}, ${RED}$FAIL failed${RESET}, ${YELLOW}$WARN action${RESET}"
+
+if [[ "$FAIL" -gt 0 ]]; then
+    echo ""
+    echo -e "${RED}Session not ready. Fix failures above before proceeding.${RESET}"
+    exit 1
+else
+    echo ""
+    echo "Session ready."
+    exit 0
+fi

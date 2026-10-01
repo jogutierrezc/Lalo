@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# What Problem: PRs were being created without running the Quality Gate,
+# and versions were not being bumped. PRs shipped without receipts.
+#
+# How & Why: Wraps gh pr create with mandatory checks:
+# 1. Must be on a branch, not main
+# 2. receipt-verify must pass (QGR or RGR with valid hash)
+# 3. agency_version must be bumped
+# Hookify blocks raw gh pr create.
+#
+# Usage: ./agency/tools/pr-create [-C <repo-root>] --title "title" --body "body"
+#        All gh pr create flags are passed through after validation.
+#
+# Written: 2026-04-14 during captain session (PR discipline enforcement)
+# Updated: iteration 1.4 — replaced inline hash logic with receipt-verify
+# Updated: v46.29 — added `-C <repo-root>` (see the block below for why)
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ── Repo-root targeting: `-C <repo-root>`, first argument only ───────────────
+#
+# What Problem: pr-captain-land runs THIS tool from the captain's checkout with
+# the cwd set to a scratch worktree — captain's code gating the scratch's data.
+# But every gate below read REPO_ROOT = SCRIPT_DIR/../.., the tool's own INSTALL
+# location. So the BRANCH check inspected the captain's main checkout (always
+# `main`) and blocked the land outright, and the receipt/version gates likewise
+# graded the wrong tree. cwd only ever reached `gh pr create` at the very end,
+# which is how the mismatch went unnoticed.
+#
+# How & Why: `-C` retargets the DATA this tool reads — branch, receipt,
+# manifest — and the directory `gh pr create` runs in. It deliberately does NOT
+# retarget the CODE: receipt-verify and resolve-default-branch below are still
+# invoked from "$SCRIPT_DIR", so a branch cannot ship its own verifier and pass
+# its own gate. Captain's code, scratch's data — that is the whole security
+# model, and `-C` must not be a hole in it.
+#
+# First argument only: everything after this point is passed through verbatim to
+# `gh pr create`, so a scan-anywhere parse would eat a `--body` whose value was
+# literally "-C". Absent the flag, behaviour is unchanged for every caller.
+REPO_ROOT=""
+GH_RUN_DIR=""
+if [[ "${1:-}" == "-C" ]]; then
+    [[ -n "${2:-}" ]] || { echo "BLOCKED: -C requires a directory argument" >&2; exit 1; }
+    [[ -d "$2" ]] || { echo "BLOCKED: -C directory does not exist: $2" >&2; exit 1; }
+    REPO_ROOT="$(cd "$2" && pwd)"
+    GH_RUN_DIR="$REPO_ROOT"
+    shift 2
+fi
+[[ -n "$REPO_ROOT" ]] || REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# ── Step 1: Verify on a branch, not main ─────────────────────────────────
+
+BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
+
+if [[ "$BRANCH" == "main" || "$BRANCH" == "master" ]]; then
+    echo "BLOCKED: Cannot create PR from $BRANCH. Create a branch first." >&2
+    exit 1
+fi
+
+echo "✓ On branch: $BRANCH"
+
+# ── Step 2: Verify receipt ───────────────────────────────────────────────
+
+# D42-R3 / v46.1-R1: four-tier receipt search
+# Tier 1: per-workstream qgr/ and rgr/ (post-v46 canonical)
+# The trailing `|| true` is load-bearing under `set -o pipefail`: `head -1`
+# closes the pipe after the first line, which SIGPIPEs the upstream `ls`
+# once there are more receipts than fit its stdio buffer (races in at ~100+).
+# The value is already captured by `head` before the signal; `|| true` keeps
+# that nondeterministic pipeline failure from aborting the whole script. A
+# genuine empty result still falls through to the -z checks below.
+# `xargs -r` (--no-run-if-empty) is REQUIRED: without it, GNU xargs (Linux)
+# runs `ls -t` with NO args when find matches nothing, which lists the CURRENT
+# DIRECTORY and returns a spurious entry (e.g. "usr") — the -z check then passes
+# and the tool tries to verify a non-receipt. BSD xargs (macOS) skips on empty by
+# default AND supports -r, so -r is correct on both. (#42, container gate.)
+NEWEST_RECEIPT=$(find "$REPO_ROOT/agency/workstreams" \( -path "*/qgr/*.md" -o -path "*/rgr/*.md" \) 2>/dev/null | xargs -r ls -t 2>/dev/null | head -1 || true)
+
+if [[ -z "$NEWEST_RECEIPT" ]]; then
+    # Tier 2: legacy flat receipts dir
+    NEWEST_RECEIPT=$(find "$REPO_ROOT/agency/receipts" -name "*.md" -not -name ".gitkeep" -print0 2>/dev/null | xargs -0 -r ls -t 2>/dev/null | head -1 || true)
+fi
+
+if [[ -z "$NEWEST_RECEIPT" ]]; then
+    # Tier 3: old usr/ location
+    NEWEST_RECEIPT=$(find "$REPO_ROOT/usr" -name "qgr-*.md" -print0 2>/dev/null | xargs -0 -r ls -t 2>/dev/null | head -1 || true)
+fi
+
+if [[ -z "$NEWEST_RECEIPT" ]]; then
+    echo "BLOCKED: No receipt found." >&2
+    echo "  Searched: agency/workstreams/*/qgr/, agency/receipts/, usr/**/qgr-*.md" >&2
+    echo "  Run /pr-prep first." >&2
+    exit 1
+fi
+
+# Run the verifier FROM the captain's $SCRIPT_DIR but WITH the cwd in the repo
+# being gated. receipt-verify compares the receipt's hash against a freshly
+# computed one, and that computation goes through diff-hash, which is purely
+# cwd-based (`git diff <base>..HEAD -- .`). Without the cd, -C would retarget
+# receipt DISCOVERY but not hash VERIFICATION: a receipt found in tree A would
+# be graded against whatever tree the caller happened to be standing in. Today
+# pr-captain-land also wraps this call in a cd to the scratch, so the two agree
+# by luck; this makes them agree by construction.
+if ! (cd "$REPO_ROOT" && "$SCRIPT_DIR/receipt-verify" --file "$NEWEST_RECEIPT") 2>&1; then
+    echo "" >&2
+    echo "Every PR requires a valid receipt. Run /pr-prep again." >&2
+    exit 1
+fi
+
+# ── Step 3: Verify version was bumped ────────────────────────────────────
+
+MANIFEST="$REPO_ROOT/agency/config/manifest.json"
+
+if [[ ! -f "$MANIFEST" ]]; then
+    echo "BLOCKED: manifest.json not found at $MANIFEST" >&2
+    exit 1
+fi
+
+# Detect the default branch so this works on repos using 'master' as well.
+# Issue #107 (monofolk hotfix): the hardcoded 'origin/main' caused false
+# "version not bumped" failures on repos where origin/master is the default.
+#
+# The detection ladder used to be inline here (and in six other tools). It now
+# lives in the shared `resolve-default-branch` primitive. `--strict` preserves
+# this tool's FAIL-CLOSED contract: a guessed base ref here would silently
+# mis-evaluate the version-bump gate, so an unresolvable default branch must
+# block, not fall back.
+if ! DEFAULT_BRANCH=$("$SCRIPT_DIR/resolve-default-branch" -C "$REPO_ROOT" --strict 2>/dev/null); then
+    echo "BLOCKED: could not determine default branch (origin/main or origin/master)." >&2
+    echo "  Fix: git remote set-head origin -a   # to set origin/HEAD" >&2
+    exit 1
+fi
+DEFAULT_REF="origin/$DEFAULT_BRANCH"
+
+MANIFEST_CHANGED=$(git -C "$REPO_ROOT" diff "$DEFAULT_REF"..HEAD --name-only -- agency/config/manifest.json 2>/dev/null || true)
+
+if [[ -z "$MANIFEST_CHANGED" ]]; then
+    MANIFEST_STAGED=$(git -C "$REPO_ROOT" diff --name-only -- agency/config/manifest.json 2>/dev/null || true)
+    MANIFEST_CACHED=$(git -C "$REPO_ROOT" diff --cached --name-only -- agency/config/manifest.json 2>/dev/null || true)
+
+    if [[ -z "$MANIFEST_STAGED" && -z "$MANIFEST_CACHED" ]]; then
+        echo "BLOCKED: agency_version not bumped." >&2
+        echo "" >&2
+        echo "Every PR is a release. Update agency/config/manifest.json:" >&2
+        echo "  - Bump agency_version (e.g., 40.1 → 40.2)" >&2
+        echo "  - Update updated_at timestamp" >&2
+        echo "" >&2
+        echo "The /release skill handles this automatically." >&2
+        exit 1
+    fi
+fi
+
+CURRENT_VERSION=$(grep -o '"agency_version": "[^"]*"' "$MANIFEST" | cut -d'"' -f4)
+echo "✓ Version bumped: $CURRENT_VERSION"
+
+# ── Step 4: Create the PR ────────────────────────────────────────────────
+
+echo "Creating PR..."
+
+# `gh pr create` infers both the branch and the target repo from its cwd, so it
+# has to run where the gates just looked. Without -C that is the caller's cwd
+# (unchanged behaviour); with -C it is the repo the caller named, so the PR
+# cannot be opened against a different tree than the one that was gated.
+if [[ -n "$GH_RUN_DIR" ]]; then
+    cd "$GH_RUN_DIR"
+fi
+gh pr create "$@"

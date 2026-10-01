@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+# What Problem: Hash computation for receipts was fragile — manual, changed
+# when receipts were added, no parameterized baseline. Every QG/RG gate
+# needs a deterministic hash of what was reviewed.
+#
+# Additional chicken-and-egg fix (2026-04-15, monofolk issue #99): the
+# safe-commit tool auto-stages dispatch artifacts under usr/{principal}/
+# {project}/dispatches/. Without excluding those paths, the diff-hash
+# changes on every commit (commit creates a dispatch artifact, which is
+# part of the next diff). Same circular trap as receipts.
+#
+# How & Why: Computes deterministic SHA-256 hash of either a code diff
+# (branch vs base) or a single artifact file. Excludes:
+#   - agency/receipts/      (the receipts themselves — original fix)
+#   - usr/**/dispatches/    (auto-staged commit-announce dispatches — #99 fix)
+#   - usr/**/*-handoff.md   (active handoffs — receipt-churn fix, see below)
+#   - usr/**/handoff-*.md   (archived handoffs in history/ — receipt-churn fix)
+# from all diff computations to prevent chicken-and-egg. Full SHA-256
+# stored internally; 7-char truncation for display and filenames.
+#
+# Receipt-churn fix (2026-08-08): /pr-prep signs a receipt against this hash,
+# then /pr-submit and /handoff commit a handoff artifact that landed INSIDE
+# the hashed file set — invalidating the just-signed receipt and forcing a
+# re-sign on every landing (one PR cost five signatures). Handoffs are
+# session coordination artifacts, never the code under review, so they are
+# excluded exactly as receipts and dispatches already are.
+#
+# Usage:
+#   ./agency/tools/diff-hash                      # diff against origin/main
+#   ./agency/tools/diff-hash --base v39.1         # diff against tag/commit
+#   ./agency/tools/diff-hash --file <path>        # single file hash
+#   ./agency/tools/diff-hash --json               # JSON output with full hash
+#
+# Written: 2026-04-14 during captain session (receipt infrastructure Phase 1)
+
+set -euo pipefail
+
+# Issue #254: fail loudly with a clear error when invoked outside a git repo.
+# Previously, `git diff` silently produced empty output, masking the real
+# failure. Exit 2 = precondition failure (distinct from exit 1 argparse errors).
+if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+    echo "Error: diff-hash must be run inside a git repository (cwd: $(pwd))" >&2
+    exit 2
+fi
+
+# Portable SHA-256 via the shared helper (shasum on macOS || sha256sum on
+# Linux). Sourced so the resolution lives in ONE place across diff-hash /
+# stage-hash / monitor-register instead of three copies that must move together
+# for the next platform quirk (QG design finding, #42). Fail loud if the helper
+# is missing — diff-hash is receipt-critical and must not silently mis-hash.
+_DH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_DH_DIR/lib/_sha256" ]]; then
+    source "$_DH_DIR/lib/_sha256"
+else
+    echo "Error: diff-hash requires agency/tools/lib/_sha256" >&2
+    exit 2
+fi
+
+BASE="origin/main"
+FILE=""
+JSON=false
+WORKING=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --base)
+            BASE="$2"
+            shift 2
+            ;;
+        --file)
+            FILE="$2"
+            shift 2
+            ;;
+        --json)
+            JSON=true
+            shift
+            ;;
+        --working)
+            WORKING=true
+            shift
+            ;;
+        --help)
+            echo "Usage: diff-hash [--base <ref>] [--file <path>] [--working] [--json]"
+            echo "  --base <ref>   Base ref for diff (default: origin/main)"
+            echo "  --file <path>  Hash a single file instead of diff"
+            echo "  --working      Hash BASE vs the WORKING TREE — staged, unstaged,"
+            echo "                 AND untracked new files — not BASE..HEAD. Use this"
+            echo "                 to hash uncommitted work, e.g. a QG capturing the"
+            echo "                 final state BEFORE the caller commits (flag #207)."
+            echo "                 Untracked files are surfaced via intent-to-add in"
+            echo "                 a throwaway index (real staging state untouched)."
+            echo "                 Consistent across the commit boundary: after the"
+            echo "                 work is committed (git add -A), this equals the"
+            echo "                 default BASE..HEAD hash, so receipt-verify matches."
+            echo "  --json         JSON output with full SHA-256"
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Validate mutual exclusion
+if [[ -n "$FILE" && "$BASE" != "origin/main" ]]; then
+    echo "Error: --file and --base are mutually exclusive" >&2
+    exit 1
+fi
+if [[ -n "$FILE" && "$WORKING" == "true" ]]; then
+    echo "Error: --file and --working are mutually exclusive (--working is a diff-mode option)" >&2
+    exit 1
+fi
+
+if [[ -n "$FILE" ]]; then
+    # Single file hash
+    if [[ ! -f "$FILE" ]]; then
+        echo "Error: file not found: $FILE" >&2
+        exit 1
+    fi
+
+    FULL_HASH=$(_sha256 "$FILE" | cut -d' ' -f1)
+    SHORT_HASH="${FULL_HASH:0:7}"
+    FILE_COUNT=1
+
+    if [[ "$JSON" == "true" ]]; then
+        echo "{\"hash\":\"$SHORT_HASH\",\"full_hash\":\"$FULL_HASH\",\"mode\":\"file\",\"file\":\"$FILE\"}"
+    else
+        echo "$SHORT_HASH"
+    fi
+else
+    # Diff hash — exclude receipts and dispatches
+    # (both auto-mutate per commit; including them would make hashes circular)
+    # D42-R3: added per-workstream qgr/rgr exclusions
+    # V5 Phase 4 (2026-04-22): src/agency/workstreams/*/qgr + rgr added —
+    # Phase 4 src/ split duplicated these to src/ side too; both sides must
+    # be excluded for the chicken-and-egg fix to hold.
+    #
+    # DIFF_REF selects what "final state" means (flag #207):
+    #   default  BASE..HEAD  — BASE vs the committed tip. Blind to uncommitted
+    #                          work, so a QG that hashes before the caller commits
+    #                          gets a stale hash (Hash E == Hash A).
+    #   --working  BASE      — BASE vs the WORKING TREE. Sees uncommitted work.
+    #                          Once committed with a clean tree, `git diff BASE`
+    #                          == `git diff BASE..HEAD`, so the hash is stable
+    #                          across the commit boundary and receipt-verify
+    #                          (default) still matches.
+    #
+    # Untracked files: `git diff <ref>` ignores them, but git-safe-commit runs
+    # `git add -A`, so a QG's NEW files (new tests/fixes) DO get committed. If
+    # --working omitted them, Hash E would undercount and receipt-verify would
+    # later BLOCK a legitimate commit. So in --working mode we mark untracked
+    # files intent-to-add (`git add -N`) so they surface as new-file diffs —
+    # done in a THROWAWAY copy of the index (GIT_INDEX_FILE) so the caller's
+    # real staging state is never mutated.
+    WORKING_TMP_INDEX=""
+    if [[ "$WORKING" == "true" ]]; then
+        DIFF_REF="$BASE"
+        WORKING_TMP_INDEX=$(mktemp "${TMPDIR:-/tmp}/diff-hash-index.XXXXXX")
+        _GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+        if [[ -n "$_GIT_DIR" && -f "$_GIT_DIR/index" ]]; then
+            cp "$_GIT_DIR/index" "$WORKING_TMP_INDEX"
+        fi
+        export GIT_INDEX_FILE="$WORKING_TMP_INDEX"
+        git add -N -- . >/dev/null 2>&1 || true
+    else
+        DIFF_REF="$BASE..HEAD"
+    fi
+
+    DIFF_OUTPUT=$(git diff "$DIFF_REF" -- . \
+        ':(exclude)agency/receipts/' \
+        ':(exclude,glob)agency/workstreams/*/qgr/**' \
+        ':(exclude,glob)agency/workstreams/*/rgr/**' \
+        ':(exclude,glob)src/agency/workstreams/*/qgr/**' \
+        ':(exclude,glob)src/agency/workstreams/*/rgr/**' \
+        ':(exclude,glob)usr/*/*/dispatches/**' \
+        ':(exclude,glob)usr/*/dispatches/**' \
+        ':(exclude,glob)usr/**/*-handoff.md' \
+        ':(exclude,glob)usr/**/handoff-*.md' \
+        2>/dev/null)
+
+    FILE_COUNT=$(git diff "$DIFF_REF" --name-only -- . \
+        ':(exclude)agency/receipts/' \
+        ':(exclude,glob)agency/workstreams/*/qgr/**' \
+        ':(exclude,glob)agency/workstreams/*/rgr/**' \
+        ':(exclude,glob)src/agency/workstreams/*/qgr/**' \
+        ':(exclude,glob)src/agency/workstreams/*/rgr/**' \
+        ':(exclude,glob)usr/*/*/dispatches/**' \
+        ':(exclude,glob)usr/*/dispatches/**' \
+        ':(exclude,glob)usr/**/*-handoff.md' \
+        ':(exclude,glob)usr/**/handoff-*.md' \
+        2>/dev/null | wc -l | tr -d ' ')
+
+    # Tear down the throwaway index BEFORE any exit, so the caller's environment
+    # and real index are always left exactly as we found them.
+    if [[ -n "$WORKING_TMP_INDEX" ]]; then
+        unset GIT_INDEX_FILE
+        rm -f "$WORKING_TMP_INDEX"
+    fi
+
+    if [[ -z "$DIFF_OUTPUT" ]]; then
+        echo "Error: no diff for $DIFF_REF (excluding receipts, dispatches, and handoffs)" >&2
+        exit 1
+    fi
+
+    FULL_HASH=$(echo "$DIFF_OUTPUT" | _sha256 | cut -d' ' -f1)
+    SHORT_HASH="${FULL_HASH:0:7}"
+
+    if [[ "$JSON" == "true" ]]; then
+        echo "{\"hash\":\"$SHORT_HASH\",\"full_hash\":\"$FULL_HASH\",\"mode\":\"diff\",\"base\":\"$BASE\",\"file_count\":$FILE_COUNT}"
+    else
+        echo "$SHORT_HASH"
+    fi
+fi
