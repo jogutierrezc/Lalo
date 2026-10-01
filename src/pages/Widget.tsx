@@ -182,9 +182,13 @@ export const Widget: React.FC = () => {
 
       let audioUrl: string | null = null;
       let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+      let finalized = false;
 
-      // Limpieza final y avance incondicional a la siguiente tarjeta
+      // Limpieza final y avance incondicional a la siguiente tarjeta (idempotente)
       const finalizePlayback = () => {
+        if (finalized) return;
+        finalized = true;
+
         if (watchdogTimer) clearTimeout(watchdogTimer);
         stopEqualizer();
 
@@ -283,12 +287,24 @@ export const Widget: React.FC = () => {
             utterance.rate = settings.speed;
             utterance.volume = settings.volume;
 
+            let speechFinished = false;
+            const finishSpeech = () => {
+              if (!speechFinished) {
+                speechFinished = true;
+                if (speechWatchdog) clearTimeout(speechWatchdog);
+                finalizePlayback();
+              }
+            };
+
+            const speechTimeoutMs = Math.max(3500, Math.min(15000, message.cleanText.length * 120));
+            const speechWatchdog = setTimeout(finishSpeech, speechTimeoutMs);
+
             utterance.onstart = () => {
               setIsAudioLoading(false);
               startEqualizer();
             };
-            utterance.onend = () => finalizePlayback();
-            utterance.onerror = () => finalizePlayback();
+            utterance.onend = finishSpeech;
+            utterance.onerror = finishSpeech;
 
             window.speechSynthesis.speak(utterance);
             return;

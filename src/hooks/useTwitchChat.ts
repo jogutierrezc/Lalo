@@ -47,13 +47,13 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       if (prev.length === 0) return prev;
       if (id) {
         const index = prev.findIndex((m) => m.id === id);
-        if (index === -1) return prev;
-        removed = prev[index];
-        return [...prev.slice(0, index), ...prev.slice(index + 1)];
-      } else {
-        removed = prev[0];
-        return prev.slice(1);
+        if (index !== -1) {
+          removed = prev[index];
+          return [...prev.slice(0, index), ...prev.slice(index + 1)];
+        }
       }
+      removed = prev[0];
+      return prev.slice(1);
     });
     return removed;
   }, []);
