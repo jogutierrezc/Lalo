@@ -97,12 +97,22 @@ export const Widget: React.FC = () => {
   useEffect(() => {
     const handleStorage = () => {
       const updated = loadSettings();
+      const voiceParam = getURLParam('voice') || getURLParam('reference_id') || getURLParam('v');
+      const rawVoice = (voiceParam || updated.referenceId || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
+      const cleanVoice = (!rawVoice || rawVoice === OLD_PRESET_VOICE || rawVoice === 'default' || rawVoice === 'undefined')
+        ? LALOPLAY_DEFAULT_VOICE
+        : rawVoice;
+
+      const modelParam = getURLParam('model') || getURLParam('m');
+      const rawModel = (modelParam || updated.model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
+      const cleanModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
+
       setSettings((prev) => ({
         ...prev,
         ...updated,
-        channel: getURLParam('channel') || updated.channel,
-        referenceId: getURLParam('voice') || getURLParam('reference_id') || updated.referenceId,
-        model: getURLParam('model') || updated.model,
+        channel: getURLParam('channel') || getURLParam('c') || updated.channel,
+        referenceId: cleanVoice,
+        model: cleanModel,
       }));
     };
     window.addEventListener('storage', handleStorage);
@@ -163,6 +173,10 @@ export const Widget: React.FC = () => {
           console.log('[Lalo Widget] Configuración actualizada dinámicamente desde el Dashboard.');
           setSettings((prev) => ({ ...prev, ...event.data.settings }));
         }
+        if (event.data?.type === 'FORCE_RELOAD' || event.data?.type === 'RELOAD') {
+          console.log('[Lalo Widget] Orden de recarga remota recibida vía BroadcastChannel.');
+          window.location.reload();
+        }
       };
     } catch {
       // BroadcastChannel no soportado en entornos antiguos
@@ -183,7 +197,7 @@ export const Widget: React.FC = () => {
 
   // Observador de despliegues seguro para OBS Studio:
   // Detecta si se publica un nuevo commit en Vercel y actualiza el overlay de forma transparente
-  // ÚNICAMENTE cuando está inactivo y con cooldown de 3 minutos para prevenir cualquier bucle.
+  // ÚNICAMENTE cuando está inactivo y con cooldown de 30 segundos para prevenir cualquier bucle.
   useEffect(() => {
     let initialDeployment: string | null = null;
     let isChecking = false;
@@ -203,7 +217,7 @@ export const Widget: React.FC = () => {
           // Nueva versión detectada en Vercel mientras el stream sigue abierto
           if (!isProcessingRef.current && !isPlaying && messageQueue.length === 0) {
             const lastReload = Number(sessionStorage.getItem('last_auto_update_ts') || '0');
-            if (Date.now() - lastReload > 180000) {
+            if (Date.now() - lastReload > 30000) {
               sessionStorage.setItem('last_auto_update_ts', Date.now().toString());
               console.log('[OBS Widget] Nueva versión detectada en Vercel. Recargando overlay en estado inactivo...');
               window.location.reload();
@@ -217,8 +231,8 @@ export const Widget: React.FC = () => {
       }
     };
 
-    const initialTimer = setTimeout(checkDeployment, 8000);
-    const intervalTimer = setInterval(checkDeployment, 45000);
+    const initialTimer = setTimeout(checkDeployment, 2000);
+    const intervalTimer = setInterval(checkDeployment, 15000);
 
     return () => {
       clearTimeout(initialTimer);

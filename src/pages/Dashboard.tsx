@@ -23,7 +23,8 @@ import {
   Layers,
   ShieldCheck,
   Megaphone,
-  Smile
+  Smile,
+  RefreshCw
 } from 'lucide-react';
 import { loadSettings, saveSettings, TTSSettings } from '../types/settings';
 import { sanitizeTwitchMessage } from '../utils/twitchSanitizer';
@@ -46,6 +47,20 @@ export const Dashboard: React.FC = () => {
   const [settings, setSettings] = useState<TTSSettings>(loadSettings);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [reloadingWidget, setReloadingWidget] = useState(false);
+
+  // Forzar recarga remota del widget en OBS Studio sin interrumpir la transmisión
+  const handleForceReloadWidget = () => {
+    setReloadingWidget(true);
+    try {
+      const bus = new BroadcastChannel('lalo_tts_bus');
+      bus.postMessage({ type: 'FORCE_RELOAD' });
+      bus.close();
+    } catch {
+      // Ignorar si no está soportado
+    }
+    setTimeout(() => setReloadingWidget(false), 2500);
+  };
 
   // Estados del banco de pruebas
   const [testText, setTestText] = useState('!s [feliz] ¡Hola chat! Este es un mensaje con emoción');
@@ -137,6 +152,16 @@ export const Dashboard: React.FC = () => {
           >
             {copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-purple-400" />}
             <span>{copiedUrl ? '¡Copiado para OBS!' : 'Copiar URL de OBS'}</span>
+          </button>
+
+          <button
+            onClick={handleForceReloadWidget}
+            disabled={reloadingWidget}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass-card glass-card-hover text-sm font-medium text-amber-300 hover:text-amber-200 border border-amber-500/30 hover:border-amber-500/50 transition-all focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-60"
+            title="Recargar remotamente el overlay en OBS Studio sin reiniciar la transmisión ni cambiar el enlace"
+          >
+            <RefreshCw className={`w-4 h-4 text-amber-400 ${reloadingWidget ? 'animate-spin' : ''}`} />
+            <span>{reloadingWidget ? 'Actualizando OBS...' : 'Actualizar OBS'}</span>
           </button>
 
           <a
@@ -537,6 +562,20 @@ export const Dashboard: React.FC = () => {
               <li>Marca la opción <strong className="text-zinc-200">"Controlar audio a través de OBS"</strong> si deseas monitorear el volumen en el mezclador de OBS.</li>
               <li>¡Listo! El overlay permanecerá invisible hasta que alguien escriba <code className="text-purple-300 font-bold">!s [mensaje]</code>.</li>
             </ol>
+
+            <div className="mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs space-y-1.5">
+              <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5" /> ¿Tu stream ya está en directo?
+              </span>
+              <p className="text-[11px] text-zinc-300 leading-relaxed">
+                No necesitas detener el directo ni cambiar el enlace en OBS. Para cargar las últimas funciones al instante:
+              </p>
+              <ul className="list-disc list-inside text-[11px] text-zinc-400 space-y-1 ml-1">
+                <li>Haz clic en el botón <strong className="text-amber-300">"Actualizar OBS"</strong> en la cabecera de este panel.</li>
+                <li>O escribe en tu chat de Twitch: <code className="text-purple-300 font-mono">!s reload</code> o <code className="text-purple-300 font-mono">!s update</code> (comando streamer/mod).</li>
+                <li>O en OBS Studio: clic derecho sobre tu fuente Navegador &rarr; <strong className="text-zinc-200">"Actualizar"</strong> (o Propiedades &rarr; "Actualizar la caché de la página actual").</li>
+              </ul>
+            </div>
           </div>
         </div>
       </main>

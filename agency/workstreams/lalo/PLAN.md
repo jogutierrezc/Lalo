@@ -72,3 +72,11 @@
 - [x] 11.2: Dedicated Singing Phrasing: Formatted announcement as `"{user} canta."` with period sentence boundary instead of colon to prevent breaking Fish Audio's musical prosody.
 - [x] 11.3: Natural Song Preview & Test Defaults: Updated Dashboard "🎵 Cantando" button to prefill a realistic singing verse (`Cumpleaños feliz, te deseamos a ti, que los cumplas muy feliz`) instead of dry prose.
 - [x] 11.4: Unit Test Coverage: Added verification test for all singing variants in `tests/emotionMapper.test.ts` (17/17 tests passing).
+
+## Phase 12: Zero-Downtime Remote OBS Live Stream Synchronization
+- [x] 12.1: Robust URL Sanitization: Strict stripping of trailing punctuation (`.`, `,`, `;`, `/`, `\`) on query params (`model=s2.1-pro-free.`), ensuring full backward compatibility with active browser source URLs.
+- [x] 12.2: Remote OBS Force-Reload Button: Added 1-click "Actualizar OBS" action in Dashboard header broadcasting `{ type: 'FORCE_RELOAD' }` across `BroadcastChannel('lalo_tts_bus')`.
+- [x] 12.3: Broadcaster / Mod Chat Command: Regex matcher in `useTwitchChat.ts` for `!s reload`, `!s update`, `!s actualizar`, `!s reiniciar` with optional punctuation.
+- [x] 12.4: Accelerated Hot Poller: 15-second polling interval and 30-second cooldown in `Widget.tsx` using `/api/version` (supporting `VERCEL_DEPLOYMENT_ID` and `VERCEL_GIT_COMMIT_SHA`).
+- [x] 12.5: Express & Serverless Parity: Added `/api/version` to local Express development server.
+

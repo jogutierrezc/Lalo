@@ -14,6 +14,6 @@ export default function handler(_req: any, res: any) {
   return res.status(200).json({
     status: 'ok',
     version: '1.0.0',
-    deployment: process.env.VERCEL_GIT_COMMIT_SHA || 'production',
+    deployment: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'production',
   });
 }

@@ -121,18 +121,14 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       if (self || !isMountedRef.current) return;
 
       // Comando especial de actualización remota para el streamer / moderadores
-      const trimmedLower = message.trim().toLowerCase();
       const isBroadcasterOrMod =
         tags.badges?.broadcaster === '1' ||
         tags.mod === true ||
         tags.username?.toLowerCase() === cleanChannel;
 
-      if (
-        (trimmedLower === '!s reload' ||
-          trimmedLower === '!s update' ||
-          trimmedLower === '!s actualizar') &&
-        isBroadcasterOrMod
-      ) {
+      const isReloadCommand = /^!s\s+(reload|update|actualizar|reiniciar)[.,!?;]*$/i.test(message.trim());
+
+      if (isReloadCommand && isBroadcasterOrMod) {
         console.log('[Twitch Chat] Comando de recarga remota recibido. Actualizando overlay...');
         window.location.reload();
         return;

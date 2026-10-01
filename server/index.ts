@@ -47,6 +47,16 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
+// Endpoint de versión para el auto-actualizador del widget
+app.get('/api/version', (_req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.json({
+    status: 'ok',
+    version: '1.0.0',
+    deployment: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'local-dev',
+  });
+});
+
 interface TTSRequestBody {
   text?: string;
   reference_id?: string;
