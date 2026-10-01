@@ -312,6 +312,20 @@ export const Widget: React.FC = () => {
           finalizePlayback();
         }, maxDurationMs);
 
+        // Pre-cargar el buffer de audio para evitar chasquidos, cortes o zumbidos iniciales en OBS
+        await new Promise<void>((resolve) => {
+          let ready = false;
+          const onReady = () => {
+            if (!ready) {
+              ready = true;
+              resolve();
+            }
+          };
+          audio.addEventListener('canplaythrough', onReady, { once: true });
+          audio.addEventListener('loadeddata', onReady, { once: true });
+          setTimeout(onReady, 350);
+        });
+
         // Intentar reproducción
         await audio.play();
       } catch (err) {

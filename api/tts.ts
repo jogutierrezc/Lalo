@@ -4,53 +4,15 @@
  * Handler Serverless autónomo para Vercel Functions.
  * Expone la ruta POST /api/tts directamente al desplegar en Vercel.
  *
- * DISEÑO DEFENSIVO PARA VERCEL:
- * - 100% autocontenido (sin dependencias relativas externas que puedan fallar en empaquetado ESM/Lambda).
- * - Sanitización de API Key (elimina comillas accidentales y espacios al pegar en Vercel).
- * - Reintento automático con voz base si el reference_id personalizado es inválido o no accesible.
- * - Soporte universal para Vercel Serverless (req.body parseado o stream; res.send o res.end).
- * - Cabeceras CORS completas para OBS Studio y cualquier origen.
+ * RESILIENCIA Y LIMPIEZA DE AUDIO:
+ * - Sin pitidos ni zumbidos electrónicos: Si Fish Audio falla o no hay clave, retorna error HTTP 502
+ *   para que el Widget active de inmediato la voz nativa del navegador (Web Speech API) de forma fluida.
+ * - Sanitización estricta de FISH_AUDIO_API_KEY (elimina comillas accidentales y espacios al pegar en Vercel).
+ * - Reintento automático con voz base si el reference_id de la voz personalizada falla (400 / permisos).
+ * - CORS universal y compatibilidad total con Node.js en Vercel Serverless.
  */
 
 const MAX_TTS_LENGTH = 300;
-
-function generateFallbackBeepBuffer(durationSec = 1.8, freq = 440): Buffer {
-  const sampleRate = 22050;
-  const numSamples = Math.floor(sampleRate * durationSec);
-  const blockAlign = 2; // 16-bit mono
-  const byteRate = sampleRate * blockAlign;
-  const dataSize = numSamples * blockAlign;
-  const buffer = Buffer.alloc(44 + dataSize);
-
-  // RIFF header
-  buffer.write('RIFF', 0);
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write('WAVE', 8);
-
-  // fmt chunk
-  buffer.write('fmt ', 12);
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20); // PCM
-  buffer.writeUInt16LE(1, 22); // mono
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(byteRate, 28);
-  buffer.writeUInt16LE(blockAlign, 32);
-  buffer.writeUInt16LE(16, 34);
-
-  // data chunk
-  buffer.write('data', 36);
-  buffer.writeUInt32LE(dataSize, 40);
-
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    const envelope = Math.sin((Math.PI * i) / numSamples);
-    const sample = Math.sin(2 * Math.PI * freq * t) * envelope * 0.45;
-    const intSample = Math.max(-32768, Math.min(32767, Math.floor(sample * 32767)));
-    buffer.writeInt16LE(intSample, 44 + i * 2);
-  }
-
-  return buffer;
-}
 
 interface TTSProcessResult {
   status: number;
@@ -70,25 +32,34 @@ async function processTTSRequest(text: string, reference_id?: string, model = 's
   const rawKey = process.env.FISH_AUDIO_API_KEY || '';
   const apiKey = rawKey.replace(/^["']|["']$/g, '').trim();
 
-  // Si no hay API key en variables de entorno, devolver audio de simulación
   if (!apiKey) {
-    console.log(`[TTS Engine] Sin FISH_AUDIO_API_KEY: Generando audio de prueba para: "${boundedText.slice(0, 30)}..."`);
-    const fallbackDuration = Math.min(3.5, Math.max(1.2, boundedText.length * 0.08));
-    return {
-      status: 200,
-      contentType: 'audio/wav',
-      buffer: generateFallbackBeepBuffer(fallbackDuration, 480),
-      headers: {
-        'X-TTS-Mode': 'simulation-fallback',
-      },
-    };
+    throw new Error('FISH_AUDIO_API_KEY no configurada en las variables de entorno de Vercel');
   }
 
   const selectedModel = model || 's2.1-pro-free';
   console.log(`[TTS Engine Vercel] Solicitando Fish Audio (${selectedModel}, ref: ${reference_id || 'default'}): "${boundedText.slice(0, 30)}..."`);
 
-  try {
-    let fishResponse = await fetch('https://api.fish.audio/v1/tts', {
+  let fishResponse = await fetch('https://api.fish.audio/v1/tts', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      model: selectedModel,
+    },
+    body: JSON.stringify({
+      text: boundedText,
+      reference_id: reference_id || undefined,
+      format: 'mp3',
+      normalize: true,
+      latency: 'normal',
+    }),
+  });
+
+  // Si la voz personalizada falla (ej. 400 porque el ID no existe o no tiene permiso),
+  // reintentamos automáticamente con la voz base del modelo para no dejar sin audio al stream
+  if (!fishResponse.ok && reference_id) {
+    console.warn(`[Fish Audio Vercel] Voz personalizada "${reference_id}" retornó ${fishResponse.status}. Reintentando con voz base por defecto...`);
+    fishResponse = await fetch('https://api.fish.audio/v1/tts', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -97,63 +68,25 @@ async function processTTSRequest(text: string, reference_id?: string, model = 's
       },
       body: JSON.stringify({
         text: boundedText,
-        reference_id: reference_id || undefined,
         format: 'mp3',
         normalize: true,
         latency: 'normal',
       }),
     });
-
-    // Si la llamada con voz personalizada falla (ej. 400 porque el ID no existe o no tiene permiso),
-    // reintentamos automáticamente sin reference_id para que el stream nunca se quede en silencio
-    if (!fishResponse.ok && reference_id) {
-      console.warn(`[Fish Audio Vercel] Voz personalizada "${reference_id}" no respondió OK (${fishResponse.status}). Reintentando con voz base por defecto...`);
-      fishResponse = await fetch('https://api.fish.audio/v1/tts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          model: selectedModel,
-        },
-        body: JSON.stringify({
-          text: boundedText,
-          format: 'mp3',
-          normalize: true,
-          latency: 'normal',
-        }),
-      });
-    }
-
-    if (!fishResponse.ok) {
-      console.warn(`[Fish Audio Vercel] API respondió con status ${fishResponse.status}. Usando audio de respaldo.`);
-      return {
-        status: 200,
-        contentType: 'audio/wav',
-        buffer: generateFallbackBeepBuffer(2.0, 380),
-        headers: {
-          'X-TTS-Mode': 'api-error-fallback',
-          'X-Upstream-Status': String(fishResponse.status),
-        },
-      };
-    }
-
-    const arrayBuffer = await fishResponse.arrayBuffer();
-    return {
-      status: 200,
-      contentType: 'audio/mpeg',
-      buffer: Buffer.from(arrayBuffer),
-    };
-  } catch (err) {
-    console.error('[Fish Audio Vercel Fetch Error]', err);
-    return {
-      status: 200,
-      contentType: 'audio/wav',
-      buffer: generateFallbackBeepBuffer(1.8, 350),
-      headers: {
-        'X-TTS-Mode': 'network-error-fallback',
-      },
-    };
   }
+
+  if (!fishResponse.ok) {
+    const errorText = await fishResponse.text().catch(() => '');
+    console.warn(`[Fish Audio Vercel] API falló con status ${fishResponse.status}: ${errorText}`);
+    throw new Error(`Fish Audio API HTTP ${fishResponse.status}: ${errorText || 'Error en síntesis'}`);
+  }
+
+  const arrayBuffer = await fishResponse.arrayBuffer();
+  return {
+    status: 200,
+    contentType: 'audio/mpeg',
+    buffer: Buffer.from(arrayBuffer),
+  };
 }
 
 export default async function handler(req: any, res: any) {
@@ -237,13 +170,14 @@ export default async function handler(req: any, res: any) {
       return res.send(result.buffer);
     }
     return res.end(result.buffer);
-  } catch (error) {
+  } catch (error: any) {
     console.error('[Vercel TTS Handler Error]', error);
+    const message = error?.message || 'Error en servidor de síntesis de voz';
     if (typeof res.status === 'function') {
-      return res.status(500).json({ error: 'Error procesando síntesis de voz' });
+      return res.status(502).json({ error: message });
     }
-    res.statusCode = 500;
+    res.statusCode = 502;
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ error: 'Error procesando síntesis de voz' }));
+    return res.end(JSON.stringify({ error: message }));
   }
 }
