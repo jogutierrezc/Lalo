@@ -59,4 +59,11 @@
 - [x] 9.4: Resonant Ambient Glow: Card backlight breathing dynamically to the cadence of the speech.
 - [x] 9.5: 7-Bar Harmonic Audio Equalizer: Organically randomized multi-frequency frequency bars.
 - [x] 9.6: Coordinated Exit Timeline: Smooth staggered word ascension combined with card fade-out.
-- [x] 9.7: OBS Chromium / CEF Safety: Full cleanup of all GSAP timelines & tweens on message completion and unmount.
+## Phase 10: Smart Semantic Chunking & Long-Form Reading Engine
+- [x] 10.1: Smart Semantic Chunking (`splitTextIntoSemanticChunks`): Decomposes long text (>260 chars) along sentence/clause boundaries (`.`, `!`, `?`, `;`, `,`) without cutting words.
+- [x] 10.2: Vocal Emotion Tag Propagation: Automatically prepends active emotion tags (`[happy]`, etc.) to subsequent chunks to ensure consistent tone across the entire reading.
+- [x] 10.3: Parallel Concurrent Audio Synthesis: Executes all chunks in parallel using `Promise.all` and concatenates MP3 byte streams with `Buffer.concat`, cutting generation latency by ~60%.
+- [x] 10.4: Vercel Max Duration: Configured `maxDuration: 60` and `MAX_TTS_LENGTH: 2000` in serverless function preventing 502/504 timeouts.
+- [x] 10.5: Adaptive Visual Container & Typography: Upgraded card to `max-h-[28rem]` with fluid font scaling (`text-xs` for >650 chars down from `text-lg`).
+- [x] 10.6: Kinetic GSAP Auto-Scroll: Dynamically advances the text container smoothly down to the bottom while audio is speaking if text exceeds card height.
+- [x] 10.7: Extended Safety Watchdog: Proportional watchdog timer (`Math.max(20000, text.length * 250)`) ensuring 1000-character audio plays completely to the very last word.

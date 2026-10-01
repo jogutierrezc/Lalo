@@ -42,7 +42,7 @@ export interface SanitizedTTSMessage {
 
 const TRIGGER_PREFIX = '!s ';
 const MAX_TTS_LENGTH = 1000;
-const MAX_RAW_INPUT_LENGTH = 2500;
+const MAX_RAW_INPUT_LENGTH = 3000;
 
 // Expresión regular para validar color hexadecimal seguro
 const HEX_COLOR_REGEX = /^#[0-9A-Fa-f]{6}$/;

@@ -148,6 +148,7 @@ export const Widget: React.FC = () => {
   const avatarTweenRef = useRef<gsap.core.Tween | null>(null);
   const auraTweenRef = useRef<gsap.core.Tween | null>(null);
   const glowTweenRef = useRef<gsap.core.Tween | null>(null);
+  const scrollTweenRef = useRef<gsap.core.Tween | null>(null);
 
   // Sincronización entre pestañas (Dashboard <-> Widget) vía BroadcastChannel
   useEffect(() => {
@@ -336,7 +337,8 @@ export const Widget: React.FC = () => {
   // 2. Ondas acústicas/Aura: anillos de pulso concéntricos expandiéndose hacia afuera.
   // 3. Resplandor ambiental respirante: luz difusa que late detrás de la tarjeta.
   // 4. Ecualizador armónico de 7 bandas: barras de frecuencia reactivas.
-  const startSpeakingAnimation = useCallback(() => {
+  // 5. Desplazamiento cinético auto-scroll: si el texto es largo, avanza suavemente con la lectura.
+  const startSpeakingAnimation = useCallback((textLength?: number) => {
     // 1. Ecualizador reactivo
     if (barsRef.current) {
       const bars = barsRef.current.querySelectorAll('.eq-bar');
@@ -402,6 +404,23 @@ export const Widget: React.FC = () => {
         ease: 'sine.inOut',
       });
     }
+
+    // 5. Desplazamiento cinético (auto-scroll) continuo si el texto sobrepasa la altura del contenedor
+    if (textContainerRef.current) {
+      const container = textContainerRef.current;
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      if (maxScroll > 10) {
+        scrollTweenRef.current?.kill();
+        const chars = textLength || 300;
+        const scrollDuration = Math.max(6, chars * 0.065);
+        scrollTweenRef.current = gsap.to(container, {
+          scrollTop: maxScroll,
+          duration: scrollDuration,
+          ease: 'none',
+          delay: 1.0,
+        });
+      }
+    }
   }, []);
 
   const stopSpeakingAnimation = useCallback(() => {
@@ -421,6 +440,10 @@ export const Widget: React.FC = () => {
       glowTweenRef.current.kill();
       glowTweenRef.current = null;
     }
+    if (scrollTweenRef.current) {
+      scrollTweenRef.current.kill();
+      scrollTweenRef.current = null;
+    }
 
     if (barsRef.current) {
       const bars = barsRef.current.querySelectorAll('.eq-bar');
@@ -435,6 +458,9 @@ export const Widget: React.FC = () => {
     }
     if (ambientGlowRef.current) {
       gsap.to(ambientGlowRef.current, { scale: 1, opacity: 0.2, duration: 0.3, ease: 'power1.out' });
+    }
+    if (textContainerRef.current) {
+      textContainerRef.current.scrollTop = 0;
     }
   }, []);
 
@@ -529,7 +555,7 @@ export const Widget: React.FC = () => {
         audio.onplay = () => {
           setIsAudioLoading(false);
           setAutoplayBlocked(false);
-          startSpeakingAnimation();
+          startSpeakingAnimation(message.cleanText.length);
         };
 
         audio.onended = () => {
@@ -541,8 +567,8 @@ export const Widget: React.FC = () => {
           finalizePlayback();
         };
 
-        // Watchdog de seguridad (proporcional al texto de hasta 1000 caracteres)
-        const maxDurationMs = Math.max(15000, message.cleanText.length * 220);
+        // Watchdog de seguridad (proporcional al texto de hasta 1200 caracteres)
+        const maxDurationMs = Math.max(20000, message.cleanText.length * 250);
         watchdogTimer = setTimeout(() => {
           console.warn('[Audio Watchdog] Tiempo límite alcanzado. Pasando al siguiente mensaje.');
           finalizePlayback();
@@ -606,7 +632,7 @@ export const Widget: React.FC = () => {
 
             utterance.onstart = () => {
               setIsAudioLoading(false);
-              startSpeakingAnimation();
+              startSpeakingAnimation(message.cleanText.length);
             };
             utterance.onend = finishSpeech;
             utterance.onerror = finishSpeech;
@@ -787,13 +813,15 @@ export const Widget: React.FC = () => {
 
           <div
             ref={textContainerRef}
-            className="relative max-h-64 overflow-y-auto no-scrollbar"
+            className="relative max-h-[28rem] overflow-y-auto no-scrollbar scroll-smooth"
           >
             <p
               className={`text-zinc-100 font-medium leading-relaxed tracking-normal break-words drop-shadow-sm ${
-                currentMessage.cleanText.length > 400
-                  ? 'text-sm'
-                  : currentMessage.cleanText.length > 200
+                currentMessage.cleanText.length > 650
+                  ? 'text-xs md:text-sm'
+                  : currentMessage.cleanText.length > 350
+                  ? 'text-sm md:text-base'
+                  : currentMessage.cleanText.length > 150
                   ? 'text-base'
                   : 'text-lg'
               }`}
