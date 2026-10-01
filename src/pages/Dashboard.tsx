@@ -22,10 +22,16 @@ import {
   Radio,
   Layers,
   ShieldCheck,
-  Megaphone
+  Megaphone,
+  Smile
 } from 'lucide-react';
 import { loadSettings, saveSettings, TTSSettings } from '../types/settings';
 import { sanitizeTwitchMessage } from '../utils/twitchSanitizer';
+import {
+  AVAILABLE_EMOTIONS,
+  normalizeTextForFishAudio,
+  EmotionInfo
+} from '../utils/emotionMapper';
 
 // Voces de referencia de muestra de Fish Audio (o custom reference_ids)
 const PRESET_VOICES = [
@@ -41,9 +47,10 @@ export const Dashboard: React.FC = () => {
   const [isSaved, setIsSaved] = useState(false);
 
   // Estados del banco de pruebas
-  const [testText, setTestText] = useState('¡Hola chat! Este es un mensaje de prueba con el comando !s');
+  const [testText, setTestText] = useState('!s [feliz] ¡Hola chat! Este es un mensaje con emoción');
   const [testUser, setTestUser] = useState('SuperViewer');
   const [testPreview, setTestPreview] = useState<string | null>(null);
+  const [detectedEmotion, setDetectedEmotion] = useState<EmotionInfo | null>(null);
 
   // URL del Widget para OBS (con parámetros de canal, voz y modelo incorporados)
   const widgetUrl = `${window.location.origin}/widget?channel=${encodeURIComponent(settings.channel)}&voice=${encodeURIComponent(settings.referenceId)}&model=${encodeURIComponent(settings.model || 's2.1-pro-free')}`;
@@ -75,6 +82,7 @@ export const Dashboard: React.FC = () => {
     const raw = testText.trim().startsWith('!s ') ? testText : `!s ${testText}`;
     const res = sanitizeTwitchMessage(raw, { username: testUser });
     setTestPreview(res ? res.cleanText : '(Mensaje descartado por filtro)');
+    setDetectedEmotion(res?.emotion || null);
   }, [testText, testUser]);
 
   // Disparar mensaje de prueba al widget
@@ -385,31 +393,71 @@ export const Dashboard: React.FC = () => {
               </div>
 
               <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-zinc-300">Expresiones y Emociones Vocales</label>
+                  <span className="text-[10px] text-purple-400 font-mono">Haz clic para probar</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-black/30 border border-white/5 max-h-28 overflow-y-auto no-scrollbar">
+                  {AVAILABLE_EMOTIONS.map((emo) => (
+                    <button
+                      key={emo.tag}
+                      type="button"
+                      onClick={() => {
+                        const tag = emo.example;
+                        const defaultMsg = '¡Esto es una prueba de voz con emoción en el stream!';
+                        if (!testText.startsWith('!s ')) {
+                          setTestText(`!s ${tag} ${defaultMsg}`);
+                        } else {
+                          const withoutTag = testText.replace(/^!s\s+(\[[^\]]+\]\s*)?/, '').trim();
+                          setTestText(`!s ${tag} ${withoutTag || defaultMsg}`);
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 hover:bg-purple-600/30 text-[11px] text-zinc-200 hover:text-white border border-white/10 hover:border-purple-500/40 transition-all cursor-pointer active:scale-95"
+                    >
+                      <span>{emo.emoji}</span>
+                      <span>{emo.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
                 <label className="text-xs text-zinc-300 block mb-1">Mensaje Bruto de Chat</label>
                 <textarea
                   rows={3}
                   value={testText}
                   onChange={(e) => setTestText(e.target.value)}
                   className="w-full bg-[#121218] border border-white/10 rounded-xl p-3 text-xs text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 resize-none font-mono"
-                  placeholder="!s mensaje de prueba..."
+                  placeholder="!s [feliz] mensaje de prueba..."
                 />
               </div>
 
               {/* Resultado del Sanitizer y Audio */}
-              <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-xs space-y-2">
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 text-xs space-y-2.5">
                 <div>
                   <span className="text-[10px] uppercase font-mono text-zinc-500 block mb-0.5">Texto Sanitizado para Card:</span>
                   <p className="text-zinc-200 font-mono text-xs">
                     {testPreview || 'Escribe un mensaje para previsualizar...'}
                   </p>
                 </div>
+
+                {detectedEmotion && (
+                  <div className="flex items-center gap-2 pt-1 border-t border-white/5">
+                    <span className="text-[10px] uppercase font-mono text-zinc-400">Insignia OBS:</span>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${detectedEmotion.badgeClass}`}>
+                      <span>{detectedEmotion.emoji}</span>
+                      <span>{detectedEmotion.label}</span>
+                    </span>
+                  </div>
+                )}
+
                 {settings.announceSender !== false && testPreview && (
                   <div className="pt-2 border-t border-white/5">
-                    <span className="text-[10px] uppercase font-mono text-purple-400 block mb-0.5">Audio TTS a Sintetizar:</span>
+                    <span className="text-[10px] uppercase font-mono text-purple-400 block mb-0.5">Audio TTS (Fish Audio S2):</span>
                     <p className="text-purple-200 italic font-mono text-xs">
                       "{(settings.announceTemplate || '{user} dice: {message}')
                         .replace('{user}', testUser || 'Streamer')
-                        .replace('{message}', testPreview)}"
+                        .replace('{message}', normalizeTextForFishAudio(testPreview))}"
                     </p>
                   </div>
                 )}
@@ -422,6 +470,51 @@ export const Dashboard: React.FC = () => {
                 <Play className="w-4 h-4 fill-white" />
                 <span>Disparar Síntesis al Widget</span>
               </button>
+            </div>
+          </div>
+
+          {/* Guía de Expresiones Vocales y Emociones */}
+          <div className="glass-panel rounded-2xl p-6 shadow-glass text-xs space-y-3">
+            <div className="flex items-center gap-2 text-zinc-200 font-semibold text-sm">
+              <Smile className="w-4 h-4 text-emerald-400" />
+              <span>Expresiones y Emociones Soportadas</span>
+            </div>
+            <p className="text-zinc-400 leading-relaxed text-[11px]">
+              Tus espectadores pueden escribir cualquiera de estas etiquetas entre corchetes dentro de su comando <code className="text-purple-300 font-mono">!s</code>. El bot modulará su tono de voz y mostrará la insignia correspondiente en OBS:
+            </p>
+            <div className="grid grid-cols-2 gap-1.5 text-[11px] font-mono">
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-emerald-400 block font-semibold mb-0.5">😄 [feliz] o [happy]</span>
+                Voz alegre y entusiasta.
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-cyan-400 block font-semibold mb-0.5">🤫 [susurro] o [whisper]</span>
+                Voz baja y secreta.
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-red-400 block font-semibold mb-0.5">😡 [enojado] o [angry]</span>
+                Tono molesto y enérgico.
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-blue-400 block font-semibold mb-0.5">😢 [triste] o [sad]</span>
+                Melancólica y pausada.
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-amber-400 block font-semibold mb-0.5">🤣 [risa] o [laughing]</span>
+                Habla riéndose.
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-orange-400 block font-semibold mb-0.5">📢 [grito] o [shouting]</span>
+                Exclamación potente.
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-pink-400 block font-semibold mb-0.5">🎵 [canto] o [singing]</span>
+                Entonación cantada.
+              </div>
+              <div className="p-2 rounded-lg bg-white/5 border border-white/5 text-zinc-300">
+                <span className="text-purple-400 block font-semibold mb-0.5">🎉 [emocionado] o [hype]</span>
+                Alta energía y fiesta.
+              </div>
             </div>
           </div>
 

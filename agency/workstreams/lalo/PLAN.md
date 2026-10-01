@@ -44,3 +44,12 @@
 - [x] 7.4: Resilient watchdog timer scaling (proportional to message length up to 180s) preventing premature cutoffs.
 - [x] 7.5: Zero-touch OBS auto-updater checking deployment build hash via `/api/version` to reload active browser sources automatically.
 
+## Phase 8: Vocal Emotion & Expression System
+- [x] 8.1: Dedicated `emotionMapper.ts` with Spanish-English bidirectional synonym dictionary for Fish Audio S2 tags.
+- [x] 8.2: Extraction of primary emotion (`extractPrimaryEmotion`) and real-time normalization (`normalizeTextForFishAudio`).
+- [x] 8.3: OBS Widget visual emotion insignia badge in card header with emoji, label, and themed color glows.
+- [x] 8.4: Inline expression formatting in OBS text with glowing purple accent pills (`renderMessageContent`).
+- [x] 8.5: Fallback safety: Web Speech API removes bracket tags to prevent literal reading when offline.
+- [x] 8.6: Streamer Dashboard interactive emotion suite: quick-test buttons, live insignia preview, and viewer guide.
+- [x] 8.7: Comprehensive unit tests in `emotionMapper.test.ts` (16/16 tests passing).
+

@@ -17,6 +17,9 @@
  * 7. Validación estricta de color hexadecimal para evitar inyección CSS en inline styles.
  */
 
+import { extractPrimaryEmotion, EmotionInfo } from './emotionMapper';
+export type { EmotionInfo };
+
 export interface TwitchMessageMeta {
   id?: string;
   username: string;
@@ -34,6 +37,7 @@ export interface SanitizedTTSMessage {
   displayName: string;
   userColor: string;
   timestamp: number;
+  emotion?: EmotionInfo | null;
 }
 
 const TRIGGER_PREFIX = '!s ';
@@ -129,6 +133,9 @@ export function sanitizeTwitchMessage(
     ? meta.color
     : '#9146FF';
 
+  // Detección de emoción o expresión vocal (ej. [feliz], [susurro], [angry])
+  const emotion = extractPrimaryEmotion(text);
+
   return {
     id: meta?.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     rawText: rawMessage,
@@ -137,5 +144,6 @@ export function sanitizeTwitchMessage(
     displayName,
     userColor,
     timestamp: meta?.timestamp || Date.now(),
+    emotion,
   };
 }

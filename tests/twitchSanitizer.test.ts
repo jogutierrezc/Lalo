@@ -63,4 +63,13 @@ describe('twitchSanitizer — Trigger !s y Reglas de Sanitización', () => {
     expect(sanitizeTwitchMessage('!s https://twitch.tv')).toBeNull();
     expect(sanitizeTwitchMessage('!s    ')).toBeNull();
   });
+
+  it('debe detectar y adjuntar metadatos de emoción si el usuario escribe etiquetas como [susurro]', () => {
+    const result = sanitizeTwitchMessage('!s [susurro] esto es un secreto');
+    expect(result).not.toBeNull();
+    expect(result?.emotion).toBeDefined();
+    expect(result?.emotion?.tag).toBe('whispering');
+    expect(result?.emotion?.label).toBe('Susurro');
+    expect(result?.emotion?.emoji).toBe('🤫');
+  });
 });

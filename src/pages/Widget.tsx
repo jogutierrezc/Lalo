@@ -13,6 +13,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import gsap from 'gsap';
 import { useTwitchChat } from '../hooks/useTwitchChat';
 import { SanitizedTTSMessage } from '../utils/twitchSanitizer';
+import { normalizeTextForFishAudio } from '../utils/emotionMapper';
 import { loadSettings } from '../types/settings';
 import { MessageSquare, Volume2, Radio, VolumeX } from 'lucide-react';
 
@@ -27,6 +28,27 @@ function getURLParam(key: string): string | null {
     if (hashVal) return hashVal.trim().replace(/[.,;/\\]+$/, '');
   }
   return null;
+}
+
+/**
+ * Renderiza el texto del mensaje destacando las etiquetas de corchete [expresión]
+ * con estilo visual de pill/chip en lugar de texto plano.
+ */
+function renderMessageContent(text: string) {
+  const parts = text.split(/(\[[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30}\])/g);
+  return parts.map((part, index) => {
+    if (part.startsWith('[') && part.endsWith(']')) {
+      return (
+        <span
+          key={index}
+          className="inline-block px-1.5 py-0.5 mx-0.5 rounded bg-purple-500/25 text-purple-200 border border-purple-500/40 text-[0.85em] font-semibold tracking-wide"
+        >
+          {part}
+        </span>
+      );
+    }
+    return part;
+  });
 }
 
 export const Widget: React.FC = () => {
@@ -304,12 +326,15 @@ export const Widget: React.FC = () => {
           .replace(/[_.-]+/g, ' ')
           .trim();
 
+        // Traducir etiquetas de emoción al formato canónico en inglés para Fish Audio S2 (ej. [feliz] -> [happy])
+        const normalizedMessageText = normalizeTextForFishAudio(message.cleanText);
+
         const template = settings.announceTemplate || '{user} dice: {message}';
         const spokenText = settings.announceSender !== false
           ? template
               .replace('{user}', cleanUserName)
-              .replace('{message}', message.cleanText)
-          : message.cleanText;
+              .replace('{message}', normalizedMessageText)
+          : normalizedMessageText;
 
         // Llamada al endpoint backend con el modelo gratuito s2.1-pro-free
         const response = await fetch('/api/tts', {
@@ -400,9 +425,11 @@ export const Widget: React.FC = () => {
             const cleanUserName = (message.displayName || message.username || 'Usuario')
               .replace(/[_.-]+/g, ' ')
               .trim();
+            // Limpiar etiquetas entre corchetes para que el sintetizador nativo no las lea literalmente
+            const speechText = message.cleanText.replace(/\[[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30}\]/g, '').trim() || message.cleanText;
             const fallbackText = settings.announceSender !== false
-              ? `${cleanUserName} dice: ${message.cleanText}`
-              : message.cleanText;
+              ? `${cleanUserName} dice: ${speechText}`
+              : speechText;
 
             const utterance = new SpeechSynthesisUtterance(fallbackText);
             utterance.lang = 'es-ES';
@@ -530,7 +557,7 @@ export const Widget: React.FC = () => {
               </div>
 
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className="font-bold text-base tracking-tight"
                     style={{ color: currentMessage.userColor || '#f4f4f5' }}
@@ -543,6 +570,14 @@ export const Widget: React.FC = () => {
                   <span className="text-[10px] font-mono text-zinc-400 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
                     !s
                   </span>
+                  {currentMessage.emotion && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-sm backdrop-blur-md animate-in fade-in zoom-in-95 duration-300 ${currentMessage.emotion.badgeClass}`}
+                    >
+                      <span className="text-xs leading-none">{currentMessage.emotion.emoji}</span>
+                      <span>{currentMessage.emotion.label}</span>
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-zinc-400 flex items-center gap-1">
                   <MessageSquare className="w-3 h-3 text-zinc-500" />
@@ -583,7 +618,7 @@ export const Widget: React.FC = () => {
                   : 'text-lg'
               }`}
             >
-              "{currentMessage.cleanText}"
+              "{renderMessageContent(currentMessage.cleanText)}"
             </p>
           </div>
         </div>
