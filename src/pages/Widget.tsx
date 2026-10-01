@@ -9,13 +9,16 @@
  * - Canal BroadcastChannel para pruebas instantáneas desde el Dashboard.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import gsap from 'gsap';
 import { useTwitchChat } from '../hooks/useTwitchChat';
 import { SanitizedTTSMessage } from '../utils/twitchSanitizer';
 import { normalizeTextForFishAudio } from '../utils/emotionMapper';
-import { loadSettings } from '../types/settings';
-import { MessageSquare, Volume2, Radio, VolumeX } from 'lucide-react';
+import { loadSettings, TTSSettings } from '../types/settings';
+import { AlertPosition, appearanceFromParams, normalizeAppearance } from '../utils/appearance';
+import { MotionOptions, playEnter, playExit, startSpeaking, stopSpeaking } from '../utils/alertMotion';
+import { AlertCard } from '../components/AlertCard';
+import { Radio, VolumeX } from 'lucide-react';
 
 function getURLParam(key: string): string | null {
   const searchVal = new URLSearchParams(window.location.search).get(key);
@@ -31,36 +34,27 @@ function getURLParam(key: string): string | null {
 }
 
 /**
- * Renderiza el texto del mensaje descomponiéndolo en palabras y etiquetas de corchete [expresión]
- * preparadas para la animación cinética escalonada de GSAP (.msg-word).
+ * Ajustes que llegan en la URL del widget. El navegador de OBS no comparte
+ * localStorage con el panel, así que la URL manda sobre lo guardado.
  */
-function renderMessageContent(text: string) {
-  const tokens = text.split(/(\[[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30}\]|\s+)/g);
-  return tokens.map((token, index) => {
-    if (!token) return null;
-
-    if (token.startsWith('[') && token.endsWith(']')) {
-      return (
-        <span
-          key={index}
-          className="msg-word inline-block px-2 py-0.5 mx-0.5 rounded-lg bg-purple-500/25 text-purple-200 border border-purple-500/40 text-[0.86em] font-semibold tracking-wide shadow-sm"
-        >
-          {token}
-        </span>
-      );
-    }
-
-    if (/^\s+$/.test(token)) {
-      return token;
-    }
-
-    return (
-      <span key={index} className="msg-word inline-block">
-        {token}
-      </span>
-    );
-  });
+function urlOverrides(): Partial<TTSSettings> {
+  const overrides: Partial<TTSSettings> = appearanceFromParams(getURLParam);
+  const volume = parseFloat(getURLParam('vol') || '');
+  if (Number.isFinite(volume)) overrides.volume = Math.min(1, Math.max(0, volume));
+  const speed = parseFloat(getURLParam('speed') || '');
+  if (Number.isFinite(speed)) overrides.speed = Math.min(1.5, Math.max(0.75, speed));
+  return overrides;
 }
+
+// Colocación de la alerta en pantalla (horizontal con justify, vertical con items)
+const POSITION_CLASS: Record<AlertPosition, string> = {
+  tl: 'items-start justify-start',
+  tc: 'items-start justify-center',
+  tr: 'items-start justify-end',
+  bl: 'items-end justify-start',
+  bc: 'items-end justify-center',
+  br: 'items-end justify-end',
+};
 
 const LALOPLAY_DEFAULT_VOICE = '37f9f4eec7624089a49b188d47588f2c';
 const OLD_PRESET_VOICE = '7f92f8afb8ec43bf81429cc1c9199cb1';
@@ -88,6 +82,7 @@ export const Widget: React.FC = () => {
       referenceId: cleanVoice,
       model: cleanModel,
       announceSender: announceParam !== null ? announceParam === 'true' || announceParam === '1' : base.announceSender,
+      ...urlOverrides(),
     };
   });
 
@@ -113,6 +108,7 @@ export const Widget: React.FC = () => {
         channel: getURLParam('channel') || getURLParam('c') || updated.channel,
         referenceId: cleanVoice,
         model: cleanModel,
+        ...urlOverrides(),
       }));
     };
     window.addEventListener('storage', handleStorage);
@@ -146,19 +142,21 @@ export const Widget: React.FC = () => {
   const isProcessingRef = useRef<boolean>(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const avatarRef = useRef<HTMLDivElement | null>(null);
-  const textContainerRef = useRef<HTMLDivElement | null>(null);
-  const barsRef = useRef<HTMLDivElement | null>(null);
-  const ambientGlowRef = useRef<HTMLDivElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Tweens y timelines de animación GSAP
+  // Timelines GSAP de entrada y de voz, y opciones de movimiento vigentes
   const entryTimelineRef = useRef<gsap.core.Timeline | null>(null);
-  const equalizerTweenRef = useRef<gsap.core.Tween | null>(null);
-  const avatarTweenRef = useRef<gsap.core.Tween | null>(null);
-  const auraTweenRef = useRef<gsap.core.Tween | null>(null);
-  const glowTweenRef = useRef<gsap.core.Tween | null>(null);
-  const scrollTweenRef = useRef<gsap.core.Tween | null>(null);
+  const speakTimelineRef = useRef<gsap.core.Timeline | null>(null);
+  const motion: MotionOptions = {
+    style: settings.alertStyle,
+    position: settings.position,
+    energy: settings.energy,
+    accent: settings.accent,
+    emotion: currentMessage?.emotion?.tag,
+    leadIn: settings.announceSender !== false ? 1 : 0,
+  };
+  const motionRef = useRef<MotionOptions>(motion);
+  motionRef.current = motion;
 
   // Sincronización entre pestañas (Dashboard <-> Widget) vía BroadcastChannel
   useEffect(() => {
@@ -171,7 +169,10 @@ export const Widget: React.FC = () => {
         }
         if (event.data?.type === 'SETTINGS_UPDATE' && event.data.settings) {
           console.log('[Lalo Widget] Configuración actualizada dinámicamente desde el Dashboard.');
-          setSettings((prev) => ({ ...prev, ...event.data.settings }));
+          setSettings((prev) => {
+            const merged = { ...prev, ...event.data.settings };
+            return { ...merged, ...normalizeAppearance(merged) };
+          });
         }
         if (event.data?.type === 'FORCE_RELOAD' || event.data?.type === 'RELOAD') {
           console.log('[Lalo Widget] Orden de recarga remota recibida vía BroadcastChannel.');
@@ -240,52 +241,12 @@ export const Widget: React.FC = () => {
     };
   }, [isPlaying, messageQueue.length]);
 
-  // Animación de entrada GSAP (Tarjeta elástica + Revelación cinética escalonada de palabras)
-  useEffect(() => {
+  // Animación de entrada GSAP según el estilo de alerta elegido.
+  // useLayoutEffect evita que la tarjeta se vea un fotograma antes de animar.
+  useLayoutEffect(() => {
     if (currentMessage && cardRef.current) {
       entryTimelineRef.current?.kill();
-      gsap.killTweensOf(cardRef.current);
-
-      const tl = gsap.timeline();
-      entryTimelineRef.current = tl;
-
-      // 1. Tarjeta entra con overshoot elástico suave (back.out)
-      tl.fromTo(
-        cardRef.current,
-        { y: 45, opacity: 0, scale: 0.94 },
-        {
-          y: 0,
-          opacity: 1,
-          scale: 1,
-          duration: 0.5,
-          ease: 'back.out(1.4)',
-        }
-      );
-
-      // 2. Revelación cinética de palabras (.msg-word) escalonada
-      if (textContainerRef.current) {
-        const words = textContainerRef.current.querySelectorAll('.msg-word');
-        if (words.length > 0) {
-          gsap.killTweensOf(words);
-          // Velocidad adaptativa: palabras cortas juegan dinámicas, párrafos largos entran fluidos sin demoras
-          const staggerSpeed = Math.max(0.01, Math.min(0.035, 0.9 / words.length));
-
-          tl.fromTo(
-            words,
-            { opacity: 0, y: 12, scale: 0.92, filter: 'blur(4px)' },
-            {
-              opacity: 1,
-              y: 0,
-              scale: 1,
-              filter: 'blur(0px)',
-              duration: 0.35,
-              stagger: staggerSpeed,
-              ease: 'power2.out',
-            },
-            '-=0.25' // Se superpone con el aterrizaje de la tarjeta
-          );
-        }
-      }
+      entryTimelineRef.current = playEnter(cardRef.current, motionRef.current);
     }
   }, [currentMessage]);
 
@@ -305,177 +266,33 @@ export const Widget: React.FC = () => {
 
     if (cardRef.current) {
       entryTimelineRef.current?.kill();
-      gsap.killTweensOf(cardRef.current);
-
-      const exitTl = gsap.timeline({
-        onComplete: () => {
-          clearTimeout(hardTimeout);
-          triggerComplete();
-        },
+      playExit(cardRef.current, motionRef.current, () => {
+        clearTimeout(hardTimeout);
+        triggerComplete();
       });
-
-      // Si hay palabras visibles, desvanecerlas suavemente hacia arriba
-      if (textContainerRef.current) {
-        const words = textContainerRef.current.querySelectorAll('.msg-word');
-        if (words.length > 0) {
-          exitTl.to(words, {
-            y: -10,
-            opacity: 0,
-            duration: 0.18,
-            stagger: 0.005,
-            ease: 'power2.in',
-          });
-        }
-      }
-
-      // Salida rápida y elegante de la tarjeta
-      exitTl.to(
-        cardRef.current,
-        {
-          opacity: 0,
-          y: -22,
-          scale: 0.96,
-          duration: 0.3,
-          ease: 'power2.in',
-        },
-        '-=0.1'
-      );
     } else {
       clearTimeout(hardTimeout);
       triggerComplete();
     }
   }, []);
 
-  // Inicia la orquestación visual completa de "habla" con GSAP:
-  // 1. Avatar parlante: micro-vibración y rebote sutil al ritmo de la voz.
-  // 2. Ondas acústicas/Aura: anillos de pulso concéntricos expandiéndose hacia afuera.
-  // 3. Resplandor ambiental respirante: luz difusa que late detrás de la tarjeta.
-  // 4. Ecualizador armónico de 7 bandas: barras de frecuencia reactivas.
-  // 5. Desplazamiento cinético auto-scroll: si el texto es largo, avanza suavemente con la lectura.
-  const startSpeakingAnimation = useCallback((textLength?: number) => {
-    // 1. Ecualizador reactivo
-    if (barsRef.current) {
-      const bars = barsRef.current.querySelectorAll('.eq-bar');
-      if (bars.length) {
-        equalizerTweenRef.current?.kill();
-        equalizerTweenRef.current = gsap.to(bars, {
-          scaleY: 'random(0.3, 1.9)',
-          duration: 0.16,
-          repeat: -1,
-          yoyo: true,
-          stagger: {
-            each: 0.035,
-            from: 'center',
-          },
-          ease: 'sine.inOut',
-        });
-      }
-    }
-
-    // 2. Avatar con micro-movimiento vocal (como si hablara)
-    if (avatarRef.current) {
-      avatarTweenRef.current?.kill();
-      avatarTweenRef.current = gsap.to(avatarRef.current, {
-        scale: 1.07,
-        y: -2.5,
-        rotation: 'random(-1.2, 1.2)',
-        duration: 0.17,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-      });
-    }
-
-    // 3. Anillos de sonido/aura emanando del avatar
-    if (cardRef.current) {
-      const auraRings = cardRef.current.querySelectorAll('.talking-aura-ring');
-      if (auraRings.length) {
-        auraTweenRef.current?.kill();
-        auraTweenRef.current = gsap.fromTo(
-          auraRings,
-          { scale: 0.95, opacity: 0.75 },
-          {
-            scale: 1.6,
-            opacity: 0,
-            duration: 1.15,
-            repeat: -1,
-            stagger: 0.55,
-            ease: 'power1.out',
-          }
-        );
-      }
-    }
-
-    // 4. Luz ambiental respirando con energía vocal
-    if (ambientGlowRef.current) {
-      glowTweenRef.current?.kill();
-      glowTweenRef.current = gsap.to(ambientGlowRef.current, {
-        scale: 1.35,
-        opacity: 0.45,
-        duration: 0.45,
-        repeat: -1,
-        yoyo: true,
-        ease: 'sine.inOut',
-      });
-    }
-
-    // 5. Desplazamiento cinético (auto-scroll) continuo si el texto sobrepasa la altura del contenedor
-    if (textContainerRef.current) {
-      const container = textContainerRef.current;
-      const maxScroll = container.scrollHeight - container.clientHeight;
-      if (maxScroll > 10) {
-        scrollTweenRef.current?.kill();
-        const chars = textLength || 300;
-        const scrollDuration = Math.max(6, chars * 0.065);
-        scrollTweenRef.current = gsap.to(container, {
-          scrollTop: maxScroll,
-          duration: scrollDuration,
-          ease: 'none',
-          delay: 1.0,
-        });
-      }
-    }
+  // Indicador de voz del estilo activo (vúmetro, ondas, karaoke o sticker).
+  // Usa la duración real del audio cuando se conoce; si no, la estima por longitud.
+  const startSpeakingAnimation = useCallback((textLength?: number, seconds?: number) => {
+    if (!cardRef.current) return;
+    speakTimelineRef.current?.kill();
+    const estimated = Math.max(3, (textLength || 80) * 0.065);
+    const duration = seconds && Number.isFinite(seconds) && seconds > 0 ? seconds : estimated;
+    speakTimelineRef.current = startSpeaking(cardRef.current, motionRef.current, duration);
   }, []);
 
   const stopSpeakingAnimation = useCallback(() => {
-    if (equalizerTweenRef.current) {
-      equalizerTweenRef.current.kill();
-      equalizerTweenRef.current = null;
-    }
-    if (avatarTweenRef.current) {
-      avatarTweenRef.current.kill();
-      avatarTweenRef.current = null;
-    }
-    if (auraTweenRef.current) {
-      auraTweenRef.current.kill();
-      auraTweenRef.current = null;
-    }
-    if (glowTweenRef.current) {
-      glowTweenRef.current.kill();
-      glowTweenRef.current = null;
-    }
-    if (scrollTweenRef.current) {
-      scrollTweenRef.current.kill();
-      scrollTweenRef.current = null;
-    }
-
-    if (barsRef.current) {
-      const bars = barsRef.current.querySelectorAll('.eq-bar');
-      gsap.to(bars, { scaleY: 0.3, duration: 0.2, ease: 'power1.out' });
-    }
-    if (avatarRef.current) {
-      gsap.to(avatarRef.current, { scale: 1, y: 0, rotation: 0, duration: 0.2, ease: 'power2.out' });
-    }
     if (cardRef.current) {
-      const auraRings = cardRef.current.querySelectorAll('.talking-aura-ring');
-      gsap.to(auraRings, { opacity: 0, scale: 0.95, duration: 0.2 });
+      stopSpeaking(cardRef.current, speakTimelineRef.current);
+    } else {
+      speakTimelineRef.current?.kill();
     }
-    if (ambientGlowRef.current) {
-      gsap.to(ambientGlowRef.current, { scale: 1, opacity: 0.2, duration: 0.3, ease: 'power1.out' });
-    }
-    if (textContainerRef.current) {
-      textContainerRef.current.scrollTop = 0;
-    }
+    speakTimelineRef.current = null;
   }, []);
 
   // Procesamiento y reproducción de audio de un mensaje
@@ -585,7 +402,7 @@ export const Widget: React.FC = () => {
         audio.onplay = () => {
           setIsAudioLoading(false);
           setAutoplayBlocked(false);
-          startSpeakingAnimation(message.cleanText.length);
+          startSpeakingAnimation(message.cleanText.length, audio.duration / (audio.playbackRate || 1));
         };
 
         audio.onended = () => {
@@ -714,7 +531,7 @@ export const Widget: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 pointer-events-none flex flex-col justify-end p-8 overflow-hidden select-none"
+      className={`fixed inset-0 pointer-events-none flex p-8 overflow-hidden select-none ${POSITION_CLASS[settings.position]}`}
     >
       {/* Botón flotante para desbloquear audio en navegadores si fuera bloqueado */}
       {autoplayBlocked && (
@@ -733,7 +550,7 @@ export const Widget: React.FC = () => {
       )}
 
       {/* Indicador de estado de Twitch y contador de cola */}
-      <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-zinc-300">
+      <div className={`absolute right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-zinc-300 ${settings.position[0] === 't' ? 'bottom-4' : 'top-4'}`}>
         <Radio className={`w-3.5 h-3.5 ${isConnected ? 'text-emerald-400 animate-pulse' : 'text-zinc-600'}`} />
         <span className="font-mono">#{activeChannel}</span>
         {messageQueue.length > 0 && (
@@ -743,123 +560,23 @@ export const Widget: React.FC = () => {
         )}
       </div>
 
-      {/* Tarjeta de TTS para OBS */}
+      {/* Tarjeta de TTS para OBS en el estilo elegido desde el panel */}
       {currentMessage && (
-        <div
+        <AlertCard
+          key={currentMessage.id}
           ref={cardRef}
-          className="max-w-xl md:max-w-2xl w-full mx-auto glass-panel rounded-2xl p-5 shadow-glass border border-white/10 relative overflow-hidden backdrop-blur-xl pointer-events-auto"
-          style={{
-            boxShadow: `0 12px 40px -10px ${currentMessage.userColor}33, 0 0 20px -2px rgba(145, 70, 255, 0.15)`,
-          }}
-        >
-          {/* Luz ambiental con respiración vocal GSAP */}
-          <div
-            ref={ambientGlowRef}
-            className="absolute -top-12 -right-12 w-36 h-36 rounded-full blur-2xl opacity-20 pointer-events-none transition-opacity"
-            style={{ backgroundColor: currentMessage.userColor }}
-          />
-
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-3">
-              {/* Contenedor de Avatar con aura de voz interactiva */}
-              <div className="relative shrink-0 flex items-center justify-center">
-                {/* Ondas concéntricas de sonido / aura parlante */}
-                <span
-                  className="talking-aura-ring absolute -inset-1 rounded-2xl opacity-0 pointer-events-none border border-purple-400/50"
-                  style={{
-                    boxShadow: `0 0 16px ${currentMessage.userColor || '#9146FF'}88`,
-                  }}
-                />
-                <span
-                  className="talking-aura-ring absolute -inset-1.5 rounded-2xl opacity-0 pointer-events-none border border-fuchsia-400/40"
-                  style={{
-                    boxShadow: `0 0 24px ${currentMessage.userColor || '#9146FF'}66`,
-                  }}
-                />
-
-                {/* Avatar parlante animado con GSAP */}
-                <div
-                  ref={avatarRef}
-                  className="w-11 h-11 rounded-xl flex items-center justify-center font-bold text-white shadow-lg text-sm uppercase ring-2 ring-white/15 relative z-10 transition-shadow select-none"
-                  style={{ backgroundColor: currentMessage.userColor || '#9146FF' }}
-                >
-                  {currentMessage.displayName.charAt(0)}
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="font-bold text-base tracking-tight"
-                    style={{ color: currentMessage.userColor || '#f4f4f5' }}
-                  >
-                    {currentMessage.displayName}
-                  </span>
-                  <span className="text-xs font-semibold text-purple-400">
-                    dice:
-                  </span>
-                  <span className="text-[10px] font-mono text-zinc-400 px-1.5 py-0.5 rounded bg-white/5 border border-white/5">
-                    !s
-                  </span>
-                  {currentMessage.emotion && (
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border shadow-sm backdrop-blur-md animate-in fade-in zoom-in-95 duration-300 ${currentMessage.emotion.badgeClass}`}
-                    >
-                      <span className="text-xs leading-none">{currentMessage.emotion.emoji}</span>
-                      <span>{currentMessage.emotion.label}</span>
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-zinc-400 flex items-center gap-1">
-                  <MessageSquare className="w-3 h-3 text-zinc-500" />
-                  <span>Mensaje de chat</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Estado del ecualizador */}
-            <div className="flex items-center gap-3 shrink-0">
-              {isAudioLoading ? (
-                <div className="flex items-center gap-1.5 text-xs text-purple-300 animate-pulse">
-                  <Volume2 className="w-4 h-4 text-purple-400 animate-spin" />
-                  <span>Sintetizando...</span>
-                </div>
-              ) : (
-                <div
-                  ref={barsRef}
-                  className="flex items-center gap-1 h-7 px-3 py-1 rounded-xl bg-black/40 border border-white/10 shadow-inner"
-                >
-                  <span className="eq-bar w-1 h-3 rounded-full bg-purple-400 origin-bottom" />
-                  <span className="eq-bar w-1 h-5 rounded-full bg-fuchsia-400 origin-bottom" />
-                  <span className="eq-bar w-1 h-4 rounded-full bg-indigo-400 origin-bottom" />
-                  <span className="eq-bar w-1 h-6 rounded-full bg-purple-300 origin-bottom" />
-                  <span className="eq-bar w-1 h-4 rounded-full bg-pink-400 origin-bottom" />
-                  <span className="eq-bar w-1 h-5 rounded-full bg-fuchsia-400 origin-bottom" />
-                  <span className="eq-bar w-1 h-3 rounded-full bg-purple-400 origin-bottom" />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div
-            ref={textContainerRef}
-            className="relative max-h-[28rem] overflow-y-auto no-scrollbar scroll-smooth"
-          >
-            <p
-              className={`text-zinc-100 font-medium leading-relaxed tracking-normal break-words drop-shadow-sm ${
-                currentMessage.cleanText.length > 650
-                  ? 'text-xs md:text-sm'
-                  : currentMessage.cleanText.length > 350
-                  ? 'text-sm md:text-base'
-                  : currentMessage.cleanText.length > 150
-                  ? 'text-base'
-                  : 'text-lg'
-              }`}
-            >
-              "{renderMessageContent(currentMessage.cleanText)}"
-            </p>
-          </div>
-        </div>
+          alertStyle={settings.alertStyle}
+          position={settings.position}
+          accent={settings.accent}
+          name={currentMessage.displayName}
+          text={currentMessage.cleanText}
+          emotionLabel={currentMessage.emotion?.label}
+          emotionTag={currentMessage.emotion?.tag}
+          userColor={currentMessage.userColor}
+          stickerSvg={settings.stickerSvg}
+          loading={isAudioLoading}
+          fontSize={`calc(clamp(13px, 1.05vw, 22px) * ${settings.scale})`}
+        />
       )}
     </div>
   );

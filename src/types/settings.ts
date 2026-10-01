@@ -1,4 +1,6 @@
-export interface TTSSettings {
+import { Appearance, DEFAULT_APPEARANCE, normalizeAppearance } from '../utils/appearance';
+
+export interface TTSSettings extends Appearance {
   channel: string;
   model: string;
   referenceId: string;
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: TTSSettings = {
   maxQueueSize: 20,
   announceSender: true,
   announceTemplate: '{user} dice: {message}',
+  ...DEFAULT_APPEARANCE,
 };
 
 export const STORAGE_KEY = 'lalo_tts_settings';
@@ -39,7 +42,8 @@ export function loadSettings(): TTSSettings {
     if (parsed.model === 's2.1-pro' || !parsed.model) {
       parsed.model = 's2.1-pro-free';
     }
-    return parsed;
+    // La apariencia guardada puede venir de una versión anterior o estar manipulada
+    return { ...parsed, ...normalizeAppearance(parsed) };
   } catch {
     return DEFAULT_SETTINGS;
   }

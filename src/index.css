@@ -4,9 +4,9 @@
 
 @layer base {
   body {
-    background-color: #09090b;
-    color: #f4f4f5;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #121315;
+    color: #efe9dc;
+    font-family: 'Onest', system-ui, -apple-system, sans-serif;
   }
 
   /* When body has .obs-transparent class for OBS Studio browser source */
@@ -18,29 +18,6 @@
 }
 
 @layer utilities {
-  .glass-panel {
-    background: rgba(18, 18, 24, 0.72);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-  }
-
-  .glass-card {
-    background: rgba(24, 24, 32, 0.65);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .glass-card-hover {
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  .glass-card-hover:hover {
-    border-color: rgba(145, 70, 255, 0.35);
-    box-shadow: 0 0 20px -3px rgba(145, 70, 255, 0.25);
-    transform: translateY(-1px);
-  }
-
   /* Hide scrollbars for OBS overlay */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -49,16 +26,996 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+}
 
-  /* Hardware-accelerated word transitions for kinetic text */
-  .msg-word {
-    will-change: transform, opacity, filter;
-    display: inline-block;
-  }
+/* ==========================================================================
+   Alertas del widget (Cabina, Bocadillo, Subtítulo, Sticker)
+   Todo se mide en em: el tamaño base lo fija quien monta la tarjeta.
+   ========================================================================== */
 
-  /* Talking avatar soundwave aura */
-  .talking-aura-ring {
-    will-change: transform, opacity;
-    pointer-events: none;
+.al {
+  --acc: #9146ff;
+  --acc-ink: #ffffff;
+  --k: 1;
+  width: min(100%, 34em);
+  min-width: 0;
+  pointer-events: auto;
+}
+.al p {
+  margin: 0;
+}
+.al[data-size='m'] { --k: 0.86; }
+.al[data-size='l'] { --k: 0.74; }
+.al[data-size='xl'] { --k: 0.64; }
+
+/* Palabras animadas por GSAP */
+.msg-word {
+  display: inline-block;
+  will-change: transform, opacity;
+}
+.al-tagword {
+  padding: 0 0.35em;
+  border-radius: 0.3em;
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-size: 0.82em;
+  font-weight: 700;
+}
+.al-text {
+  max-height: 14em;
+  overflow: hidden;
+}
+.al-msg {
+  overflow-wrap: anywhere;
+}
+.al[data-emo='whispering'] .al-msg {
+  font-weight: 500;
+  letter-spacing: 0.035em;
+}
+.al[data-emo='shouting'] .al-msg {
+  text-transform: uppercase;
+  font-weight: 800;
+}
+.al-status {
+  font-size: 0.8em;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+.al-wave {
+  display: inline-flex;
+  gap: 0.15em;
+  align-items: center;
+  height: 1em;
+}
+.al-wave i {
+  width: 0.15em;
+  height: 100%;
+  border-radius: 1em;
+  background: currentColor;
+  transform: scaleY(0.4);
+}
+
+/* ---------- Cabina: rótulo de emisión ---------- */
+.al-cabina {
+  background: #1b1c1f;
+  color: #efe9dc;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  border: 1px solid #3a3c42;
+  border-radius: 0.2em;
+  box-shadow: 0 0.7em 1.8em -0.5em rgba(0, 0, 0, 0.65);
+}
+.alc-top {
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  padding: 0.45em 0.8em;
+  border-bottom: 1px solid #3a3c42;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.74em;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #a7a295;
+}
+.alc-tally {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  color: #ff6a60;
+}
+.alc-tally i {
+  width: 0.72em;
+  height: 0.72em;
+  border-radius: 50%;
+  background: #ff3b30;
+}
+.alc-emo {
+  margin-left: auto;
+  background: var(--acc);
+  color: var(--acc-ink);
+  padding: 0.12em 0.6em;
+  border-radius: 0.15em;
+}
+.alc-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.9em;
+  padding: 0.8em;
+}
+.alc-avatar {
+  width: 2.5em;
+  height: 2.5em;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1.1em;
+  border-radius: 0.15em;
+}
+.alc-main {
+  min-width: 0;
+}
+.alc-name {
+  font-stretch: 75%;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.84em;
+  color: #a7a295;
+}
+.al-cabina .al-msg {
+  font-size: calc(1.24em * var(--k));
+  font-weight: 600;
+  line-height: 1.26;
+  margin-top: 0.12em;
+}
+.alc-vu {
+  display: flex;
+  gap: 0.22em;
+  width: 1.25em;
+  min-height: 3em;
+}
+.alc-vu span {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(to top, #3ddc84 0 58%, #ffb020 58% 84%, #ff3b30 84%);
+  -webkit-mask: repeating-linear-gradient(to top, #000 0 0.3em, transparent 0.3em 0.42em);
+  mask: repeating-linear-gradient(to top, #000 0 0.3em, transparent 0.3em 0.42em);
+}
+.alc-vu b {
+  position: absolute;
+  inset: 0;
+  background: #2a2c31;
+  transform-origin: top;
+  transform: scaleY(0.92);
+}
+.alc-prog {
+  height: 0.2em;
+  background: #121315;
+}
+.alc-prog i {
+  display: block;
+  height: 100%;
+  background: var(--acc);
+  transform-origin: left;
+}
+
+/* ---------- Bocadillo: globo de cómic ---------- */
+.al-bocadillo {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75em;
+  padding-top: 1em;
+  color: #1d1a3a;
+  font-family: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+}
+.al-bocadillo[data-pos$='r'] {
+  flex-direction: row-reverse;
+}
+.alb-avatar {
+  position: relative;
+  flex: none;
+  width: 2.7em;
+  height: 2.7em;
+  border-radius: 50%;
+  border: 0.16em solid #1d1a3a;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 1.15em;
+  box-shadow: 0 0.3em 0.8em -0.2em rgba(29, 26, 58, 0.5);
+}
+.alb-arcs {
+  position: absolute;
+  left: 74%;
+  top: -46%;
+  width: 1.3em;
+  height: 1.3em;
+  overflow: visible;
+}
+.al-bocadillo[data-pos$='r'] .alb-arcs {
+  left: auto;
+  right: 74%;
+  transform: scaleX(-1);
+}
+.alb-arcs g {
+  opacity: 0;
+}
+.alb-arcs path {
+  fill: none;
+  stroke: #ffd84a;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+}
+.alb-arcs .alb-arc-ink {
+  stroke: #1d1a3a;
+  stroke-width: 6.4;
+}
+.alb-balloon {
+  position: relative;
+  min-width: 0;
+  background: #fff;
+  border: 0.18em solid #1d1a3a;
+  border-radius: 1.3em;
+  padding: 1.1em 1.1em 0.85em;
+  box-shadow: 0 0.55em 1.3em -0.35em rgba(29, 26, 58, 0.5);
+}
+.alb-tail {
+  position: absolute;
+  left: -0.84em;
+  bottom: 0.7em;
+  width: 1em;
+  height: 1.1em;
+}
+.al-bocadillo[data-pos$='r'] .alb-tail {
+  left: auto;
+  right: -0.84em;
+  transform: scaleX(-1);
+}
+.alb-tag {
+  position: absolute;
+  top: -0.95em;
+  border: 0.16em solid #1d1a3a;
+  border-radius: 0.6em;
+  padding: 0.08em 0.6em;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.alb-name {
+  left: 0.9em;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-size: 0.92em;
+  transform: rotate(-3deg);
+}
+.alb-emo {
+  right: 0.9em;
+  background: #ffd84a;
+  color: #1d1a3a;
+  font-size: 0.76em;
+  transform: rotate(3deg);
+}
+.al-bocadillo .al-msg {
+  font-size: calc(1.28em * var(--k));
+  font-weight: 600;
+  line-height: 1.24;
+}
+
+/* ---------- Subtítulo: karaoke sin tarjeta ---------- */
+.al-subtitulo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  align-items: flex-start;
+  width: min(100%, 30em);
+  color: #fff;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.al-subtitulo[data-pos$='c'] {
+  align-items: center;
+  text-align: center;
+}
+.al-subtitulo[data-pos$='r'] {
+  align-items: flex-end;
+  text-align: right;
+}
+.als-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  max-width: 100%;
+  background: rgba(12, 11, 18, 0.9);
+  border-radius: 99em;
+  padding: 0.3em 0.85em 0.3em 0.35em;
+  font-weight: 700;
+  font-size: 0.84em;
+}
+.als-dot {
+  width: 1.55em;
+  height: 1.55em;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.82em;
+  font-weight: 800;
+}
+.als-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.als-emo {
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 500;
+}
+.als-chip .al-wave {
+  color: var(--acc);
+}
+.al-subtitulo .al-text {
+  max-height: 7em;
+}
+.al-subtitulo .al-msg {
+  --o: 0.055em;
+  --ink: #0c0b12;
+  font-size: calc(1.72em * var(--k));
+  font-weight: 800;
+  line-height: 1.16;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+  /* Contorno por sombras: legible sobre cualquier escena y compatible con el CEF de OBS */
+  text-shadow:
+    var(--o) 0 var(--ink),
+    calc(-1 * var(--o)) 0 var(--ink),
+    0 var(--o) var(--ink),
+    0 calc(-1 * var(--o)) var(--ink),
+    var(--o) var(--o) var(--ink),
+    calc(-1 * var(--o)) var(--o) var(--ink),
+    var(--o) calc(-1 * var(--o)) var(--ink),
+    calc(-1 * var(--o)) calc(-1 * var(--o)) var(--ink),
+    0 0.12em 0.5em rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- Sticker: el SVG del canal, troquelado ---------- */
+.al-sticker {
+  display: flex;
+  align-items: center;
+  font-family: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+}
+.al-sticker[data-pos$='r'] {
+  flex-direction: row-reverse;
+}
+.alk-sticker {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  width: 5.4em;
+  height: 5.4em;
+  margin-right: -1.1em;
+  transform: rotate(-6deg);
+  /* Borde blanco de troquel alrededor de la silueta real del SVG */
+  filter:
+    drop-shadow(0.12em 0 0 #fff)
+    drop-shadow(-0.12em 0 0 #fff)
+    drop-shadow(0 0.12em 0 #fff)
+    drop-shadow(0 -0.12em 0 #fff)
+    drop-shadow(0 0.3em 0.45em rgba(0, 0, 0, 0.45));
+}
+.al-sticker[data-pos$='r'] .alk-sticker {
+  margin-right: 0;
+  margin-left: -1.1em;
+}
+.alk-sticker img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.alk-sticker span {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 2.4em;
+  font-weight: 800;
+}
+.alk-plate {
+  min-width: 0;
+  flex: 1;
+  background: var(--acc);
+  color: var(--acc-ink);
+  border-radius: 1em;
+  padding: 0.7em 1em 0.8em 1.8em;
+  box-shadow: 0 0.55em 1.3em -0.35em rgba(0, 0, 0, 0.55);
+}
+.al-sticker[data-pos$='r'] .alk-plate {
+  padding: 0.7em 1.8em 0.8em 1em;
+}
+.alk-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  font-size: 0.86em;
+  font-weight: 800;
+}
+.alk-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alk-emo {
+  font-weight: 600;
+  opacity: 0.85;
+}
+.alk-top .al-wave {
+  margin-left: auto;
+}
+.al-sticker .al-msg {
+  font-size: calc(1.26em * var(--k));
+  font-weight: 650;
+  line-height: 1.24;
+  margin-top: 0.1em;
+}
+.al-sticker .al-tagword,
+.alk-plate .al-tagword {
+  background: var(--acc-ink);
+  color: var(--acc);
+}
+
+/* ==========================================================================
+   Panel de control en estilo Cabina (mesa de mezclas)
+   ========================================================================== */
+
+.cab {
+  --acc: #9146ff;
+  --acc-ink: #ffffff;
+  --cb-bg: #121315;
+  --cb-panel: #1b1c1f;
+  --cb-surface: #26282d;
+  --cb-line: #3f4148;
+  --cb-fg: #efe9dc;
+  --cb-mut: #aba698;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  min-height: 100vh;
+  background: var(--cb-bg);
+  color: var(--cb-fg);
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.cab ::selection {
+  background: var(--acc);
+  color: var(--acc-ink);
+}
+.cab :focus-visible {
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+}
+.cab button:not(:disabled):active {
+  transform: scale(0.97);
+}
+.cab-caps {
+  font-stretch: 75%;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.cab-mod {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  min-width: 0;
+  padding: 20px;
+  background: var(--cb-panel);
+  border: 1px solid var(--cb-line);
+  border-radius: 4px;
+}
+.cab-mod h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-stretch: 70%;
+  font-weight: 800;
+  font-size: 1.3rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.cab-mod h2 span {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--cb-fg);
+  color: var(--cb-panel);
+  font-size: 0.8125rem;
+  font-stretch: 100%;
+}
+.cab-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.cab-label {
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cb-mut);
+}
+.cab-hint {
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+  overflow-wrap: anywhere;
+}
+.cab-error {
+  font-size: 0.8125rem;
+  color: #ff8a80;
+}
+.cab-inp {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  font: inherit;
+  transition: border-color 0.15s ease;
+}
+.cab-inp::placeholder {
+  color: var(--cb-mut);
+}
+.cab-inp:disabled {
+  opacity: 0.5;
+}
+.cab-mono {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+textarea.cab-inp {
+  height: auto;
+  min-height: 76px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+.cab-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--cb-line);
+  border-radius: 5px;
+  background: var(--cb-bg);
+}
+.cab-seg button {
+  min-height: 32px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--cb-mut);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.14s var(--ease-out);
+}
+.cab-seg button[aria-pressed='true'] {
+  background: var(--acc);
+  color: var(--acc-ink);
+}
+.cab-btn,
+.cab-btn2 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 3px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.14s var(--ease-out), background-color 0.15s ease, border-color 0.15s ease;
+}
+.cab-btn {
+  border: 0;
+  background: var(--cb-fg);
+  color: var(--cb-panel);
+}
+.cab-btn2 {
+  border: 1px solid var(--cb-line);
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+}
+.cab-btn:disabled,
+.cab-btn2:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cab-btn2:hover:not(:disabled) {
+    border-color: var(--cb-mut);
   }
+  .cab-seg button:hover:not([aria-pressed='true']) {
+    color: var(--cb-fg);
+  }
+  .cab-style:hover {
+    border-color: var(--cb-mut);
+  }
+}
+.cab-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cab-range input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  accent-color: var(--acc);
+  cursor: pointer;
+}
+.cab-range output {
+  min-width: 5ch;
+  text-align: right;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.cab-tog {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  border-radius: 99px;
+  background: #4a4c54;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.cab-tog::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.18s var(--ease-out);
+}
+.cab-tog:checked {
+  background: var(--acc);
+}
+.cab-tog:checked::after {
+  transform: translateX(18px);
+  background: var(--acc-ink);
+}
+.cab-sw {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+.cab-sw button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--cb-line);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.14s var(--ease-out);
+}
+.cab-sw button[aria-pressed='true'] {
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+}
+.cab-sw input {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  cursor: pointer;
+}
+.cab-pos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  width: 128px;
+  aspect-ratio: 16 / 9;
+  padding: 5px;
+  border: 1px solid var(--cb-line);
+  border-radius: 4px;
+  background: var(--cb-bg);
+}
+.cab-pos button {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+.cab-pos button::after {
+  content: '';
+  position: absolute;
+  inset: 32% 22%;
+  border-radius: 2px;
+  background: #4a4c54;
+  transition: inset 0.16s var(--ease-out), background-color 0.15s ease;
+}
+.cab-pos button[aria-pressed='true']::after {
+  inset: 14% 6%;
+  background: var(--acc);
+}
+
+/* Selector de estilo de alerta */
+.cab-styles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.cab-style {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid var(--cb-line);
+  border-radius: 4px;
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.14s var(--ease-out);
+}
+.cab-style[aria-pressed='true'] {
+  border-color: var(--cb-fg);
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+}
+.cab-style-face {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 58px;
+  padding: 0 12px;
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+.cab-style-body {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px 12px;
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+.cab-style-body b {
+  font-size: 0.9375rem;
+  color: var(--cb-fg);
+}
+.cab-face-cabina {
+  background: #0c0d0e;
+  color: #efe9dc;
+  font-stretch: 70%;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.cab-face-cabina i {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: #ff3b30;
+}
+.cab-face-bocadillo {
+  background: #ffd84a;
+  color: #1d1a3a;
+  font-family: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+}
+.cab-face-subtitulo {
+  background: linear-gradient(160deg, #27305e, #0d0f1e);
+  color: #fff;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.cab-face-sticker {
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-family: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+}
+
+/* Monitor de vista previa */
+.cab-stage {
+  position: relative;
+  display: flex;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  padding: 3.5%;
+  overflow: hidden;
+  container-type: inline-size;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background:
+    radial-gradient(60% 80% at 72% 18%, #3b4a8c 0, transparent 60%),
+    radial-gradient(42% 52% at 18% 74%, #7a2f5a 0, transparent 65%),
+    linear-gradient(180deg, #141a33, #0a0c18);
+}
+.cab-stage[data-bg='claro'] {
+  background:
+    radial-gradient(30% 40% at 78% 22%, #fff 0, transparent 70%),
+    linear-gradient(180deg, #a9d8ff 0, #eef3d6 58%, #bfe0a0 100%);
+}
+.cab-sticker-thumb {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  padding: 6px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-bg);
+  object-fit: contain;
+}
+.cab-url {
+  display: block;
+  padding: 9px 12px;
+  border: 1px dashed var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-bg);
+  overflow-wrap: anywhere;
+}
+.cab details summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cab *,
+  .cab *::before,
+  .cab *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ==========================================================================
+   Guía de primeros pasos (marco sobre el módulo + consola fija abajo)
+   ========================================================================== */
+
+.tour-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none; /* el panel sigue siendo usable durante la guía */
+  border: 2px solid #efe9dc;
+  border-radius: 6px;
+  box-shadow: 0 0 0 200vmax rgba(8, 8, 10, 0.6);
+}
+.tour-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 51;
+  background: #1b1c1f;
+  color: #efe9dc;
+  border-top: 1px solid #3f4148;
+  box-shadow: 0 -12px 32px -8px rgba(0, 0, 0, 0.6);
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.tour-dock :focus-visible {
+  outline: 2px solid #efe9dc;
+  outline-offset: 2px;
+}
+.tour-dock button:not(:disabled):active {
+  transform: scale(0.97);
+}
+.tour-progress {
+  height: 3px;
+  background: #121315;
+}
+.tour-progress i {
+  display: block;
+  height: 100%;
+  background: #efe9dc;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.tour-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 32px;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding: 16px 20px 18px;
+}
+.tour-copy {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.tour-count {
+  margin: 0;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #aba698;
+}
+.tour-title {
+  margin: 2px 0 4px;
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+.tour-body {
+  margin: 0;
+  max-width: 68ch;
+  color: #cfc9bb;
+}
+.tour-body code {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: #efe9dc;
+}
+.tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.tour-skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: #aba698;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.14s cubic-bezier(0.23, 1, 0.32, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tour-skip:hover {
+    color: #efe9dc;
+  }
+}
+/* La consola vive fuera de .cab (portal): repite sus tokens para los botones */
+.tour-dock {
+  --acc: #9146ff;
+  --acc-ink: #ffffff;
+  --cb-bg: #121315;
+  --cb-panel: #1b1c1f;
+  --cb-surface: #26282d;
+  --cb-line: #3f4148;
+  --cb-fg: #efe9dc;
+  --cb-mut: #aba698;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
