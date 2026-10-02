@@ -80,3 +80,76 @@
 - [x] 12.4: Accelerated Hot Poller: 15-second polling interval and 30-second cooldown in `Widget.tsx` using `/api/version` (supporting `VERCEL_DEPLOYMENT_ID` and `VERCEL_GIT_COMMIT_SHA`).
 - [x] 12.5: Express & Serverless Parity: Added `/api/version` to local Express development server.
 
+## Phase 13: Lalo Stream Suite Hub & Stream Alerts Module (Impeccable & Emil Kowalski Design)
+- [x] 13.1: Unified Suite Navbar (`src/components/SuiteNav.tsx`): Persistent top navigation with segmented app switcher (Catálogo, TTS, Alertas), channel status indicator, 1-click OBS Browser Source copy modal, and ThemeSwitch.
+- [x] 13.2: Studio Tools Catalog Dashboard (`src/pages/Catalog.tsx`): Command center showcasing suite tools (Lalo TTS, Lalo Alertas, Bot & Moderación, Metas, Ruleta) with GSAP `useGSAP` staggered entrance, micro-interactions, and active states (`scale(0.97)`).
+- [x] 13.3: Stream Alerts Studio (`src/pages/AlertsStudio.tsx`): Dedicated studio for Follows, Subscriptions, Bits, and Raids; custom templates with token interpolation, 4 Cabina styles, position quadrant, duration, and volume controls.
+- [x] 13.4: Zero-Latency Web Audio API Synthesizer (`src/utils/alertsAudio.ts`): Built-in harmonic chimes (Synth Bell, Retro Fanfare, Arcade Chime, Soft Pop) with zero network latency and no CORS issues.
+- [x] 13.5: Multi-App Hash Router (`src/App.tsx`): Seamless switching between `#catalogo`, `#tts`, `#control`, `#alertas`, and OBS `#widget`.
+- [x] 13.6: Real-Time Bus & OBS Overlay Integration (`src/utils/bus.ts` & `src/pages/Widget.tsx`): Live dispatch of `ALERT_TRIGGER` events from the studio to OBS overlays.
+- [x] 13.7: Quality Gates & Verification: 41/41 unit tests passing in Vitest (`tests/alerts.test.ts`), `tsc --noEmit` clean, and production build succeeded.
+
+## Phase 14: TwitchIO Bot & EventSub Engine Integration (PythonistaGuild Attribution)
+- [x] 14.1: Technical Analysis & Attribution: Evaluated Python framework TwitchIO (https://github.com/TwitchIO/TwitchIO); embedded prominent credits and attribution to creators **PythonistaGuild** & **EvieePy** under the **MIT License**.
+- [x] 14.2: TwitchIO Studio Surface (`src/pages/TwitchIOStudio.tsx`): Dedicated studio with Cabina hardware styling, official attribution hero card, command manager (permissions, cooldowns, toggles), EventSub gateway monitors, and interactive chat console simulator.
+- [x] 14.3: Asynchronous Python Bridge Script (`server/twitchio_bridge.py`): Standalone bridge connecting TwitchIO IRC and EventSub with the local Lalo Express server via `POST /api/twitchio/event`.
+- [x] 14.4: Express Server Webhook Receptor (`server/index.ts`): Added `POST /api/twitchio/event` to ingest live TwitchIO bridge events.
+- [x] 14.5: Navigation & Catalog Activation (`src/components/SuiteNav.tsx` & `src/pages/Catalog.tsx`): Activated "Bot (TwitchIO)" tab in navigation and promoted the Catalog tool card from "Próximamente" to "DISPONIBLE (Powered by TwitchIO)".
+- [x] 14.6: Verification & Test Suite (`tests/twitchio.test.ts`): 44/44 unit tests passing, `tsc --noEmit` clean, and production build verified.
+
+## Phase 15: Suite Dashboard Stabilization & Custom Media / Channel Points FX Architecture
+- [x] 15.1: Fixed GSAP React 19 StrictMode bug in `src/pages/Catalog.tsx` (migrated from `tl.from()` to `tl.fromTo()` with `clearProps: 'transform,opacity'` preventing cards from becoming permanently invisible at `opacity: 0`).
+- [x] 15.2: Stabilized routing and navbar in `src/App.tsx` and `src/components/SuiteNav.tsx` (promoted Hub to "Dashboard", unified route `#dashboard` / `#/dashboard` / `#catalogo` / `/`, and ensured tactile `active:scale-[0.97]` feedback).
+- [x] 15.3: Added Module 4 Showcase Card to `src/pages/Catalog.tsx`: "Puntos de Canal & FX Personalizados (Estilo StreamElements)" with 1-click test simulation.
+- [x] 15.4: Architectural specification for transparent WebM videos, chroma keying, screen shake, audio layers, and OBS WebSocket v5 triggers.
+
+## Phase 16: Rewards Library Studio & Transparent Video Overlay System
+- [x] 16.1: Fixed navigation priority in `src/App.tsx`: App routes (`#tts`, `#alertas`, `#recompensas`, `#twitchio`) now take absolute precedence over `search.includes('channel=')`, resolving the issue where URL query params trapped navigation on a blank OBS widget.
+- [x] 16.2: Fixed active tab highlight in `src/pages/TwitchIOStudio.tsx`: Set `currentApp="twitchio"` on `SuiteNav` so the "Bot" tab highlights correctly instead of "Catálogo".
+- [x] 16.3: Built Rewards Studio (`src/pages/RewardsStudio.tsx`): 16:9 interactive live simulation stage, local file uploader (`.webm` with alpha channel and `.mp4`), blend mode selector (WebM Alfa, Screen blend, Chroma green), position quadrants, scale, volume, and Screen Shake toggle.
+- [x] 16.4: Transparent Video Overlay Engine in OBS Widget (`src/pages/Widget.tsx`): Real-time `REWARD_TRIGGER` handler, elastic GSAP camera shake (`elastic.out(1.2, 0.18)`), transparent video playback, and custom broadcast notice banners.
+- [x] 16.5: SuiteNav & Catalog Integration: Added dedicated "Recompensas" tab (`#recompensas`) to `SuiteNav.tsx` and activated direct button in `Catalog.tsx`.
+- [x] 16.6: Quality Gates & Verification: 49/49 unit tests passing (`tests/rewards.test.ts`), `tsc --noEmit` clean, and production build succeeded.
+
+## Phase 17: Video & Meme Integration in Stream Alerts (Follows, Subs, Bits, Raids)
+- [x] 17.1: Data Model Expansion (`src/types/alerts.ts`): Extended `EventRuleConfig` with `videoUrl`, `videoName`, `blendMode`, `videoScale`, and `screenShake`.
+- [x] 17.2: Stream Alerts Studio (`src/pages/AlertsStudio.tsx`): Integrated dedicated Video Transparente / Meme upload section into each event tab (Follow, Sub, Bits, Raid) with blend mode selector (WebM Alfa, Screen, Chroma Key) and Screen Shake toggle.
+- [x] 17.3: 16:9 Live Monitor Simulation: Synchronized video playback and physical GSAP screen shake in the studio monitor when clicking "Probar Alerta" or "Reproducir Animación".
+- [x] 17.4: OBS Overlay Synchronization (`src/pages/Widget.tsx`): Enhanced `ALERT_TRIGGER` receptor to parse and display video overlays, volume, and trigger elastic camera vibrations in OBS Browser Source.
+- [x] 17.5: Verification: 49/49 Vitest unit tests passing (`tests/alerts.test.ts`), `tsc --noEmit` clean, and production build verified.
+
+## Phase 18: Custom Audio Engine in Alerts & Channel Points Rewards
+- [x] 18.1: Unified Audio Engine (`src/utils/alertsAudio.ts`): Built `playCustomAudio(audioUrl, volume)` and `playAlertOrCustomSound(customAudioUrl, fallbackSoundType, volume)` supporting Base64/Data URI and local uploads (`.mp3`, `.wav`, `.ogg`) alongside zero-latency synthesized web audio chimes.
+- [x] 18.2: Custom Audio in Stream Alerts (`src/pages/AlertsStudio.tsx`): Integrated audio upload input, audio preview playback ("Escuchar"), individual gain sliders, and remove button across all event tabs (Follow, Sub, Bits, Raid).
+- [x] 18.3: Custom Audio in Channel Points Rewards (`src/pages/RewardsStudio.tsx`): Added audio upload inspector card, quick playback button, and gain slider so channel rewards can trigger both custom fanfare sounds and transparent WebM alpha videos.
+- [x] 18.4: Live OBS Studio Synchronization (`src/pages/Widget.tsx` & `src/utils/bus.ts`): Transmitted `customAudioUrl` and `customAudioVolume` across the BroadcastChannel bus for immediate playback in OBS Browser Source.
+
+## Phase 19: Tiered Bits & Subscriptions Personalization Actions
+- [x] 19.1: Tiered Architecture (`src/types/alerts.ts`): Modeled `BitTierConfig` (Bronze 1-99, Silver 100-499, Gold 500-999, Diamond/Hype 1000+) and `SubTierConfig` (Tier 1, Tier 2, Tier 3, and Community Gift Subs).
+- [x] 19.2: Tier Customization & Interactive Simulation (`src/pages/AlertsStudio.tsx`): Integrated tier inspection, 1-click test triggers (`broadcastTierBits`, `broadcastTierSub`), custom accent colors, screen shake flags, and individual templates.
+- [x] 19.3: Backward Compatibility: Enhanced `loadAlertsSettings()` to guarantee default bit and sub tiers populate seamlessly for existing localStorage user profiles.
+
+## Phase 20: Metas Comunitarias & Marcadores Studio (Goals Studio - Module 5)
+- [x] 20.1: Goals Data Architecture (`src/types/goals.ts`): Modeled `CommunityGoalItem` for Sub Goals, Follower Goals, and Bit Goals with custom units, progress limits, style presets (Cabina, Neón Glow, Cyberpunk, Minimalist), and 100% celebration triggers.
+- [x] 20.2: State Management Hook (`src/hooks/useGoalsSettings.ts`): Created reactive hook with local storage persistence and real-time `GOAL_UPDATE` / `GOAL_CELEBRATE` bus dispatch.
+- [x] 20.3: Goals Studio (`src/pages/GoalsStudio.tsx`): Dedicated studio with 16:9 monitor, GSAP fluid progress bar physics, interactive advance buttons (+1, +5, +25, reset), canvas confetti particle shower, transparent victory video, seismic camera shake, and custom MP3 victory fanfare audio.
+- [x] 20.4: OBS Browser Source Overlay (`src/pages/Widget.tsx`): Added dedicated goal bar overlay when `?app=goals` or `#widget?app=goals` is requested, plus milestone celebration handling.
+- [x] 20.5: Navigation & Catalog Activation: Added `#metas` route to `src/App.tsx`, Metas tab to `src/components/SuiteNav.tsx`, and promoted Module 5 to `DISPONIBLE` in `src/pages/Catalog.tsx`.
+## Phase 21: Media Vault 30s Strict Audio Architecture, Stream Events Customization & Vercel Production Readiness
+- [x] 21.1: Strict 30s Audio Engine & Format Validation (`src/types/mediaLibrary.ts`): Implemented `MAX_AUDIO_DURATION_SECONDS = 30.0` and `inspectAudioFile()` to measure audio duration via `Audio.onloadedmetadata` with friendly user rejection banners for files > 30s.
+- [x] 21.2: Central Media Vault System (`src/components/MediaLibraryModal.tsx` & `src/hooks/useMediaLibrary.ts`): Built interactive modal with live search, category chips, audio preview playback, drag-and-drop uploader, duration badges, and 1-click item assignment.
+- [x] 21.3: Audio Modes in Stream Alerts (`src/pages/AlertsStudio.tsx`): Integrated 4 distinct audio modes (`synth`, `custom_audio`, `tts`, `both`), allowing streamers to choose between synthesized Web Audio chimes, uploaded audio clips (<= 30s), spoken TTS voice, or both (intro sound + speech).
+- [x] 21.4: Custom Stream Events System (`src/pages/AlertsStudio.tsx`): Built full CRUD manager for custom chat triggers (e.g. `!hypetrain`, `!secreto`), custom templates, audio modes, screen shake, accent colors, and 1-click test dispatch to OBS.
+- [x] 21.5: Unified Suite Media Integration: Wired `MediaLibraryModal` into `AlertsStudio.tsx`, `RewardsStudio.tsx`, and `GoalsStudio.tsx`, providing seamless access to the streamer's media vault for audio fanfares and transparent videos.
+- [x] 21.6: OBS Overlay Speech & Sound Routing (`src/pages/Widget.tsx`): Updated `ALERT_TRIGGER` receptor to honor `audioMode`, playing audio bites and selectively enqueuing TTS speech synthesis based on mode.
+- [x] 21.7: Vercel Deployment & Serverless Integration: Prepared `vercel.json` SPA rewrites and serverless endpoints (`api/tts.ts`, `api/health.ts`, `api/version.ts`, `api/twitchio.ts`).
+- [x] 21.8: Quality Gates & Testing: Added `tests/mediaLibrary.test.ts` (61/61 unit tests passing across 9 test suites), `npx tsc --noEmit` 0 errors, and production build succeeded in 5.91s.
+
+## Phase 22: Multi-Metas Simultáneas, Compresión ≤4 en Fila, Carrusel Rotativo GSAP (5+ Metas) y Anuncios TTS
+- [x] 22.1: Multi-Goals Data Modeling (`src/types/goals.ts`): Modeled `GoalsDisplayMode` (`auto_4_or_slideshow`, `slideshow_only`, `row_only`, `reactive_progress`, `single_active`), `shouldDisplayAsSlideshow()`, milestone detection `checkMilestoneCrossed()` (25%, 50%, 75%, 100%), and speech announcement scripts `formatMilestoneAnnouncement()` and `formatProgressAnnouncement()`.
+- [x] 22.2: Unified Goals Overlay Component (`src/components/goals/GoalsOverlayView.tsx`): Built multi-goal layout supporting all 4 styles (Cabina, Neón, Cyberpunk, Minimalist), automatic visual compression for 1 to 4 goals in a row, and animated slideshow carousel with GSAP (smooth slide in `y: 8 -> 0`, subtle blur crossfade, live cycle countdown timer bar, and interactive pill indicators) when reaching 5+ goals.
+- [x] 22.3: Goals Studio Interactive Control (`src/pages/GoalsStudio.tsx`): Replaced single-goal preview with `GoalsOverlayView` in the 16:9 monitor, added display mode selector cards, slideshow interval slider (3s-30s), TTS announcements toggles, active/paused toggles per goal, simulation advance buttons with voice announcements, and 1-click "Probar Umbral 5+ Metas" button.
+- [x] 22.4: Realtime Bus & OBS Synchronization (`src/hooks/useGoalsSettings.ts`, `src/utils/bus.ts`, `src/pages/Widget.tsx`): Sincronización instantánea de `GOALS_SETTINGS_UPDATE` y `GOAL_UPDATE`, con renderizado unificado en la fuente de navegador de OBS y locución hablada TTS de avances e hitos.
+- [x] 22.5: Design Skills Compliance: Adhered to `impeccable` (broadcast hardware aesthetic, high visual contrast), `emil-design-eng` (interactive `active:scale-[0.97]`, transitions < 250ms, no animations from `scale(0)`), and `gsap` (smooth timelines and timer bar tween).
+- [x] 22.6: Verification & Quality Gates: Expanded `tests/goals.test.ts` (15/15 goals tests, 72/72 total tests passing across 9 test suites), `npx tsc --noEmit` 0 errors, and Vite production build verified.
+

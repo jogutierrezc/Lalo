@@ -16,14 +16,13 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
 import tmi from 'tmi.js';
-import { Ban, Check, CircleHelp, Clock, Copy, Pause, VolumeX, Play, Radar, RotateCcw, SkipForward, Trash2, X } from 'lucide-react';
+import { Ban, Check, Clock, Copy, Pause, VolumeX, Play, Radar, RotateCcw, SkipForward, Trash2, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
 import { inkFor } from '../utils/appearance';
 import { DEFAULT_TIMEOUT_MINUTES, LIMITS, MIN_ROLES, normalizeUser, parseWordList } from '../utils/moderation';
 import { LiveItem, LogItem, WidgetState, listenBus, postBus } from '../utils/bus';
 import { buildWidgetUrl } from '../utils/widgetUrl';
-import { PanelNav } from '../components/PanelNav';
-import { ThemeSwitch } from '../components/ThemeSwitch';
+import { SuiteNav } from '../components/SuiteNav';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 
 const TRIGGER_LABEL: Record<string, string> = { reward: 'Puntos', bits: 'Bits', test: 'Prueba' };
@@ -230,22 +229,14 @@ export const Control: React.FC = () => {
   return (
     <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[color:var(--cb-line)] pb-4">
-          <h1 className="cab-caps text-2xl" style={{ fontStretch: '70%', fontWeight: 800 }}>
-            Lalo TTS
-          </h1>
-          <PanelNav current="control" />
-          <div className="ml-auto">
-            <ThemeSwitch />
-          </div>
-          <span className="cab-caps text-[13px] text-[color:var(--cb-mut)]" role="status">
-            {saved ? 'Cambios guardados' : 'Guardando'}
-          </span>
-          <button type="button" className="cab-btn2" onClick={() => setTourOpen(true)} disabled={tourOpen}>
-            <CircleHelp className="h-4 w-4" aria-hidden="true" />
-            Guía
-          </button>
-        </header>
+        {/* Barra de navegación de la Suite */}
+        <SuiteNav
+          currentApp="control"
+          channel={settings.channel}
+          saved={saved}
+          onOpenTour={() => setTourOpen(true)}
+          tourAvailable={!tourOpen}
+        />
 
         <div ref={listsRef} className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
           {/* Columna izquierda: lo que pasa ahora */}

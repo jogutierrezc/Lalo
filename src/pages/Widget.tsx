@@ -25,10 +25,13 @@ import {
   normalizeUser,
   pickNext,
 } from '../utils/moderation';
-import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus } from '../utils/bus';
+import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus, RewardTriggerEvent, GoalProgressEvent } from '../utils/bus';
 import { MotionOptions, playEnter, playExit, startSpeaking, stopSpeaking } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
-import { Radio, VolumeX } from 'lucide-react';
+import { playAlertOrCustomSound } from '../utils/alertsAudio';
+import { Coins, Radio, VolumeX } from 'lucide-react';
+import { loadGoalsSettings } from '../types/goals';
+import { GoalsOverlayView } from '../components/goals/GoalsOverlayView';
 
 function getURLParam(key: string): string | null {
   const searchVal = new URLSearchParams(window.location.search).get(key);
@@ -776,17 +779,196 @@ export const Widget: React.FC = () => {
     publishRef.current();
   }, [activeChannel, isConnected, paused, approval, textOnly, approvedIds, activeTimeouts, stats, currentMessage, messageQueue, log]);
 
+  // Recompensas interactivas y avisos con video transparente
+  const [activeReward, setActiveReward] = useState<RewardTriggerEvent | null>(null);
+  const rewardOverlayRef = useRef<HTMLDivElement | null>(null);
+  const rewardVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Soporte para Metas Comunitarias en OBS
+  const isGoalsApp = getURLParam('app') === 'goals' || window.location.hash.includes('app=goals');
+  const [goalsSettings, setGoalsSettings] = useState(() => loadGoalsSettings());
+  const [currentGoalEvent, setCurrentGoalEvent] = useState<GoalProgressEvent | null>(null);
+
+  useEffect(() => {
+    if (activeReward && rewardOverlayRef.current) {
+      gsap.fromTo(
+        rewardOverlayRef.current,
+        { opacity: 0, scale: 0.93, y: 15 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.38, ease: 'back.out(1.5)', clearProps: 'transform,opacity' }
+      );
+    }
+  }, [activeReward]);
+
   useEffect(() => {
     const stop = listenBus((message: BusMessage) => {
-      if (message.type === 'CONTROL') controlRef.current({ action: message.action, id: message.id, user: message.user, minutes: message.minutes } as LiveControl);
-      if (message.type === 'STATE_REQUEST') publishRef.current();
+      if (message.type === 'CONTROL') {
+        controlRef.current({ action: message.action, id: message.id, user: message.user, minutes: message.minutes } as LiveControl);
+      }
+      if (message.type === 'STATE_REQUEST') {
+        publishRef.current();
+      }
+      if (message.type === 'ENQUEUE') {
+        enqueueManualMessage(message.text, message.user);
+      }
+      if (message.type === 'ALERT_TRIGGER') {
+        const alert = message.alert;
+        const mode = alert.audioMode || (alert.customAudioUrl ? 'custom_audio' : 'synth');
+
+        // Reproducir audio si el modo incluye sonido sintetizado o clip personalizado
+        if (mode === 'synth' || mode === 'custom_audio' || mode === 'both') {
+          playAlertOrCustomSound(alert.customAudioUrl, alert.soundType || 'synth-bell', alert.customAudioVolume ?? 0.85);
+        }
+
+        // Sacudida de pantalla si está habilitada en la alerta
+        if (alert.screenShake && containerRef.current) {
+          gsap.fromTo(
+            containerRef.current,
+            { x: -16, y: 12, rotate: -1 },
+            {
+              x: 0,
+              y: 0,
+              rotate: 0,
+              duration: 0.7,
+              ease: 'elastic.out(1.2, 0.18)',
+              clearProps: 'transform',
+            }
+          );
+        }
+
+        // Si la alerta incluye video transparente, proyectarlo en el overlay
+        if (alert.videoUrl) {
+          setActiveReward({
+            id: alert.id,
+            user: alert.user,
+            rewardName: `Alerta de ${alert.eventType.toUpperCase()}`,
+            noticeText: alert.text,
+            videoUrl: alert.videoUrl,
+            blendMode: alert.blendMode || 'transparent',
+            position: 'center',
+            scale: alert.videoScale || 1.0,
+            volume: 0.85,
+            screenShake: alert.screenShake,
+            accentColor: alert.accent || '#9146ff',
+            soundType: alert.soundType,
+            duration: alert.duration || 5,
+          });
+        }
+
+        // Encolar síntesis de voz (TTS) solo si el modo es 'tts' o 'both'
+        if (mode === 'tts' || mode === 'both') {
+          enqueueManualMessage(alert.text, alert.user);
+        }
+      }
+      if (message.type === 'REWARD_TRIGGER') {
+        const reward = message.reward;
+        playAlertOrCustomSound(reward.customAudioUrl, reward.soundType || 'arcade-chime', reward.customAudioVolume ?? 0.85);
+        if (reward.screenShake && containerRef.current) {
+          gsap.fromTo(
+            containerRef.current,
+            { x: -16, y: 12, rotate: -1 },
+            {
+              x: 0,
+              y: 0,
+              rotate: 0,
+              duration: 0.7,
+              ease: 'elastic.out(1.2, 0.18)',
+              clearProps: 'transform',
+            }
+          );
+        }
+        setActiveReward(reward);
+        const durationSec = reward.duration || 6;
+        setTimeout(() => {
+          if (rewardOverlayRef.current) {
+            gsap.to(rewardOverlayRef.current, {
+              opacity: 0,
+              scale: 0.95,
+              duration: 0.4,
+              ease: 'power2.in',
+              onComplete: () => setActiveReward(null),
+            });
+          } else {
+            setActiveReward(null);
+          }
+        }, durationSec * 1000);
+      }
+      if (message.type === 'GOALS_SETTINGS_UPDATE') {
+        setGoalsSettings(message.settings);
+      }
+      if (message.type === 'GOAL_UPDATE') {
+        setCurrentGoalEvent(message.goal);
+        setGoalsSettings((prev) => ({
+          ...prev,
+          goals: prev.goals.map((g) =>
+            g.id === message.goal.goalId
+              ? { ...g, current: message.goal.current, target: message.goal.target }
+              : g
+          ),
+        }));
+
+        // Locución hablada de avance o de hito en OBS si está habilitado
+        if (message.goal.announcement) {
+          if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            try {
+              const utter = new SpeechSynthesisUtterance(message.goal.announcement);
+              utter.lang = 'es-MX';
+              utter.volume = goalsSettings.announceTtsVolume ?? 0.85;
+              window.speechSynthesis.speak(utter);
+            } catch (err) {
+              console.warn('OBS TTS speech error:', err);
+            }
+          }
+        }
+      }
+      if (message.type === 'GOAL_CELEBRATE') {
+        const cel = message.celebration;
+        playAlertOrCustomSound(
+          cel.victoryCustomAudioUrl,
+          cel.victorySoundType || 'retro-fanfare',
+          cel.victoryCustomAudioVolume ?? 0.85
+        );
+        if (cel.screenShake && containerRef.current) {
+          gsap.fromTo(
+            containerRef.current,
+            { x: -18, y: 14, rotate: -1.2 },
+            {
+              x: 0,
+              y: 0,
+              rotate: 0,
+              duration: 0.8,
+              ease: 'elastic.out(1.2, 0.18)',
+              clearProps: 'transform',
+            }
+          );
+        }
+        if (cel.victoryVideoUrl) {
+          setActiveReward({
+            id: `goal-cel-${cel.goalId}-${Date.now()}`,
+            user: 'Comunidad',
+            rewardName: '¡META ALCANZADA!',
+            noticeText: `¡Meta Completada: ${cel.title}!`,
+            videoUrl: cel.victoryVideoUrl,
+            blendMode: cel.victoryBlendMode || 'transparent',
+            position: 'center',
+            scale: 1.2,
+            volume: cel.victoryCustomAudioVolume ?? 0.85,
+            screenShake: cel.screenShake,
+            accentColor: '#ffd700',
+            soundType: cel.victorySoundType,
+            duration: cel.duration || 6,
+          });
+          setTimeout(() => {
+            setActiveReward(null);
+          }, (cel.duration || 6) * 1000);
+        }
+      }
     });
     const heartbeat = setInterval(() => publishRef.current(), 5000);
     return () => {
       stop();
       clearInterval(heartbeat);
     };
-  }, []);
+  }, [enqueueManualMessage]);
 
   // Al bloquear a alguien desde el panel, sus mensajes en espera salen de la cola
   useEffect(() => {
@@ -875,6 +1057,113 @@ export const Widget: React.FC = () => {
           loading={isAudioLoading}
           fontSize={`calc(clamp(13px, 1.05vw, 22px) * ${settings.scale})`}
         />
+      )}
+
+      {/* Overlay de Metas Comunitarias & Marcadores (Compresión ≤4 en fila y Carrusel 5+ con GSAP) */}
+      {isGoalsApp && (
+        <div className="pointer-events-none fixed inset-x-0 top-6 z-30 flex justify-center px-4">
+          <GoalsOverlayView
+            goals={goalsSettings.goals}
+            activeGoalId={goalsSettings.activeGoalId}
+            displayMode={goalsSettings.displayMode}
+            slideshowIntervalSec={goalsSettings.slideshowIntervalSec}
+            recentProgressGoalId={currentGoalEvent?.goalId}
+          />
+        </div>
+      )}
+
+      {/* Capa de Recompensa / Video Transparente y Aviso Personalizado */}
+      {activeReward && (
+        <div
+          ref={rewardOverlayRef}
+          className={`pointer-events-none fixed inset-0 z-40 flex p-8 ${
+            activeReward.position === 'fullscreen'
+              ? 'items-center justify-center'
+              : activeReward.position === 'bottom-right'
+              ? 'items-end justify-end'
+              : activeReward.position === 'bottom-left'
+              ? 'items-end justify-start'
+              : activeReward.position === 'top-right'
+              ? 'items-start justify-end'
+              : activeReward.position === 'top-left'
+              ? 'items-start justify-start'
+              : 'items-center justify-center'
+          }`}
+        >
+          <div
+            className={`relative flex flex-col items-center gap-3 ${
+              activeReward.position === 'fullscreen' ? 'h-full w-full justify-center' : 'max-w-xl'
+            }`}
+            style={{
+              transform: `scale(${activeReward.scale || 1})`,
+              transformOrigin: activeReward.position === 'bottom-right' ? 'bottom right' : 'center',
+            }}
+          >
+            {/* Reproductor de Video Transparente */}
+            {activeReward.videoUrl ? (
+              <video
+                ref={rewardVideoRef}
+                src={activeReward.videoUrl}
+                autoPlay
+                playsInline
+                muted={false}
+                className={`rounded-lg object-contain ${
+                  activeReward.position === 'fullscreen' ? 'max-h-[85vh] w-auto' : 'max-h-80 w-auto'
+                }`}
+                style={{
+                  mixBlendMode: activeReward.blendMode === 'screen' ? 'screen' : 'normal',
+                }}
+              />
+            ) : (
+              /* Animación vectorial transparente generativa para presets sin archivo cargado */
+              <div className="relative flex h-48 w-48 items-center justify-center">
+                <div
+                  className="absolute inset-0 animate-ping rounded-full opacity-30"
+                  style={{ backgroundColor: activeReward.accentColor || '#9146ff' }}
+                />
+                <div
+                  className="absolute inset-2 animate-pulse rounded-full border-2 opacity-80"
+                  style={{ borderColor: activeReward.accentColor || '#9146ff' }}
+                />
+                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-black/60 shadow-2xl backdrop-blur-md">
+                  <Coins
+                    className="h-12 w-12 animate-bounce"
+                    style={{ color: activeReward.accentColor || '#9146ff' }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Aviso en pantalla personalizado estilo Cabina Broadcast */}
+            {activeReward.noticeText && (
+              <div
+                className="flex items-center gap-3 rounded-lg border bg-zinc-950/90 px-4 py-2.5 shadow-2xl backdrop-blur-md"
+                style={{
+                  borderColor: activeReward.accentColor || 'var(--ui, #9146ff)',
+                  boxShadow: `0 8px 32px -4px ${activeReward.accentColor || '#9146ff'}40`,
+                }}
+              >
+                <div
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-md text-black font-black"
+                  style={{ backgroundColor: activeReward.accentColor || '#9146ff' }}
+                >
+                  <Coins className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex flex-col">
+                  <span
+                    className="text-[10px] font-black uppercase tracking-wider"
+                    style={{ color: activeReward.accentColor || '#9146ff' }}
+                  >
+                    {activeReward.rewardName}
+                  </span>
+                  <span className="text-sm font-bold text-white drop-shadow-sm">
+                    {activeReward.noticeText}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -57,6 +57,19 @@ app.get('/api/version', (_req: Request, res: Response) => {
   });
 });
 
+// Endpoint receptor de eventos del puente TwitchIO (PythonistaGuild)
+app.post('/api/twitchio/event', (req: Request, res: Response) => {
+  const { type, channel, data } = req.body || {};
+  console.log(`[TwitchIO Bridge Event] Tipo: ${type} | Canal: ${channel}`, data);
+  res.json({
+    status: 'ok',
+    framework: 'TwitchIO (PythonistaGuild)',
+    receivedAt: Date.now(),
+    type,
+    channel,
+  });
+});
+
 interface TTSRequestBody {
   text?: string;
   reference_id?: string;

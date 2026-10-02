@@ -8,6 +8,9 @@
 
 import type { ControlAction } from './moderation';
 import type { TTSSettings } from '../types/settings';
+import type { AlertStyle } from './appearance';
+import type { StreamAlertsSettings, AlertEventType, AlertSoundType, AlertAudioMode } from '../types/alerts';
+import type { GoalsSettings } from '../types/goals';
 
 export const BUS_NAME = 'lalo_tts_bus';
 
@@ -51,8 +54,78 @@ export interface WidgetState {
   at: number;
 }
 
+export interface StreamAlertEvent {
+  id: string;
+  eventType: AlertEventType;
+  user: string;
+  detail?: string;
+  text: string;
+  style?: AlertStyle;
+  accent?: string;
+  soundType?: AlertSoundType;
+  duration?: number;
+  videoUrl?: string;
+  blendMode?: 'transparent' | 'screen' | 'chroma-green';
+  videoScale?: number;
+  screenShake?: boolean;
+  customAudioUrl?: string;
+  customAudioVolume?: number;
+  audioMode?: AlertAudioMode;
+}
+
+export interface RewardTriggerEvent {
+  id: string;
+  user: string;
+  rewardName: string;
+  noticeText: string;
+  videoUrl?: string;
+  blendMode?: 'transparent' | 'screen' | 'chroma-green';
+  position?: 'center' | 'fullscreen' | 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  scale?: number;
+  volume?: number;
+  screenShake?: boolean;
+  accentColor?: string;
+  soundType?: AlertSoundType;
+  customAudioUrl?: string;
+  customAudioVolume?: number;
+  duration?: number;
+}
+
+export interface GoalProgressEvent {
+  goalId: string;
+  title: string;
+  current: number;
+  target: number;
+  unit: string;
+  percent: number;
+  completed: boolean;
+  delta?: number;
+  user?: string;
+  milestone?: 25 | 50 | 75 | 100;
+  announcement?: string;
+}
+
+export interface GoalCelebrationEvent {
+  goalId: string;
+  title: string;
+  victoryVideoUrl?: string;
+  victoryBlendMode?: 'transparent' | 'screen' | 'chroma-green';
+  victoryCustomAudioUrl?: string;
+  victoryCustomAudioVolume?: number;
+  victorySoundType?: AlertSoundType;
+  screenShake?: boolean;
+  confetti?: boolean;
+  duration?: number;
+}
+
 export type BusMessage =
   | { type: 'SETTINGS_UPDATE'; settings: TTSSettings }
+  | { type: 'ALERT_SETTINGS_UPDATE'; settings: StreamAlertsSettings }
+  | { type: 'ALERT_TRIGGER'; alert: StreamAlertEvent }
+  | { type: 'REWARD_TRIGGER'; reward: RewardTriggerEvent }
+  | { type: 'GOALS_SETTINGS_UPDATE'; settings: GoalsSettings }
+  | { type: 'GOAL_UPDATE'; goal: GoalProgressEvent }
+  | { type: 'GOAL_CELEBRATE'; celebration: GoalCelebrationEvent }
   | { type: 'ENQUEUE'; text: string; user?: string }
   | { type: 'FORCE_RELOAD' }
   | { type: 'CONTROL'; action: ControlAction | 'remove'; id?: string; user?: string; minutes?: number }

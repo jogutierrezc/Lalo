@@ -9,13 +9,12 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, CircleHelp, Copy, ExternalLink, Play, RefreshCw, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { Check, Copy, ExternalLink, Play, RefreshCw, RotateCcw, Trash2, Upload } from 'lucide-react';
 import { saveSettings } from '../types/settings';
 import { useSettings } from '../hooks/useSettings';
 import { postBus } from '../utils/bus';
 import { buildWidgetUrl } from '../utils/widgetUrl';
-import { PanelNav } from '../components/PanelNav';
-import { ThemeSwitch } from '../components/ThemeSwitch';
+import { SuiteNav } from '../components/SuiteNav';
 import { sanitizeTwitchMessage } from '../utils/twitchSanitizer';
 import { AVAILABLE_EMOTIONS, normalizeTextForFishAudio, EmotionInfo } from '../utils/emotionMapper';
 import {
@@ -284,29 +283,14 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        {/* Barra de estado */}
-        <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[color:var(--cb-line)] pb-4">
-          <h1 className="cab-caps text-2xl" style={{ fontStretch: '70%', fontWeight: 800 }}>
-            Lalo TTS
-          </h1>
-          <PanelNav current="ajustes" />
-          <span className="cab-caps text-[13px] text-[color:var(--cb-mut)]">
-            Canal <b className="text-[color:var(--cb-fg)]">{settings.channel || 'sin canal'}</b>
-          </span>
-          <span className="cab-caps text-[13px] text-[color:var(--cb-mut)]">
-            Estilo <b className="text-[color:var(--cb-fg)]">{ALERT_STYLES.find((s) => s.id === settings.alertStyle)?.name}</b>
-          </span>
-          <div className="ml-auto">
-            <ThemeSwitch />
-          </div>
-          <span className="cab-caps text-[13px] text-[color:var(--cb-mut)]" role="status">
-            {saved ? 'Cambios guardados' : 'Guardando'}
-          </span>
-          <button type="button" className="cab-btn2" onClick={() => setTourOpen(true)} disabled={tourOpen}>
-            <CircleHelp className="h-4 w-4" aria-hidden="true" />
-            Guía
-          </button>
-        </header>
+        {/* Barra de navegación de la Suite */}
+        <SuiteNav
+          currentApp="tts"
+          channel={settings.channel}
+          saved={saved}
+          onOpenTour={() => setTourOpen(true)}
+          tourAvailable={!tourOpen}
+        />
 
         {/* 1 Entrada · 2 Voz · 3 Mezcla */}
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
