@@ -11,6 +11,7 @@ import type { TTSSettings } from '../types/settings';
 import type { AlertStyle } from './appearance';
 import type { StreamAlertsSettings, AlertEventType, AlertSoundType, AlertAudioMode } from '../types/alerts';
 import type { GoalsSettings } from '../types/goals';
+import type { RouletteSettings, RouletteSegment } from '../types/roulette';
 
 export const BUS_NAME = 'lalo_tts_bus';
 
@@ -118,6 +119,24 @@ export interface GoalCelebrationEvent {
   duration?: number;
 }
 
+export interface RouletteSpinEvent {
+  id: string;
+  user?: string;
+  winnerSegment: RouletteSegment;
+  winnerIndex: number;
+  totalActiveSegments: number;
+  startRotation?: number;
+  finalRotation: number;
+  spinDurationSec: number;
+  screenShake?: boolean;
+  confetti?: boolean;
+  victorySoundType?: AlertSoundType;
+  victoryCustomAudioUrl?: string;
+  victoryCustomAudioVolume?: number;
+  showWinnerBanner?: boolean;
+  winnerBannerDurationSec?: number;
+}
+
 export type BusMessage =
   | { type: 'SETTINGS_UPDATE'; settings: TTSSettings }
   | { type: 'ALERT_SETTINGS_UPDATE'; settings: StreamAlertsSettings }
@@ -126,9 +145,12 @@ export type BusMessage =
   | { type: 'GOALS_SETTINGS_UPDATE'; settings: GoalsSettings }
   | { type: 'GOAL_UPDATE'; goal: GoalProgressEvent }
   | { type: 'GOAL_CELEBRATE'; celebration: GoalCelebrationEvent }
+  | { type: 'ROULETTE_SETTINGS_UPDATE'; settings: RouletteSettings }
+  | { type: 'ROULETTE_SPIN'; spin: RouletteSpinEvent }
+  | { type: 'ROULETTE_CLEAR' }
   | { type: 'ENQUEUE'; text: string; user?: string }
   | { type: 'FORCE_RELOAD' }
-  | { type: 'CONTROL'; action: ControlAction | 'remove'; id?: string; user?: string; minutes?: number }
+  | { type: 'CONTROL'; action: ControlAction | 'remove'; id?: string; user?: string; minutes?: number; sender?: string; senderRole?: string }
   | { type: 'STATE_REQUEST' }
   | { type: 'STATE'; state: WidgetState };
 

@@ -96,6 +96,12 @@ const CATALOG_TOUR_STEPS: TourStep[] = [
     body: 'Configura objetivos de Seguidores, Subs o Bits. Visualízalos en modo carrusel o individual con física fluida GSAP. Al llegar al 100%, desata fanfarrias, lluvia de confeti y temblor sísmico.',
   },
   {
+    target: 'app-roulette',
+    badge: 'Aplicación',
+    title: 'Ruleta de Castigos, Retos & Penitencias',
+    body: 'Minijuego interactivo accionado por Puntos de Canal o comandos de chat. Cuenta con física de rotación inercial GSAP, clicks mecánicos sintetizados con Web Audio API, aguja flexible y temporizadores de retos en pantalla.',
+  },
+  {
     target: 'obs-dock',
     badge: 'Acción del Sistema',
     title: 'Dock de Integración con OBS Studio',
@@ -682,42 +688,111 @@ export const Catalog: React.FC = () => {
               </div>
             </article>
 
-            {/* 5. Ruleta & Minijuegos (Próximamente) */}
-            <article className="suite-card relative flex flex-col justify-between rounded-md border border-dashed border-[color:var(--cb-line)] bg-[color:var(--cb-surface)]/50 p-5 opacity-85 transition-opacity hover:opacity-100">
+            {/* 6. Ruleta & Castigos (Minijuegos) */}
+            <article
+              className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-rose-500/80"
+              data-tour="app-roulette"
+            >
               <div>
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-md bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-md bg-rose-500/15 text-rose-500 transition-transform duration-150 group-hover:scale-105">
                     <Gamepad2 className="h-6 w-6" />
                   </div>
-                  <span className="rounded bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[color:var(--cb-mut)]">
-                    Próximamente
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-black text-rose-400">
+                      MÓDULO 6
+                    </span>
+                    <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black text-emerald-400">
+                      DISPONIBLE
+                    </span>
+                  </div>
                 </div>
 
                 <h2
-                  className="cab-caps mt-4 text-xl font-extrabold text-[color:var(--cb-mut)]"
+                  className="cab-caps mt-4 text-xl font-extrabold text-[color:var(--cb-fg)]"
                   style={{ fontStretch: '75%' }}
                 >
                   Ruleta & Castigos
                 </h2>
                 <p className="mt-2 text-xs leading-relaxed text-[color:var(--cb-mut)]">
-                  Minijuego de ruleta interactiva accionada por puntos de canal de Twitch.
-                  Física de giro con inercia, desaceleración natural y efectos de victoria.
+                  Minijuego interactivo accionado por Puntos de Canal o chat. Física de giro inercial con GSAP, clicks mecánicos sintetizados con Web Audio API, aguja con rebote elástico y temporizador en pantalla.
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
-                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-bg)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
-                    Puntos de Canal
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-rose-400">
+                    Retos & Castigos
                   </span>
-                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-bg)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
-                    Física de Inercia
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
+                    Inercia GSAP
+                  </span>
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
+                    Ticks Mecánicos
+                  </span>
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
+                    Puntos de Canal
                   </span>
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-between border-t border-[color:var(--cb-line)]/50 pt-4 text-xs font-semibold text-[color:var(--cb-mut)]">
-                <span>En hoja de ruta de la Suite</span>
-                <span className="cab-mono text-[11px]">v1.4</span>
+              <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[color:var(--cb-line)] pt-4">
+                <a
+                  href="#ruleta"
+                  className="cab-btn !h-9 flex-1 !text-xs font-bold no-underline"
+                >
+                  <Gamepad2 className="h-3.5 w-3.5 text-rose-400" />
+                  <span>Estudio Ruleta</span>
+                </a>
+                <button
+                  type="button"
+                  className="cab-btn2 !h-9 !px-3 !text-xs font-bold"
+                  onClick={() => {
+                    playAlertAudio('arcade-chime', 0.85);
+                    postBus({
+                      type: 'ROULETTE_SPIN',
+                      spin: {
+                        id: `test-spin-${Date.now()}`,
+                        user: 'EspectadorDemo',
+                        winnerSegment: {
+                          id: 'demo-seg',
+                          text: '¡15 Flexiones en directo!',
+                          color: '#ff2d46',
+                          category: 'fitness',
+                          durationSec: 45,
+                          enabled: true,
+                        },
+                        winnerIndex: 0,
+                        totalActiveSegments: 6,
+                        finalRotation: 2160 + 330,
+                        spinDurationSec: 5.5,
+                        screenShake: true,
+                        confetti: true,
+                        victorySoundType: 'arcade-chime',
+                        showWinnerBanner: true,
+                        winnerBannerDurationSec: 8,
+                      },
+                    });
+                    setQuickTestMsg('¡Giro simulado de Ruleta enviado al bus y a OBS!');
+                    setTimeout(() => setQuickTestMsg(null), 3000);
+                  }}
+                  title="Disparar giro de prueba"
+                >
+                  <Play className="h-3 w-3 fill-current text-rose-400" />
+                  <span>Probar</span>
+                </button>
+                <button
+                  type="button"
+                  className="cab-btn2 !h-9 !px-2.5 !text-xs"
+                  onClick={() =>
+                    copyUrl('roulette', `${baseUrl}/#widget?app=roulette&channel=${settings.channel}`)
+                  }
+                  title="Copiar Widget OBS de Ruleta"
+                >
+                  {copiedKey === 'roulette' ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
               </div>
             </article>
           </div>

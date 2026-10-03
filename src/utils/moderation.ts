@@ -29,6 +29,8 @@ export interface Moderation {
   approvalMode: boolean; // cada mensaje espera el visto bueno del streamer o un mod
   priorityPaid: boolean; // canjes y bits pasan al frente de la cola
   textOnly: boolean; // mostrar la alerta sin voz
+  modNotificationAudio?: boolean; // reproduce aviso sonoro cuando un moderador ejecuta una acción
+  modNotificationVoice?: boolean; // anuncia por voz la acción ejecutada por el moderador
 }
 
 export const DEFAULT_MODERATION: Moderation = {
@@ -44,6 +46,8 @@ export const DEFAULT_MODERATION: Moderation = {
   approvalMode: false,
   priorityPaid: false,
   textOnly: false,
+  modNotificationAudio: true,
+  modNotificationVoice: true,
 };
 
 export const MIN_ROLES: { id: MinRole; name: string }[] = [
@@ -115,33 +119,69 @@ export function normalizeModeration(raw: Partial<Record<keyof Moderation, unknow
     approvalMode: source.approvalMode === true,
     priorityPaid: source.priorityPaid === true,
     textOnly: source.textOnly === true,
+    modNotificationAudio: source.modNotificationAudio !== false,
+    modNotificationVoice: source.modNotificationVoice !== false,
   };
 }
 
 export interface ChatTags {
   badges?: Record<string, string | undefined> | null;
-  mod?: boolean;
-  subscriber?: boolean;
+  mod?: boolean | string | number;
+  subscriber?: boolean | string | number;
   username?: string;
   bits?: string | number;
   'custom-reward-id'?: string;
+  'user-type'?: string;
+  isMod?: boolean;
 }
 
 export function roleFromTags(tags: ChatTags, channel: string): UserRole {
-  const badges = tags.badges || {};
-  if (badges.broadcaster === '1' || (tags.username || '').toLowerCase() === channel.toLowerCase()) return 'broadcaster';
-  if (tags.mod === true || badges.moderator !== undefined) return 'mod';
+  const badges = (tags.badges || {}) as Record<string, string | undefined>;
+  const isBroadcaster =
+    badges.broadcaster === '1' ||
+    (tags.username || '').toLowerCase() === channel.toLowerCase();
+  if (isBroadcaster) return 'broadcaster';
+
+  // Detección exhaustiva de moderadores en Twitch IRC / tmi.js / EventSub
+  const isMod =
+    tags.mod === true ||
+    tags.mod === '1' ||
+    (tags as Record<string, unknown>).mod === 1 ||
+    tags.isMod === true ||
+    badges.moderator !== undefined ||
+    badges.lead_moderator !== undefined ||
+    badges['lead-moderator'] !== undefined ||
+    tags['user-type'] === 'mod' ||
+    tags['user-type'] === 'global_mod' ||
+    tags['user-type'] === 'admin' ||
+    tags['user-type'] === 'staff';
+  if (isMod) return 'mod';
+
   if (badges.vip !== undefined) return 'vip';
-  if (tags.subscriber === true || badges.subscriber !== undefined || badges.founder !== undefined) return 'sub';
+  if (
+    tags.subscriber === true ||
+    tags.subscriber === '1' ||
+    badges.subscriber !== undefined ||
+    badges.founder !== undefined
+  ) return 'sub';
+
   return 'viewer';
 }
 
 /** Decide con qué disparador entra un mensaje, o null si no debe leerse. */
-export function classifyTrigger(mod: Moderation, message: string, tags: ChatTags): Exclude<TriggerKind, 'test'> | null {
+export function classifyTrigger(
+  mod: Moderation,
+  message: string,
+  tags: ChatTags,
+  role?: UserRole
+): Exclude<TriggerKind, 'test'> | null {
   const bits = Number(tags.bits) || 0;
   if (mod.minBits > 0 && bits >= mod.minBits) return 'bits';
   if (mod.rewardId && (tags['custom-reward-id'] || '').toLowerCase() === mod.rewardId) return 'reward';
-  if (mod.commandEnabled && /^!s\s/i.test(message.trim())) return 'command';
+
+  // El streamer y los moderadores siempre pueden usar !s incluso si los comandos públicos están pausados
+  const isPrivileged = role === 'broadcaster' || role === 'mod';
+  if ((mod.commandEnabled || isPrivileged) && /^!s\s/i.test(message.trim())) return 'command';
   return null;
 }
 
@@ -227,6 +267,8 @@ export interface ControlCommand {
   action: ControlAction;
   user?: string;
   minutes?: number;
+  sender?: string;
+  senderRole?: UserRole;
 }
 
 export const DEFAULT_TIMEOUT_MINUTES = 10;
@@ -280,9 +322,10 @@ const CONTROL_WORDS: Record<string, ControlAction> = {
   voz: 'unmute', unmute: 'unmute',
 };
 
-/** Órdenes de control que el streamer y los mods escriben en el chat (!s skip, !s pausa...). */
+/** Órdenes de control que el streamer y los mods escriben en el chat (!s skip, !skip, !s pausa, !pausa...). */
 export function parseControl(message: string): ControlCommand | null {
-  const match = /^!s\s+([a-z]+)(?:\s+@?([a-z0-9_]{1,25}))?(?:\s+(\d{1,4}))?[.,!?;]*$/i.exec(message.trim());
+  // Acepta tanto el prefijo !s <comando> como el comando directo !<comando>
+  const match = /^!(?:s\s+)?([a-z]+)(?:\s+@?([a-z0-9_]{1,25}))?(?:\s+(\d{1,4}))?[.,!?;]*$/i.exec(message.trim());
   if (!match) return null;
   const action = CONTROL_WORDS[match[1].toLowerCase()];
   if (!action) return null;
@@ -309,6 +352,8 @@ export function moderationToQuery(mod: Moderation): Record<string, string> {
     appr: mod.approvalMode ? '1' : '0',
     prio: mod.priorityPaid ? '1' : '0',
     mute: mod.textOnly ? '1' : '0',
+    mod_audio: mod.modNotificationAudio !== false ? '1' : '0',
+    mod_voice: mod.modNotificationVoice !== false ? '1' : '0',
   };
   if (mod.rewardId) query.reward = mod.rewardId;
   return query;
@@ -341,6 +386,8 @@ export function moderationFromParams(get: (key: string) => string | null): Parti
     ['appr', 'approvalMode'],
     ['prio', 'priorityPaid'],
     ['mute', 'textOnly'],
+    ['mod_audio', 'modNotificationAudio'],
+    ['mod_voice', 'modNotificationVoice'],
   ];
   flags.forEach(([param, key]) => {
     const value = get(param);

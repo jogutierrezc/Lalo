@@ -18,6 +18,7 @@ import {
   stripCheermotes,
   truncateText,
 } from '../src/utils/moderation';
+import { ACTION_DESCRIPTIONS } from '../src/utils/moderationAudio';
 
 const mod = (patch: Partial<Moderation> = {}): Moderation => ({ ...DEFAULT_MODERATION, ...patch });
 const ctx = (patch: Partial<Parameters<typeof evaluateMessage>[1]> = {}) => ({
@@ -64,12 +65,17 @@ describe('moderation — Reglas del streamer', () => {
       approvalMode: false,
       priorityPaid: false,
       textOnly: false,
+      modNotificationAudio: true,
+      modNotificationVoice: true,
     });
   });
 
   it('deduce el rol a partir de las etiquetas del chat', () => {
     expect(roleFromTags({ username: 'lalo' }, 'Lalo')).toBe('broadcaster');
     expect(roleFromTags({ mod: true, username: 'm' }, 'lalo')).toBe('mod');
+    expect(roleFromTags({ mod: '1', username: 'm' }, 'lalo')).toBe('mod');
+    expect(roleFromTags({ 'user-type': 'mod', username: 'm' }, 'lalo')).toBe('mod');
+    expect(roleFromTags({ badges: { lead_moderator: '1' }, username: 'm' }, 'lalo')).toBe('mod');
     expect(roleFromTags({ badges: { vip: '1' }, username: 'v' }, 'lalo')).toBe('vip');
     expect(roleFromTags({ badges: { founder: '0' }, username: 's' }, 'lalo')).toBe('sub');
     expect(roleFromTags({ username: 'x' }, 'lalo')).toBe('viewer');
@@ -84,6 +90,10 @@ describe('moderation — Reglas del streamer', () => {
     expect(classifyTrigger(mod({ rewardId: reward }), 'hola', { 'custom-reward-id': 'otra' })).toBeNull();
     expect(classifyTrigger(mod({ minBits: 100 }), 'Cheer100 hola', { bits: '100' })).toBe('bits');
     expect(classifyTrigger(mod({ minBits: 100 }), 'Cheer50 hola', { bits: '50' })).toBeNull();
+    // Moderadores y streamer pueden usar !s aunque commandEnabled esté desactivado
+    expect(classifyTrigger(mod({ commandEnabled: false }), '!s mensaje mod', {}, 'mod')).toBe('command');
+    expect(classifyTrigger(mod({ commandEnabled: false }), '!s mensaje broadcaster', {}, 'broadcaster')).toBe('command');
+    expect(classifyTrigger(mod({ commandEnabled: false }), '!s mensaje viewer', {}, 'viewer')).toBeNull();
   });
 
   it('limpia cheermotes y recorta textos largos', () => {
@@ -123,14 +133,22 @@ describe('moderation — Reglas del streamer', () => {
     expect(evaluateMessage(strict, ctx({ trigger: 'test', username: 'malo' }))).toEqual({ ok: true });
   });
 
-  it('interpreta las órdenes de control del chat', () => {
+  it('interpreta las órdenes de control del chat (con y sin prefijo !s)', () => {
     expect(parseControl('!s skip')).toEqual({ action: 'skip' });
+    expect(parseControl('!skip')).toEqual({ action: 'skip' });
     expect(parseControl('!s Pausa.')).toEqual({ action: 'pause' });
+    expect(parseControl('!pausa')).toEqual({ action: 'pause' });
+    expect(parseControl('!pause')).toEqual({ action: 'pause' });
     expect(parseControl('!s reanudar')).toEqual({ action: 'resume' });
+    expect(parseControl('!resume')).toEqual({ action: 'resume' });
     expect(parseControl('!s vaciar')).toEqual({ action: 'clear' });
+    expect(parseControl('!clear')).toEqual({ action: 'clear' });
     expect(parseControl('!s reload')).toEqual({ action: 'reload' });
+    expect(parseControl('!reload')).toEqual({ action: 'reload' });
     expect(parseControl('!s block @Troll_1')).toEqual({ action: 'block', user: 'troll_1' });
+    expect(parseControl('!block @Troll_1')).toEqual({ action: 'block', user: 'troll_1' });
     expect(parseControl('!s unban troll_1')).toEqual({ action: 'unblock', user: 'troll_1' });
+    expect(parseControl('!silencio')).toEqual({ action: 'panic' });
     expect(parseControl('!s block')).toBeNull();
     expect(parseControl('!s pausa larga')).toBeNull();
     expect(parseControl('!s hola a todos')).toBeNull();
@@ -190,5 +208,15 @@ describe('moderation — Reglas del streamer', () => {
     expect(moderationFromParams(() => null)).toEqual({});
     const partial = new URLSearchParams({ cd: '9999', block: '%%%' });
     expect(moderationFromParams((k) => partial.get(k))).toEqual({ cooldownSec: 600 });
+  });
+
+  it('genera avisos y locuciones de audio claras para moderadores', () => {
+    expect(ACTION_DESCRIPTIONS.skip('ModJuan')).toBe('Mensaje saltado por ModJuan');
+    expect(ACTION_DESCRIPTIONS.pause('ModJuan')).toBe('TTS pausado por ModJuan');
+    expect(ACTION_DESCRIPTIONS.resume('ModJuan')).toBe('TTS reanudado por ModJuan');
+    expect(ACTION_DESCRIPTIONS.clear('ModJuan')).toBe('Cola de mensajes vaciada por ModJuan');
+    expect(ACTION_DESCRIPTIONS.panic('ModJuan')).toBe('Modo silencio total activado por ModJuan');
+    expect(ACTION_DESCRIPTIONS.timeout('ModJuan', 'troll_99', 15)).toBe('troll_99 silenciado por 15 minutos por ModJuan');
+    expect(ACTION_DESCRIPTIONS.block('ModJuan', 'troll_99')).toBe('troll_99 bloqueado por ModJuan');
   });
 });

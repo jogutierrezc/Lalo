@@ -173,19 +173,24 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       const displayName = tags['display-name'] || tags.username || 'viewer';
       const role = roleFromTags(tags, cleanChannel);
 
-      // Órdenes del streamer y los moderadores: !s skip, !s pausa, !s block usuario...
+      // Órdenes del streamer y los moderadores: !s skip, !skip, !s pausa, !pausa, !s block usuario...
       const control = parseControl(message);
       if (control && (role === 'broadcaster' || role === 'mod')) {
+        const enrichedControl = {
+          ...control,
+          sender: displayName,
+          senderRole: role,
+        };
         if (control.action === 'reload') {
           console.log('[Twitch Chat] Comando de recarga remota recibido. Actualizando overlay...');
           window.location.reload();
           return;
         }
-        onControlRef.current?.(control);
+        onControlRef.current?.(enrichedControl);
         return;
       }
 
-      const trigger = classifyTrigger(moderation, message, tags);
+      const trigger = classifyTrigger(moderation, message, tags, role);
       if (!trigger) return;
 
       // Canjes y bits no llevan el prefijo !s: se añade para reutilizar la sanitización

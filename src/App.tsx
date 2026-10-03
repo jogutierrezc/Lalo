@@ -20,6 +20,7 @@ import { AlertsStudio } from './pages/AlertsStudio';
 import { TwitchIOStudio } from './pages/TwitchIOStudio';
 import { RewardsStudio } from './pages/RewardsStudio';
 import { GoalsStudio } from './pages/GoalsStudio';
+import { RouletteStudio } from './pages/RouletteStudio';
 
 export type AppRoute =
   | 'catalogo'
@@ -29,6 +30,7 @@ export type AppRoute =
   | 'recompensas'
   | 'twitchio'
   | 'metas'
+  | 'ruleta'
   | 'widget';
 
 function resolveRoute(): AppRoute {
@@ -88,12 +90,25 @@ function resolveRoute(): AppRoute {
     return 'twitchio';
   }
 
-  // 6. Control en vivo del TTS
+  // 6. Ruleta de Castigos & Retos en Vivo
+  if (
+    hash.startsWith('ruleta') ||
+    hash.startsWith('wheel') ||
+    hash.startsWith('castigos') ||
+    hash.startsWith('roulette') ||
+    path.includes('/ruleta') ||
+    path.includes('/wheel') ||
+    path.includes('/roulette')
+  ) {
+    return 'ruleta';
+  }
+
+  // 7. Control en vivo del TTS
   if (hash.startsWith('control') || path.includes('/control')) {
     return 'control';
   }
 
-  // 7. Fuentes de navegador para OBS Studio
+  // 8. Fuentes de navegador para OBS Studio
   if (
     path.includes('/widget') ||
     hash.startsWith('widget') ||
@@ -102,7 +117,7 @@ function resolveRoute(): AppRoute {
     return 'widget';
   }
 
-  // 8. Dashboard de la Suite / Catálogo (por defecto para raíz, #dashboard, #catalogo, #suite)
+  // 9. Dashboard de la Suite / Catálogo (por defecto para raíz, #dashboard, #catalogo, #suite)
   return 'catalogo';
 }
 
@@ -134,6 +149,8 @@ export const App: React.FC = () => {
       return <RewardsStudio />;
     case 'metas':
       return <GoalsStudio />;
+    case 'ruleta':
+      return <RouletteStudio />;
     case 'twitchio':
       return <TwitchIOStudio />;
     case 'tts':

@@ -17,6 +17,7 @@ import { normalizeTextForFishAudio } from '../utils/emotionMapper';
 import { loadSettings, TTSSettings } from '../types/settings';
 import { AlertPosition, appearanceFromParams, normalizeAppearance } from '../utils/appearance';
 import {
+  ControlAction,
   ControlCommand,
   DEFAULT_TIMEOUT_MINUTES,
   moderationFromParams,
@@ -24,14 +25,19 @@ import {
   normalizeModeration,
   normalizeUser,
   pickNext,
+  UserRole,
 } from '../utils/moderation';
-import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus, RewardTriggerEvent, GoalProgressEvent } from '../utils/bus';
+import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus, RewardTriggerEvent, GoalProgressEvent, RouletteSpinEvent } from '../utils/bus';
 import { MotionOptions, playEnter, playExit, startSpeaking, stopSpeaking } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
-import { Coins, Radio, VolumeX } from 'lucide-react';
+import { playModerationChime, announceModerationAction, ACTION_DESCRIPTIONS } from '../utils/moderationAudio';
+import { Coins, Radio, VolumeX, Shield } from 'lucide-react';
 import { loadGoalsSettings } from '../types/goals';
 import { GoalsOverlayView } from '../components/goals/GoalsOverlayView';
+import { loadRouletteSettings, RouletteSegment } from '../types/roulette';
+import { RouletteWheel } from '../components/roulette/RouletteWheel';
+import { WinnerBanner } from '../components/roulette/WinnerBanner';
 
 function getURLParam(key: string): string | null {
   const searchVal = new URLSearchParams(window.location.search).get(key);
@@ -98,7 +104,7 @@ const toLiveItem = (m: SanitizedTTSMessage): LiveItem => ({
   bits: m.bits,
 });
 
-type LiveControl = (ControlCommand & { id?: string }) | { action: 'remove'; id?: string };
+type LiveControl = (ControlCommand & { id?: string }) | { action: 'remove'; id?: string; user?: string; minutes?: number; sender?: string; senderRole?: UserRole };
 
 // Bloqueos temporales (!s timeout usuario 10): usuario -> momento en que caduca
 const TIMEOUTS_KEY = 'lalo_tts_timeouts';
@@ -273,6 +279,15 @@ export const Widget: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState<boolean>(false);
+
+  // Notificación de acciones de moderadores en pantalla
+  const [modNotice, setModNotice] = useState<{
+    action: ControlAction | 'remove';
+    sender: string;
+    user?: string;
+    timestamp: number;
+  } | null>(null);
+  const modNoticeRef = useRef<HTMLDivElement | null>(null);
 
   // Referencias defensivas y de animación GSAP
   const isProcessingRef = useRef<boolean>(false);
@@ -656,6 +671,28 @@ export const Widget: React.FC = () => {
 
   // Órdenes de control: llegan del chat (streamer y mods) o del control en vivo de este navegador
   controlRef.current = (command: LiveControl) => {
+    // Retroalimentación sonora y locución ante órdenes de moderación
+    if (command.action !== 'reload') {
+      if (moderation.modNotificationAudio !== false) {
+        playModerationChime(settings.volume);
+      }
+      if (moderation.modNotificationVoice !== false && command.action !== 'remove') {
+        announceModerationAction(
+          command.action as ControlAction,
+          command.sender || 'Moderación',
+          command.user,
+          command.minutes,
+          settings.volume
+        );
+      }
+      setModNotice({
+        action: command.action,
+        sender: command.sender || 'Moderación',
+        user: command.user,
+        timestamp: Date.now(),
+      });
+    }
+
     const dropUser = (user: string) =>
       messageQueue.filter((m) => m.username.toLowerCase() === user && m.trigger !== 'test').forEach((m) => removeMessageFromQueue(m.id));
 
@@ -789,6 +826,91 @@ export const Widget: React.FC = () => {
   const [goalsSettings, setGoalsSettings] = useState(() => loadGoalsSettings());
   const [currentGoalEvent, setCurrentGoalEvent] = useState<GoalProgressEvent | null>(null);
 
+  // Soporte para Ruleta de Castigos & Retos en OBS
+  const isRouletteApp =
+    getURLParam('app') === 'roulette' ||
+    getURLParam('app') === 'ruleta' ||
+    getURLParam('app') === 'wheel' ||
+    window.location.hash.includes('app=roulette') ||
+    window.location.hash.includes('app=ruleta');
+  const [rouletteSettings, setRouletteSettings] = useState(() => loadRouletteSettings());
+  const [activeRouletteSpin, setActiveRouletteSpin] = useState<RouletteSpinEvent | null>(null);
+  const [rouletteStartRotation, setRouletteStartRotation] = useState(0);
+  const [rouletteRotation, setRouletteRotation] = useState(0);
+  const [isRouletteSpinning, setIsRouletteSpinning] = useState(false);
+  const [rouletteWinnerBanner, setRouletteWinnerBanner] = useState<{
+    segment: RouletteSegment;
+    user: string;
+  } | null>(null);
+  const rouletteContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Animación física del aviso HUD de moderación en OBS
+  useEffect(() => {
+    if (!modNotice) return;
+    if (modNoticeRef.current) {
+      gsap.fromTo(
+        modNoticeRef.current,
+        { y: -30, opacity: 0, scale: 0.95 },
+        { y: 0, opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(1.5)' }
+      );
+    }
+    const timer = setTimeout(() => {
+      if (modNoticeRef.current) {
+        gsap.to(modNoticeRef.current, {
+          y: -15,
+          opacity: 0,
+          scale: 0.95,
+          duration: 0.3,
+          ease: 'power2.in',
+          onComplete: () => setModNotice(null),
+        });
+      } else {
+        setModNotice(null);
+      }
+    }, 4200);
+    return () => clearTimeout(timer);
+  }, [modNotice]);
+
+  const handleObsWheelComplete = useCallback((winner: RouletteSegment) => {
+    setIsRouletteSpinning(false);
+    setActiveRouletteSpin((prev) => {
+      if (prev) {
+        const finalWinner = prev.winnerSegment || winner;
+        setRouletteWinnerBanner({
+          segment: finalWinner,
+          user: prev.user || 'Streamer',
+        });
+
+        playAlertOrCustomSound(
+          prev.victoryCustomAudioUrl,
+          prev.victorySoundType || 'arcade-chime',
+          prev.victoryCustomAudioVolume ?? 0.85
+        );
+
+        const bannerDuration = prev.winnerBannerDurationSec || 8;
+        setTimeout(() => {
+          if (rouletteContainerRef.current) {
+            gsap.to(rouletteContainerRef.current, {
+              opacity: 0,
+              scale: 0.95,
+              y: -20,
+              duration: 0.45,
+              ease: 'power2.in',
+              onComplete: () => {
+                setActiveRouletteSpin(null);
+                setRouletteWinnerBanner(null);
+              },
+            });
+          } else {
+            setActiveRouletteSpin(null);
+            setRouletteWinnerBanner(null);
+          }
+        }, bannerDuration * 1000);
+      }
+      return prev;
+    });
+  }, []);
+
   useEffect(() => {
     if (activeReward && rewardOverlayRef.current) {
       gsap.fromTo(
@@ -802,7 +924,14 @@ export const Widget: React.FC = () => {
   useEffect(() => {
     const stop = listenBus((message: BusMessage) => {
       if (message.type === 'CONTROL') {
-        controlRef.current({ action: message.action, id: message.id, user: message.user, minutes: message.minutes } as LiveControl);
+        controlRef.current({
+          action: message.action,
+          id: message.id,
+          user: message.user,
+          minutes: message.minutes,
+          sender: message.sender || 'Panel de Control',
+          senderRole: (message.senderRole as UserRole) || 'broadcaster',
+        } as LiveControl);
       }
       if (message.type === 'STATE_REQUEST') {
         publishRef.current();
@@ -962,6 +1091,37 @@ export const Widget: React.FC = () => {
           }, (cel.duration || 6) * 1000);
         }
       }
+      if (message.type === 'ROULETTE_SETTINGS_UPDATE') {
+        setRouletteSettings(message.settings);
+      }
+      if (message.type === 'ROULETTE_SPIN') {
+        const spin = message.spin;
+        setActiveRouletteSpin(spin);
+        setRouletteStartRotation(spin.startRotation ?? 0);
+        setRouletteRotation(spin.finalRotation);
+        setIsRouletteSpinning(true);
+        setRouletteWinnerBanner(null);
+
+        if (spin.screenShake && containerRef.current) {
+          gsap.fromTo(
+            containerRef.current,
+            { x: -16, y: 12, rotate: -1.2 },
+            {
+              x: 0,
+              y: 0,
+              rotate: 0,
+              duration: 0.8,
+              ease: 'elastic.out(1.2, 0.18)',
+              clearProps: 'transform',
+            }
+          );
+        }
+      }
+      if (message.type === 'ROULETTE_CLEAR') {
+        setActiveRouletteSpin(null);
+        setRouletteWinnerBanner(null);
+        setIsRouletteSpinning(false);
+      }
     });
     const heartbeat = setInterval(() => publishRef.current(), 5000);
     return () => {
@@ -1069,6 +1229,71 @@ export const Widget: React.FC = () => {
             slideshowIntervalSec={goalsSettings.slideshowIntervalSec}
             recentProgressGoalId={currentGoalEvent?.goalId}
           />
+        </div>
+      )}
+
+      {/* Overlay de Ruleta de Castigos & Retos en OBS */}
+      {(isRouletteApp || activeRouletteSpin) && (
+        <div
+          ref={rouletteContainerRef}
+          className="pointer-events-none fixed inset-0 z-40 flex flex-col items-center justify-center p-6"
+        >
+          <div className="relative flex flex-col items-center rounded-2xl border border-white/10 bg-black/85 p-6 shadow-2xl backdrop-blur-md">
+            <h2
+              className="cab-caps mb-3 text-sm font-black tracking-widest text-rose-400 drop-shadow"
+              style={{ fontStretch: '75%' }}
+            >
+              {rouletteSettings.title || 'RULETA DE CASTIGOS & RETOS'}
+            </h2>
+
+            <RouletteWheel
+              segments={rouletteSettings.segments}
+              targetRotation={rouletteRotation}
+              startRotation={rouletteStartRotation}
+              targetWinner={activeRouletteSpin?.winnerSegment}
+              isSpinning={isRouletteSpinning}
+              spinDurationSec={activeRouletteSpin?.spinDurationSec || rouletteSettings.spinDurationSec}
+              styleTheme={rouletteSettings.style}
+              soundEnabled={rouletteSettings.soundEnabled}
+              tickVolume={rouletteSettings.tickVolume}
+              size={360}
+              onSpinComplete={handleObsWheelComplete}
+            />
+
+            {rouletteWinnerBanner && (
+              <div className="mt-4 w-full">
+                <WinnerBanner
+                  segment={rouletteWinnerBanner.segment}
+                  user={rouletteWinnerBanner.user}
+                  autoDismissSec={activeRouletteSpin?.winnerBannerDurationSec || 8}
+                  isStudio={false}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast HUD de Notificación de Acciones de Moderación */}
+      {modNotice && (
+        <div
+          ref={modNoticeRef}
+          className="pointer-events-none fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border border-amber-500/40 bg-zinc-950/90 px-4 py-2 shadow-2xl backdrop-blur-md transition-all"
+        >
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+            <Shield className="h-3.5 w-3.5" />
+          </div>
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-100">
+            <span className="text-amber-400 font-bold uppercase tracking-wider text-[10px]">
+              MODERACIÓN
+            </span>
+            <span className="text-zinc-500">•</span>
+            <span>
+              {modNotice.action in ACTION_DESCRIPTIONS
+                ? ACTION_DESCRIPTIONS[modNotice.action as ControlAction](modNotice.sender, modNotice.user)
+                : `${modNotice.action} por ${modNotice.sender}`}
+            </span>
+          </div>
         </div>
       )}
 

@@ -174,4 +174,67 @@
   - Vitest test suite: 10/10 test files passing (78 tests total).
   - TypeScript & Vite build: `tsc && vite build` clean with 0 errors.
 
+## Phase 24: Ruleta de Castigos & Retos Interactiva (Roulette Studio - Module 6)
+- [x] 24.1: Data Architecture & Geometric Angular Mathematics (`src/types/roulette.ts`):
+  - Modeled `RouletteSegment`, `PenaltyCategory` ('fitness', 'voice', 'gameplay', 'food', 'show', 'safe', 'custom'), `RouletteStyle` ('cabina', 'neon', 'cyber', 'gold'), `RoulettePreset`, and `RouletteSettings`.
+  - Implemented 4 themed pre-built packs: *Castigos Gamer*, *Castigos Físicos & Fitness*, *Show, Voz & Actuación*, and *Sabores & Retos Picantes*.
+  - Mathematical & physical calculation engine: `getSegmentAngle`, `polarToCartesian`, `describeArc` (SVG wedge paths), `calculateTargetRotation` (forward inertia with min 5-8 full 360° spins and continuous rotational continuity), and `pickRandomSegment`.
+  - Storage persistence: `loadRouletteSettings()` and `saveRouletteSettings()` with safe fallback handling.
+- [x] 24.2: Mechanical Audio Synthesizer Engine (`src/utils/rouletteAudio.ts`):
+  - Zero-dependency Web Audio API synthesizer for physical feedback.
+  - `playWheelTick(volume, pitchScale)`: 20ms high-passed triangle click with dynamic pitch scaling that prevents auditory fatigue during deceleration.
+  - `playWheelFanfare(volume)`: Major-triad harmonic fanfare with envelope shaping upon stopping.
+- [x] 24.3: High-Definition Vector Wheel Component (`src/components/roulette/RouletteWheel.tsx`):
+  - 440x440 SVG vector wheel with Cabina Broadcast chasis, LED perimeter indicators, metallic pegs, and radial text labels with category icons.
+  - Physical deceleration with GSAP `power4.out`, needle flipper bounce (`elastic.out(1.8, 0.3)`), and boundary tick audio synchronization.
+- [x] 24.4: Dramatic Winner / Penalty Reveal Card (`src/components/roulette/WinnerBanner.tsx`):
+  - Dramatic entrance animation with GSAP `back.out(1.6)` and exit with `power2.in`.
+  - Category badges, intensity markers, interactive countdown timer for timed challenges (e.g., 45s, 60s) with live progress bar and pause/resume/reset controls.
+- [x] 24.5: Broadcast Bus & OBS Browser Source Integration (`src/utils/bus.ts` & `src/pages/Widget.tsx`):
+  - Extended event bus with `RouletteSpinEvent`, `ROULETTE_SETTINGS_UPDATE`, `ROULETTE_SPIN`, `ROULETTE_CLEAR`.
+  - Transparent OBS Browser Source overlay (`?app=roulette` or `#widget?app=roulette`), auto-triggering on broadcast with camera shake and winner card.
+- [x] 24.6: Dedicated Roulette Studio Page (`src/pages/RouletteStudio.tsx`):
+  - 16:9 monitor with live spin trigger, preset selector, full segment CRUD manager with category pills and color pickers.
+  - Visual theme selector (Cabina, Neón, Cyberpunk, Oro VIP), spin duration slider (3s-15s), tick volume, Media Vault custom victory audio integration, and OBS link generator.
+  - Interactive Guided Tour (`ROULETTE_TOUR_STEPS`, id `'ruleta'`) with 8 steps.
+- [x] 24.7: Navigation, App Routing & Catalog Activation:
+  - Added `#ruleta` / `#wheel` / `#castigos` routes to `src/App.tsx`.
+  - Added Ruleta tab with `Gamepad2` icon and "NUEVO" badge to `src/components/SuiteNav.tsx`.
+  - Promoted Module 6 from "Próximamente" to `DISPONIBLE` in `src/pages/Catalog.tsx` with test trigger and OBS copy button.
+- [x] 24.8: Quality Gates & Testing:
+  - Created `tests/roulette.test.ts` (19/19 tests passing) testing segment angles, SVG arcs, forward inertia, target rotation, presets, and storage persistence.
+  - Full test suite: 11/11 test files passing (97 tests total).
+  - TypeScript & Vite build: `tsc && vite build` clean with 0 errors.
+
+## Phase 25: Estabilización de Física de Ruleta GSAP & Sistema de Comandos y Audio de Moderación en TTS
+- [x] 25.1: Estabilización de Física Inercial de la Ruleta (`src/components/roulette/RouletteWheel.tsx` & `src/types/roulette.ts`):
+  - Identificada la causa de giros erráticos: `power4.out` desaceleraba el 97% del recorrido en 2s arrastrándose 4s, la llamada a `gsap.set` 60 veces/s dentro de `onUpdate` producía micro-tirones y acumulación de miles de grados desfasaba a OBS.
+  - Migrado a animación directa en GPU sobre `wheelGroupRef.current` con curva broadcast `power3.out`.
+  - Normalizado el ángulo de reposo en $[0, 360)$ con 5 giros exactos y sincronización de `startRotation` hacia OBS vía `RouletteSpinEvent`.
+  - Regulador percutivo de clicks mecánicos (límite de frecuencia de 35ms) y deflexión con `overwrite: 'auto'` en la aguja para evitar bloqueos y chasquidos de audio.
+- [x] 25.2: Desbloqueo y Soporte Completo de Comandos para Moderadores en TTS (`src/utils/moderation.ts` & `src/hooks/useTwitchChat.ts`):
+  - Detección exhaustiva de insignias de moderador (`lead_moderator`, `user-type=mod`, `tags.mod === '1'`, `tags.isMod`).
+  - Flexibilización de sintaxis: se admiten tanto `!s <comando>` como el comando directo `!<comando>` (`!skip`, `!pausa`, `!pause`, `!reanudar`, `!resume`, `!clear`, `!silencio`, `!panic`, `!timeout @user`, `!block @user`, `!reload`).
+  - Privilegio de habla en `classifyTrigger`: broadcasters y mods pueden enviar TTS mediante `!s <texto>` incluso si los comandos públicos (`commandEnabled`) están apagados.
+- [x] 25.3: Motor de Audio y Notificación para Moderación (`src/utils/moderationAudio.ts` & `src/pages/Widget.tsx`):
+  - Sintetizador táctico Web Audio API `playModerationChime()` (intercom bip dual G5 -> C6).
+  - Locución sintética ágil `announceModerationAction()` anunciando en español la acción y el moderador que la ejecutó.
+  - Toast HUD con estética broadcast de alta visibilidad (`[🛡️ MODERACIÓN: {acción} • por {moderador}]`) con animación GSAP en la escena de OBS.
+- [x] 25.4: Verificación y Quality Gates:
+  - 11 suites de prueba unitarias ejecutadas con éxito (98/98 tests passing).
+  - Compilación TypeScript y empaquetado Vite limpio con 0 errores.
+
+## Phase 26: Instalación y Disponibilidad de Skills en Workspace (Impeccable & GSAP Suite)
+- [x] 26.1: Instalación de Skills en `.agents/skills/` (Antigravity Spec):
+  - `impeccable`: Guía completa de diseño, arquetipos, accesibilidad, tipografía, paletas de color y revisión de interfaces broadcast.
+  - Suite modular GSAP: `gsap-core`, `gsap-react`, `gsap-timeline`, `gsap-plugins`, `gsap-scrolltrigger`, `gsap-performance`, `gsap-utils`, `gsap-frameworks`.
+  - `emil-design-eng`: Principios de micro-interacciones, feedback háptico/auditivo, estados activos (`active:scale-[0.97]`), y transiciones rápidas e imperceptibles.
+- [x] 26.2: Replicación en `.claude/skills/` (TheAgency Framework Spec):
+  - Desplegadas en `.claude/skills/` para consumo directo por los subagentes del framework (`captain`, `tech_lead`, `reviewer_code`).
+- [x] 26.3: Verificación del Sistema y Quality Gates:
+  - 11 suites de pruebas ejecutadas con 98/98 tests pasando.
+  - Verificación de TypeScript (`tsc`) y empaquetado Vite para producción exitoso.
+
+
+
 

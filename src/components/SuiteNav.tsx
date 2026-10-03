@@ -13,6 +13,7 @@ import {
   Check,
   Coins,
   Copy,
+  Gamepad2,
   Layers,
   LayoutGrid,
   Mic,
@@ -28,7 +29,8 @@ export type SuiteApp =
   | 'alertas'
   | 'recompensas'
   | 'twitchio'
-  | 'metas';
+  | 'metas'
+  | 'ruleta';
 
 interface SuiteNavProps {
   currentApp: SuiteApp;
@@ -50,13 +52,14 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
-  const getWidgetUrl = (mode: 'tts' | 'alerts' | 'all') => {
+  const getWidgetUrl = (mode: 'tts' | 'alerts' | 'all' | 'roulette') => {
     if (mode === 'tts') return `${baseUrl}/#widget?channel=${channel}`;
     if (mode === 'alerts') return `${baseUrl}/#widget?app=alerts&channel=${channel}`;
+    if (mode === 'roulette') return `${baseUrl}/#widget?app=roulette&channel=${channel}`;
     return `${baseUrl}/#widget?app=all&channel=${channel}`;
   };
 
-  const handleCopy = (mode: 'tts' | 'alerts' | 'all') => {
+  const handleCopy = (mode: 'tts' | 'alerts' | 'all' | 'roulette') => {
     const url = getWidgetUrl(mode);
     navigator.clipboard?.writeText(url).catch(() => {});
     setCopiedKey(mode);
@@ -200,6 +203,23 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
               FX
             </span>
           </a>
+
+          {/* 7. Ruleta de Castigos & Retos */}
+          <a
+            href="#ruleta"
+            className={`inline-flex items-center gap-2 rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider no-underline transition-colors ${
+              currentApp === 'ruleta'
+                ? 'bg-[color:var(--cb-fg)] text-[color:var(--cb-panel)] shadow-sm'
+                : 'text-[color:var(--cb-mut)] hover:text-[color:var(--cb-fg)]'
+            }`}
+            aria-current={currentApp === 'ruleta' ? 'page' : undefined}
+          >
+            <Gamepad2 className="h-3.5 w-3.5 text-rose-500" />
+            <span>Ruleta</span>
+            <span className="rounded bg-rose-500/20 px-1 py-0.2 text-[9px] font-black text-rose-400">
+              NUEVO
+            </span>
+          </a>
         </nav>
 
         {/* Acciones de la derecha: OBS Dropdown, Canal, Guía, Tema */}
@@ -313,6 +333,30 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
                           <Copy className="h-3 w-3" />
                         )}
                         <span>{copiedKey === 'all' ? 'Copiado' : 'Copiar'}</span>
+                      </button>
+                    </div>
+
+                    {/* Opción 4: Ruleta & Castigos */}
+                    <div className="flex items-center justify-between rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] p-2">
+                      <div>
+                        <p className="text-xs font-bold text-[color:var(--cb-fg)]">
+                          Overlay Ruleta
+                        </p>
+                        <p className="text-[10px] text-[color:var(--cb-mut)]">
+                          Ruleta de retos y castigos
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="cab-btn2 !h-7 !px-2 !text-[11px]"
+                        onClick={() => handleCopy('roulette')}
+                      >
+                        {copiedKey === 'roulette' ? (
+                          <Check className="h-3 w-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                        <span>{copiedKey === 'roulette' ? 'Copiado' : 'Copiar'}</span>
                       </button>
                     </div>
                   </div>
