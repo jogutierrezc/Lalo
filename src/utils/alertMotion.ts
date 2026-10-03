@@ -45,7 +45,7 @@ const GESTURES: Record<string, Gesture> = {
 
 const all = (root: HTMLElement, selector: string) => Array.from(root.querySelectorAll<HTMLElement>(selector));
 const part = (root: HTMLElement, name: string) => all(root, `[data-al="${name}"]`);
-const reduced = () =>
+export const reduced = () =>
   typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sideOf = (position: AlertPosition) => (position[1] === 'l' ? -1 : position[1] === 'r' ? 1 : 0);
 const back = (strength: number, bounce: number) => (bounce ? `back.out(${(strength * bounce).toFixed(2)})` : 'power3.out');
@@ -203,7 +203,7 @@ export function startSpeaking(root: HTMLElement, o: MotionOptions, seconds: numb
     tl.to(words, { y: -0.22 * em * E.amp, duration: 0.4, ease: 'sine.inOut', yoyo: true, repeat: -1, stagger: 0.06 }, 0.2);
   }
   if (gesture === 'shout' || gesture === 'angry') {
-    tl.to(root, { x: 'random(-4, 4)', duration: 0.05, repeat: 9, repeatRefresh: true, ease: 'none' }, 0).to(root, { x: 0, duration: 0.1 });
+    tl.to(root, { x: () => gsap.utils.random(-0.2, 0.2) * em * E.amp, duration: 0.05, repeat: 5, repeatRefresh: true, ease: 'none' }, 0).to(root, { x: 0, duration: 0.1 });
   }
 
   // Si el texto no cabe, avanza con la lectura

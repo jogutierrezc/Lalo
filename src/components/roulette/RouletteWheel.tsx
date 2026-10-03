@@ -28,7 +28,7 @@ export interface RouletteWheelProps {
   styleTheme?: RouletteStyle;
   soundEnabled?: boolean;
   tickVolume?: number;
-  size?: number;
+  size?: number | string;
   onSpinComplete?: (winnerSegment: RouletteSegment, winnerIndex: number) => void;
 }
 

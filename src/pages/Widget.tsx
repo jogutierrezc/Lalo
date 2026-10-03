@@ -15,7 +15,7 @@ import { RejectedMessage, useTwitchChat } from '../hooks/useTwitchChat';
 import { SanitizedTTSMessage } from '../utils/twitchSanitizer';
 import { normalizeTextForFishAudio } from '../utils/emotionMapper';
 import { loadSettings, TTSSettings } from '../types/settings';
-import { AlertPosition, appearanceFromParams, normalizeAppearance } from '../utils/appearance';
+import { AlertPosition, appearanceFromParams, inkFor, normalizeAppearance } from '../utils/appearance';
 import {
   ControlAction,
   ControlCommand,
@@ -28,11 +28,11 @@ import {
   UserRole,
 } from '../utils/moderation';
 import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus, RewardTriggerEvent, GoalProgressEvent, RouletteSpinEvent } from '../utils/bus';
-import { MotionOptions, playEnter, playExit, startSpeaking, stopSpeaking } from '../utils/alertMotion';
+import { MotionOptions, playEnter, playExit, reduced, startSpeaking, stopSpeaking } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
 import { playModerationChime, announceModerationAction, ACTION_DESCRIPTIONS } from '../utils/moderationAudio';
-import { Coins, Radio, VolumeX, Shield } from 'lucide-react';
+import { Radio, VolumeX } from 'lucide-react';
 import { loadGoalsSettings } from '../types/goals';
 import { GoalsOverlayView } from '../components/goals/GoalsOverlayView';
 import { loadRouletteSettings, RouletteSegment } from '../types/roulette';
@@ -54,6 +54,9 @@ import {
   announceModPollStarted,
   announceModPollStopped,
 } from '../utils/pollsAudio';
+
+/** OBS expone window.obsstudio en sus fuentes de navegador. */
+const IN_OBS = typeof window !== 'undefined' && 'obsstudio' in window;
 
 function getURLParam(key: string): string | null {
   const searchVal = new URLSearchParams(window.location.search).get(key);
@@ -890,18 +893,16 @@ export const Widget: React.FC = () => {
     if (modNoticeRef.current) {
       gsap.fromTo(
         modNoticeRef.current,
-        { y: -30, opacity: 0, scale: 0.95 },
-        { y: 0, opacity: 1, scale: 1, duration: 0.35, ease: 'back.out(1.5)' }
+        { clipPath: reduced() ? 'inset(0 0% 0 0%)' : 'inset(0 50% 0 50%)', opacity: 0 },
+        { clipPath: 'inset(0 0% 0 0%)', opacity: 1, duration: 0.4, ease: 'expo.out' }
       );
     }
     const timer = setTimeout(() => {
       if (modNoticeRef.current) {
         gsap.to(modNoticeRef.current, {
-          y: -15,
           opacity: 0,
-          scale: 0.95,
-          duration: 0.3,
-          ease: 'power2.in',
+          duration: 0.2,
+          ease: 'power2.out',
           onComplete: () => setModNotice(null),
         });
       } else {
@@ -937,13 +938,13 @@ export const Widget: React.FC = () => {
           if (rouletteContainerRef.current) {
             gsap.to(rouletteContainerRef.current, {
               opacity: 0,
-              scale: 0.95,
-              y: -20,
-              duration: 0.45,
-              ease: 'power2.in',
+              scale: 0.96,
+              duration: 0.22,
+              ease: 'power2.out',
               onComplete: () => {
                 setActiveRouletteSpin(null);
                 setRouletteWinnerBanner(null);
+                gsap.set(rouletteContainerRef.current, { clearProps: 'all' });
               },
             });
           } else {
@@ -960,8 +961,8 @@ export const Widget: React.FC = () => {
     if (activeReward && rewardOverlayRef.current) {
       gsap.fromTo(
         rewardOverlayRef.current,
-        { opacity: 0, scale: 0.93, y: 15 },
-        { opacity: 1, scale: 1, y: 0, duration: 0.38, ease: 'back.out(1.5)', clearProps: 'transform,opacity' }
+        { opacity: 0, y: reduced() ? 0 : 14 },
+        { opacity: 1, y: 0, duration: 0.4, ease: 'expo.out', clearProps: 'transform,opacity' }
       );
     }
   }, [activeReward]);
@@ -1056,9 +1057,8 @@ export const Widget: React.FC = () => {
           if (rewardOverlayRef.current) {
             gsap.to(rewardOverlayRef.current, {
               opacity: 0,
-              scale: 0.95,
-              duration: 0.4,
-              ease: 'power2.in',
+              duration: 0.22,
+              ease: 'power2.out',
               onComplete: () => setActiveReward(null),
             });
           } else {
@@ -1267,11 +1267,13 @@ export const Widget: React.FC = () => {
                 if (pollsContainerRef.current) {
                   gsap.to(pollsContainerRef.current, {
                     opacity: 0,
-                    scale: 0.95,
-                    y: 20,
-                    duration: 0.45,
-                    ease: 'power2.in',
-                    onComplete: () => setActivePollState(null),
+                    y: 16,
+                    duration: 0.24,
+                    ease: 'power2.out',
+                    onComplete: () => {
+                    setActivePollState(null);
+                    gsap.set(pollsContainerRef.current, { clearProps: 'all' });
+                  },
                   });
                 } else {
                   setActivePollState(null);
@@ -1324,11 +1326,13 @@ export const Widget: React.FC = () => {
         if (pollsContainerRef.current) {
           gsap.to(pollsContainerRef.current, {
             opacity: 0,
-            scale: 0.95,
-            y: 20,
-            duration: 0.45,
-            ease: 'power2.in',
-            onComplete: () => setActivePollState(null),
+            y: 16,
+            duration: 0.24,
+            ease: 'power2.out',
+            onComplete: () => {
+                    setActivePollState(null);
+                    gsap.set(pollsContainerRef.current, { clearProps: 'all' });
+                  },
           });
         } else {
           setActivePollState(null);
@@ -1453,7 +1457,7 @@ export const Widget: React.FC = () => {
               setAutoplayBlocked(false);
               if (audioRef.current) audioRef.current.play().catch(() => {});
             }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs shadow-lg animate-bounce"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs shadow-lg"
           >
             <VolumeX className="w-4 h-4" />
             <span>Haz clic para activar el audio</span>
@@ -1461,18 +1465,21 @@ export const Widget: React.FC = () => {
         </div>
       )}
 
-      {/* Indicador de estado de Twitch y contador de cola */}
-      <div className={`absolute right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-zinc-300 ${settings.position[0] === 't' ? 'bottom-4' : 'top-4'}`}>
-        <Radio className={`w-3.5 h-3.5 ${isConnected ? 'text-emerald-400 animate-pulse' : 'text-zinc-600'}`} />
-        <span className="font-mono">#{activeChannel}</span>
-        {paused && <span className="font-semibold text-amber-300">En pausa</span>}
-        {approval && <span className="font-semibold text-amber-300">Manual</span>}
-        {messageQueue.length > 0 && (
-          <span className="ml-1 px-1.5 py-0.5 rounded-full bg-purple-600 text-[10px] text-white font-mono font-bold">
-            {messageQueue.length}
-          </span>
-        )}
-      </div>
+      {/* Estado de Twitch y cola. En OBS solo aparece si se pierde la conexión: no es contenido para la emisión */}
+      {(!IN_OBS || !isConnected) && (
+        <div className={`absolute right-4 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/70 border border-white/10 text-xs text-zinc-300 ${settings.position[0] === 't' ? 'bottom-4' : 'top-4'}`}>
+          <Radio className={`w-3.5 h-3.5 ${isConnected ? 'text-emerald-400' : 'text-zinc-600'}`} />
+          <span className="font-mono">#{activeChannel}</span>
+          {!isConnected && <span className="font-semibold text-amber-300">Sin conexión</span>}
+          {paused && <span className="font-semibold text-amber-300">En pausa</span>}
+          {approval && <span className="font-semibold text-amber-300">Manual</span>}
+          {messageQueue.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-purple-600 text-[10px] text-white font-mono font-bold">
+              {messageQueue.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Tarjeta de TTS para OBS en el estilo elegido desde el panel */}
       {currentMessage && (
@@ -1512,7 +1519,7 @@ export const Widget: React.FC = () => {
           ref={rouletteContainerRef}
           className="pointer-events-none fixed inset-0 z-40 flex flex-col items-center justify-center p-6"
         >
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto w-full">
             <RouletteOverlayView
               settings={rouletteSettings}
               targetRotation={rouletteRotation}
@@ -1534,7 +1541,7 @@ export const Widget: React.FC = () => {
           ref={pollsContainerRef}
           className="pointer-events-none fixed inset-x-0 bottom-8 z-40 flex items-center justify-center p-6"
         >
-          <div className="w-full max-w-3xl pointer-events-auto">
+          <div className="w-full pointer-events-auto">
             <BattleBarView
               title={activePollState?.title || pollSettings.activeBattleTitle}
               optionA={activePollState?.optionA || pollSettings.options[0]}
@@ -1549,21 +1556,16 @@ export const Widget: React.FC = () => {
         </div>
       )}
 
-      {/* Toast HUD de Notificación de Acciones de Moderación */}
+      {/* Aviso de acciones de moderación, en la misma placa que el resto de capas */}
       {modNotice && (
-        <div
-          ref={modNoticeRef}
-          className="pointer-events-none fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border border-amber-500/40 bg-zinc-950/90 px-4 py-2 shadow-2xl backdrop-blur-md transition-all"
-        >
-          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
-            <Shield className="h-3.5 w-3.5" />
-          </div>
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-100">
-            <span className="text-amber-400 font-bold uppercase tracking-wider text-[10px]">
-              MODERACIÓN
-            </span>
-            <span className="text-zinc-500">•</span>
-            <span>
+        <div className="ovl pointer-events-none fixed inset-x-0 top-6 z-50 flex justify-center px-4">
+          <div
+            ref={modNoticeRef}
+            className="ovl-plate nt"
+            style={{ '--c': '#ffb020', '--c-ink': '#1b1c1f' } as React.CSSProperties}
+          >
+            <span className="nt-tag ovl-caps">Moderación</span>
+            <span className="nt-text">
               {modNotice.action in ACTION_DESCRIPTIONS
                 ? ACTION_DESCRIPTIONS[modNotice.action as ControlAction](modNotice.sender, modNotice.user)
                 : `${modNotice.action} por ${modNotice.sender}`}
@@ -1591,7 +1593,7 @@ export const Widget: React.FC = () => {
           }`}
         >
           <div
-            className={`relative flex flex-col items-center gap-3 ${
+            className={`ovl relative flex flex-col items-center gap-3 ${
               activeReward.position === 'fullscreen' ? 'h-full w-full justify-center' : 'max-w-xl'
             }`}
             style={{
@@ -1614,52 +1616,22 @@ export const Widget: React.FC = () => {
                   mixBlendMode: activeReward.blendMode === 'screen' ? 'screen' : 'normal',
                 }}
               />
-            ) : (
-              /* Animación vectorial transparente generativa para presets sin archivo cargado */
-              <div className="relative flex h-48 w-48 items-center justify-center">
-                <div
-                  className="absolute inset-0 animate-ping rounded-full opacity-30"
-                  style={{ backgroundColor: activeReward.accentColor || '#9146ff' }}
-                />
-                <div
-                  className="absolute inset-2 animate-pulse rounded-full border-2 opacity-80"
-                  style={{ borderColor: activeReward.accentColor || '#9146ff' }}
-                />
-                <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-black/60 shadow-2xl backdrop-blur-md">
-                  <Coins
-                    className="h-12 w-12 animate-bounce"
-                    style={{ color: activeReward.accentColor || '#9146ff' }}
-                  />
-                </div>
-              </div>
-            )}
+            ) : null}
 
-            {/* Aviso en pantalla personalizado estilo Cabina Broadcast */}
-            {activeReward.noticeText && (
+            {/* Aviso de la recompensa. Sin vídeo, el aviso es la recompensa: va en grande */}
+            {(activeReward.noticeText || !activeReward.videoUrl) && (
               <div
-                className="flex items-center gap-3 rounded-lg border bg-zinc-950/90 px-4 py-2.5 shadow-2xl backdrop-blur-md"
-                style={{
-                  borderColor: activeReward.accentColor || 'var(--ui, #9146ff)',
-                  boxShadow: `0 8px 32px -4px ${activeReward.accentColor || '#9146ff'}40`,
-                }}
+                className="ovl-plate nt"
+                data-big={activeReward.videoUrl ? undefined : ''}
+                style={
+                  {
+                    '--c': activeReward.accentColor || '#9146ff',
+                    '--c-ink': inkFor(activeReward.accentColor || '#9146ff'),
+                  } as React.CSSProperties
+                }
               >
-                <div
-                  className="flex h-8 w-8 flex-none items-center justify-center rounded-md text-black font-black"
-                  style={{ backgroundColor: activeReward.accentColor || '#9146ff' }}
-                >
-                  <Coins className="h-4 w-4 text-white" />
-                </div>
-                <div className="flex flex-col">
-                  <span
-                    className="text-[10px] font-black uppercase tracking-wider"
-                    style={{ color: activeReward.accentColor || '#9146ff' }}
-                  >
-                    {activeReward.rewardName}
-                  </span>
-                  <span className="text-sm font-bold text-white drop-shadow-sm">
-                    {activeReward.noticeText}
-                  </span>
-                </div>
+                <span className="nt-tag ovl-caps">{activeReward.rewardName}</span>
+                <span className="nt-text">{activeReward.noticeText || `Canjeado por ${activeReward.user}`}</span>
               </div>
             )}
           </div>

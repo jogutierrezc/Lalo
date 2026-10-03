@@ -420,7 +420,7 @@ export const RouletteStudio: React.FC = () => {
             />
 
             {/* Ruleta SVG Interactiva con GSAP & Overlay Broadcast */}
-            <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
+            <div className="relative z-10 flex flex-col items-center w-full max-w-3xl">
               <RouletteOverlayView
                 settings={rouletteSettings}
                 targetRotation={currentRotation}
