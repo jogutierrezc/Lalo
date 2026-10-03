@@ -36,12 +36,24 @@ import { Coins, Radio, VolumeX, Shield } from 'lucide-react';
 import { loadGoalsSettings } from '../types/goals';
 import { GoalsOverlayView } from '../components/goals/GoalsOverlayView';
 import { loadRouletteSettings, RouletteSegment } from '../types/roulette';
-import { RouletteWheel } from '../components/roulette/RouletteWheel';
-import { WinnerBanner } from '../components/roulette/WinnerBanner';
-import { loadPollSettings } from '../types/polls';
+import { RouletteOverlayView } from '../components/roulette/RouletteOverlayView';
+import {
+  speakRouletteSpinAnnouncement,
+  speakRouletteWinnerAnnouncement,
+  speakRouletteTtsCue,
+} from '../utils/rouletteAudio';
+import { loadPollSettings, determineLeader, PollStyleTheme } from '../types/polls';
 import { BattleBarView } from '../components/polls/BattleBarView';
 import { PollBattleUpdateEvent } from '../utils/bus';
-import { speakPollEmotionCue, playVoteTick } from '../utils/pollsAudio';
+import {
+  speakPollEmotionCue,
+  playVoteTick,
+  playLeadClash,
+  playCountdownBeep,
+  playPollVictoryFanfare,
+  announceModPollStarted,
+  announceModPollStopped,
+} from '../utils/pollsAudio';
 
 function getURLParam(key: string): string | null {
   const searchVal = new URLSearchParams(window.location.search).get(key);
@@ -370,14 +382,14 @@ export const Widget: React.FC = () => {
         if (!initialDeployment) {
           initialDeployment = serverDeployment;
         } else if (serverDeployment && initialDeployment !== serverDeployment) {
-          // Nueva versión detectada en Vercel mientras el stream sigue abierto
-          if (!isProcessingRef.current && !isPlaying && messageQueue.length === 0) {
-            const lastReload = Number(sessionStorage.getItem('last_auto_update_ts') || '0');
-            if (Date.now() - lastReload > 30000) {
-              sessionStorage.setItem('last_auto_update_ts', Date.now().toString());
-              console.log('[OBS Widget] Nueva versión detectada en Vercel. Recargando overlay en estado inactivo...');
-              window.location.reload();
-            }
+          const isManual = typeof serverDeployment === 'string' && serverDeployment.includes('manual-reload');
+          const lastReload = Number(sessionStorage.getItem('last_auto_update_ts') || '0');
+
+          // Si el streamer presionó "Actualizar OBS", recargar sin esperar cooldown
+          if (isManual || Date.now() - lastReload > 25000) {
+            sessionStorage.setItem('last_auto_update_ts', Date.now().toString());
+            console.log('[OBS Widget] Actualización detectada desde el panel. Recargando overlay en OBS...');
+            window.location.reload();
           }
         }
       } catch {
@@ -387,8 +399,8 @@ export const Widget: React.FC = () => {
       }
     };
 
-    const initialTimer = setTimeout(checkDeployment, 2000);
-    const intervalTimer = setInterval(checkDeployment, 15000);
+    const initialTimer = setTimeout(checkDeployment, 1500);
+    const intervalTimer = setInterval(checkDeployment, 7000);
 
     return () => {
       clearTimeout(initialTimer);
@@ -857,9 +869,20 @@ export const Widget: React.FC = () => {
     window.location.hash.includes('app=polls') ||
     window.location.hash.includes('app=versus') ||
     window.location.hash.includes('app=encuestas');
-  const [pollSettings, setPollSettings] = useState(() => loadPollSettings());
+  const [pollSettings, setPollSettings] = useState(() => {
+    const base = loadPollSettings();
+    const themeParam = getURLParam('theme') || getURLParam('t');
+    if (themeParam && ['cabina', 'neon', 'esports', 'cyber', 'minimal'].includes(themeParam.toLowerCase())) {
+      return { ...base, theme: themeParam.toLowerCase() as PollStyleTheme };
+    }
+    return base;
+  });
   const [activePollState, setActivePollState] = useState<PollBattleUpdateEvent | null>(null);
   const pollsContainerRef = useRef<HTMLDivElement | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollWinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollVotersRef = useRef<Map<string, 0 | 1>>(new Map());
+  const pollLeaderRef = useRef<'A' | 'B' | 'TIE'>('TIE');
 
   // Animación física del aviso HUD de moderación en OBS
   useEffect(() => {
@@ -903,6 +926,11 @@ export const Widget: React.FC = () => {
           prev.victorySoundType || 'arcade-chime',
           prev.victoryCustomAudioVolume ?? 0.85
         );
+
+        // Anunciar con la voz oficial de Fish Audio configurada en TTS
+        if (prev.ttsAnnounceWinner !== false && rouletteSettings.ttsAnnounceWinner !== false) {
+          speakRouletteWinnerAnnouncement(finalWinner, prev.user);
+        }
 
         const bannerDuration = prev.winnerBannerDurationSec || 8;
         setTimeout(() => {
@@ -1119,6 +1147,11 @@ export const Widget: React.FC = () => {
         setIsRouletteSpinning(true);
         setRouletteWinnerBanner(null);
 
+        // Anunciar con la voz TTS del sistema que la ruleta va a girar
+        if (spin.ttsAnnounceSpin !== false && rouletteSettings.ttsAnnounceSpin !== false) {
+          speakRouletteSpinAnnouncement(spin.user, rouletteSettings.title);
+        }
+
         if (spin.screenShake && containerRef.current) {
           gsap.fromTo(
             containerRef.current,
@@ -1134,6 +1167,9 @@ export const Widget: React.FC = () => {
           );
         }
       }
+      if (message.type === 'ROULETTE_TTS_CUE') {
+        speakRouletteTtsCue(message.cue.text, message.cue.emotion);
+      }
       if (message.type === 'ROULETTE_CLEAR') {
         setActiveRouletteSpin(null);
         setRouletteWinnerBanner(null);
@@ -1141,6 +1177,208 @@ export const Widget: React.FC = () => {
       }
       if (message.type === 'POLL_SETTINGS_UPDATE') {
         setPollSettings(message.settings);
+      }
+      if (message.type === 'POLL_START') {
+        const poll = message.poll;
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        if (pollWinnerTimerRef.current) clearTimeout(pollWinnerTimerRef.current);
+        pollVotersRef.current.clear();
+        pollLeaderRef.current = 'TIE';
+
+        // 1. Notificación en pantalla y aviso HUD
+        setModNotice({
+          action: 'poll_start',
+          sender: poll.startedBy,
+          user: poll.title,
+          timestamp: Date.now(),
+        });
+
+        // 2. Chime y Locución TTS con la voz oficial del sistema y modulación emocional
+        announceModPollStarted({
+          modName: poll.startedBy,
+          modRole: poll.startedByRole,
+          title: poll.title,
+          optionALabel: poll.optionA.label,
+          optionBLabel: poll.optionB.label,
+          durationSec: poll.durationSec,
+          volume: settings.volume,
+        });
+
+        // 3. Estado inicial de la batalla
+        const initialPollState: PollBattleUpdateEvent = {
+          title: poll.title,
+          optionA: {
+            id: 'opt-a',
+            label: poll.optionA.label,
+            sublabel: poll.optionA.sublabel || '!voto 1 o 1',
+            color: poll.optionA.color || '#00e5ff',
+            accentGlow: 'rgba(0, 229, 255, 0.45)',
+            votes: 0,
+          },
+          optionB: {
+            id: 'opt-b',
+            label: poll.optionB.label,
+            sublabel: poll.optionB.sublabel || '!voto 2 o 2',
+            color: poll.optionB.color || '#ff0055',
+            accentGlow: 'rgba(255, 0, 85, 0.45)',
+            votes: 0,
+          },
+          timeLeftSec: poll.durationSec,
+          totalDurationSec: poll.durationSec,
+          isActive: true,
+          winner: null,
+          leader: 'TIE',
+        };
+        setActivePollState(initialPollState);
+
+        // 4. Temporizador de cuenta regresiva en OBS
+        let remainingSeconds = poll.durationSec;
+        pollTimerRef.current = setInterval(() => {
+          remainingSeconds -= 1;
+          if (remainingSeconds <= 0) {
+            if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+            setActivePollState((prev) => {
+              if (!prev) return null;
+              const finalWinner = determineLeader(prev.optionA.votes, prev.optionB.votes);
+              const totalVotes = prev.optionA.votes + prev.optionB.votes;
+              const winVotes = finalWinner === 'A' ? prev.optionA.votes : prev.optionB.votes;
+              const winPct = totalVotes > 0 ? Math.round((winVotes / totalVotes) * 100) : 50;
+              const winLabel =
+                finalWinner === 'A'
+                  ? prev.optionA.label
+                  : finalWinner === 'B'
+                  ? prev.optionB.label
+                  : 'Empate';
+
+              // Fanfarria de victoria
+              if (pollSettings.audioEffectsEnabled) {
+                playPollVictoryFanfare(settings.volume);
+              }
+
+              // Locución TTS con la voz oficial de Fish Audio
+              const winnerText =
+                finalWinner === 'TIE'
+                  ? '[tenso] ¡Tiempo finalizado! La votación ha terminado en un empate absoluto entre ambas opciones.'
+                  : `[triunfal] ¡Tiempo finalizado! La opción ganadora indiscutible es ${winLabel} con ${winPct} por ciento de los votos.`;
+              speakPollEmotionCue(winnerText, finalWinner === 'TIE' ? '[tenso]' : '[triunfal]');
+
+              // Mantener el banner de victoria 10 segundos antes de ocultar con animación fluida
+              pollWinnerTimerRef.current = setTimeout(() => {
+                if (pollsContainerRef.current) {
+                  gsap.to(pollsContainerRef.current, {
+                    opacity: 0,
+                    scale: 0.95,
+                    y: 20,
+                    duration: 0.45,
+                    ease: 'power2.in',
+                    onComplete: () => setActivePollState(null),
+                  });
+                } else {
+                  setActivePollState(null);
+                }
+              }, 10000);
+
+              const finished: PollBattleUpdateEvent = {
+                ...prev,
+                timeLeftSec: 0,
+                isActive: false,
+                winner: finalWinner,
+              };
+              postBus({ type: 'POLL_STATE_UPDATE', state: finished });
+              return finished;
+            });
+            return;
+          }
+
+          // Alerta a los 10 segundos finales
+          if (remainingSeconds === 10) {
+            if (pollSettings.audioEffectsEnabled) {
+              playCountdownBeep(settings.volume, true);
+            }
+            speakPollEmotionCue('[susurro] Quedan solo 10 segundos, ¡emitan sus votos en el chat!', '[susurro]');
+          } else if (remainingSeconds <= 5 && remainingSeconds > 0) {
+            if (pollSettings.audioEffectsEnabled) {
+              playCountdownBeep(settings.volume, true);
+            }
+          }
+
+          setActivePollState((prev) => {
+            if (!prev || !prev.isActive) return prev;
+            const updated = { ...prev, timeLeftSec: remainingSeconds };
+            postBus({ type: 'POLL_STATE_UPDATE', state: updated });
+            return updated;
+          });
+        }, 1000);
+      }
+      if (message.type === 'POLL_STOP') {
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        if (pollWinnerTimerRef.current) clearTimeout(pollWinnerTimerRef.current);
+        const modName = message.user || 'Moderación';
+        setModNotice({
+          action: 'poll_stop',
+          sender: modName,
+          timestamp: Date.now(),
+        });
+        announceModPollStopped(modName);
+
+        if (pollsContainerRef.current) {
+          gsap.to(pollsContainerRef.current, {
+            opacity: 0,
+            scale: 0.95,
+            y: 20,
+            duration: 0.45,
+            ease: 'power2.in',
+            onComplete: () => setActivePollState(null),
+          });
+        } else {
+          setActivePollState(null);
+        }
+      }
+      if (message.type === 'POLL_VOTE') {
+        const voter = (message.user || 'Anónimo').toLowerCase().trim();
+        setActivePollState((prev) => {
+          if (!prev || !prev.isActive) return prev;
+
+          const existingVote = pollVotersRef.current.get(voter);
+          if (existingVote !== undefined) {
+            if (!pollSettings.allowVoteChange) return prev;
+            if (existingVote === message.option) return prev;
+          }
+
+          let votesA = prev.optionA.votes;
+          let votesB = prev.optionB.votes;
+
+          if (existingVote === 0) votesA = Math.max(0, votesA - 1);
+          if (existingVote === 1) votesB = Math.max(0, votesB - 1);
+
+          if (message.option === 0) votesA += 1;
+          if (message.option === 1) votesB += 1;
+
+          pollVotersRef.current.set(voter, message.option);
+
+          const newLeader = determineLeader(votesA, votesB);
+          if (newLeader !== 'TIE' && newLeader !== pollLeaderRef.current) {
+            pollLeaderRef.current = newLeader;
+            if (pollSettings.audioEffectsEnabled) {
+              playLeadClash(pollSettings.audioVolume);
+            }
+          }
+
+          if (pollSettings.audioEffectsEnabled) {
+            playVoteTick(pollSettings.audioVolume, message.option);
+          }
+
+          const nextState: PollBattleUpdateEvent = {
+            ...prev,
+            optionA: { ...prev.optionA, votes: votesA },
+            optionB: { ...prev.optionB, votes: votesB },
+            leader: newLeader,
+            lastVoteUser: message.user,
+            lastVoteOption: message.option,
+          };
+          postBus({ type: 'POLL_STATE_UPDATE', state: nextState });
+          return nextState;
+        });
       }
       if (message.type === 'POLL_STATE_UPDATE') {
         setActivePollState(message.state);
@@ -1152,6 +1390,8 @@ export const Widget: React.FC = () => {
         speakPollEmotionCue(message.cue.text, message.cue.emotion);
       }
       if (message.type === 'POLL_CLEAR') {
+        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        if (pollWinnerTimerRef.current) clearTimeout(pollWinnerTimerRef.current);
         setActivePollState(null);
       }
     });
@@ -1185,6 +1425,8 @@ export const Widget: React.FC = () => {
   useEffect(() => {
     return () => {
       isProcessingRef.current = false;
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (pollWinnerTimerRef.current) clearTimeout(pollWinnerTimerRef.current);
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';
@@ -1264,50 +1506,30 @@ export const Widget: React.FC = () => {
         </div>
       )}
 
-      {/* Overlay de Ruleta de Castigos & Retos en OBS */}
+      {/* Overlay Cinemático de Ruleta de Castigos & Retos en OBS */}
       {(isRouletteApp || activeRouletteSpin) && (
         <div
           ref={rouletteContainerRef}
           className="pointer-events-none fixed inset-0 z-40 flex flex-col items-center justify-center p-6"
         >
-          <div className="relative flex flex-col items-center rounded-2xl border border-white/10 bg-black/85 p-6 shadow-2xl backdrop-blur-md">
-            <h2
-              className="cab-caps mb-3 text-sm font-black tracking-widest text-rose-400 drop-shadow"
-              style={{ fontStretch: '75%' }}
-            >
-              {rouletteSettings.title || 'RULETA DE CASTIGOS & RETOS'}
-            </h2>
-
-            <RouletteWheel
-              segments={rouletteSettings.segments}
+          <div className="pointer-events-auto">
+            <RouletteOverlayView
+              settings={rouletteSettings}
               targetRotation={rouletteRotation}
               startRotation={rouletteStartRotation}
               targetWinner={activeRouletteSpin?.winnerSegment}
               isSpinning={isRouletteSpinning}
-              spinDurationSec={activeRouletteSpin?.spinDurationSec || rouletteSettings.spinDurationSec}
-              styleTheme={rouletteSettings.style}
-              soundEnabled={rouletteSettings.soundEnabled}
-              tickVolume={rouletteSettings.tickVolume}
-              size={360}
+              activeUser={activeRouletteSpin?.user || 'Streamer'}
+              winnerBanner={rouletteWinnerBanner}
               onSpinComplete={handleObsWheelComplete}
+              isStudio={false}
             />
-
-            {rouletteWinnerBanner && (
-              <div className="mt-4 w-full">
-                <WinnerBanner
-                  segment={rouletteWinnerBanner.segment}
-                  user={rouletteWinnerBanner.user}
-                  autoDismissSec={activeRouletteSpin?.winnerBannerDurationSec || 8}
-                  isStudio={false}
-                />
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {/* Overlay de Batallas & Encuestas en OBS */}
-      {(isPollsApp || (activePollState && activePollState.isActive)) && (
+      {(isPollsApp || (activePollState && (activePollState.isActive || Boolean(activePollState.winner)))) && (
         <div
           ref={pollsContainerRef}
           className="pointer-events-none fixed inset-x-0 bottom-8 z-40 flex items-center justify-center p-6"

@@ -261,7 +261,9 @@ export type ControlAction =
   | 'manual' // activar aprobación manual
   | 'auto'
   | 'mute' // solo texto
-  | 'unmute';
+  | 'unmute'
+  | 'poll_start' // inicio/personalización de encuesta por moderador
+  | 'poll_stop'; // finalización de encuesta por moderador
 
 export interface ControlCommand {
   action: ControlAction;

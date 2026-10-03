@@ -21,7 +21,7 @@ export function buildWidgetUrl(origin: string, settings: TTSSettings): string {
     speed: String(settings.speed),
     style: settings.alertStyle,
     pos: settings.position,
-    accent: settings.accent.slice(1),
+    accent: settings.accent.startsWith('#') ? settings.accent.slice(1) : settings.accent,
     scale: String(settings.scale),
     energy: settings.energy,
     ...moderationToQuery(settings),
@@ -33,5 +33,42 @@ export function buildWidgetUrl(origin: string, settings: TTSSettings): string {
   if (lists) fragment.set('block', lists);
   const hash = fragment.toString();
 
-  return `${origin}/widget?${query.toString()}${hash ? `#?${hash}` : ''}`;
+  return `${origin}/#widget?${query.toString()}${hash ? `&${hash}` : ''}`;
+}
+
+export type WidgetAppType = 'tts' | 'alerts' | 'roulette' | 'goals' | 'polls' | 'all';
+
+/**
+ * Construye la URL completa y parametrizada para cualquier herramienta de Lalo Stream Suite en OBS Studio.
+ */
+export function buildSuiteWidgetUrl(
+  origin: string,
+  app: WidgetAppType,
+  channel: string,
+  ttsSettings?: TTSSettings,
+  extraParams?: Record<string, string>
+): string {
+  const activeChannel = (channel || ttsSettings?.channel || 'laloplay_').trim();
+
+  if (app === 'tts' && ttsSettings) {
+    return buildWidgetUrl(origin, { ...ttsSettings, channel: activeChannel });
+  }
+
+  const query = new URLSearchParams({
+    app,
+    channel: activeChannel,
+    ...(extraParams || {}),
+  });
+
+  if (app === 'all' && ttsSettings) {
+    query.set('voice', ttsSettings.referenceId);
+    query.set('model', ttsSettings.model || 's2.1-pro-free');
+    query.set('vol', String(ttsSettings.volume));
+    query.set('speed', String(ttsSettings.speed));
+    query.set('style', ttsSettings.alertStyle);
+    query.set('pos', ttsSettings.position);
+    query.set('accent', ttsSettings.accent.startsWith('#') ? ttsSettings.accent.slice(1) : ttsSettings.accent);
+  }
+
+  return `${origin}/#widget?${query.toString()}`;
 }

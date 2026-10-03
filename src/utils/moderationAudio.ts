@@ -98,6 +98,8 @@ export const ACTION_DESCRIPTIONS: Record<ControlAction, (sender: string, target?
   mute: (sender) => `Modo solo texto activado por ${sender}`,
   unmute: (sender) => `Voz activada por ${sender}`,
   reload: (sender) => `Overlay recargado por ${sender}`,
+  poll_start: (sender, target) => `Votación iniciada por ${sender}: ${target || 'Batalla en vivo'}`,
+  poll_stop: (sender) => `Votación cancelada por ${sender}`,
 };
 
 /**

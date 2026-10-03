@@ -158,6 +158,8 @@ export function useRouletteSettings() {
         victoryCustomAudioVolume: rouletteSettings.victoryCustomAudioVolume ?? 0.85,
         showWinnerBanner: rouletteSettings.showWinnerBanner,
         winnerBannerDurationSec: rouletteSettings.winnerBannerDurationSec || 8,
+        ttsAnnounceSpin: rouletteSettings.ttsAnnounceSpin !== false,
+        ttsAnnounceWinner: rouletteSettings.ttsAnnounceWinner !== false,
       };
 
       postBus({ type: 'ROULETTE_SPIN', spin: spinEvent });

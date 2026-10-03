@@ -13,6 +13,9 @@ import type { StreamAlertsSettings, AlertEventType, AlertSoundType, AlertAudioMo
 import type { GoalsSettings } from '../types/goals';
 import type { RouletteSettings, RouletteSegment } from '../types/roulette';
 import type { PollSettings, PollOption } from '../types/polls';
+import type { PollStartEvent } from './pollCommands';
+
+export type { PollStartEvent };
 
 export const BUS_NAME = 'lalo_tts_bus';
 
@@ -136,6 +139,13 @@ export interface RouletteSpinEvent {
   victoryCustomAudioVolume?: number;
   showWinnerBanner?: boolean;
   winnerBannerDurationSec?: number;
+  ttsAnnounceSpin?: boolean;
+  ttsAnnounceWinner?: boolean;
+}
+
+export interface RouletteTtsCueEvent {
+  text: string;
+  emotion: string;
 }
 
 export interface PollBattleUpdateEvent {
@@ -166,11 +176,14 @@ export type BusMessage =
   | { type: 'GOAL_CELEBRATE'; celebration: GoalCelebrationEvent }
   | { type: 'ROULETTE_SETTINGS_UPDATE'; settings: RouletteSettings }
   | { type: 'ROULETTE_SPIN'; spin: RouletteSpinEvent }
+  | { type: 'ROULETTE_TTS_CUE'; cue: RouletteTtsCueEvent }
   | { type: 'ROULETTE_CLEAR' }
   | { type: 'POLL_SETTINGS_UPDATE'; settings: PollSettings }
   | { type: 'POLL_STATE_UPDATE'; state: PollBattleUpdateEvent }
   | { type: 'POLL_TTS_CUE'; cue: PollTtsCueEvent }
   | { type: 'POLL_VOTE'; option: 0 | 1; user: string }
+  | { type: 'POLL_START'; poll: PollStartEvent }
+  | { type: 'POLL_STOP'; user?: string }
   | { type: 'POLL_CLEAR' }
   | { type: 'ENQUEUE'; text: string; user?: string }
   | { type: 'FORCE_RELOAD' }

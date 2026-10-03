@@ -6,14 +6,33 @@
  * y se recarguen solos sin intervención del streamer.
  */
 
-export default function handler(_req: any, res: any) {
+let serverlessDeploymentVersion = process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'production';
+
+export default function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.setHeader('Content-Type', 'application/json');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method === 'POST') {
+    serverlessDeploymentVersion = `manual-reload-${Date.now()}`;
+    return res.status(200).json({
+      status: 'ok',
+      version: '1.0.0',
+      deployment: serverlessDeploymentVersion,
+      message: 'Señal de actualización de OBS emitida',
+      timestamp: Date.now(),
+    });
+  }
 
   return res.status(200).json({
     status: 'ok',
     version: '1.0.0',
-    deployment: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'production',
+    deployment: serverlessDeploymentVersion,
   });
 }

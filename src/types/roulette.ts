@@ -57,18 +57,20 @@ export interface RouletteSettings {
   segments: RouletteSegment[];
   triggerRewardName?: string; // Nombre del canje de puntos de Twitch
   triggerCommand?: string; // Comando de chat (ej: !ruleta)
+  ttsAnnounceSpin?: boolean; // Anunciar con voz TTS cuando la ruleta va a girar
+  ttsAnnounceWinner?: boolean; // Anunciar con voz TTS el resultado seleccionado
 }
 
 export const ROULETTE_STORAGE_KEY = 'lalo_roulette_settings';
 
-export const CATEGORY_LABELS: Record<PenaltyCategory, { label: string; color: string }> = {
-  fitness: { label: 'Fitness / Físico', color: '#ff2d46' },
-  voice: { label: 'Voz & Show', color: '#9146ff' },
-  gameplay: { label: 'Gameplay / Juego', color: '#00f5ff' },
-  food: { label: 'Sabor / Picante', color: '#ffb020' },
-  show: { label: 'Humor & Castigo', color: '#ec4899' },
-  safe: { label: 'Inmunidad / Libre', color: '#53fc18' },
-  custom: { label: 'Personalizado', color: '#a855f7' },
+export const CATEGORY_LABELS: Record<PenaltyCategory, { label: string; color: string; icon: string }> = {
+  fitness: { label: 'Fitness / Físico', color: '#ff2d46', icon: '🏋️' },
+  voice: { label: 'Voz & Show', color: '#9146ff', icon: '🎤' },
+  gameplay: { label: 'Gameplay / Juego', color: '#00f5ff', icon: '🎮' },
+  food: { label: 'Sabor / Picante', color: '#ffb020', icon: '🌶️' },
+  show: { label: 'Humor & Castigo', color: '#ec4899', icon: '🎭' },
+  safe: { label: 'Inmunidad / Libre', color: '#53fc18', icon: '🛡️' },
+  custom: { label: 'Personalizado', color: '#a855f7', icon: '⭐' },
 };
 
 export const ROULETTE_STYLE_PRESETS: { id: RouletteStyle; name: string; desc: string }[] = [
@@ -167,6 +169,8 @@ export const DEFAULT_ROULETTE_SETTINGS: RouletteSettings = {
   segments: ROULETTE_PRESETS[0].segments,
   triggerRewardName: 'Girar Ruleta de Castigos',
   triggerCommand: '!ruleta',
+  ttsAnnounceSpin: true,
+  ttsAnnounceWinner: true,
 };
 
 /** Carga segura desde LocalStorage */

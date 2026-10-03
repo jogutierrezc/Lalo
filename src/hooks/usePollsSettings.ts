@@ -154,12 +154,24 @@ export function usePollsSettings() {
     setTimeLeft(dur);
     setIsActive(true);
     setWinner(null);
+    postBus({
+      type: 'POLL_START',
+      poll: {
+        title: settings.activeBattleTitle,
+        optionA: { label: settings.options[0].label, sublabel: settings.options[0].sublabel, color: settings.options[0].color },
+        optionB: { label: settings.options[1].label, sublabel: settings.options[1].sublabel, color: settings.options[1].color },
+        durationSec: dur,
+        startedBy: 'Streamer',
+        startedByRole: 'broadcaster',
+      },
+    });
     broadcastState(dur, true, null);
-  }, [settings.durationSec, broadcastState]);
+  }, [settings, broadcastState]);
 
   // Pausar batalla
   const pauseBattle = useCallback(() => {
     setIsActive(false);
+    postBus({ type: 'POLL_STOP', user: 'Streamer' });
     broadcastState(timeLeft, false, winner);
   }, [timeLeft, winner, broadcastState]);
 
@@ -315,9 +327,59 @@ export function usePollsSettings() {
     };
   }, [isActive, settings, broadcastState]);
 
-  // Escuchar bus para sincronización externa (ej. si llega voto desde Widget o moderación)
+  // Escuchar bus para sincronización externa (ej. si llega voto o comando desde Widget o moderación)
   useEffect(() => {
     return listenBus((msg) => {
+      if (msg.type === 'POLL_START') {
+        const poll = msg.poll;
+        setTimeLeft(poll.durationSec);
+        setIsActive(true);
+        setWinner(null);
+        setUserVotes(new Map());
+        previousLeaderRef.current = 'TIE';
+        setSettings((prev) => ({
+          ...prev,
+          activeBattleTitle: poll.title,
+          durationSec: poll.durationSec,
+          options: [
+            {
+              ...prev.options[0],
+              label: poll.optionA.label,
+              sublabel: poll.optionA.sublabel,
+              color: poll.optionA.color || prev.options[0].color,
+              votes: 0,
+            },
+            {
+              ...prev.options[1],
+              label: poll.optionB.label,
+              sublabel: poll.optionB.sublabel,
+              color: poll.optionB.color || prev.options[1].color,
+              votes: 0,
+            },
+          ],
+        }));
+      }
+      if (msg.type === 'POLL_STOP') {
+        setIsActive(false);
+        setWinner(null);
+      }
+      if (msg.type === 'POLL_STATE_UPDATE') {
+        if (msg.state) {
+          setTimeLeft(msg.state.timeLeftSec);
+          setIsActive(msg.state.isActive);
+          if (msg.state.winner !== undefined) {
+            setWinner(msg.state.winner);
+          }
+          setSettings((prev) => ({
+            ...prev,
+            activeBattleTitle: msg.state.title,
+            options: [
+              { ...prev.options[0], votes: msg.state.optionA.votes, label: msg.state.optionA.label },
+              { ...prev.options[1], votes: msg.state.optionB.votes, label: msg.state.optionB.label },
+            ],
+          }));
+        }
+      }
       if (msg.type === 'POLL_VOTE') {
         castVote(msg.option, msg.user);
       }

@@ -6,7 +6,59 @@
  */
 
 export type PollLayoutMode = '1v1_battle' | 'multi_choice';
-export type PollStyleTheme = 'cabina' | 'neon' | 'esports' | 'cyber';
+export type PollStyleTheme = 'cabina' | 'neon' | 'esports' | 'cyber' | 'minimal';
+
+export interface PollThemeDefinition {
+  id: PollStyleTheme;
+  name: string;
+  description: string;
+  badge: string;
+  accent: string;
+  previewBg: string;
+}
+
+export const POLL_THEMES: PollThemeDefinition[] = [
+  {
+    id: 'cabina',
+    name: 'Cabina Broadcast',
+    description: 'Estética de rack de máster de transmisión, tally LED al aire, vúmetros de audio y telemetría analógica.',
+    badge: 'ON AIR',
+    accent: '#00e5ff',
+    previewBg: 'from-slate-900 to-slate-950',
+  },
+  {
+    id: 'neon',
+    name: 'Neon Synthwave',
+    description: 'Tubos de neón láser, scanlines retro, resplandor difuso cian/magenta y estética arcade 80s.',
+    badge: 'LASER GLOW',
+    accent: '#ff007f',
+    previewBg: 'from-fuchsia-950/60 to-purple-950/80',
+  },
+  {
+    id: 'esports',
+    name: 'Arena Esports',
+    description: 'Chasis de fibra de carbono, cortes angulares 45°, corona de campeonato y partículas de choque sísmico.',
+    badge: 'TOURNAMENT',
+    accent: '#ffd700',
+    previewBg: 'from-cyan-950/50 to-rose-950/60',
+  },
+  {
+    id: 'cyber',
+    name: 'Tactical Cyber HUD',
+    description: 'Matriz militar futurista con retículas de apuntado, bloques de datos segmentados y telemetría digital.',
+    badge: 'HUD TÁCTICO',
+    accent: '#00ff66',
+    previewBg: 'from-emerald-950/40 to-slate-950',
+  },
+  {
+    id: 'minimal',
+    name: 'Minimal Frosted Glass',
+    description: 'Vidrio esmerilado flotante ultra refinado, tipografía suiza limpia y gradientes líquidos sutiles.',
+    badge: 'SWISS CLEAN',
+    accent: '#38bdf8',
+    previewBg: 'from-slate-900/60 to-slate-950/80',
+  },
+];
 
 export interface PollOption {
   id: string;
@@ -133,25 +185,29 @@ export const INITIAL_POLL_SETTINGS: PollSettings = {
 export const POLLS_STORAGE_KEY = 'lalo_polls_settings_v1';
 
 /**
- * Parsea un mensaje de chat para extraer el voto del usuario.
- * Acepta: !voto 1, !voto 2, !voto a, !voto b, !vote 1, !vote 2, !1, !2, !a, !b.
- * Devuelve 0 para la opción 1 (A), 1 para la opción 2 (B), o null si no es un comando de voto.
+ * Parsea un mensaje de chat para extraer el voto del usuario de forma simple o explícita.
+ * Acepta: 1, 2, 111, 222, a, b, !1, !2, !a, !b, #1, #2, !voto 1, !voto 2, voto 1, voto 2, !vote 1, etc.
+ * Devuelve 0 para la opción 1 (A), 1 para la opción 2 (B), o null si no es un voto válido.
  */
 export function parseVoteCommand(message: string): 0 | 1 | null {
   if (!message) return null;
   const trimmed = message.trim().toLowerCase();
 
-  // 1. Sintaxis explícita con prefijo !voto o !vote
-  const explicitMatch = trimmed.match(/^!(?:voto|vote)\s+([12ab])/i);
+  // 1. Sintaxis explícita con prefijo !voto, !vote, voto o vote (ej: !voto 1, !vote 2, voto a, vote b)
+  const explicitMatch = trimmed.match(/^!?(?:voto|vote)\s*[:=]?\s*([12ab])$/i);
   if (explicitMatch) {
-    const val = explicitMatch[1];
+    const val = explicitMatch[1].toLowerCase();
     if (val === '1' || val === 'a') return 0;
     if (val === '2' || val === 'b') return 1;
   }
 
-  // 2. Sintaxis abreviada directa (!1, !2, !a, !b)
-  if (/^![1a]$/i.test(trimmed)) return 0;
-  if (/^![2b]$/i.test(trimmed)) return 1;
+  // 2. Sintaxis abreviada con exclamación o hashtag (!1, !2, !a, !b, #1, #2, #a, #b)
+  if (/^[!#][1a]$/i.test(trimmed)) return 0;
+  if (/^[!#][2b]$/i.test(trimmed)) return 1;
+
+  // 3. Voto simple de un solo carácter o repetición del mismo dígito/letra ("1", "2", "111", "222", "a", "b", "aaa", "bbb")
+  if (/^1+$/i.test(trimmed) || /^a+$/i.test(trimmed)) return 0;
+  if (/^2+$/i.test(trimmed) || /^b+$/i.test(trimmed)) return 1;
 
   return null;
 }

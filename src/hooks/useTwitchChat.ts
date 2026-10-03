@@ -30,7 +30,9 @@ import {
   truncateText,
 } from '../utils/moderation';
 import { postBus } from '../utils/bus';
-import { parseVoteCommand } from '../types/polls';
+import { parseVoteCommand, loadPollSettings } from '../types/polls';
+import { parsePollCommand } from '../utils/pollCommands';
+import { loadRouletteSettings, calculateTargetRotation, pickRandomSegment } from '../types/roulette';
 
 export interface RejectedMessage {
   id: string;
@@ -192,7 +194,49 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
         return;
       }
 
-      // Votos en tiempo real para Batallas & Encuestas (!voto 1, !voto 2, !1, !2, etc.)
+      // Comandos de moderación para Encuestas y Batallas (!poll, !encuesta, !batalla, !versus)
+      const pollCmd = parsePollCommand(message);
+      if (pollCmd && (role === 'broadcaster' || role === 'mod')) {
+        if (pollCmd.action === 'stop') {
+          postBus({
+            type: 'POLL_STOP',
+            user: displayName,
+          });
+          onControlRef.current?.({
+            action: 'poll_stop',
+            sender: displayName,
+            senderRole: role,
+          });
+        } else {
+          const currentSettings = loadPollSettings();
+          const title = pollCmd.title || currentSettings.activeBattleTitle;
+          const optA = pollCmd.optionA || currentSettings.options[0].label;
+          const optB = pollCmd.optionB || currentSettings.options[1].label;
+          const durationSec = pollCmd.durationSec || currentSettings.durationSec || 60;
+
+          postBus({
+            type: 'POLL_START',
+            poll: {
+              title,
+              optionA: { label: optA, sublabel: '!voto 1 o 1', color: currentSettings.options[0].color || '#00e5ff' },
+              optionB: { label: optB, sublabel: '!voto 2 o 2', color: currentSettings.options[1].color || '#ff0055' },
+              durationSec,
+              startedBy: displayName,
+              startedByRole: role,
+            },
+          });
+
+          onControlRef.current?.({
+            action: 'poll_start',
+            sender: displayName,
+            senderRole: role,
+            user: title,
+          });
+        }
+        return;
+      }
+
+      // Votos en tiempo real para Batallas & Encuestas (1, 2, a, b, !voto 1, !voto 2, !1, !2, etc.)
       const voteOption = parseVoteCommand(message);
       if (voteOption !== null) {
         postBus({
@@ -200,6 +244,46 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
           option: voteOption,
           user: displayName,
         });
+      }
+
+      // Activación remota de la Ruleta de Castigos (!ruleta, !spin, !wheel)
+      const cleanMsg = message.trim().toLowerCase();
+      if (cleanMsg === '!ruleta' || cleanMsg === '!spin' || cleanMsg === '!wheel') {
+        const rs = loadRouletteSettings();
+        const activeSegments = rs.segments.filter((s) => s.enabled);
+        if (activeSegments.length > 0) {
+          const picked = pickRandomSegment(activeSegments);
+          if (picked) {
+            const finalRotation = calculateTargetRotation(
+              picked.index,
+              activeSegments.length,
+              0,
+              5
+            );
+            postBus({
+              type: 'ROULETTE_SPIN',
+              spin: {
+                id: `spin-chat-${Date.now()}`,
+                user: displayName,
+                winnerSegment: picked.segment,
+                winnerIndex: picked.index,
+                totalActiveSegments: activeSegments.length,
+                startRotation: 0,
+                finalRotation,
+                spinDurationSec: rs.spinDurationSec || 6.0,
+                screenShake: rs.screenShake,
+                confetti: rs.confetti,
+                victorySoundType: rs.victorySoundType,
+                victoryCustomAudioUrl: rs.victoryCustomAudioUrl,
+                victoryCustomAudioVolume: rs.victoryCustomAudioVolume ?? 0.85,
+                showWinnerBanner: rs.showWinnerBanner,
+                winnerBannerDurationSec: rs.winnerBannerDurationSec || 8,
+                ttsAnnounceSpin: rs.ttsAnnounceSpin !== false,
+                ttsAnnounceWinner: rs.ttsAnnounceWinner !== false,
+              },
+            });
+          }
+        }
       }
 
       const trigger = classifyTrigger(moderation, message, tags, role);

@@ -47,13 +47,37 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
+let dynamicDeploymentVersion = process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || `local-dev-${Date.now()}`;
+
 // Endpoint de versión para el auto-actualizador del widget
 app.get('/api/version', (_req: Request, res: Response) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.json({
     status: 'ok',
     version: '1.0.0',
-    deployment: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'local-dev',
+    deployment: dynamicDeploymentVersion,
+  });
+});
+
+app.post('/api/version', (_req: Request, res: Response) => {
+  dynamicDeploymentVersion = `manual-reload-${Date.now()}`;
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.json({
+    status: 'ok',
+    version: '1.0.0',
+    deployment: dynamicDeploymentVersion,
+    message: 'Señal de actualización de OBS emitida',
+  });
+});
+
+app.post('/api/obs/reload', (_req: Request, res: Response) => {
+  dynamicDeploymentVersion = `manual-reload-${Date.now()}`;
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.json({
+    status: 'ok',
+    deployment: dynamicDeploymentVersion,
+    message: 'Señal de actualización de OBS emitida',
+    timestamp: Date.now(),
   });
 });
 

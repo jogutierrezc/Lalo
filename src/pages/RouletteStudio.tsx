@@ -36,11 +36,16 @@ import {
 } from '../types/roulette';
 import { AlertSoundType } from '../types/alerts';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
-import { RouletteWheel } from '../components/roulette/RouletteWheel';
-import { WinnerBanner } from '../components/roulette/WinnerBanner';
+import { RouletteOverlayView } from '../components/roulette/RouletteOverlayView';
+import {
+  speakRouletteSpinAnnouncement,
+  speakRouletteWinnerAnnouncement,
+} from '../utils/rouletteAudio';
+import { loadSettings, PRESET_VOICES } from '../types/settings';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import { MediaItem } from '../types/mediaLibrary';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
+import { Volume2, Sparkles } from 'lucide-react';
 
 const TOUR_ID = 'ruleta';
 
@@ -203,6 +208,10 @@ export const RouletteStudio: React.FC = () => {
     setTimeout(() => setCopiedUrl(false), 2200);
   };
 
+  const [isSpeakingTts, setIsSpeakingTts] = useState<string | null>(null);
+  const ttsSettings = loadSettings();
+  const activeVoiceName = PRESET_VOICES.find((v) => v.id === ttsSettings.referenceId)?.name || 'Voz Personalizada';
+
   // Disparar giro local y sincronizar con OBS
   const handleStartSpin = (targetId?: string) => {
     if (isSpinning) return;
@@ -219,6 +228,11 @@ export const RouletteStudio: React.FC = () => {
     setCurrentRotation(spinEvent.finalRotation);
     setTargetWinner(spinEvent.winnerSegment);
     setTestStatus('¡Ruleta girando con inercia GSAP! (Sincronizado con OBS)');
+
+    // Anunciar con la voz TTS del sistema que la ruleta va a girar
+    if (rouletteSettings.ttsAnnounceSpin !== false) {
+      speakRouletteSpinAnnouncement('Streamer', rouletteSettings.title);
+    }
   };
 
   const handleWheelComplete = (winner: RouletteSegment) => {
@@ -232,12 +246,17 @@ export const RouletteStudio: React.FC = () => {
       rouletteSettings.victoryCustomAudioVolume ?? 0.85
     );
 
-    // 2. Confeti
+    // 2. Anunciar con la voz TTS oficial del sistema el castigo resultante
+    if (rouletteSettings.ttsAnnounceWinner !== false) {
+      speakRouletteWinnerAnnouncement(winner, 'Streamer');
+    }
+
+    // 3. Confeti
     if (rouletteSettings.confetti) {
       setConfettiActive(true);
     }
 
-    // 3. Screen Shake sísmico con GSAP
+    // 4. Screen Shake sísmico con GSAP
     if (rouletteSettings.screenShake && monitorStageRef.current) {
       gsap.fromTo(
         monitorStageRef.current,
@@ -400,34 +419,20 @@ export const RouletteStudio: React.FC = () => {
               className="pointer-events-none absolute inset-0 z-20 h-full w-full"
             />
 
-            {/* Ruleta SVG Interactiva con GSAP */}
-            <div className="relative z-10 flex flex-col items-center">
-              <RouletteWheel
-                segments={rouletteSettings.segments}
+            {/* Ruleta SVG Interactiva con GSAP & Overlay Broadcast */}
+            <div className="relative z-10 flex flex-col items-center w-full max-w-lg">
+              <RouletteOverlayView
+                settings={rouletteSettings}
                 targetRotation={currentRotation}
                 startRotation={startRotation}
                 targetWinner={targetWinner}
                 isSpinning={isSpinning}
-                spinDurationSec={rouletteSettings.spinDurationSec}
-                styleTheme={rouletteSettings.style}
-                soundEnabled={rouletteSettings.soundEnabled}
-                tickVolume={rouletteSettings.tickVolume}
-                size={340}
+                activeUser="Streamer"
+                winnerBanner={activeWinner}
                 onSpinComplete={handleWheelComplete}
+                onBannerDismiss={() => setActiveWinner(null)}
+                isStudio={true}
               />
-
-              {/* Banner con el ganador / castigo activo */}
-              {activeWinner && (
-                <div className="mt-4 w-full">
-                  <WinnerBanner
-                    segment={activeWinner.segment}
-                    user={activeWinner.user}
-                    onDismiss={() => setActiveWinner(null)}
-                    autoDismissSec={rouletteSettings.winnerBannerDurationSec}
-                    isStudio={true}
-                  />
-                </div>
-              )}
             </div>
 
             {/* Barra de control rápido de prueba en el monitor */}
@@ -815,6 +820,114 @@ export const RouletteStudio: React.FC = () => {
                     Al canjear esta recompensa en Twitch, el bot o EventSub hará girar la ruleta en directo.
                   </span>
                 </div>
+              </div>
+            </section>
+
+            {/* Módulo: Locutor TTS con Voz de Fish Audio */}
+            <section className="cab-mod" data-tour="roulette-tts">
+              <div className="flex items-center justify-between border-b border-[color:var(--cb-line)] pb-3">
+                <div className="flex items-center gap-2">
+                  <Mic className="h-4 w-4 text-rose-400" />
+                  <h2 className="!border-none !pb-0 !mb-0">
+                    <span>4</span>Locutor TTS de la Ruleta
+                  </h2>
+                </div>
+                <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300">
+                  FISH AUDIO
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between rounded-lg border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="text-xs text-[color:var(--cb-mut)]">Voz activa:</span>
+                  <span className="rounded bg-rose-500/20 px-2 py-0.5 font-mono text-xs font-bold text-rose-300">
+                    {activeVoiceName}
+                  </span>
+                </div>
+                <a
+                  href="#tts"
+                  className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 hover:underline"
+                >
+                  Cambiar en TTS →
+                </a>
+              </div>
+
+              <p className="mt-3 text-xs leading-relaxed text-[color:var(--cb-mut)]">
+                La voz del sistema anuncia automáticamente cuando la ruleta empieza a girar y proclama el castigo final con inflexión emocional.
+              </p>
+
+              <div className="mt-3 grid gap-2">
+                {/* Toggle Anunciar Giro */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateSettings({
+                      ttsAnnounceSpin: !(rouletteSettings.ttsAnnounceSpin !== false),
+                    })
+                  }
+                  className={`flex items-center justify-between rounded border p-2 text-xs font-bold transition-all active:scale-[0.97] ${
+                    rouletteSettings.ttsAnnounceSpin !== false
+                      ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
+                      : 'border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]'
+                  }`}
+                >
+                  <span>Anunciar inicio de giro</span>
+                  <span>{rouletteSettings.ttsAnnounceSpin !== false ? 'ACTIVADO' : 'SILENCIADO'}</span>
+                </button>
+
+                {/* Toggle Anunciar Ganador */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateSettings({
+                      ttsAnnounceWinner: !(rouletteSettings.ttsAnnounceWinner !== false),
+                    })
+                  }
+                  className={`flex items-center justify-between rounded border p-2 text-xs font-bold transition-all active:scale-[0.97] ${
+                    rouletteSettings.ttsAnnounceWinner !== false
+                      ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
+                      : 'border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]'
+                  }`}
+                >
+                  <span>Anunciar castigo/reto resultante</span>
+                  <span>{rouletteSettings.ttsAnnounceWinner !== false ? 'ACTIVADO' : 'SILENCIADO'}</span>
+                </button>
+              </div>
+
+              {/* Botones de prueba de locución */}
+              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[color:var(--cb-line)] pt-3">
+                <button
+                  type="button"
+                  disabled={isSpeakingTts !== null}
+                  onClick={() => {
+                    setIsSpeakingTts('spin');
+                    speakRouletteSpinAnnouncement('Streamer', rouletteSettings.title, undefined, () =>
+                      setIsSpeakingTts(null)
+                    );
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 text-xs font-bold text-slate-200 transition-transform active:scale-[0.97] disabled:opacity-50"
+                >
+                  <Volume2 className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>{isSpeakingTts === 'spin' ? 'Hablando...' : 'Probar Giro'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSpeakingTts !== null}
+                  onClick={() => {
+                    setIsSpeakingTts('winner');
+                    const sampleWinner =
+                      rouletteSettings.segments.find((s) => s.enabled) || rouletteSettings.segments[0];
+                    speakRouletteWinnerAnnouncement(sampleWinner, 'Streamer', undefined, () =>
+                      setIsSpeakingTts(null)
+                    );
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 text-xs font-bold text-slate-200 transition-transform active:scale-[0.97] disabled:opacity-50"
+                >
+                  <Volume2 className="h-3.5 w-3.5 text-rose-400" />
+                  <span>{isSpeakingTts === 'winner' ? 'Hablando...' : 'Probar Resultado'}</span>
+                </button>
               </div>
             </section>
           </div>

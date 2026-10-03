@@ -812,7 +812,7 @@ export const Catalog: React.FC = () => {
                       MÓDULO 7
                     </span>
                     <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black text-emerald-400">
-                      PROTOTIPO ACTIVO
+                      DISPONIBLE
                     </span>
                   </div>
                 </div>
@@ -824,12 +824,12 @@ export const Catalog: React.FC = () => {
                   Batallas & Encuestas
                 </h2>
                 <p className="mt-2 text-xs leading-relaxed text-[color:var(--cb-mut)]">
-                  Votaciones 1v1 y encuestas interactivas accionadas por el chat (!voto 1 / !voto 2). Barras líquidas de colisión con físicas GSAP, ticks de audio por frecuencia y locutor TTS con emociones predefinidas.
+                  Votaciones 1v1 y encuestas interactivas accionadas por el chat (!voto 1 / !voto 2). 5 temas visuales cinemáticos, barras líquidas de colisión con físicas GSAP, ticks de audio por frecuencia y locutor TTS con emociones predefinidas.
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-cyan-400">
-                    Versus 1v1
+                    5 Temas OBS
                   </span>
                   <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
                     Barras Líquidas GSAP
@@ -849,8 +849,34 @@ export const Catalog: React.FC = () => {
                   className="cab-btn !h-9 flex-1 !text-xs font-bold no-underline"
                 >
                   <Swords className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>Ver / Probar Prototipo</span>
+                  <span>Estudio Batallas</span>
                 </a>
+                <button
+                  type="button"
+                  className="cab-btn2 !h-9 !px-3 !text-xs font-bold"
+                  onClick={() => {
+                    playAlertAudio('synth-bell', 0.85);
+                    postBus({
+                      type: 'POLL_STATE_UPDATE',
+                      state: {
+                        title: 'Batalla de Demostración: ¿Pizza vs Tacos?',
+                        optionA: { id: 'opt-a', label: '🍕 Pizza Italiana', color: '#00e5ff', accentGlow: '#00e5ff', votes: 14 },
+                        optionB: { id: 'opt-b', label: '🌮 Tacos al Pastor', color: '#ff0055', accentGlow: '#ff0055', votes: 10 },
+                        totalDurationSec: 45,
+                        timeLeftSec: 45,
+                        isActive: true,
+                        winner: null,
+                        leader: 'A',
+                      },
+                    });
+                    setQuickTestMsg('¡Batalla simulada enviada al bus y a OBS!');
+                    setTimeout(() => setQuickTestMsg(null), 3000);
+                  }}
+                  title="Disparar votación de prueba a OBS"
+                >
+                  <Play className="h-3 w-3 fill-current text-cyan-400" />
+                  <span>Probar</span>
+                </button>
                 <button
                   type="button"
                   className="cab-btn2 !h-9 !px-2.5 !text-xs"

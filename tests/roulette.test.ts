@@ -19,6 +19,8 @@ import {
   ROULETTE_PRESETS,
   ROULETTE_STORAGE_KEY,
   RouletteSegment,
+  CATEGORY_LABELS,
+  PenaltyCategory,
 } from '../src/types/roulette';
 
 // Mock de localStorage para el entorno de test
@@ -245,4 +247,36 @@ describe('Roulette Settings & Storage Persistence', () => {
     expect(loaded.title).toBe(DEFAULT_ROULETTE_SETTINGS.title);
     expect(loaded.segments.length).toBeGreaterThan(0);
   });
+
+  it('incluye opciones de locución TTS activadas por defecto', () => {
+    const loaded = loadRouletteSettings();
+    expect(loaded.ttsAnnounceSpin).toBe(true);
+    expect(loaded.ttsAnnounceWinner).toBe(true);
+  });
+
+  it('guarda y persiste las preferencias de locución TTS', () => {
+    const custom = {
+      ...DEFAULT_ROULETTE_SETTINGS,
+      ttsAnnounceSpin: false,
+      ttsAnnounceWinner: true,
+    };
+    saveRouletteSettings(custom);
+    const loaded = loadRouletteSettings();
+    expect(loaded.ttsAnnounceSpin).toBe(false);
+    expect(loaded.ttsAnnounceWinner).toBe(true);
+  });
 });
+
+describe('Roulette Category Labels & Visual Assets', () => {
+  it('todas las categorías de castigos tienen icono emoji asociado', () => {
+    const categories: PenaltyCategory[] = ['fitness', 'voice', 'gameplay', 'food', 'show', 'safe', 'custom'];
+    categories.forEach((cat) => {
+      const info = CATEGORY_LABELS[cat];
+      expect(info).toBeDefined();
+      expect(info.label.length).toBeGreaterThan(0);
+      expect(info.color.startsWith('#')).toBe(true);
+      expect(info.icon.length).toBeGreaterThan(0);
+    });
+  });
+});
+

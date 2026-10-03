@@ -149,14 +149,15 @@ export const WinnerBanner: React.FC<WinnerBannerProps> = ({
       {/* Categoría e Intensidad */}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
         <span
-          className="rounded border px-2 py-0.5 text-[10px] font-bold"
+          className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] font-bold"
           style={{
             borderColor: `${cat.color}60`,
             backgroundColor: `${cat.color}20`,
             color: cat.color,
           }}
         >
-          {cat.label}
+          <span>{cat.icon || '🎯'}</span>
+          <span>{cat.label}</span>
         </span>
 
         {segment.intensity && (

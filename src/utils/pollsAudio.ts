@@ -297,3 +297,86 @@ function fallbackSpeechSynthesis(
 
   window.speechSynthesis.speak(utterance);
 }
+
+/**
+ * Chime broadcast brillante de triple armónico (E5 -> A5 -> C#6)
+ * para capturar la atención del chat cuando un moderador lanza una votación en vivo.
+ */
+export function playPollModNoticeSound(volume = 0.85): void {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const safeVol = Math.max(0.01, Math.min(1, volume)) * 0.45;
+
+    const notes = [
+      { freq: 659.25, time: 0.0, dur: 0.09 }, // E5
+      { freq: 880.0, time: 0.07, dur: 0.1 },  // A5
+      { freq: 1108.73, time: 0.15, dur: 0.35 }, // C#6
+    ];
+
+    notes.forEach(({ freq, time, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + time);
+
+      gain.gain.setValueAtTime(0.001, now + time);
+      gain.gain.exponentialRampToValueAtTime(safeVol, now + time + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + time + dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + time);
+      osc.stop(now + time + dur + 0.02);
+    });
+  } catch {
+    // Silencioso ante restricciones de autoplay
+  }
+}
+
+export interface ModPollAnnouncementOptions {
+  modName: string;
+  modRole?: string;
+  title: string;
+  optionALabel: string;
+  optionBLabel: string;
+  durationSec: number;
+  volume?: number;
+}
+
+/**
+ * Construye el guion con modulación emocional para anunciar que un moderador inició la encuesta.
+ * Incluye instrucciones claras y simples de cómo votar (escribir 1 o 2 en el chat) y el tiempo disponible.
+ */
+export function buildModPollAnnouncementText(opts: ModPollAnnouncementOptions): string {
+  const isBroadcaster = opts.modRole === 'broadcaster' || opts.modName.toLowerCase() === 'streamer';
+  const caller = isBroadcaster ? 'El streamer' : `El moderador ${opts.modName}`;
+  return `[emocionado] ¡Atención chat! ${caller} ha iniciado una votación: ${opts.title}. Para votar por ${opts.optionALabel}, escribe 1 en el chat. Para votar por ${opts.optionBLabel}, escribe 2. ¡Tienen ${opts.durationSec} segundos para votar!`;
+}
+
+/**
+ * Anuncia por voz (con la voz del sistema Fish Audio configurada) el inicio de la encuesta del moderador.
+ */
+export async function announceModPollStarted(
+  opts: ModPollAnnouncementOptions,
+  onStart?: () => void,
+  onEnd?: () => void
+): Promise<void> {
+  playPollModNoticeSound(opts.volume);
+  const text = buildModPollAnnouncementText(opts);
+  return speakPollEmotionCue(text, '[emocionado]', onStart, onEnd);
+}
+
+/**
+ * Anuncia por voz si un moderador cancela la votación activa.
+ */
+export async function announceModPollStopped(
+  modName: string,
+  onStart?: () => void,
+  onEnd?: () => void
+): Promise<void> {
+  const text = `[tenso] Atención chat, el moderador ${modName} ha cancelado la votación en curso.`;
+  return speakPollEmotionCue(text, '[tenso]', onStart, onEnd);
+}
+

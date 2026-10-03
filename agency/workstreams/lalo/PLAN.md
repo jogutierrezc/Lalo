@@ -281,7 +281,136 @@
   - 12 suites de prueba unitarias ejecutadas con éxito (113/113 tests pasando en Vitest).
   - Verificación estricta de tipos con `tsc --noEmit` y empaquetado de producción Vite verificado con 0 errores.
 
+## Phase 29: Rediseño Visual de Alta Definición de la Ruleta (Impeccable & Emil), Locución TTS de Giro y Resultados, y Overlay Cinemático para OBS
+- [x] 29.1: Overhaul Visual y Mecánico de la Ruleta (`src/components/roulette/RouletteWheel.tsx`):
+  - Chasis multicapa con bisel industrial 3D, degradados metálicos y corona central turbine-hub con gema reflectante.
+  - 28 LEDs perimetrales animados con persecución estroboscópica durante el giro y reposo con respiración suave.
+  - Cuñas con sombreado cónico tridimensional, relieves luminosos, tipografía con doble sombra y emojis de categoría.
+  - Clavijas perimetrales 3D con cuerpo metálico cilíndrico, sombras proyectadas y reflejos especulares de luz.
+  - Aguja mecánica flipper aerodinámica tipo daga con doble bisel 3D, núcleo carmesí brillante, pivote cromado y rebote elástico `elastic.out(2.2, 0.25)`.
+  - Micro-retroceso físico de inercia al clavar el perno, onda expansiva shockwave y partículas de chispas en el punto de contacto.
+- [x] 29.2: Locución Emocional TTS Integrada (`src/utils/rouletteAudio.ts` & `src/types/roulette.ts`):
+  - `speakRouletteSpinAnnouncement`: Anuncia con voz emocionada del sistema (`[emocionado]`) que la ruleta va a girar y qué penitencia tocará.
+  - `speakRouletteWinnerAnnouncement`: Proclama con modulación dramática (`[triunfal]`, `[alegria]`, `[sorprendido]`) el castigo o reto seleccionado, informando tiempo o inmunidad.
+  - Sonido whoosh cinemático sintetizado con Web Audio API al iniciar el giro.
+  - Enrutamiento directo al endpoint `/api/tts` con la voz oficial de Fish Audio configurada en el sistema (Diana, Jarvis, Teemo, Ahri, Luz, etc.) y fallback a SpeechSynthesis.
+- [x] 29.3: Overlay Cinemático para OBS Studio (`src/components/roulette/RouletteOverlayView.tsx` & `src/pages/Widget.tsx`):
+  - Componente de overlay con chasis broadcast transparente, corchetes esquineros de esports, resplandor ambiental reactivo y medidor LIVE de giro.
+  - Integración en `Widget.tsx` con manejo de eventos `ROULETTE_SPIN` y `ROULETTE_TTS_CUE`.
+  - Soporte de activación directa por chat con comandos `!ruleta`, `!spin` y `!wheel` en `src/hooks/useTwitchChat.ts`.
+- [x] 29.4: Mesa de Control del Studio (`src/pages/RouletteStudio.tsx`):
+  - Renderizado directo del `RouletteOverlayView` en el monitor 16:9 de simulación.
+  - Tarjeta de Locutor TTS con indicador de voz activa del sistema, toggles de inicio y finalización, y botones de prueba directa.
+- [x] 29.5: Quality Gates y Suite de Pruebas:
+  - 22 pruebas unitarias en `tests/roulette.test.ts`. Total: 12 suites de prueba y 116/116 tests pasando con 0 errores.
+  - Verificación de tipos `tsc --noEmit` limpia y empaquetado Vite completado con éxito en 6.5s.
 
+## Phase 30: Corrección y Estabilización Cinemática del Eje de Rotación de la Ruleta (Zero Wobble)
+- [x] 30.1: Eliminación del desvío excéntrico por CSS `transform-box` (`src/components/roulette/RouletteWheel.tsx`):
+  - Diagnóstico: en Chromium/OBS Studio CEF, `transformOrigin: '220px 220px'` en elementos SVG `<g>` se calcula respecto al bounding box (`fill-box`) en vez del viewBox, desplazando el eje de rotación ~36px en diagonal y causando que la ruleta orbitara de forma irregular en lugar de girar sobre su eje.
+  - Corrección: desacoplado GSAP del estilo CSS inline hacia un proxy numérico puro `{ angle: startRot }` que actualiza directamente el atributo estándar SVG `transform="rotate(rot, 220, 220)"`.
+  - Garantía matemática: el centro de rotación queda bloqueado en coordenadas absolutas SVG `(220, 220)`, coincidiendo exactamente con la corona central turbine-hub con 0 píxeles de vibración o alabeo.
+- [x] 30.2: Unificación mecánica y pivote de la aguja indicadora flipper (`src/components/roulette/RouletteWheel.tsx`):
+  - Empaquetada la hoja de la aguja, el bisel 3D luminoso y la sombra proyectada dentro de un único grupo `<g ref={pointerRef}>`.
+  - Eje de rotación del flipper anclado con precisión en su perno superior cromado `(220, 22)`.
+  - Cinemática de flexión elástica GSAP con rebote orgánico (`elastic.out(2.0, 0.25)`) que oscila al unísono con cada clavija.
+- [x] 30.3: Onda expansiva (Shockwave) y micro-retroceso físico (`src/components/roulette/RouletteWheel.tsx`):
+  - Animación del radio `attr: { r: 42 }` y opacidad sin depender de transformOrigin en la onda expansiva.
+  - Micro-retroceso físico de inercia al clavar el perno ganador ejecutado suavemente sobre el eje `(220, 220)`.
+- [x] 30.4: Quality Gates y Verificación:
+  - 116/116 pruebas unitarias pasando en Vitest (12/12 suites).
+  - `tsc --noEmit` completado con 0 errores de tipado.
+  - Build de producción Vite verificado en 5.91s.
 
+## Phase 31: Sistema Unificado de Sincronización y Recarga Rápida para OBS Studio (Top-Bar 1-Click Sync)
+- [x] 31.1: Botón Superior de Acción Primaria «Actualizar OBS» (`src/components/SuiteNav.tsx`):
+  - Integrado en la barra superior persistente de navegación junto al menú de Widgets OBS.
+  - Diseñado con estética de hardware Cabina Broadcast, halo cian, animación rotativa de progreso y tally LED de confirmación.
+  - Triple acción al pulsar: emisión de evento `FORCE_RELOAD` y `SETTINGS_UPDATE` por `BroadcastChannel`, llamada HTTP al endpoint de recarga remota del backend (`POST /api/obs/reload` / `POST /api/version`), y copia automática al portapapeles del enlace actualizado con todos los parámetros codificados.
+  - Feedback visual táctil (Emil Kowalski delight): transición de estado Idle (`Actualizar OBS`) → Sincronizando (`Enviando...`) → Completado (`¡OBS Actualizado!` en esmeralda con checkmark y HUD flotante).
+- [x] 31.2: Enlaces Parametrizados Completos y Menú Enriquecido de Widgets OBS (`src/utils/widgetUrl.ts` & `src/components/SuiteNav.tsx`):
+  - Creación de `buildSuiteWidgetUrl` para codificar de forma exhaustiva canal, voz de personaje (Diana, Jarvis, Teemo, Ahri, Luz), volumen, velocidad, estilo y acento para todas las herramientas (TTS, Ruleta, Alertas, Metas, Batallas, Todo-en-Uno).
+  - Tarjeta de Sincronización en Vivo de 1-clic dentro del dropdown `Widgets OBS` para emitir actualizaciones directas.
+- [x] 31.3: Endpoints de Recarga Remota y Polling Acelerado (`server/index.ts`, `api/version.ts`, `src/pages/Widget.tsx`):
+  - Nuevos endpoints `POST /api/obs/reload` y `POST /api/version` que actualizan la versión dinámica del servidor.
+  - En `Widget.tsx`, el observador de despliegue y recarga ahora responde inmediatamente ante recargas manuales pedidas por el streamer (`manual-reload`) y el intervalo de sondeo se aceleró a 7 segundos.
+- [x] 31.4: Quality Gates y Suite de Pruebas:
+  - Nueva suite `tests/widgetUrl.test.ts` con 7 pruebas unitarias.
+  - Total del proyecto: 13 suites pasadas y 123/123 tests pasando en Vitest (100%).
+  - `tsc --noEmit` completado con 0 errores de compilación.
+  - Build de producción Vite completado exitosamente en 6.70s.
+
+## Phase 32: Optimización Cinemática del Botón y Aviso HUD con GSAP, Emil Kowalski e Impeccable
+- [x] 32.1: Micro-Interacciones Físicas del Botón de Actualización (`src/components/SuiteNav.tsx`):
+  - Refinement táctil con respuesta a la presión `:active:scale-[0.96]` y `:active:translate-y-[0.5px]`.
+  - Micro-recoil elástico con GSAP (`gsap.fromTo(syncBtnRef.current, { scale: 0.94 }, { scale: 1, duration: 0.35, ease: 'back.out(2.2)' })`) al completarse la sincronización.
+  - Chasis broadcast con esquinas angulares de micro-hardware, bisel specular con `inset 0 1px 0 rgba(255,255,255,0.18)` y halo pulsante.
+  - Síntesis de sonido de confirmación física cristalina (`playAlertAudio('synth-bell', 0.45)`) vía Web Audio API nativo con 0ms de latencia.
+- [x] 32.2: Aviso Flotante HUD Cinemático con GSAP (`src/components/ObsSyncNotice.tsx`):
+  - Componente dedicado con animación física de entrada: `y: -32 -> 0`, `scale: 0.92 -> 1`, `filter: blur(6px) -> 0px` con curva elástica `back.out(1.5)`.
+  - Barra de progreso temporal que se consume proporcionalmente (`width: 100% -> 0%`) a lo largo del tiempo de auto-descarte (4.2s).
+  - Faro beacon esmeralda pulsante concéntrico (`scale: 1.8`, `opacity: 0`).
+  - Salida acelerada con micro-blur (`power2.in`, 220ms) tanto en auto-cierre como en descarte manual con botón `✕`.
+  - Botón interactivo secundario para volver a copiar el enlace al instante si es necesario.
+- [x] 32.3: Quality Gates y Verificación:
+  - 123/123 pruebas unitarias pasando en Vitest (13 suites).
+  - `tsc --noEmit` sin errores de TypeScript.
+  - Build de producción Vite verificado en 6.42s.
+
+## Phase 33: Comandos de Moderación para Encuestas, Preaviso por Voz y Votación Simple con Tiempos
+- [x] 33.1: Parser de Comandos de Chat para Moderadores y Streamer (`src/utils/pollCommands.ts`):
+  - Soporte completo de comandos `!poll`, `!encuesta`, `!batalla`, `!versus` accesibles para moderadores y broadcaster.
+  - Sintaxis con comillas: `!poll "Título" "Opción A" "Opción B" [tiempo]`.
+  - Sintaxis con pipes: `!poll Título | Opción A | Opción B | [tiempo]`.
+  - Sintaxis con vs: `!poll Gatos vs Perros [tiempo]`.
+  - Carga rápida de plantillas: `!poll preset gamer [tiempo]`, `!encuesta preset castigos`, etc.
+  - Inicio rápido con tiempo: `!poll [tiempo]` (ej. `!poll 45` activa la encuesta por 45 seg) y detención inmediata: `!poll stop` / `!poll cancel`.
+  - Validación y acotación segura de tiempos entre 10 y 600 segundos (default 60s).
+- [x] 33.2: Sistema de Votación Ultra Simple y Eficiente (`src/types/polls.ts` & `src/hooks/useTwitchChat.ts`):
+  - Reconocimiento de votos directos por un solo carácter: `1`, `2`, `a`, `b`.
+  - Reconocimiento de ráfagas y repeticiones de chat: `111`, `222`, `aaa`, `bbb`.
+  - Soporte de sintaxis abreviada y explícita: `!1`, `!2`, `!a`, `!b`, `#1`, `#2`, `!voto 1`, `!voto 2`, `voto 1`, `voto 2`.
+  - Deduplicación por usuario y control de cambio de voto respetando la configuración del canal.
+- [x] 33.3: Preaviso Sonoro y Locución TTS con Voz Oficial de Fish Audio (`src/utils/pollsAudio.ts`):
+  - Chime broadcast brillante de triple armónico en Web Audio API (E5 -> A5 -> C#6) al activarse la encuesta.
+  - Locución TTS estructurada con etiquetas emocionales `[emocionado]`:
+    `"[emocionado] ¡Atención chat! El moderador {nombre} ha iniciado una votación: {título}. Para votar por {opción A}, escribe 1 en el chat. Para votar por {opción B}, escribe 2. ¡Tienen {tiempo} segundos para votar!"`
+  - Sintetizado mediante `/api/tts` con la voz de personaje activa configurada (Diana, Jarvis, Teemo, Ahri, Luz o ID propio).
+  - Alerta de cuenta regresiva en los últimos 10 segundos y locución triunfal con fanfare al finalizar.
+- [x] 33.4: Ciclo de Vida y Temporizador Autónomo en OBS Overlay (`src/pages/Widget.tsx` & `src/hooks/usePollsSettings.ts`):
+  - Gestión autónoma del temporizador y conteo de votos en el overlay de OBS (`Widget.tsx`), funcionando tanto si la página de control está abierta como si OBS corre de forma independiente.
+  - Sincronización bidireccional inmediata vía `BroadcastChannel` con `POLL_START`, `POLL_STOP`, `POLL_VOTE` y `POLL_STATE_UPDATE`.
+  - Toast HUD de moderación en pantalla notificando qué moderador inició o canceló la votación.
+  - Revelación dramática del ganador con retención de 10 segundos antes del desvanecimiento cinemático con GSAP.
+- [x] 33.5: Guía Visual y Tester de Preaviso en el Studio (`src/pages/PollsStudio.tsx`):
+  - Tarjeta de referencia de comandos para moderadores y streamer con ejemplos claros de sintaxis y reglas de voto.
+  - Botón de prueba en el monitor de emociones TTS para escuchar la locución exacta de preaviso de moderador.
+- [x] 33.6: Quality Gates y Suite de Pruebas:
+  - 12 nuevas pruebas unitarias en `tests/polls.test.ts`. Total: 135/135 tests pasando en Vitest (13 suites al 100%).
+  - `tsc --noEmit` completado con 0 errores de TypeScript.
+  - Empaquetado de producción Vite verificado en 7.14s sin errores.
+
+## Phase 34: Temas Cinemáticos de Batallas, Sincronización Global del Diseño & Micro-Interacciones
+- [x] 34.1: 5 Temas Visuales Cinemáticos para Overlays en OBS Studio (`src/components/polls/BattleBarView.tsx` & `src/types/polls.ts`):
+  - **Cabina Broadcast (`cabina`)**: Estética de rack de máster de transmisión con chasis gunmetal, tornillos biselados, indicador LED `AL AIRE` parpadeante, vúmetros estéreo animados reactivos con GSAP y telemetría analógica.
+  - **Neon Synthwave (`neon`)**: Chasis obsidiana profundo `#030308`, textura CRT de scanlines horizontales, tubos de neón láser cian (`#00f0ff`) vs magenta ácido (`#ff007f`) con resplandor difuso drop-shadow y anillo estroboscópico VS con destellos.
+  - **Arena Esports (`esports`)**: Fondo de fibra de carbono con biseles diagonales a 45°, cortes angulares de torneo, corona dorada de victoria con chispas animadas y badge VS 3D con retroceso elástico (`elastic.out(1.4, 0.25)`).
+  - **Tactical Cyber HUD (`cyber`)**: Cristal holográfico con malla hexagonal, retículas de apuntado `[ + ]` en las esquinas, cabecera de datos monospace (`SYSTEM_FEED // LIVE_DECISION_PROTOCOL`), barras segmentadas digitales (10 bloques dinámicos por bando) y rombo táctico VS.
+  - **Minimal Frosted Glass (`minimal`)**: Píldora flotante con desenfoque de fondo ultra limpio (`backdrop-blur-xl`), borde vítreo `border-white/10`, tipografía suiza sobria y gradiente líquido de terciopelo.
+- [x] 34.2: Selector Visual de Temas y Personalización en Polls Studio (`src/pages/PollsStudio.tsx`):
+  - Cuadrícula de 5 temas con miniaturas, badges de color de acento y previsualización en vivo en el monitor 16:9 de OBS.
+  - Paleta de muestras de color personalizadas para Opción 1 y Opción 2 con retroalimentación táctil `:active:scale-[0.9]`.
+  - Selector de duración rápida en píldoras (15s, 30s, 45s, 60s, 90s, 120s).
+- [x] 34.3: Sincronización del Diseño Global y Chasis Broadcast (`src/index.css`, `PollsStudio.tsx`, `Catalog.tsx`):
+  - Estandarización de tokens de diseño (`.cab`, `.cab-mod`, `.cab-field`, `.cab-label`, `.cab-inp`, `.cab-btn`, `.cab-btn2`, `.cab-seg`, `--cb-line`, `--cb-panel`, `--cb-surface`, `--cb-fg`, `--cb-mut`).
+  - Armonización de encabezados en todos los módulos (`MÓDULO X · CATEGORÍA`, títulos con `cab-caps`, acciones de copiado y apertura con `:active:scale-[0.97]`).
+  - Catálogo central (`Catalog.tsx`): Módulo 7 actualizado de prototipo a `DISPONIBLE`, con botón `Probar` para disparar simulación al instante hacia OBS y el bus local.
+- [x] 34.4: Integración en OBS Browser Source mediante URL Parametrizada (`src/utils/widgetUrl.ts` & `src/pages/Widget.tsx`):
+  - `buildSuiteWidgetUrl` codifica `&theme=` según el tema activo seleccionado.
+  - `Widget.tsx` lee el parámetro de URL para aplicar el tema de forma autónoma en la fuente de navegador de OBS.
+- [x] 34.5: Quality Gates y Suite de Pruebas:
+  - Pruebas unitarias de definición y persistencia de temas visuales en `tests/polls.test.ts`. Total: 138/138 pruebas unitarias pasando en Vitest (13 suites al 100%).
+  - `tsc --noEmit` completado con 0 errores de TypeScript.
+  - Compilación de producción Vite verificada exitosamente en 5.76s.
 
 
