@@ -904,9 +904,9 @@ textarea.cab-inp {
   height: 0;
   opacity: 0;
   pointer-events: none; /* el panel sigue siendo usable durante la guía */
-  border: 2px solid #efe9dc;
+  border: 2px solid var(--ui, #9146ff);
   border-radius: 6px;
-  box-shadow: 0 0 0 200vmax rgba(8, 8, 10, 0.6);
+  box-shadow: 0 0 0 200vmax rgba(8, 8, 10, 0.68), 0 0 24px rgba(145, 70, 255, 0.4);
 }
 .tour-dock {
   position: fixed;

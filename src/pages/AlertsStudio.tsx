@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { useAlertsSettings } from '../hooks/useAlertsSettings';
+import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import {
   AlertEventType,
   AlertSoundType,
@@ -58,6 +59,68 @@ import {
   MediaType,
   MAX_AUDIO_DURATION_SECONDS,
 } from '../types/mediaLibrary';
+
+const TOUR_ID = 'alertas';
+
+const ALERTS_TOUR_STEPS: TourStep[] = [
+  {
+    badge: 'Bienvenida',
+    title: 'Estudio de Alertas Cinemáticas',
+    body: (
+      <>
+        Bienvenido al Estudio de Alertas de Stream. Aquí puedes personalizar cómo reacciona tu transmisión en tiempo real ante nuevos seguidores, suscripciones, donaciones de bits y raids, con estética broadcast y física fluida en GSAP.
+      </>
+    ),
+  },
+  {
+    target: 'alert-events',
+    badge: 'Configuración',
+    title: 'Selector de Eventos y Plantillas',
+    body: 'Elige qué tipo de evento configurar: Seguidores, Suscripciones, Bits o Raids. Puedes activar o desactivar cada evento por separado y personalizar el mensaje en pantalla usando variables automáticas como {user}, {bits} o {viewers}.',
+  },
+  {
+    target: 'alert-audio',
+    badge: 'Audio Broadcast',
+    title: 'Motor de Audio y Fanfarrias',
+    body: 'Configura el sonido de la alerta: utiliza timbres sintéticos de latencia cero generados por Web Audio API (Campana Synth, Fanfarria Retro, Arcade) o sube clips de audio personalizados de hasta 30 segundos (MP3/WAV) con control de volumen independiente.',
+  },
+  {
+    target: 'alert-video',
+    badge: 'Efectos Visuales',
+    title: 'Videos Transparentes (WebM Alfa)',
+    body: 'Añade videos con canal alfa transparente o videos con fondo negro usando el modo Screen Blend. Las animaciones se superpondrán directamente sobre la alerta creando un efecto visual dinámico.',
+  },
+  {
+    target: 'alert-tiers',
+    badge: 'Acción del Sistema',
+    title: 'Niveles de Bits, Subs y Eventos Especiales',
+    body: 'Crea alertas diferenciadas según la magnitud del apoyo: por ejemplo, sonidos y sacudidas de pantalla más intensas para donaciones de más de 500 bits, o palabras clave especiales del chat como !hype o !meta.',
+  },
+  {
+    target: 'alert-appearance',
+    badge: 'Diseño Visual',
+    title: 'Estilos Cabina, Bocadillo, Subtítulo y Sticker',
+    body: 'Selecciona uno de los cuatro estilos visuales coherentes con la suite, asigna el color de acento de tu marca, ajusta el cuadrante de posición en OBS (16:9) y la duración en pantalla.',
+  },
+  {
+    target: 'stage-monitor',
+    badge: 'Previsualización',
+    title: 'Monitor en Vivo 16:9 con Física GSAP',
+    body: 'El monitor simula en tiempo real la escena de OBS Studio. Te permite apreciar la curva elástica de entrada, el tiempo de visualización y la salida suave calculada con física de resortes.',
+  },
+  {
+    target: 'test-trigger',
+    badge: 'Acción del Sistema',
+    title: 'Banco de Pruebas Rápidas',
+    body: 'Pulsa cualquiera de los botones de prueba rápida (Follow, Sub, Bits, Raid) para disparar la animación en tu monitor y enviarla al instante a OBS Studio a través del BroadcastChannel.',
+  },
+  {
+    target: 'alert-obs',
+    badge: 'Acción del Sistema',
+    title: 'Enlace de Widget para OBS Studio',
+    body: 'Copia la URL del overlay de alertas y agrégala en OBS Studio como Fuente de Navegador (1920 × 1080). Todas tus personalizaciones de audio, estilo y video se reflejarán automáticamente.',
+  },
+];
 
 const ACCENTS = [
   { color: '#9146ff', name: 'Morado' },
@@ -129,6 +192,14 @@ export const AlertsStudio: React.FC = () => {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [demoStatus, setDemoStatus] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // La guía se abre sola la primera vez; después se accede desde el botón en la cabecera
+  useEffect(() => {
+    if (isTourDone(TOUR_ID)) return;
+    const timer = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Modal de Biblioteca de Medios (Media Vault)
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
@@ -600,10 +671,16 @@ export const AlertsStudio: React.FC = () => {
   } as React.CSSProperties;
 
   return (
-    <div className="cab" style={rootStyle}>
+    <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6">
         {/* Barra superior unificada */}
-        <SuiteNav currentApp="alertas" channel={alertsSettings.channel} saved={saved} />
+        <SuiteNav
+          currentApp="alertas"
+          channel={alertsSettings.channel}
+          saved={saved}
+          onOpenTour={() => setTourOpen(true)}
+          tourAvailable={!tourOpen}
+        />
 
         {/* Encabezado del Estudio */}
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--cb-line)] pb-4">
@@ -624,7 +701,7 @@ export const AlertsStudio: React.FC = () => {
             </h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2" data-tour="alert-obs">
             <button
               type="button"
               className="cab-btn2 !h-8 !px-3 !text-xs font-bold"
@@ -664,7 +741,7 @@ export const AlertsStudio: React.FC = () => {
           {/* Columna Izquierda: Configuración de Eventos y Apariencia (7 cols) */}
           <div className="grid gap-5 lg:col-span-7">
             {/* Módulo 1: Selector y Ajuste de Eventos */}
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="alert-events">
               <h2>
                 <span>1</span>Eventos de Stream
               </h2>
@@ -780,7 +857,7 @@ export const AlertsStudio: React.FC = () => {
                 )}
 
                 {/* Sonido de la alerta & Audio Personalizado */}
-                <div className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-3.5">
+                <div className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-3.5" data-tour="alert-audio">
                   <div className="flex items-center justify-between">
                     <span className="cab-caps text-xs font-bold text-[color:var(--cb-fg)]">
                       CONFIGURACIÓN DE AUDIO & FANFARRIA
@@ -988,7 +1065,7 @@ export const AlertsStudio: React.FC = () => {
                 </div>
 
                 {/* Video Transparente o Meme de Alerta */}
-                <div className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-3.5">
+                <div className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-3.5" data-tour="alert-video">
                   <div className="flex items-center justify-between">
                     <span className="cab-caps text-xs font-bold text-[color:var(--cb-fg)]">
                       VIDEO TRANSPARENTE / MEME PARA ESTA ALERTA
@@ -1224,7 +1301,7 @@ export const AlertsStudio: React.FC = () => {
             </section>
 
             {/* Módulo 2: Eventos de Stream Personalizados */}
-            <section className="cab-mod" aria-label="Eventos Personalizados de Stream">
+            <section className="cab-mod" aria-label="Eventos Personalizados de Stream" data-tour="alert-tiers">
               <div className="flex items-center justify-between border-b border-[color:var(--cb-line)] pb-3">
                 <div>
                   <h2>
@@ -1478,7 +1555,7 @@ export const AlertsStudio: React.FC = () => {
             </section>
 
             {/* Módulo 3: Apariencia Visual y Colores */}
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="alert-appearance">
               <h2>
                 <span>3</span>Estilo Visual
               </h2>
@@ -1593,7 +1670,7 @@ export const AlertsStudio: React.FC = () => {
 
           {/* Columna Derecha: Monitor en Vivo 16:9 y Pruebas (5 cols) */}
           <div className="grid gap-5 lg:col-span-5">
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="stage-monitor">
               <h2>
                 <span>4</span>Monitor en Vivo
               </h2>
@@ -1653,7 +1730,7 @@ export const AlertsStudio: React.FC = () => {
               </div>
 
               {/* Banco de Pruebas de Simulación */}
-              <div className="mt-2 grid gap-2">
+              <div className="mt-2 grid gap-2" data-tour="test-trigger">
                 <span className="cab-caps text-[11px] font-bold text-[color:var(--cb-mut)]">
                   BANCO DE PRUEBAS RÁPIDAS
                 </span>
@@ -1748,6 +1825,16 @@ export const AlertsStudio: React.FC = () => {
           }
         />
       </div>
+
+      {/* Guía interactiva de primeros pasos para el Estudio de Alertas */}
+      {tourOpen && (
+        <GuidedTour
+          steps={ALERTS_TOUR_STEPS}
+          onClose={() => setTourOpen(false)}
+          id={TOUR_ID}
+          appName="Estudio de Alertas"
+        />
+      )}
     </div>
   );
 };

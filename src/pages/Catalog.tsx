@@ -7,7 +7,7 @@
  * acuerdo a los principios de Emil Kowalski y modo Operate de Impeccable.
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import {
@@ -31,14 +31,91 @@ import { SuiteNav } from '../components/SuiteNav';
 import { useSettings } from '../hooks/useSettings';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { postBus } from '../utils/bus';
+import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 
 gsap.registerPlugin(useGSAP);
+
+const TOUR_ID = 'catalogo';
+
+const CATALOG_TOUR_STEPS: TourStep[] = [
+  {
+    badge: 'Bienvenida',
+    title: 'Estación Central de Lalo Stream Suite',
+    body: (
+      <>
+        Bienvenido a la cabina broadcast unificada. Desde aquí puedes explorar todas las herramientas interactivas del sistema, sincronizar tu canal de Twitch y desplegar los overlays en OBS Studio. Te guiaremos paso a paso por las aplicaciones y las acciones globales del sistema.
+      </>
+    ),
+  },
+  {
+    target: 'nav',
+    badge: 'Navegación',
+    title: 'Conmutador de Aplicaciones (SuiteNav)',
+    body: 'Usa este selector de cabina de hardware para saltar entre el Dashboard, la mesa de TTS con emociones, el Estudio de Alertas, Recompensas & FX, Bot TwitchIO y Metas. El indicador Tally LED verde confirma que el bus de comunicación en vivo está activo.',
+  },
+  {
+    target: 'channel-input',
+    badge: 'Acción del Sistema',
+    title: 'Canal de Emisión Unificado',
+    body: 'Escribe aquí tu usuario de Twitch. Al cambiarlo aquí, se sincroniza instantáneamente con todas las herramientas, conexiones anónimas de chat IRC y URLs de los widgets sin tener que configurarlo en cada módulo por separado.',
+  },
+  {
+    target: 'obs-menu',
+    badge: 'Acción del Sistema',
+    title: 'Menú Rápido de Widgets OBS',
+    body: 'Copia con un clic la fuente de navegador para OBS Studio. Tienes fuentes dedicadas (solo TTS o solo Alertas) o la fuente recomendada «Todo-en-Uno», que procesa ambas capas en un solo navegador consumiendo mínimos recursos.',
+  },
+  {
+    target: 'app-tts',
+    badge: 'Aplicación',
+    title: 'Voz en Vivo (TTS) & Control de Moderación',
+    body: 'Lee los mensajes del chat que empiezan por !s usando voces de IA hiperrealistas de Fish Audio. Incluye modulación emocional ([feliz], [susurro], etc.), 4 estilos visuales y una mesa de control para pausar, saltar y moderar en vivo.',
+  },
+  {
+    target: 'app-alerts',
+    badge: 'Aplicación',
+    title: 'Estudio de Alertas Cinemáticas',
+    body: 'Reacciona al instante ante nuevos Followers, Suscripciones, Bits y Raids. Cuenta con síntesis de sonido Web Audio API sin latencia, soporte para clips MP3/WAV y física elástica GSAP en pantalla.',
+  },
+  {
+    target: 'app-bot',
+    badge: 'Aplicación',
+    title: 'Bot & EventSub (Powered by TwitchIO)',
+    body: 'Automatización con la librería oficial asíncrona TwitchIO (por PythonistaGuild & EvieePy). Configura comandos personalizados con permisos por rango y exporta el script de Python listo para correr en tu servidor.',
+  },
+  {
+    target: 'app-rewards',
+    badge: 'Aplicación',
+    title: 'Puntos de Canal & Videos Transparentes FX',
+    body: 'Convierte las redenciones de tus espectadores en espectáculo: reproduce videos WebM con canal alfa sobre tu transmisión, activa Screen Shake (sacudida sísmica) y reproduce sonidos arcade en directo.',
+  },
+  {
+    target: 'app-goals',
+    badge: 'Aplicación',
+    title: 'Metas Comunitarias & Marcadores en Vivo',
+    body: 'Configura objetivos de Seguidores, Subs o Bits. Visualízalos en modo carrusel o individual con física fluida GSAP. Al llegar al 100%, desata fanfarrias, lluvia de confeti y temblor sísmico.',
+  },
+  {
+    target: 'obs-dock',
+    badge: 'Acción del Sistema',
+    title: 'Dock de Integración con OBS Studio',
+    body: 'Para integrar cualquier herramienta en OBS, añade una fuente de tipo Navegador a 1920 × 1080 píxeles y marca «Controlar audio mediante OBS». Las URLs guardan tu configuración de forma persistente.',
+  },
+];
 
 export const Catalog: React.FC = () => {
   const { settings, update, saved } = useSettings();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [quickTestMsg, setQuickTestMsg] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // La guía se abre sola la primera vez; después se accede desde el botón en la cabecera
+  useEffect(() => {
+    if (isTourDone(TOUR_ID)) return;
+    const timer = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
@@ -104,10 +181,16 @@ export const Catalog: React.FC = () => {
   } as React.CSSProperties;
 
   return (
-    <div ref={containerRef} className="cab" style={rootStyle}>
+    <div ref={containerRef} className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6">
         {/* Barra de navegación superior de la Suite */}
-        <SuiteNav currentApp="catalogo" channel={settings.channel} saved={saved} />
+        <SuiteNav
+          currentApp="catalogo"
+          channel={settings.channel}
+          saved={saved}
+          onOpenTour={() => setTourOpen(true)}
+          tourAvailable={!tourOpen}
+        />
 
         {/* Cabecera del Dashboard */}
         <div className="catalog-header flex flex-col justify-between gap-4 border-b border-[color:var(--cb-line)] pb-5 md:flex-row md:items-end">
@@ -131,7 +214,10 @@ export const Catalog: React.FC = () => {
           </div>
 
           {/* Selector rápido del canal de Twitch */}
-          <div className="flex flex-col gap-1.5 rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-3 sm:min-w-[260px]">
+          <div
+            className="flex flex-col gap-1.5 rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-3 sm:min-w-[260px]"
+            data-tour="channel-input"
+          >
             <label
               htmlFor="suite-channel"
               className="cab-caps text-[11px] font-bold text-[color:var(--cb-mut)]"
@@ -169,7 +255,10 @@ export const Catalog: React.FC = () => {
         <section aria-label="Aplicaciones disponibles">
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {/* 1. Lalo TTS */}
-            <article className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-[color:var(--cb-fg)]">
+            <article
+              className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-[color:var(--cb-fg)]"
+              data-tour="app-tts"
+            >
               <div>
                 {/* Cabecera de la tarjeta */}
                 <div className="flex items-start justify-between gap-3">
@@ -247,7 +336,10 @@ export const Catalog: React.FC = () => {
             </article>
 
             {/* 2. Lalo Alertas */}
-            <article className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--ui,#9146ff)]/50 bg-[color:var(--cb-panel)] p-5 shadow-lg shadow-[color:var(--ui,#9146ff)]/5 transition-all duration-200 hover:border-[color:var(--ui,#9146ff)]">
+            <article
+              className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--ui,#9146ff)]/50 bg-[color:var(--cb-panel)] p-5 shadow-lg shadow-[color:var(--ui,#9146ff)]/5 transition-all duration-200 hover:border-[color:var(--ui,#9146ff)]"
+              data-tour="app-alerts"
+            >
               <div>
                 {/* Cabecera de la tarjeta */}
                 <div className="flex items-start justify-between gap-3">
@@ -329,7 +421,10 @@ export const Catalog: React.FC = () => {
             </article>
 
             {/* 3. Lalo Bot & EventSub Engine (Powered by TwitchIO) */}
-            <article className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-emerald-400/80">
+            <article
+              className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-emerald-400/80"
+              data-tour="app-bot"
+            >
               <div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-400 transition-transform duration-150 group-hover:scale-105">
@@ -389,7 +484,10 @@ export const Catalog: React.FC = () => {
             </article>
 
             {/* 4. Puntos de Canal & FX Personalizados */}
-            <article className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-amber-400/80">
+            <article
+              className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-amber-400/80"
+              data-tour="app-rewards"
+            >
               <div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-md bg-amber-500/15 text-amber-400 transition-transform duration-150 group-hover:scale-105">
@@ -489,7 +587,10 @@ export const Catalog: React.FC = () => {
             </article>
 
             {/* 5. Metas Comunitarias & Marcadores */}
-            <article className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-rose-400/80">
+            <article
+              className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-rose-400/80"
+              data-tour="app-goals"
+            >
               <div>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-md bg-rose-500/15 text-rose-400 transition-transform duration-150 group-hover:scale-105">
@@ -626,6 +727,7 @@ export const Catalog: React.FC = () => {
         <section
           className="cab-mod mt-4 border border-[color:var(--cb-line)]"
           aria-label="Integración con OBS Studio"
+          data-tour="obs-dock"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -736,6 +838,16 @@ export const Catalog: React.FC = () => {
           </div>
         </section>
       </div>
+
+      {/* Guía interactiva de primeros pasos para el Catálogo y Acciones Globales */}
+      {tourOpen && (
+        <GuidedTour
+          steps={CATALOG_TOUR_STEPS}
+          onClose={() => setTourOpen(false)}
+          id={TOUR_ID}
+          appName="Estación Central"
+        />
+      )}
     </div>
   );
 };

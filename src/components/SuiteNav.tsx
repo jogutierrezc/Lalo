@@ -213,7 +213,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
           </span>
 
           {/* Menú rápido OBS Sources */}
-          <div className="relative">
+          <div className="relative" data-tour="obs-menu">
             <button
               type="button"
               className="cab-btn2 !h-8 !px-2.5 !text-xs font-bold"

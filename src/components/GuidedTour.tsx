@@ -16,6 +16,14 @@ export interface TourStep {
   target?: string; // valor de data-tour del módulo a resaltar; sin él, el paso es de bienvenida
   title: string;
   body: React.ReactNode;
+  badge?: string; // e.g. 'Acción del Sistema', 'Módulo', 'OBS Studio', 'Audio', 'En vivo'
+}
+
+export interface GuidedTourProps {
+  steps: TourStep[];
+  onClose: () => void;
+  id?: string;
+  appName?: string;
 }
 
 const TOUR_DONE_KEY = 'lalo_tts_tour_done';
@@ -32,7 +40,7 @@ export function isTourDone(id = 'ajustes'): boolean {
   }
 }
 
-function markTourDone(id: string) {
+export function markTourDone(id = 'ajustes') {
   try {
     localStorage.setItem(doneKey(id), '1');
   } catch {
@@ -40,9 +48,67 @@ function markTourDone(id: string) {
   }
 }
 
+export function resetTour(id = 'ajustes') {
+  try {
+    localStorage.removeItem(doneKey(id));
+  } catch {
+    // Ignorar si no está soportado
+  }
+}
+
 const reduced = () => !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?: string }> = ({ steps, onClose, id = 'ajustes' }) => {
+/**
+ * Feedback acústico sintético sutil con Web Audio API (cero-dependencias).
+ * Tono sinusoidal suave (sine) con caída ultra-rápida.
+ */
+function playTourCue(isCompletion = false) {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+
+    osc.type = 'sine';
+    if (isCompletion) {
+      // Fanfarria breve de triunfo
+      osc.frequency.setValueAtTime(523.25, now); // C5
+      osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.08); // G5
+      osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.16); // C6
+      gain.gain.setValueAtTime(0.04, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.28);
+    } else {
+      // Tick sutil al cambiar de paso
+      osc.frequency.setValueAtTime(680, now);
+      osc.frequency.exponentialRampToValueAtTime(840, now + 0.035);
+      gain.gain.setValueAtTime(0.02, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.06);
+    }
+    setTimeout(() => ctx.close().catch(() => {}), 350);
+  } catch {
+    // No interrumpir si el navegador bloquea audio
+  }
+}
+
+export const GuidedTour: React.FC<GuidedTourProps> = ({
+  steps,
+  onClose,
+  id = 'ajustes',
+  appName,
+}) => {
   const [index, setIndex] = useState(0);
   const ringRef = useRef<HTMLDivElement | null>(null);
   const dockRef = useRef<HTMLDivElement | null>(null);
@@ -56,8 +122,8 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?:
   const isLast = index === steps.length - 1;
 
   const findTarget = useCallback(
-    () => (step.target ? document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`) : null),
-    [step.target]
+    () => (step?.target ? document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`) : null),
+    [step?.target]
   );
 
   // Coloca el marco sobre el módulo, en coordenadas de documento (acompaña al scroll sin recalcular)
@@ -92,7 +158,7 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?:
     [findTarget]
   );
 
-  // Entrada de la consola
+  // Entrada de la consola (slide up con power3.out)
   useLayoutEffect(() => {
     if (dockRef.current && !reduced()) {
       gsap.fromTo(dockRef.current, { yPercent: 100, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 0.4, ease: 'power3.out' });
@@ -100,7 +166,7 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?:
     primaryRef.current?.focus({ preventScroll: true });
   }, []);
 
-  // Cambio de paso: mover el marco, llevar el módulo a la vista y relevar el texto
+  // Cambio de paso: mover el marco, llevar el módulo a la vista y relevar el texto con blur suave
   useLayoutEffect(() => {
     const target = findTarget();
     placeRing(true);
@@ -108,7 +174,7 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?:
 
     if (!reduced()) {
       if (copyRef.current) {
-        // Un desenfoque leve une el texto saliente con el entrante
+        // Un desenfoque leve une el texto saliente con el entrante (filosofía Emil Kowalski)
         gsap.fromTo(
           copyRef.current,
           { opacity: 0, y: 6, filter: 'blur(2px)' },
@@ -120,7 +186,7 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?:
       gsap.to(barRef.current, { scaleX: (index + 1) / steps.length, duration: reduced() ? 0 : 0.3, ease: 'power2.out' });
     }
 
-    // El módulo puede cambiar de tamaño mientras se usa (por ejemplo, al elegir Sticker)
+    // El módulo puede cambiar de tamaño mientras se usa
     const onResize = () => placeRing(false);
     window.addEventListener('resize', onResize);
     const observer = target && 'ResizeObserver' in window ? new ResizeObserver(onResize) : null;
@@ -135,28 +201,56 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?:
     if (closingRef.current) return;
     closingRef.current = true;
     markTourDone(id);
+    playTourCue(true);
     if (reduced() || !dockRef.current) {
       onClose();
       return;
     }
-    // Salida más corta que la entrada
+    // Salida más corta que la entrada (Emil: exit faster than enter)
     gsap.to(ringRef.current, { opacity: 0, duration: 0.18, ease: 'power2.out' });
     gsap.to(dockRef.current, { yPercent: 100, opacity: 0, duration: 0.2, ease: 'power2.out', onComplete: onClose });
   }, [onClose, id]);
 
   const next = useCallback(() => {
-    if (isLast) close();
-    else setIndex((i) => i + 1);
+    if (isLast) {
+      close();
+    } else {
+      playTourCue(false);
+      setIndex((i) => i + 1);
+    }
   }, [isLast, close]);
-  const back = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
 
+  const back = useCallback(() => {
+    playTourCue(false);
+    setIndex((i) => Math.max(0, i - 1));
+  }, []);
+
+  // Control por teclado: Esc para cerrar, Flechas para avanzar/retroceder (salvo si se está escribiendo)
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape') {
+        close();
+        return;
+      }
+      const active = document.activeElement;
+      const isInput =
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        (active && active.getAttribute('contenteditable') === 'true');
+      if (isInput) return;
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        next();
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        back();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [close]);
+  }, [close, next, back]);
 
   useEffect(
     () => () => {
@@ -165,34 +259,64 @@ export const GuidedTour: React.FC<{ steps: TourStep[]; onClose: () => void; id?:
     []
   );
 
+  if (!step) return null;
+
   return createPortal(
     <>
       <div ref={ringRef} className="tour-ring" aria-hidden="true" />
-      <div ref={dockRef} className="tour-dock" role="dialog" aria-label="Guía de primeros pasos">
+      <div
+        ref={dockRef}
+        className="tour-dock"
+        role="dialog"
+        aria-label={`Guía de primeros pasos${appName ? `: ${appName}` : ''}`}
+      >
         <div className="tour-progress" aria-hidden="true">
           <i ref={barRef} />
         </div>
         <div className="tour-inner">
           <div ref={copyRef} className="tour-copy" aria-live="polite">
-            <p className="tour-count">
-              Paso {index + 1} de {steps.length}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <p className="tour-count">
+                {appName ? `${appName.toUpperCase()} · ` : ''}Paso {index + 1} de {steps.length}
+              </p>
+              {step.badge && (
+                <span className="rounded bg-[color:var(--ui,#9146ff)]/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-[color:var(--ui,#9146ff)] border border-[color:var(--ui,#9146ff)]/30">
+                  {step.badge}
+                </span>
+              )}
+            </div>
             <h2 className="tour-title">{step.title}</h2>
-            <p className="tour-body">{step.body}</p>
+            <div className="tour-body">{step.body}</div>
           </div>
           <div className="tour-actions">
             {index > 0 && (
-              <button type="button" className="cab-btn2" onClick={back}>
+              <button
+                type="button"
+                className="cab-btn2"
+                onClick={back}
+                title="Paso anterior (Tecla ←)"
+              >
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 Atrás
               </button>
             )}
-            <button ref={primaryRef} type="button" className="cab-btn" onClick={next}>
+            <button
+              ref={primaryRef}
+              type="button"
+              className="cab-btn"
+              onClick={next}
+              title={isLast ? 'Terminar tutorial' : 'Siguiente paso (Tecla → o Enter)'}
+            >
               {isLast ? 'Terminar' : index === 0 ? 'Empezar' : 'Siguiente'}
               {!isLast && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
             </button>
             {!isLast && (
-              <button type="button" className="tour-skip" onClick={close}>
+              <button
+                type="button"
+                className="tour-skip"
+                onClick={close}
+                title="Saltar tutorial (Esc)"
+              >
                 <X className="h-4 w-4" aria-hidden="true" />
                 Saltar guía
               </button>

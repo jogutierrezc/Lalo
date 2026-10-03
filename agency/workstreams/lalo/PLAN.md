@@ -153,3 +153,25 @@
 - [x] 22.5: Design Skills Compliance: Adhered to `impeccable` (broadcast hardware aesthetic, high visual contrast), `emil-design-eng` (interactive `active:scale-[0.97]`, transitions < 250ms, no animations from `scale(0)`), and `gsap` (smooth timelines and timer bar tween).
 - [x] 22.6: Verification & Quality Gates: Expanded `tests/goals.test.ts` (15/15 goals tests, 72/72 total tests passing across 9 test suites), `npx tsc --noEmit` 0 errors, and Vite production build verified.
 
+## Phase 23: Sistema de Tutoriales Guiados (GuidedTour) Universal para Toda la Suite
+- [x] 23.1: GuidedTour Component Enhancement (`src/components/GuidedTour.tsx`):
+  - Added support for category `badge` on steps (e.g., 'Bienvenida', 'Acción del Sistema', 'Previsualización', 'Gestión').
+  - Added `appName` in dock header (e.g., 'Estación Central', 'Estudio de Alertas', 'Recompensas & FX', 'Metas & Marcadores', 'Bot TwitchIO').
+  - Integrated Emil Kowalski micro-craft: Web Audio API sound cue oscillator for step transitions (sweet sine chime at 520Hz) and tour completion (major-third triad fanfare), faster exit (180ms) vs entrance (400ms), and subtle `filter: blur(2px)` crossfades.
+  - Added full keyboard accessibility (`ArrowRight`, `ArrowLeft`, `Escape`) with active text-input and modal guards.
+  - Exported `isTourDone(id)`, `markTourDone(id)`, and `resetTour(id)` with independent localStorage keys per application.
+- [x] 23.2: Universal Suite Integration:
+  - `src/pages/Catalog.tsx`: 10-step guided tour (`CATALOG_TOUR_STEPS`, id `'catalogo'`) explaining every module, system actions (OBS quick URLs, global channel switcher), and launch buttons.
+  - `src/pages/AlertsStudio.tsx`: 9-step guided tour (`ALERTS_TOUR_STEPS`, id `'alertas'`) covering Follow, Sub, Bit, and Raid events, audio modes (synth, custom, tts, both), WebM alpha transparent videos, tier customization, and 16:9 live monitor simulation.
+  - `src/pages/RewardsStudio.tsx`: 7-step guided tour (`REWARDS_TOUR_STEPS`, id `'recompensas'`) covering channel point rewards, transparent videos, blend modes, screen shake, audio fanfares, and OBS browser source embedding.
+  - `src/pages/GoalsStudio.tsx`: 7-step guided tour (`GOALS_TOUR_STEPS`, id `'metas'`) explaining multi-goal progression, display modes, automatic GSAP slideshow rotation for 5+ goals, milestone speech announcements, and 100% victory celebrations with canvas confetti.
+  - `src/pages/TwitchIOStudio.tsx`: 7-step guided tour (`TWITCHIO_TOUR_STEPS`, id `'twitchio'`) covering TwitchIO bot architecture (PythonistaGuild & EvieePy), chat commands, permissions, EventSub gateway, interactive simulator console, and Python 3.9+ script generator.
+- [x] 23.3: Navbar Accessibility (`src/components/SuiteNav.tsx`):
+  - Connected `onOpenTour` and `tourAvailable` across all pages, allowing streamers to re-open the guided tour at any time via the "Guía" button in the header.
+  - Set `paddingBottom: tourOpen ? 220 : undefined` on main container elements so the fixed floating dock never obscures interactive controls during the tour.
+- [x] 23.4: Quality Gates & Test Suite:
+  - Created `tests/guidedTour.test.ts` testing storage persistence, independent app keys, reset behavior, and step structure contracts.
+  - Vitest test suite: 10/10 test files passing (78 tests total).
+  - TypeScript & Vite build: `tsc && vite build` clean with 0 errors.
+
+

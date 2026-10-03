@@ -12,7 +12,7 @@
  * principios de Emil Kowalski y modo Operate de Impeccable.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bot,
   Check,
@@ -33,6 +33,57 @@ import { useTwitchIOSettings } from '../hooks/useTwitchIOSettings';
 import { CommandPermission, TwitchIOCommand } from '../types/twitchio';
 import { postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
+import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
+
+const TOUR_ID = 'twitchio';
+
+const TWITCHIO_TOUR_STEPS: TourStep[] = [
+  {
+    badge: 'Bienvenida',
+    title: 'Bot TwitchIO & Motor EventSub',
+    body: (
+      <>
+        Bienvenido al Centro de Control de TwitchIO. Aquí configuras tu bot de chat asíncrono y la conexión con EventSub para automatizar respuestas, moderación reactiva y triggers de alertas en vivo.
+      </>
+    ),
+  },
+  {
+    target: 'bot-header',
+    badge: 'Arquitectura',
+    title: 'Powered by TwitchIO & Código Abierto',
+    body: 'Basado en el framework asíncrono de TwitchIO desarrollado por PythonistaGuild y EvieePy bajo licencia MIT. Conéctalo con la suite para enviar comandos de chat directamente a TTS y Alertas de pantalla.',
+  },
+  {
+    target: 'bot-params',
+    badge: 'Configuración',
+    title: 'Parámetros del Bot & Prefijo',
+    body: 'Personaliza el prefijo de activación (como !, $ o ?), el nombre del bot en el chat y el mensaje de saludo automático al iniciar tu directo.',
+  },
+  {
+    target: 'bot-commands',
+    badge: 'Gestión',
+    title: 'Comandos de Chat & Permisos',
+    body: 'Crea comandos personalizados con respuestas dinámicas ({user}, {channel}) y roles de acceso (Todos, Subs, Mods o Streamer). Puedes pausar o activar comandos en cualquier momento.',
+  },
+  {
+    target: 'bot-eventsub',
+    badge: 'Eventos en Vivo',
+    title: 'Twitch EventSub Gateway',
+    body: 'Supervisa el estado de la conexión en vivo con los eventos de Twitch: Follows, Subs, Bits y Raids. Cuando un evento ocurre, el motor lo despacha instantáneamente hacia tus overlays.',
+  },
+  {
+    target: 'bot-console',
+    badge: 'Simulación',
+    title: 'Consola y Simulador Interactivo',
+    body: 'Prueba tus comandos antes de salir al aire sin necesidad de abrir Twitch. Escribe !lalo o !alerta para ver la respuesta del bot y escuchar el chime de confirmación sonora.',
+  },
+  {
+    target: 'bot-code',
+    badge: 'Acción del Sistema',
+    title: 'Generador de Script Python 3.9+',
+    body: 'Copia el código Python asíncrono autogenerado con tu token y canal configurados. Ejecútalo en tu máquina para conectar TwitchIO de manera local y ultra-rápida con la suite Lalo.',
+  },
+];
 
 const PERMISSION_BADGES: Record<CommandPermission, { label: string; color: string }> = {
   all: { label: 'Todos', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
@@ -45,6 +96,15 @@ export const TwitchIOStudio: React.FC = () => {
   const { twitchIOSettings, updateTwitchIO, saved } = useTwitchIOSettings();
   const [copiedCode, setCopiedCode] = useState(false);
   const [consoleInput, setConsoleInput] = useState('!lalo');
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // La guía se abre sola la primera vez; después se accede desde el botón en la cabecera
+  useEffect(() => {
+    if (isTourDone(TOUR_ID)) return;
+    const timer = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [consoleLogs, setConsoleLogs] = useState<
     { id: string; time: string; type: 'in' | 'out' | 'system'; text: string }[]
   >([
@@ -220,13 +280,22 @@ bot.run()`;
   };
 
   return (
-    <div className="cab">
+    <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6">
         {/* Barra superior de la Suite */}
-        <SuiteNav currentApp="twitchio" channel={twitchIOSettings.channel} saved={saved} />
+        <SuiteNav
+          currentApp="twitchio"
+          channel={twitchIOSettings.channel}
+          saved={saved}
+          onOpenTour={() => setTourOpen(true)}
+          tourAvailable={!tourOpen}
+        />
 
         {/* Tarjeta de Créditos y Atribución Oficial TwitchIO */}
-        <div className="relative overflow-hidden rounded-md border border-[color:var(--ui,#9146ff)] bg-[color:var(--cb-panel)] p-5 shadow-lg">
+        <div
+          className="relative overflow-hidden rounded-md border border-[color:var(--ui,#9146ff)] bg-[color:var(--cb-panel)] p-5 shadow-lg"
+          data-tour="bot-header"
+        >
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 flex-none items-center justify-center rounded-md bg-[color:var(--ui,#9146ff)]/20 text-[color:var(--ui,#9146ff)]">
@@ -290,7 +359,7 @@ bot.run()`;
           {/* Columna Izquierda: Parámetros y Gestor de Comandos (7 cols) */}
           <div className="grid gap-5 lg:col-span-7">
             {/* Módulo 1: Parámetros del Bot */}
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="bot-params">
               <h2>
                 <span>1</span>Parámetros del Bot
               </h2>
@@ -342,7 +411,7 @@ bot.run()`;
             </section>
 
             {/* Módulo 2: Comandos de Chat (TwitchIO Commands) */}
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="bot-commands">
               <div className="flex items-center justify-between">
                 <h2>
                   <span>2</span>Comandos de Chat
@@ -494,7 +563,7 @@ bot.run()`;
             </section>
 
             {/* Módulo 3: EventSub Gateway */}
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="bot-eventsub">
               <h2>
                 <span>3</span>Twitch EventSub Gateway
               </h2>
@@ -562,7 +631,7 @@ bot.run()`;
           {/* Columna Derecha: Consola Simulador y Script Python (5 cols) */}
           <div className="grid gap-5 lg:col-span-5">
             {/* Simulador Interactivo de Comandos */}
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="bot-console">
               <h2>
                 <Terminal className="h-4 w-4 text-[color:var(--ui,#9146ff)]" />
                 <span>Simulador de Chat</span>
@@ -652,7 +721,7 @@ bot.run()`;
             </section>
 
             {/* Código del Puente en Python (TwitchIO) */}
-            <section className="cab-mod">
+            <section className="cab-mod" data-tour="bot-code">
               <div className="flex items-center justify-between">
                 <h2>
                   <Code className="h-4 w-4 text-[color:var(--ui,#9146ff)]" />
@@ -694,6 +763,16 @@ bot.run()`;
             </section>
           </div>
         </div>
+
+        {/* Tutorial Guiado */}
+        {tourOpen && (
+          <GuidedTour
+            steps={TWITCHIO_TOUR_STEPS}
+            onClose={() => setTourOpen(false)}
+            id={TOUR_ID}
+            appName="Bot TwitchIO"
+          />
+        )}
       </div>
     </div>
   );

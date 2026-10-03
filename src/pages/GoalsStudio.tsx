@@ -49,6 +49,57 @@ import {
   inspectAudioFile,
   MAX_AUDIO_DURATION_SECONDS,
 } from '../types/mediaLibrary';
+import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
+
+const TOUR_ID = 'metas';
+
+const GOALS_TOUR_STEPS: TourStep[] = [
+  {
+    badge: 'Bienvenida',
+    title: 'Estudio de Metas & Marcadores en Pantalla',
+    body: (
+      <>
+        Bienvenido al Estudio de Metas Comunitarias. Diseña barras de progreso reactivas para Suscriptores, Seguidores y Bits con física fluida GSAP, celebraciones épicas de victoria al 100%, lluvia de confeti y anuncios TTS en tiempo real.
+      </>
+    ),
+  },
+  {
+    target: 'goals-monitor',
+    badge: 'Previsualización',
+    title: 'Monitor 16:9 y Simulador en Vivo',
+    body: 'El monitor simula en tiempo real lo que verán tus espectadores en OBS. Incluye controles de avance rápido (+1, +5, +25), reseteo y el botón para probar la celebración del 100%.',
+  },
+  {
+    target: 'goals-mode',
+    badge: 'Diseño Inteligente',
+    title: 'Modos de Visualización & Carrusel Rotativo',
+    body: 'Hasta 4 metas se muestran comprimidas en fila horizontal sin estorbar tu pantalla. Al llegar a 5 o más metas, el sistema activa automáticamente el Carrusel Rotativo con transiciones fluidas de GSAP.',
+  },
+  {
+    target: 'goals-list',
+    badge: 'Gestión',
+    title: 'Lista de Metas Activas',
+    body: 'Crea nuevas metas para cualquier métrica (Subs, Followers, Bits). Puedes pausar, activar o seleccionar cualquier meta para personalizarla en el inspector.',
+  },
+  {
+    target: 'goals-appearance',
+    badge: 'Personalización',
+    title: 'Estilos Visuales & Color de Acento',
+    body: 'Elige entre 4 estilos profesionales (Cabina Broadcast, Neón Glow, Cyberpunk o Minimalista) y ajusta la paleta de color para sincronizarla con la estética de tu stream.',
+  },
+  {
+    target: 'goals-celebration',
+    badge: 'Acción del Sistema',
+    title: 'Celebración de Victoria (100% Milestone)',
+    body: 'Cuando la comunidad completa la meta, el sistema desata la fiesta: lluvia de confeti en canvas, sacudida sísmica de pantalla (Screen Shake), video transparente WebM en pantalla completa y tu fanfarria MP3 favorita.',
+  },
+  {
+    target: 'goals-obs',
+    badge: 'Acción del Sistema',
+    title: 'Fuente de Navegador para OBS Studio',
+    body: 'Copia el enlace del widget de metas y pégalo como Fuente de Navegador en tu escena (1920 × 1080 o el área que prefieras). Se sincronizará en tiempo real con cada sub, follow o bit.',
+  },
+];
 
 const ACCENTS = [
   { color: '#9146ff', name: 'Morado Twitch' },
@@ -120,6 +171,14 @@ export const GoalsStudio: React.FC = () => {
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [recentProgressGoalId, setRecentProgressGoalId] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // La guía se abre sola la primera vez; después se accede desde el botón en la cabecera
+  useEffect(() => {
+    if (isTourDone(TOUR_ID)) return;
+    const timer = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Modal de Biblioteca de Medios (Media Vault)
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
@@ -391,10 +450,16 @@ export const GoalsStudio: React.FC = () => {
   } as React.CSSProperties;
 
   return (
-    <div className="cab" style={rootStyle}>
+    <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6">
         {/* Barra de navegación de la suite */}
-        <SuiteNav currentApp="metas" channel={goalsSettings.channel} saved={saved} />
+        <SuiteNav
+          currentApp="metas"
+          channel={goalsSettings.channel}
+          saved={saved}
+          onOpenTour={() => setTourOpen(true)}
+          tourAvailable={!tourOpen}
+        />
 
         {/* Encabezado del Módulo */}
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--cb-line)] pb-4">
@@ -419,7 +484,7 @@ export const GoalsStudio: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2" data-tour="goals-obs">
             <button
               type="button"
               className="cab-btn2 !h-8 !px-3 !text-xs font-bold transition-transform active:scale-[0.97]"
@@ -455,7 +520,7 @@ export const GoalsStudio: React.FC = () => {
         )}
 
         {/* MONITOR EN VIVO 16:9 */}
-        <section aria-label="Monitor de simulación de meta">
+        <section aria-label="Monitor de simulación de meta" data-tour="goals-monitor">
           <div className="flex items-center justify-between pb-2">
             <div className="flex items-center gap-2">
               <Tv className="h-4 w-4 text-[color:var(--cb-mut)]" />
@@ -598,7 +663,7 @@ export const GoalsStudio: React.FC = () => {
         </section>
 
         {/* PANEL DE MODO DE VISUALIZACIÓN & ANUNCIOS TTS */}
-        <section className="cab-mod p-4" aria-label="Modo de Visualización y Anuncios">
+        <section className="cab-mod p-4" aria-label="Modo de Visualización y Anuncios" data-tour="goals-mode">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--cb-line)] pb-3">
             <div>
               <div className="flex items-center gap-2">
@@ -715,7 +780,7 @@ export const GoalsStudio: React.FC = () => {
         {/* LAYOUT PRINCIPAL: 2 COLUMNAS (Lista de Metas & Inspector de Personalización) */}
         <div className="grid gap-6 lg:grid-cols-12">
           {/* Columna Izquierda: Lista de Metas (5 columnas) */}
-          <section className="cab-mod lg:col-span-5" aria-label="Lista de Metas Comunitarias">
+          <section className="cab-mod lg:col-span-5" aria-label="Lista de Metas Comunitarias" data-tour="goals-list">
             <div className="flex items-center justify-between border-b border-[color:var(--cb-line)] pb-3">
               <div>
                 <h2>
@@ -934,7 +999,7 @@ export const GoalsStudio: React.FC = () => {
               </div>
 
               {/* Estilo Visual del Marcador */}
-              <div>
+              <div data-tour="goals-appearance">
                 <label className="cab-caps mb-1.5 block text-[11px] font-bold text-[color:var(--cb-mut)]">
                   Estilo Visual del Marcador
                 </label>
@@ -985,7 +1050,7 @@ export const GoalsStudio: React.FC = () => {
               </div>
 
               {/* ACCIONES AL LOGRAR EL 100% (VICTORIA) */}
-              <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-4">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 p-4" data-tour="goals-celebration">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-amber-400">
                     <Sparkles className="h-4 w-4" />
@@ -1260,6 +1325,16 @@ export const GoalsStudio: React.FC = () => {
               : 'Media Vault · Seleccionar o Subir Video de Victoria'
           }
         />
+
+        {/* Tutorial Guiado */}
+        {tourOpen && (
+          <GuidedTour
+            steps={GOALS_TOUR_STEPS}
+            onClose={() => setTourOpen(false)}
+            id={TOUR_ID}
+            appName="Metas & Marcadores"
+          />
+        )}
       </div>
     </div>
   );

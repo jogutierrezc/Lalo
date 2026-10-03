@@ -6,7 +6,7 @@
  * principios de diseño de Emil Kowalski y modo Operate de Impeccable.
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import gsap from 'gsap';
 import {
   Check,
@@ -42,6 +42,57 @@ import {
   inspectAudioFile,
   MAX_AUDIO_DURATION_SECONDS,
 } from '../types/mediaLibrary';
+import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
+
+const TOUR_ID = 'recompensas';
+
+const REWARDS_TOUR_STEPS: TourStep[] = [
+  {
+    badge: 'Bienvenida',
+    title: 'Estudio de Recompensas de Puntos de Canal',
+    body: (
+      <>
+        Bienvenido al Estudio de Recompensas y Efectos FX. Aquí transformas los canjes de puntos de tus espectadores en experiencias interactivas sobre tu transmisión: videos transparentes WebM alfa, sacudidas de pantalla sísmicas y fanfarrias personalizadas.
+      </>
+    ),
+  },
+  {
+    target: 'rewards-list',
+    badge: 'Catálogo',
+    title: 'Biblioteca de Recompensas de Canal',
+    body: 'Crea, edita y organiza tus recompensas. Al vincular el nombre exacto con el canal de Twitch, el bot o EventSub detectará el canje automáticamente en vivo.',
+  },
+  {
+    target: 'reward-editor',
+    badge: 'Personalización',
+    title: 'Editor de Textos, Avisos y Costes',
+    body: 'Configura el coste en puntos de canal, el aviso en pantalla (por ejemplo: ¡{user} desató {reward}!) y el color de acento temático de la recompensa.',
+  },
+  {
+    target: 'reward-video',
+    badge: 'Efectos FX',
+    title: 'Videos Transparentes (WebM Alfa)',
+    body: 'Sube clips WebM con canal alfa nativo o usa videos con fondo negro gracias al modo Screen Blend. El video se proyectará sobre tu cámara o juego con la escala y posición que elijas.',
+  },
+  {
+    target: 'reward-fx',
+    badge: 'Acción del Sistema',
+    title: 'Sacudida de Pantalla (Screen Shake) y Audio',
+    body: 'Añade impacto físico a los canjes épicos activando el Screen Shake calculado con GSAP. También puedes seleccionar un chime arcade o subir una fanfarria MP3 de hasta 30 segundos.',
+  },
+  {
+    target: 'rewards-monitor',
+    badge: 'Previsualización',
+    title: 'Monitor 16:9 y Simulador en Vivo',
+    body: 'El monitor simula el espacio de OBS. Pulsa «Probar Recompensa» para disparar la animación en pantalla y enviarla por BroadcastChannel a tus fuentes abiertas sin gastar puntos reales.',
+  },
+  {
+    target: 'rewards-obs',
+    badge: 'Acción del Sistema',
+    title: 'Fuente de Navegador para OBS Studio',
+    body: 'Copia el enlace del widget de recompensas y pégalo como Fuente de Navegador en tu escena (1920 × 1080). Todas tus alertas de puntos se mostrarán con transparencia total.',
+  },
+];
 
 const ACCENTS = [
   { color: '#9146ff', name: 'Morado Twitch' },
@@ -99,6 +150,14 @@ export const RewardsStudio: React.FC = () => {
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // La guía se abre sola la primera vez; después se accede desde el botón en la cabecera
+  useEffect(() => {
+    if (isTourDone(TOUR_ID)) return;
+    const timer = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Modal de Biblioteca de Medios (Media Vault)
   const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
@@ -298,13 +357,15 @@ export const RewardsStudio: React.FC = () => {
   } as React.CSSProperties;
 
   return (
-    <div className="cab" style={rootStyle}>
+    <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6">
         {/* Barra superior de la Suite */}
         <SuiteNav
           currentApp="recompensas"
           channel={rewardsSettings.channel}
           saved={saved}
+          onOpenTour={() => setTourOpen(true)}
+          tourAvailable={!tourOpen}
         />
 
         {/* Encabezado del Módulo */}
@@ -329,7 +390,7 @@ export const RewardsStudio: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2" data-tour="rewards-obs">
             <button
               type="button"
               className="cab-btn2 !h-8 !px-3 !text-xs font-bold"
@@ -365,7 +426,7 @@ export const RewardsStudio: React.FC = () => {
         )}
 
         {/* Monitor 16:9 de Simulación en Vivo */}
-        <section aria-label="Monitor de simulación de escenario">
+        <section aria-label="Monitor de simulación de escenario" data-tour="rewards-monitor">
           <div className="rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-4 shadow-xl">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -378,6 +439,7 @@ export const RewardsStudio: React.FC = () => {
                 <button
                   type="button"
                   className="cab-btn !h-8 !px-4 !text-xs font-extrabold"
+                  data-tour="reward-test"
                   onClick={() => triggerRewardTest(currentReward)}
                   title="Ejecutar prueba de la recompensa seleccionada"
                 >
@@ -526,7 +588,7 @@ export const RewardsStudio: React.FC = () => {
         {/* Área Principal: Lista de Recompensas + Inspector de Edición */}
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.35fr)]">
           {/* Columna Izquierda: Biblioteca de Recompensas */}
-          <section className="cab-mod" aria-label="Biblioteca de Recompensas">
+          <section className="cab-mod" aria-label="Biblioteca de Recompensas" data-tour="rewards-list">
             <div className="flex items-center justify-between border-b border-[color:var(--cb-line)] pb-3">
               <div>
                 <h2>
@@ -633,6 +695,7 @@ export const RewardsStudio: React.FC = () => {
             <section
               className="cab-mod"
               aria-label={`Editar ${currentReward.name}`}
+              data-tour="reward-editor"
             >
               <div className="flex items-center justify-between border-b border-[color:var(--cb-line)] pb-3">
                 <div>
@@ -694,7 +757,7 @@ export const RewardsStudio: React.FC = () => {
                 </div>
 
                 {/* Subida de Video Transparente */}
-                <div className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] p-3.5">
+                <div className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] p-3.5" data-tour="reward-video">
                   <div className="flex items-center justify-between">
                     <span className="cab-caps text-xs font-bold text-[color:var(--cb-fg)]">
                       VIDEO TRANSPARENTE / MEME
@@ -844,7 +907,7 @@ export const RewardsStudio: React.FC = () => {
                 </div>
 
                 {/* Efectos de Impacto: Screen Shake y Volumen */}
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2" data-tour="reward-fx">
                   <div>
                     <label className="cab-caps mb-1 block text-[11px] font-bold text-[color:var(--cb-mut)]">
                       Efecto de Sacudida (Screen Shake)
@@ -1103,6 +1166,16 @@ export const RewardsStudio: React.FC = () => {
               : 'Media Vault · Seleccionar o Subir Video Transparente para Recompensa'
           }
         />
+
+        {/* Tutorial Guiado */}
+        {tourOpen && (
+          <GuidedTour
+            steps={REWARDS_TOUR_STEPS}
+            onClose={() => setTourOpen(false)}
+            id={TOUR_ID}
+            appName="Recompensas & FX"
+          />
+        )}
       </div>
     </div>
   );
