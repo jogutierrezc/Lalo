@@ -129,3 +129,94 @@ export const INITIAL_POLL_SETTINGS: PollSettings = {
     tieEmotion: '[tenso]',
   },
 };
+
+export const POLLS_STORAGE_KEY = 'lalo_polls_settings_v1';
+
+/**
+ * Parsea un mensaje de chat para extraer el voto del usuario.
+ * Acepta: !voto 1, !voto 2, !voto a, !voto b, !vote 1, !vote 2, !1, !2, !a, !b.
+ * Devuelve 0 para la opción 1 (A), 1 para la opción 2 (B), o null si no es un comando de voto.
+ */
+export function parseVoteCommand(message: string): 0 | 1 | null {
+  if (!message) return null;
+  const trimmed = message.trim().toLowerCase();
+
+  // 1. Sintaxis explícita con prefijo !voto o !vote
+  const explicitMatch = trimmed.match(/^!(?:voto|vote)\s+([12ab])/i);
+  if (explicitMatch) {
+    const val = explicitMatch[1];
+    if (val === '1' || val === 'a') return 0;
+    if (val === '2' || val === 'b') return 1;
+  }
+
+  // 2. Sintaxis abreviada directa (!1, !2, !a, !b)
+  if (/^![1a]$/i.test(trimmed)) return 0;
+  if (/^![2b]$/i.test(trimmed)) return 1;
+
+  return null;
+}
+
+/**
+ * Calcula los porcentajes exactos redondeados garantizando que la suma sea siempre 100%.
+ */
+export function calculatePollPercentages(votesA: number, votesB: number): { pctA: number; pctB: number } {
+  const safeA = Math.max(0, votesA);
+  const safeB = Math.max(0, votesB);
+  const total = safeA + safeB;
+
+  if (total === 0) {
+    return { pctA: 50, pctB: 50 };
+  }
+
+  const rawA = Math.round((safeA / total) * 100);
+  const rawB = 100 - rawA;
+  return { pctA: rawA, pctB: rawB };
+}
+
+/**
+ * Determina el líder o si hay empate.
+ */
+export function determineLeader(votesA: number, votesB: number): 'A' | 'B' | 'TIE' {
+  if (votesA > votesB) return 'A';
+  if (votesB > votesA) return 'B';
+  return 'TIE';
+}
+
+/**
+ * Carga la configuración de encuestas desde localStorage con respaldo seguro.
+ */
+export function loadPollSettings(): PollSettings {
+  if (typeof window === 'undefined') return INITIAL_POLL_SETTINGS;
+  try {
+    const raw = localStorage.getItem(POLLS_STORAGE_KEY);
+    if (!raw) return INITIAL_POLL_SETTINGS;
+    const parsed = JSON.parse(raw);
+    return {
+      ...INITIAL_POLL_SETTINGS,
+      ...parsed,
+      options: [
+        { ...INITIAL_POLL_SETTINGS.options[0], ...(parsed.options?.[0] || {}) },
+        { ...INITIAL_POLL_SETTINGS.options[1], ...(parsed.options?.[1] || {}) },
+      ],
+      ttsAnnouncer: {
+        ...INITIAL_POLL_SETTINGS.ttsAnnouncer,
+        ...(parsed.ttsAnnouncer || {}),
+      },
+    };
+  } catch {
+    return INITIAL_POLL_SETTINGS;
+  }
+}
+
+/**
+ * Guarda la configuración de encuestas en localStorage.
+ */
+export function savePollSettings(settings: PollSettings): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(POLLS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Ignorar si el almacenamiento está restringido
+  }
+}
+

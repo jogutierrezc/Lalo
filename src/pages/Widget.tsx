@@ -38,6 +38,10 @@ import { GoalsOverlayView } from '../components/goals/GoalsOverlayView';
 import { loadRouletteSettings, RouletteSegment } from '../types/roulette';
 import { RouletteWheel } from '../components/roulette/RouletteWheel';
 import { WinnerBanner } from '../components/roulette/WinnerBanner';
+import { loadPollSettings } from '../types/polls';
+import { BattleBarView } from '../components/polls/BattleBarView';
+import { PollBattleUpdateEvent } from '../utils/bus';
+import { speakPollEmotionCue, playVoteTick } from '../utils/pollsAudio';
 
 function getURLParam(key: string): string | null {
   const searchVal = new URLSearchParams(window.location.search).get(key);
@@ -844,6 +848,19 @@ export const Widget: React.FC = () => {
   } | null>(null);
   const rouletteContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Soporte para Batallas & Encuestas en OBS
+  const isPollsApp =
+    getURLParam('app') === 'polls' ||
+    getURLParam('app') === 'versus' ||
+    getURLParam('app') === 'encuestas' ||
+    getURLParam('app') === 'batallas' ||
+    window.location.hash.includes('app=polls') ||
+    window.location.hash.includes('app=versus') ||
+    window.location.hash.includes('app=encuestas');
+  const [pollSettings, setPollSettings] = useState(() => loadPollSettings());
+  const [activePollState, setActivePollState] = useState<PollBattleUpdateEvent | null>(null);
+  const pollsContainerRef = useRef<HTMLDivElement | null>(null);
+
   // Animación física del aviso HUD de moderación en OBS
   useEffect(() => {
     if (!modNotice) return;
@@ -1122,6 +1139,21 @@ export const Widget: React.FC = () => {
         setRouletteWinnerBanner(null);
         setIsRouletteSpinning(false);
       }
+      if (message.type === 'POLL_SETTINGS_UPDATE') {
+        setPollSettings(message.settings);
+      }
+      if (message.type === 'POLL_STATE_UPDATE') {
+        setActivePollState(message.state);
+        if (message.state.lastVoteOption !== undefined && pollSettings.audioEffectsEnabled) {
+          playVoteTick(pollSettings.audioVolume, message.state.lastVoteOption);
+        }
+      }
+      if (message.type === 'POLL_TTS_CUE') {
+        speakPollEmotionCue(message.cue.text, message.cue.emotion);
+      }
+      if (message.type === 'POLL_CLEAR') {
+        setActivePollState(null);
+      }
     });
     const heartbeat = setInterval(() => publishRef.current(), 5000);
     return () => {
@@ -1270,6 +1302,27 @@ export const Widget: React.FC = () => {
                 />
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Overlay de Batallas & Encuestas en OBS */}
+      {(isPollsApp || (activePollState && activePollState.isActive)) && (
+        <div
+          ref={pollsContainerRef}
+          className="pointer-events-none fixed inset-x-0 bottom-8 z-40 flex items-center justify-center p-6"
+        >
+          <div className="w-full max-w-3xl pointer-events-auto">
+            <BattleBarView
+              title={activePollState?.title || pollSettings.activeBattleTitle}
+              optionA={activePollState?.optionA || pollSettings.options[0]}
+              optionB={activePollState?.optionB || pollSettings.options[1]}
+              theme={pollSettings.theme}
+              timeLeftSec={activePollState?.timeLeftSec ?? pollSettings.durationSec}
+              totalDurationSec={activePollState?.totalDurationSec ?? pollSettings.durationSec}
+              isActive={activePollState?.isActive ?? false}
+              winner={activePollState?.winner}
+            />
           </div>
         </div>
       )}

@@ -10,7 +10,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy, ExternalLink, Play, RefreshCw, RotateCcw, Trash2, Upload } from 'lucide-react';
-import { saveSettings } from '../types/settings';
+import { saveSettings, PRESET_VOICES } from '../types/settings';
 import { useSettings } from '../hooks/useSettings';
 import { postBus } from '../utils/bus';
 import { buildWidgetUrl } from '../utils/widgetUrl';
@@ -34,13 +34,7 @@ import { playDemo } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 
-// Voces de referencia de muestra de Fish Audio (o custom reference_ids)
-const PRESET_VOICES = [
-  { id: '37f9f4eec7624089a49b188d47588f2c', name: 'Voz oficial clonada (LaloPlay)' },
-  { id: '7f92f8afb8ec43bf81429cc1c9199cb1', name: 'Narrador dinámico' },
-  { id: '9f5e2786a4104724a2efdc22b31f7cf6', name: 'Amigable y streamer' },
-  { id: 'e1d2c3b4a5f607182930415263748596', name: 'Robot' },
-];
+
 
 const ACCENTS = [
   { color: '#9146ff', name: 'Morado' },
@@ -343,7 +337,7 @@ export const Dashboard: React.FC = () => {
                     {voice.name}
                   </option>
                 ))}
-                <option value="custom">Usar un ID propio</option>
+                <option value="custom">Usar ID propio</option>
               </select>
             </Field>
             <Field label="ID de voz (reference_id)" htmlFor="referenceId" hint="Pega aquí el ID de una voz propia de Fish Audio.">

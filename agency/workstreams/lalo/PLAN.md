@@ -235,6 +235,53 @@
   - 11 suites de pruebas ejecutadas con 98/98 tests pasando.
   - Verificación de TypeScript (`tsc`) y empaquetado Vite para producción exitoso.
 
+## Phase 27: Batallas & Encuestas Cinemáticas en Vivo (Polls & Versus Studio - Módulo 7)
+- [x] 27.1: Arquitectura de Datos y Parser de Votación (`src/types/polls.ts`):
+  - Modelos `PollOption`, `PollSettings`, `PollBattlePreset` y `TtsEmotionConfig`.
+  - Parser multilingüe de chat `parseVoteCommand`: reconoce `!voto 1`, `!voto 2`, `!voto a`, `!voto b`, `!vote 1`, `!vote 2` y sintaxis rápida `!1`, `!2`, `!a`, `!b`.
+  - Helpers matemáticos: `calculatePollPercentages` (suma estricta 100%), `determineLeader` y persistencia `loadPollSettings` / `savePollSettings`.
+  - 4 plantillas temáticas preconfiguradas: *¿Qué jugamos hoy?*, *Penitencia Inmediata del Chat*, *Cena Nocturna del Streamer*, *Juicio Final (Salvar o Sacrificar)*.
+- [x] 27.2: Motor Táctil de Audio Web Audio API y Locución Emocional TTS (`src/utils/pollsAudio.ts`):
+  - Ticks de voto diferenciados: Opción 1 brillante (660Hz -> 880Hz) vs Opción 2 cálido (440Hz -> 554Hz) para retroalimentación táctil-auditiva sin mirar la pantalla.
+  - Impact Clash con sub-bajo (130Hz -> 45Hz) y chispazo metálico (1600Hz -> 900Hz) ante cambios de líder.
+  - Beeps de cuenta regresiva para los últimos 10 y 5 segundos, y fanfarria triunfal polifónica.
+  - Locutor con tags emocionales: `[emocionado]` en cambio de líder, `[susurro]` en últimos 10s, `[triunfal]` en coronación del ganador y `[tenso]` en empate.
+- [x] 27.3: Componente de Barra Líquida Clashing con GSAP (`src/components/polls/BattleBarView.tsx`):
+  - Barras reactivas fluidas con curvatura elástica `power2.out`, medallón central «VS» con destello y sacudida `back.out(2)`, y tipografía tabular de alto contraste.
+- [x] 27.4: Hook de Gestión y Sincronización en Tiempo Real (`src/hooks/usePollsSettings.ts` & `src/utils/bus.ts`):
+  - Deduplicación de votantes por espectador con soporte configurable de cambio de voto (`allowVoteChange`).
+  - Sincronización continua de eventos por BroadcastChannel (`POLL_STATE_UPDATE`, `POLL_VOTE`, `POLL_TTS_CUE`, `POLL_CLEAR`).
+- [x] 27.5: Integración con Twitch Chat e IRC (`src/hooks/useTwitchChat.ts`):
+  - Detección automática de votos del chat de Twitch en vivo y emisión instantánea al bus.
+- [x] 27.6: Overlay Transparente para OBS Studio (`src/pages/Widget.tsx`):
+  - Soporte de renderizado en OBS para `?app=polls`, `?app=versus` o `#widget?app=polls` con animación GSAP flotante y audio sincronizado.
+- [x] 27.7: Mesa de Control Broadcast y Navegación (`src/pages/PollsStudio.tsx`, `src/App.tsx`, `src/components/SuiteNav.tsx`, `src/pages/Catalog.tsx`):
+  - Monitor 16:9 con simulación en tiempo real, botones de voto directo, ráfaga masiva (+aleatorio), selectores de presets, botones para probar la voz con emoción y generador de URL OBS.
+  - Pestaña «Batallas» con badge `PREVIEW` en `SuiteNav` y Módulo 7 activo en `Catalog`.
+## Phase 28: Overhaul Visual Esports en Batallas, Voces de Personajes y Locución Emocional del Sistema
+- [x] 28.1: Overhaul Visual y Animaciones de Batalla Cinemática Esports (`src/components/polls/BattleBarView.tsx`):
+  - Chasis angular estilo arena esports con cortes geométricos, corchetes de esquina y gradientes perimetrales de alta energía.
+  - Barras líquidas con interpolación GSAP fluida y números rodantes (*rolling numbers*) a 60fps sin tirones de layout.
+  - Anillo de choque sónico (*shockwave ring*) en el medallón VS y partículas de chispas en colisión de porcentajes.
+  - Anillo circular SVG de cuenta regresiva con cálculo de perímetro reactivo.
+  - Cartel de victoria dramática con entrada elástica y badge de corona dorada.
+- [x] 28.2: Integración de Voz de Fish Audio del Sistema en Batallas (`src/utils/pollsAudio.ts` & `src/pages/PollsStudio.tsx`):
+  - El locutor emocional de batallas utiliza directamente la voz configurada por el streamer en TTS (`referenceId`), en vez de una voz aleatoria o del navegador.
+  - Petición directa a `/api/tts` con etiquetas de modulación emocional (`[emocionado]`, `[susurro]`, `[triunfal]`) y fallback fluido a Web Speech API.
+  - Badge visual en `PollsStudio.tsx` indicando el personaje activo con enlace de 1-click hacia `#tts`.
+- [x] 28.3: Nuevas Voces Predefinidas de Personajes en TTS (`src/types/settings.ts` & `src/pages/Dashboard.tsx`):
+  - Reemplazadas las voces anteriores exclusivamente por los 5 personajes solicitados:
+    - **Teemo** (ID: `5669f8e58ecb476a982bc2b67ac6b538`)
+    - **Ahri** (ID: `31dbd39039854d379d1d692a6a97451d`)
+    - **Jarvis** (ID: `59fb1f7a5e69481387cc280b9d2b3ad8`)
+    - **Diana** (ID: `37f9f4eec7624089a49b188d47588f2c`) - *Por defecto*
+    - **Luz** (ID: `654e33e85be3406d90b9723712a035a9`)
+    - Opción manual: **Usar ID propio**.
+- [x] 28.4: Quality Gates y Suite de Pruebas:
+  - 12 suites de prueba unitarias ejecutadas con éxito (113/113 tests pasando en Vitest).
+  - Verificación estricta de tipos con `tsc --noEmit` y empaquetado de producción Vite verificado con 0 errores.
+
+
 
 
 

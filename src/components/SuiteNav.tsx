@@ -17,6 +17,7 @@ import {
   Layers,
   LayoutGrid,
   Mic,
+  Swords,
   Target,
   Tv,
 } from 'lucide-react';
@@ -30,7 +31,8 @@ export type SuiteApp =
   | 'recompensas'
   | 'twitchio'
   | 'metas'
-  | 'ruleta';
+  | 'ruleta'
+  | 'encuestas';
 
 interface SuiteNavProps {
   currentApp: SuiteApp;
@@ -218,6 +220,23 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
             <span>Ruleta</span>
             <span className="rounded bg-rose-500/20 px-1 py-0.2 text-[9px] font-black text-rose-400">
               NUEVO
+            </span>
+          </a>
+
+          {/* 8. Batallas & Encuestas en Vivo */}
+          <a
+            href="#encuestas"
+            className={`inline-flex items-center gap-2 rounded px-3 py-1.5 text-xs font-bold uppercase tracking-wider no-underline transition-colors ${
+              currentApp === 'encuestas'
+                ? 'bg-[color:var(--cb-fg)] text-[color:var(--cb-panel)] shadow-sm'
+                : 'text-[color:var(--cb-mut)] hover:text-[color:var(--cb-fg)]'
+            }`}
+            aria-current={currentApp === 'encuestas' ? 'page' : undefined}
+          >
+            <Swords className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Batallas</span>
+            <span className="rounded bg-cyan-500/20 px-1 py-0.2 text-[9px] font-black text-cyan-300">
+              PREVIEW
             </span>
           </a>
         </nav>

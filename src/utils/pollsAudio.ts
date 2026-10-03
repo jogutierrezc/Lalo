@@ -2,11 +2,16 @@
  * src/utils/pollsAudio.ts
  *
  * Motor de síntesis de audio para Batallas & Encuestas en Vivo (Polls & Versus Studio).
- * Utiliza Web Audio API de baja latencia sin dependencias externas,
- * y soporte para locución sintética con emociones predefinidas.
+ * Utiliza Web Audio API de baja latencia sin dependencias externas para efectos táctiles,
+ * y se conecta directamente al motor TTS de Fish Audio con la voz configurada por el streamer
+ * (Teemo, Ahri, Jarvis, Diana, Luz o ID propio) con modulación emocional.
  */
 
+import { loadSettings } from '../types/settings';
+import { normalizeTextForFishAudio } from './emotionMapper';
+
 let sharedAudioCtx: AudioContext | null = null;
+let currentPollAudio: HTMLAudioElement | null = null;
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -174,29 +179,98 @@ export function playPollVictoryFanfare(volume = 0.85): void {
 }
 
 /**
- * Emite la locución de prueba con el motor del navegador (o anuncia en consola para Fish Audio).
- * Limpia las etiquetas de emoción como [emocionado] para el lector local pero modula velocidad y pitch.
+ * Emite la locución usando la voz configurada en el módulo TTS (Fish Audio reference_id)
+ * con traducción de emociones predefinidas ([emocionado], [susurro], [triunfal]).
+ * Si la API remota no está disponible o falla, activa una degradación elegante a SpeechSynthesis.
  */
-export function speakPollEmotionCue(
+export async function speakPollEmotionCue(
+  fullText: string,
+  emotion: string,
+  onStart?: () => void,
+  onEnd?: () => void
+): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  // Detener locución previa si estaba activa
+  if (currentPollAudio) {
+    currentPollAudio.pause();
+    currentPollAudio.src = '';
+    currentPollAudio = null;
+  }
+
+  const ttsSettings = loadSettings();
+  const normalized = normalizeTextForFishAudio(fullText);
+
+  // 1. Intentar reproducir con la voz oficial configurada en TTS mediante /api/tts
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: normalized,
+        reference_id: ttsSettings.referenceId,
+        model: ttsSettings.model || 's2.1-pro-free',
+        speed: ttsSettings.speed || 1.0,
+      }),
+    });
+
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const blob = await res.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      audio.volume = Math.max(0.1, Math.min(1, ttsSettings.volume ?? 0.85));
+      currentPollAudio = audio;
+
+      audio.onplay = () => onStart?.();
+      audio.onended = () => {
+        currentPollAudio = null;
+        onEnd?.();
+      };
+      audio.onerror = () => {
+        currentPollAudio = null;
+        fallbackSpeechSynthesis(fullText, emotion, onStart, onEnd);
+      };
+
+      await audio.play();
+      return;
+    }
+  } catch {
+    // Fallback silencioso a síntesis nativa si no hay conexión o no hay API key
+  }
+
+  // 2. Degradación suave a síntesis de navegador
+  fallbackSpeechSynthesis(fullText, emotion, onStart, onEnd);
+}
+
+function fallbackSpeechSynthesis(
   fullText: string,
   emotion: string,
   onStart?: () => void,
   onEnd?: () => void
 ): void {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    onEnd?.();
+    return;
+  }
 
   window.speechSynthesis.cancel();
 
-  // Limpiar etiquetas [emocion] del texto hablado en speechSynthesis estándar
+  // Limpiar corchetes de emoción para síntesis nativa
   const cleanText = fullText.replace(/\[[^\]]+\]/g, '').trim();
   const utterance = new SpeechSynthesisUtterance(cleanText);
 
-  // Buscar voz en español
   const voices = window.speechSynthesis.getVoices();
   const esVoice = voices.find((v) => v.lang.toLowerCase().startsWith('es'));
   if (esVoice) utterance.voice = esVoice;
 
-  // Modular parámetros según la emoción predefinida
   const emoLower = emotion.toLowerCase();
   if (emoLower.includes('emocionado') || emoLower.includes('hype')) {
     utterance.rate = 1.25;

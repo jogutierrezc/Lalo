@@ -23,6 +23,7 @@ import {
   Settings,
   Sliders,
   Sparkles,
+  Swords,
   Target,
   Tv,
   Volume2,
@@ -788,6 +789,77 @@ export const Catalog: React.FC = () => {
                   title="Copiar Widget OBS de Ruleta"
                 >
                   {copiedKey === 'roulette' ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+            </article>
+
+            {/* 7. Batallas & Encuestas en Vivo */}
+            <article
+              className="suite-card group relative flex flex-col justify-between rounded-md border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-5 transition-all duration-200 hover:border-cyan-400/80"
+              data-tour="app-polls"
+            >
+              <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-md bg-cyan-500/15 text-cyan-400 transition-transform duration-150 group-hover:scale-105">
+                    <Swords className="h-6 w-6" />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded bg-cyan-500/20 px-2 py-0.5 text-[10px] font-black text-cyan-300">
+                      MÓDULO 7
+                    </span>
+                    <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-black text-emerald-400">
+                      PROTOTIPO ACTIVO
+                    </span>
+                  </div>
+                </div>
+
+                <h2
+                  className="cab-caps mt-4 text-xl font-extrabold text-[color:var(--cb-fg)]"
+                  style={{ fontStretch: '75%' }}
+                >
+                  Batallas & Encuestas
+                </h2>
+                <p className="mt-2 text-xs leading-relaxed text-[color:var(--cb-mut)]">
+                  Votaciones 1v1 y encuestas interactivas accionadas por el chat (!voto 1 / !voto 2). Barras líquidas de colisión con físicas GSAP, ticks de audio por frecuencia y locutor TTS con emociones predefinidas.
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-cyan-400">
+                    Versus 1v1
+                  </span>
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
+                    Barras Líquidas GSAP
+                  </span>
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
+                    Tags Emocionales
+                  </span>
+                  <span className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--cb-mut)]">
+                    Ticks de Audio
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-[color:var(--cb-line)] pt-4">
+                <a
+                  href="#encuestas"
+                  className="cab-btn !h-9 flex-1 !text-xs font-bold no-underline"
+                >
+                  <Swords className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Ver / Probar Prototipo</span>
+                </a>
+                <button
+                  type="button"
+                  className="cab-btn2 !h-9 !px-2.5 !text-xs"
+                  onClick={() =>
+                    copyUrl('polls', `${baseUrl}/#widget?app=polls&channel=${settings.channel}`)
+                  }
+                  title="Copiar Widget OBS de Batallas"
+                >
+                  {copiedKey === 'polls' ? (
                     <Check className="h-3.5 w-3.5 text-emerald-400" />
                   ) : (
                     <Copy className="h-3.5 w-3.5" />

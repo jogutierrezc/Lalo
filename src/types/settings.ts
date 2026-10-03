@@ -13,10 +13,23 @@ export interface TTSSettings extends Appearance, Moderation {
   announceTemplate: string;
 }
 
+export interface PresetVoice {
+  id: string;
+  name: string;
+}
+
+export const PRESET_VOICES: PresetVoice[] = [
+  { id: '5669f8e58ecb476a982bc2b67ac6b538', name: 'Teemo' },
+  { id: '31dbd39039854d379d1d692a6a97451d', name: 'Ahri' },
+  { id: '59fb1f7a5e69481387cc280b9d2b3ad8', name: 'Jarvis' },
+  { id: '37f9f4eec7624089a49b188d47588f2c', name: 'Diana' },
+  { id: '654e33e85be3406d90b9723712a035a9', name: 'Luz' },
+];
+
 export const DEFAULT_SETTINGS: TTSSettings = {
   channel: 'laloplay_',
   model: 's2.1-pro-free',
-  referenceId: '37f9f4eec7624089a49b188d47588f2c', // Voz oficial clonada de LaloPlay
+  referenceId: '37f9f4eec7624089a49b188d47588f2c', // Diana (por defecto)
   volume: 0.85,
   speed: 1.0,
   theme: 'glass-dark',

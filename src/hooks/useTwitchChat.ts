@@ -29,6 +29,8 @@ import {
   stripCheermotes,
   truncateText,
 } from '../utils/moderation';
+import { postBus } from '../utils/bus';
+import { parseVoteCommand } from '../types/polls';
 
 export interface RejectedMessage {
   id: string;
@@ -188,6 +190,16 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
         }
         onControlRef.current?.(enrichedControl);
         return;
+      }
+
+      // Votos en tiempo real para Batallas & Encuestas (!voto 1, !voto 2, !1, !2, etc.)
+      const voteOption = parseVoteCommand(message);
+      if (voteOption !== null) {
+        postBus({
+          type: 'POLL_VOTE',
+          option: voteOption,
+          user: displayName,
+        });
       }
 
       const trigger = classifyTrigger(moderation, message, tags, role);

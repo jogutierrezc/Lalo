@@ -2,17 +2,15 @@
  * src/pages/PollsStudio.tsx
  *
  * Módulo 7: Estudio de Batallas & Encuestas en Vivo (Polls & Versus Studio).
- * Prototipo funcional interactivo con estética broadcast de Impeccable,
- * animación de barras líquidas con GSAP, síntesis de audio de choques/votos y
- * locutor TTS con emociones predefinidas ([emocionado], [susurro], [triunfal], [tenso]).
+ * Implementación con estética broadcast Impeccable, física fluida GSAP,
+ * sincronización reactiva hacia OBS mediante BroadcastChannel y locución TTS
+ * modulada con etiquetas emocionales de IA ([emocionado], [susurro], [triunfal]).
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Check,
-  Clock,
   Copy,
-  ExternalLink,
   Flame,
   Mic,
   Play,
@@ -25,197 +23,53 @@ import {
   Zap,
 } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
-import {
-  DEFAULT_BATTLE_PRESETS,
-  INITIAL_POLL_SETTINGS,
-  PollBattlePreset,
-  PollSettings,
-} from '../types/polls';
+import { DEFAULT_BATTLE_PRESETS, PollBattlePreset } from '../types/polls';
+import { usePollsSettings } from '../hooks/usePollsSettings';
 import { BattleBarView } from '../components/polls/BattleBarView';
-import {
-  playVoteTick,
-  playLeadClash,
-  playCountdownBeep,
-  playPollVictoryFanfare,
-  speakPollEmotionCue,
-} from '../utils/pollsAudio';
+import { speakPollEmotionCue } from '../utils/pollsAudio';
+import { loadSettings, PRESET_VOICES } from '../types/settings';
 
 export const PollsStudio: React.FC = () => {
-  const [settings, setSettings] = useState<PollSettings>(INITIAL_POLL_SETTINGS);
-  const [timeLeft, setTimeLeft] = useState<number>(60);
-  const [isActive, setIsActive] = useState<boolean>(false);
-  const [winner, setWinner] = useState<'A' | 'B' | 'TIE' | null>(null);
-  const [previousLeader, setPreviousLeader] = useState<'A' | 'B' | 'TIE'>('A');
+  const {
+    settings,
+    saved,
+    timeLeft,
+    isActive,
+    winner,
+    castVote,
+    startBattle,
+    pauseBattle,
+    resetBattle,
+    loadPreset,
+  } = usePollsSettings();
+
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
   const [isSpeakingEmotion, setIsSpeakingEmotion] = useState<string | null>(null);
   const [simulationNotice, setSimulationNotice] = useState<string | null>(null);
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const ttsSettings = loadSettings();
+  const activeVoiceName = PRESET_VOICES.find((v) => v.id === ttsSettings.referenceId)?.name || 'Voz Personalizada';
 
-  // Determinar líder actual y detectar cambio de liderazgo
-  const optA = settings.options[0];
-  const optB = settings.options[1];
-  const currentLeader: 'A' | 'B' | 'TIE' =
-    optA.votes > optB.votes ? 'A' : optB.votes > optA.votes ? 'B' : 'TIE';
-
-  // Manejador del temporizador
-  useEffect(() => {
-    if (!isActive) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          setIsActive(false);
-
-          // Declarar ganador
-          const finalLeader =
-            optA.votes > optB.votes ? 'A' : optB.votes > optA.votes ? 'B' : 'TIE';
-          setWinner(finalLeader);
-
-          // Audio y anuncio de victoria
-          if (settings.audioEffectsEnabled) {
-            playPollVictoryFanfare(settings.audioVolume);
-          }
-
-          if (settings.ttsAnnouncer.enabled) {
-            const winName =
-              finalLeader === 'A' ? optA.label : finalLeader === 'B' ? optB.label : 'Empate';
-            const total = optA.votes + optB.votes;
-            const pct =
-              total > 0
-                ? Math.round(
-                    ((finalLeader === 'A' ? optA.votes : optB.votes) / total) * 100
-                  )
-                : 50;
-
-            const ttsMsg = settings.ttsAnnouncer.winnerAnnouncementText
-              .replace('{ganador}', winName)
-              .replace('{porcentaje}', pct.toString());
-
-            speakPollEmotionCue(ttsMsg, settings.ttsAnnouncer.winnerEmotion);
-          }
-
-          return 0;
-        }
-
-        // Alertas auditivas y TTS en los últimos 10 segundos
-        if (prev === 11 && settings.ttsAnnouncer.enabled) {
-          speakPollEmotionCue(
-            settings.ttsAnnouncer.countdownText,
-            settings.ttsAnnouncer.countdownEmotion
-          );
-        }
-
-        if (prev <= 5 && settings.audioEffectsEnabled) {
-          playCountdownBeep(settings.audioVolume, true);
-        } else if (prev <= 10 && settings.audioEffectsEnabled) {
-          playCountdownBeep(settings.audioVolume, false);
-        }
-
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isActive, optA.votes, optB.votes, settings]);
-
-  // Emitir voto para Opción 1 o 2
-  const handleVote = (optionIndex: 0 | 1, count = 1) => {
-    if (winner) setWinner(null); // Despejar estado de ganador si sigue la votación
-
-    const newOptions = [...settings.options] as [typeof optA, typeof optB];
-    newOptions[optionIndex] = {
-      ...newOptions[optionIndex],
-      votes: newOptions[optionIndex].votes + count,
-    };
-
-    setSettings((prev) => ({ ...prev, options: newOptions }));
-
-    // Efecto de sonido del tick
-    if (settings.audioEffectsEnabled) {
-      playVoteTick(settings.audioVolume, optionIndex);
-    }
-
-    // Comprobar cambio de líder (Impact Clash & Emoción)
-    const newLeader: 'A' | 'B' | 'TIE' =
-      newOptions[0].votes > newOptions[1].votes
-        ? 'A'
-        : newOptions[1].votes > newOptions[0].votes
-        ? 'B'
-        : 'TIE';
-
-    if (newLeader !== 'TIE' && newLeader !== previousLeader) {
-      setPreviousLeader(newLeader);
-      if (settings.audioEffectsEnabled) {
-        playLeadClash(settings.audioVolume);
-      }
-
-      // Si está habilitado el anuncio TTS de cambio de líder
-      if (settings.ttsAnnouncer.enabled) {
-        const leaderName = newLeader === 'A' ? newOptions[0].label : newOptions[1].label;
-        const msg = settings.ttsAnnouncer.leadChangeText.replace('{ganador}', leaderName);
-        speakPollEmotionCue(msg, settings.ttsAnnouncer.leadChangeEmotion);
-      }
-    }
-  };
-
-  // Simular ráfaga de votos
+  // Simular ráfaga masiva de votos
   const handleBurstVotes = () => {
     const burstA = Math.floor(Math.random() * 5) + 2;
     const burstB = Math.floor(Math.random() * 5) + 2;
-    handleVote(0, burstA);
-    handleVote(1, burstB);
-    setSimulationNotice(`¡Ráfaga del chat! +${burstA} votos para Opción 1, +${burstB} votos para Opción 2.`);
+    for (let i = 0; i < burstA; i++) {
+      castVote(0, `ChatUserA_${Date.now()}_${i}`);
+    }
+    for (let i = 0; i < burstB; i++) {
+      castVote(1, `ChatUserB_${Date.now()}_${i}`);
+    }
+    setSimulationNotice(
+      `¡Ráfaga del chat recibida! +${burstA} votos para ${settings.options[0].label}, +${burstB} votos para ${settings.options[1].label}.`
+    );
     setTimeout(() => setSimulationNotice(null), 3000);
   };
 
-  // Reiniciar batalla
-  const handleReset = () => {
-    setIsActive(false);
-    setTimeLeft(settings.durationSec);
-    setWinner(null);
-    setSettings((prev) => ({
-      ...prev,
-      options: [
-        { ...prev.options[0], votes: 0 },
-        { ...prev.options[1], votes: 0 },
-      ],
-    }));
-  };
-
   // Cargar preset de batalla
-  const handleLoadPreset = (preset: PollBattlePreset) => {
-    setIsActive(false);
-    setWinner(null);
-    setTimeLeft(preset.durationSec);
-    setSettings((prev) => ({
-      ...prev,
-      activeBattleTitle: preset.title,
-      durationSec: preset.durationSec,
-      options: [
-        {
-          ...prev.options[0],
-          label: preset.optionA.label,
-          sublabel: preset.optionA.sublabel,
-          color: preset.optionA.color,
-          votes: 12,
-        },
-        {
-          ...prev.options[1],
-          label: preset.optionB.label,
-          sublabel: preset.optionB.sublabel,
-          color: preset.optionB.color,
-          votes: 10,
-        },
-      ],
-    }));
-    setSimulationNotice(`Cargada plantilla: ${preset.title}`);
+  const handleSelectPreset = (preset: PollBattlePreset) => {
+    loadPreset(preset);
+    setSimulationNotice(`Plantilla cargada: ${preset.title}`);
     setTimeout(() => setSimulationNotice(null), 2500);
   };
 
@@ -240,7 +94,7 @@ export const PollsStudio: React.FC = () => {
         <SuiteNav
           currentApp="encuestas"
           channel={settings.channel}
-          saved={true}
+          saved={saved}
           tourAvailable={false}
         />
 
@@ -250,7 +104,7 @@ export const PollsStudio: React.FC = () => {
             <div className="flex items-center gap-2 text-cyan-400">
               <Swords className="h-4 w-4" />
               <span className="cab-caps text-xs font-black tracking-widest uppercase">
-                MÓDULO 7 · PROTOTIPO VISUAL & INTERACTIVO
+                MÓDULO 7 · MESA DE CONTROL BROADCAST
               </span>
             </div>
             <h1 className="cab-caps mt-1 text-3xl font-extrabold tracking-tight text-white">
@@ -261,11 +115,11 @@ export const PollsStudio: React.FC = () => {
             </p>
           </div>
 
-          {/* Estado de conexión / canal */}
+          {/* Estado de sincronización / canal */}
           <div className="flex items-center gap-2 rounded border border-slate-800 bg-slate-900/90 px-3.5 py-2">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
             <span className="text-xs font-bold text-slate-300">
-              MODO PRUEBA ACTIVO
+              SINCRONIZADO CON OBS
             </span>
           </div>
         </div>
@@ -333,7 +187,7 @@ export const PollsStudio: React.FC = () => {
                 {/* Opción 1 Voto */}
                 <button
                   type="button"
-                  onClick={() => handleVote(0, 1)}
+                  onClick={() => castVote(0, 'AdminStudio')}
                   className="flex flex-col items-center justify-center rounded-lg border-2 border-cyan-500/40 bg-cyan-950/30 p-4 transition-all hover:border-cyan-400 hover:bg-cyan-900/40 active:scale-[0.97]"
                 >
                   <span className="text-xs font-bold text-cyan-400 uppercase">Votar Opción 1</span>
@@ -346,7 +200,7 @@ export const PollsStudio: React.FC = () => {
                 {/* Opción 2 Voto */}
                 <button
                   type="button"
-                  onClick={() => handleVote(1, 1)}
+                  onClick={() => castVote(1, 'AdminStudio')}
                   className="flex flex-col items-center justify-center rounded-lg border-2 border-rose-500/40 bg-rose-950/30 p-4 transition-all hover:border-rose-400 hover:bg-rose-900/40 active:scale-[0.97]"
                 >
                   <span className="text-xs font-bold text-rose-400 uppercase">Votar Opción 2</span>
@@ -365,12 +219,12 @@ export const PollsStudio: React.FC = () => {
                   className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-950/30 px-3.5 py-2 text-xs font-bold text-amber-300 hover:bg-amber-900/40 active:scale-[0.97]"
                 >
                   <Zap className="h-3.5 w-3.5 text-amber-400" />
-                  <span>Ráfaga de Votos (+5 Aleatorio)</span>
+                  <span>Ráfaga de Votos (+Aleatorio)</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setIsActive(!isActive)}
+                  onClick={() => (isActive ? pauseBattle() : startBattle())}
                   className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition-all active:scale-[0.97] ${
                     isActive
                       ? 'border border-amber-500 bg-amber-500 text-slate-950'
@@ -378,12 +232,12 @@ export const PollsStudio: React.FC = () => {
                   }`}
                 >
                   <Play className={`h-3.5 w-3.5 fill-current ${isActive ? 'rotate-90' : ''}`} />
-                  <span>{isActive ? 'Pausar Temporizador' : 'Iniciar Batalla (60s)'}</span>
+                  <span>{isActive ? 'Pausar Temporizador' : 'Iniciar Batalla'}</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleReset}
+                  onClick={resetBattle}
                   className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3.5 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 active:scale-[0.97]"
                 >
                   <RotateCcw className="h-3.5 w-3.5 text-slate-400" />
@@ -409,7 +263,7 @@ export const PollsStudio: React.FC = () => {
                   <button
                     key={preset.id}
                     type="button"
-                    onClick={() => handleLoadPreset(preset)}
+                    onClick={() => handleSelectPreset(preset)}
                     className="flex flex-col items-start rounded-lg border border-slate-800 bg-slate-950/70 p-3 text-left transition-all hover:border-slate-700 hover:bg-slate-900 active:scale-[0.98]"
                   >
                     <span className="text-xs font-black text-white">{preset.title}</span>
@@ -440,8 +294,24 @@ export const PollsStudio: React.FC = () => {
                 </span>
               </div>
 
+              <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="text-xs text-slate-400">Voz configurada en TTS:</span>
+                  <span className="rounded bg-rose-500/20 px-2 py-0.5 font-mono text-xs font-bold text-rose-300">
+                    {activeVoiceName}
+                  </span>
+                </div>
+                <a
+                  href="#tts"
+                  className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 hover:underline"
+                >
+                  Cambiar en TTS →
+                </a>
+              </div>
+
               <p className="mt-3 text-xs leading-relaxed text-slate-400">
-                El locutor anuncia eventos clave usando tags emocionales predefinidos. Haz clic en "Escuchar" para escuchar cómo modulan la voz:
+                El locutor anuncia eventos clave usando tags emocionales predefinidos. Haz clic en "Escuchar" para comprobar cómo modula la voz:
               </p>
 
               <div className="mt-4 flex flex-col gap-3">
