@@ -206,23 +206,25 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   useEffect(() => onCloudSyncMessage(setSyncMessage), []);
   const current = nav.flatMap((section) => section.items).find((item) => item.app === currentApp);
 
-  // Sin cuenta en la nube, los ajustes del chat, del saludo de raid, de las recompensas y de la ruleta viajan en la URL:
-  // OBS no comparte almacenamiento con el panel
-  const extraFor = (mode: WidgetAppType): Record<string, string> | undefined => {
-    if (widgetKeyParam) return widgetKeyParam;
+  // Los ajustes del chat, del saludo de raid, de las recompensas y de la ruleta viajan en la URL: OBS no comparte
+  // almacenamiento con el panel. Con cuenta en la nube va además la clave: la fuente usa lo de la cuenta y deja
+  // lo de la URL de reserva, por si la nube no responde
+  const layerParams = (mode: WidgetAppType): Record<string, string> => {
     if (mode === 'chat') return { cs: encodeChatSettings(loadChatSettings()) };
     if (mode === 'rewards') return { rw: encodeRewardsSettings(loadRewardsSettings()) };
     if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
     if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
     if (mode === 'all') {
       return {
+        cs: encodeChatSettings(loadChatSettings()),
         rs: encodeRaidSettings(loadRaidSettings()),
         rw: encodeRewardsSettings(loadRewardsSettings()),
         rl: encodeRouletteSettings(loadRouletteSettings()),
       };
     }
-    return undefined;
+    return {};
   };
+  const extraFor = (mode: WidgetAppType): Record<string, string> => ({ ...widgetKeyParam, ...layerParams(mode) });
 
   const getWidgetUrl = (mode: WidgetAppType) => {
     const ttsSettings = loadSettings();

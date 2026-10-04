@@ -33,6 +33,8 @@ function getAudioContext(): AudioContext | null {
  * que confirma la ejecución instantánea de una orden de moderación en cabina.
  */
 export function playModerationChime(volume = 0.8): void {
+  // Con el volumen de la voz a cero, el aviso tampoco suena
+  if (volume <= 0) return;
   const ctx = getAudioContext();
   if (!ctx) return;
 
@@ -114,6 +116,7 @@ export function announceModerationAction(
   volume = 0.85
 ): void {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (volume <= 0) return;
 
   try {
     const formatter = ACTION_DESCRIPTIONS[action];

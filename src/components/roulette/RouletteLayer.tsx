@@ -31,6 +31,7 @@ import { loadPowerupsSettings } from '../../types/powerups';
 import { reduced } from '../../utils/alertMotion';
 import { playAlertOrCustomSound } from '../../utils/alertsAudio';
 import { RouletteSpinEvent, listenBus, postBus } from '../../utils/bus';
+import { cloudDelivered } from '../../lib/widgetCloud';
 import type { ChatTags, UserRole } from '../../utils/moderation';
 import { GateState, emptyGate } from '../../utils/rewardsLogic';
 import {
@@ -104,9 +105,12 @@ function urlParam(key: string): string | null {
   return at === -1 ? null : (new URLSearchParams(hash.slice(at)).get(key) || '').trim() || null;
 }
 
-/** Ajustes de la ruleta para esta fuente: los de la URL (`rl`, sin cuenta en la nube) o los guardados. */
+/**
+ * Ajustes de la ruleta para esta fuente. Si la cuenta en la nube ya entregó los suyos,
+ * mandan esos; si no (sin cuenta, o la nube no respondió), los de la URL (`rl`).
+ */
 export function rouletteSettingsForWidget(): RouletteSettings {
-  return decodeRouletteSettings(urlParam('rl')) || loadRouletteSettings();
+  return (cloudDelivered('roulette') ? null : decodeRouletteSettings(urlParam('rl'))) || loadRouletteSettings();
 }
 
 function loadOverride(): ActivityOverride | null {

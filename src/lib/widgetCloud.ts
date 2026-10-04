@@ -8,9 +8,13 @@
  * de donde ya leen todas las capas. Después pregunta cada diez segundos solo por
  * la fecha del último cambio (una respuesta mínima, para no gastar salida de
  * datos) y vuelve a descargar el paquete únicamente si cambió.
+ *
+ * Si la función de la fecha no existe en el servidor (migración 0002 sin
+ * aplicar), se descarga el paquete entero cada medio minuto: los cambios llegan
+ * igual, solo que algo más tarde.
  */
 
-import { supabase } from './supabase';
+import { isCloudEnabled, supabase } from './supabase';
 import { MODULE_STORAGE_KEYS, mergeKeepingLocalMedia } from './cloudConfig';
 import type { ConfigModule, WidgetBundleResult } from './cloudTypes';
 import { postBus } from '../utils/bus';
@@ -24,6 +28,8 @@ import { loadRaidSettings } from '../types/raid';
 import { loadStudioSettings } from '../types/studio';
 
 const CHECK_EVERY_MS = 10000;
+/** Sin la función de la fecha, cada cuántas consultas se descarga el paquete entero. */
+const FULL_PULL_EVERY = 3;
 
 /** Lee `k` de la query o del fragmento (#widget?k=...). */
 export function readWidgetKey(): string | null {
@@ -32,6 +38,22 @@ export function readWidgetKey(): string | null {
   const hash = window.location.hash;
   const at = hash.indexOf('?');
   return at === -1 ? null : new URLSearchParams(hash.slice(at + 1)).get('k');
+}
+
+/**
+ * true si los ajustes de este módulo le llegaron a la fuente desde la cuenta: la URL lleva
+ * la clave y el módulo está ya descargado en este navegador. En ese caso manda lo guardado
+ * sobre lo que diga la URL, que es de cuando se copió. Si la nube no se pudo leer y no hay
+ * nada descargado, devuelve false y la fuente usa lo que trae la URL.
+ */
+export function cloudDelivered(module: ConfigModule): boolean {
+  const storageKey = MODULE_STORAGE_KEYS[module];
+  if (!isCloudEnabled || !storageKey || !readWidgetKey()) return false;
+  try {
+    return localStorage.getItem(storageKey) !== null;
+  } catch {
+    return false;
+  }
 }
 
 /** Avisa a las capas ya montadas de que su configuración cambió. */
@@ -83,9 +105,18 @@ export async function startWidgetCloud(key: string): Promise<() => void> {
   let lastVersion: string | null = null;
   let stopped = false;
 
+  // Si la consulta de la fecha falla siempre, se pasa a descargar el paquete entero de vez en cuando
+  let versionWorks = false;
+  let failedChecks = 0;
   const readVersion = async (): Promise<string | null> => {
     const { data, error } = await supabase!.rpc('widget_version', { p_key: key });
-    return error ? null : ((data as string | null) ?? null);
+    if (error) {
+      failedChecks += 1;
+      return null;
+    }
+    versionWorks = true;
+    failedChecks = 0;
+    return (data as string | null) ?? null;
   };
 
   try {
@@ -98,6 +129,12 @@ export async function startWidgetCloud(key: string): Promise<() => void> {
   const timer = setInterval(async () => {
     if (stopped) return;
     const version = await readVersion();
+    if (!version && !versionWorks && failedChecks >= FULL_PULL_EVERY) {
+      failedChecks = 0;
+      // pullBundle solo avisa a las capas de los módulos que cambiaron
+      await pullBundle(key, true).catch(() => false);
+      return;
+    }
     if (!version || version === lastVersion) return;
     try {
       if (await pullBundle(key, true)) lastVersion = version;

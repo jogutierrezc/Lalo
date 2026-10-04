@@ -22,6 +22,7 @@ import {
   loadRewardsSettings,
 } from '../../types/rewards';
 import { RewardsLayer, RewardsLayerHandle } from './RewardsLayer';
+import { cloudDelivered } from '../../lib/widgetCloud';
 import '../../styles/recompensas.css';
 
 function urlParam(key: string): string | null {
@@ -32,9 +33,12 @@ function urlParam(key: string): string | null {
   return at === -1 ? null : (new URLSearchParams(hash.slice(at)).get(key) || '').trim() || null;
 }
 
-/** Ajustes de las recompensas para esta fuente: los de la URL (`rw`) o los guardados. */
+/**
+ * Ajustes de las recompensas para esta fuente. Si la cuenta en la nube ya entregó los suyos,
+ * mandan esos; si no (sin cuenta, o la nube no respondió), los de la URL (`rw`).
+ */
 export function rewardsSettingsForWidget(): RewardsSettings {
-  return decodeRewardsSettings(urlParam('rw')) || loadRewardsSettings();
+  return (cloudDelivered('rewards') ? null : decodeRewardsSettings(urlParam('rw'))) || loadRewardsSettings();
 }
 
 const VIDEO_POSITIONS: readonly string[] = [...REWARD_GRID_POSITIONS, 'fullscreen', 'random'];

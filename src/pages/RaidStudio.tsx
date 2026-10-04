@@ -173,8 +173,11 @@ export const RaidStudio: React.FC = () => {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const copyUrl = (withDemo: boolean) => {
     const tts = loadSettings();
-    const extra: Record<string, string> =
-      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : { rs: encodeRaidSettings(clean) };
+    // Con cuenta va la clave y, de reserva, los ajustes: si la nube no responde, la fuente usa los de la URL
+    const extra: Record<string, string> = {
+      ...(cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : {}),
+      rs: encodeRaidSettings(clean),
+    };
     if (withDemo) extra.demo = '1';
     const url = buildSuiteWidgetUrl(baseUrl, 'raid', tts.channel, tts, extra);
     navigator.clipboard

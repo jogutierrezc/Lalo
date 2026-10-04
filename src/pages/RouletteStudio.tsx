@@ -350,7 +350,8 @@ export const RouletteStudio: React.FC = () => {
       'roulette',
       rouletteSettings.channel,
       loadSettings(),
-      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : { rl: encodeRouletteSettings(rouletteSettings) }
+      // Con cuenta va la clave y, de reserva, los ajustes: si la nube no responde, la fuente usa los de la URL
+      { ...(cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : {}), rl: encodeRouletteSettings(rouletteSettings) }
     );
     navigator.clipboard
       ?.writeText(url)

@@ -24,7 +24,7 @@ import { BattleBarView } from '../components/polls/BattleBarView';
 import { speakPollEmotionCue } from '../utils/pollsAudio';
 import { loadSettings, saveSettings } from '../types/settings';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
-import { Field, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
+import { Field, Range, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { useCloudSession } from '../hooks/useCloudSession';
 import '../styles/capas.css';
@@ -381,6 +381,19 @@ export const PollsStudio: React.FC = () => {
                     checked={settings.audioEffectsEnabled}
                     onChange={(next) => updateSettings({ audioEffectsEnabled: next })}
                   />
+                  {settings.audioEffectsEnabled && (
+                    <Field label="Volumen de los sonidos">
+                      <Range
+                        label="Volumen de los sonidos"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={settings.audioVolume}
+                        format={(value) => `${Math.round(value * 100)} %`}
+                        onChange={(audioVolume) => updateSettings({ audioVolume })}
+                      />
+                    </Field>
+                  )}
                 </div>
               </details>
 

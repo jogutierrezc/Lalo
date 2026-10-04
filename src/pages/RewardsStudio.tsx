@@ -271,8 +271,11 @@ export const RewardsStudio: React.FC = () => {
   // ---------- URL de OBS ----------
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const copyUrl = (withDemo: boolean) => {
-    const extra: Record<string, string> =
-      cloudOn && cloud.profile ? { k: cloud.profile.widget_key } : { rw: encodeRewardsSettings(rewardsSettings) };
+    // Con cuenta va la clave y, de reserva, los ajustes: si la nube no responde, la fuente usa los de la URL
+    const extra: Record<string, string> = {
+      ...(cloudOn && cloud.profile ? { k: cloud.profile.widget_key } : {}),
+      rw: encodeRewardsSettings(rewardsSettings),
+    };
     if (withDemo) {
       extra.demo = '1';
       extra.plate = reward ? plateStyleFor(reward, rewardsSettings) : rewardsSettings.defaultPlateStyle;

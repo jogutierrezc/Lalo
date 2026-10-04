@@ -14,13 +14,12 @@ import gsap from 'gsap';
 import { RejectedMessage, useTwitchChat } from '../hooks/useTwitchChat';
 import { SanitizedTTSMessage } from '../utils/twitchSanitizer';
 import { normalizeTextForFishAudio } from '../utils/emotionMapper';
-import { loadSettings, TTSSettings } from '../types/settings';
-import { AlertPosition, appearanceFromParams, inkFor, normalizeAppearance } from '../utils/appearance';
+import { loadSettings, STORAGE_KEY as TTS_STORAGE_KEY } from '../types/settings';
+import { AlertPosition, inkFor } from '../utils/appearance';
 import {
   ControlAction,
   ControlCommand,
   DEFAULT_TIMEOUT_MINUTES,
-  moderationFromParams,
   needsApproval,
   normalizeModeration,
   normalizeUser,
@@ -55,9 +54,11 @@ import '../styles/chat.css';
 import { RaidSettings, RAID_FRAMES, RaidFrame, decodeRaidSettings, loadRaidSettings, normalizeRaidSettings } from '../types/raid';
 import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
 import '../styles/raid.css';
-import { isCloudEnabled } from '../lib/supabase';
-import { readWidgetKey } from '../lib/widgetCloud';
-import { MODULE_STORAGE_KEYS } from '../lib/cloudConfig';
+import { cloudDelivered } from '../lib/widgetCloud';
+import { resolveWidgetSettings } from '../utils/widgetSettings';
+import { shouldPlayPreSound } from '../utils/preSound';
+import { createPreSoundPlayer } from '../utils/preSoundPlayer';
+import { setActiveVoice } from '../utils/activeVoice';
 import type { RewardsLayerHandle } from '../components/recompensas/RewardsLayer';
 import { RewardsWidgetLayer, rewardsSettingsForWidget } from '../components/recompensas/RewardsWidgetLayer';
 import { TwitchEventLayer } from '../components/powerups/TwitchEventLayer';
@@ -84,44 +85,19 @@ function getURLParam(key: string): string | null {
 }
 
 /**
- * Ajustes que llegan en la URL del widget. El navegador de OBS no comparte
- * localStorage con el panel, así que la URL manda sobre lo guardado.
+ * Ajustes de la voz para esta fuente: lo guardado y lo que trae la URL, con la
+ * precedencia de utils/widgetSettings.ts. Con cuenta en la nube y los ajustes ya
+ * descargados manda lo guardado; si no, la URL.
  */
-/**
- * true si esta fuente lee sus ajustes de la cuenta (URL con llave y ajustes ya descargados).
- * En ese caso manda lo guardado en el panel: la voz y las reglas escritas en la URL son de cuando
- * se copió y, si ganaran, un cambio hecho después en el panel nunca llegaría a OBS.
- */
-function settingsComeFromCloud(): boolean {
-  if (!isCloudEnabled || !readWidgetKey()) return false;
-  try {
-    return localStorage.getItem(MODULE_STORAGE_KEYS.tts ?? '') !== null;
-  } catch {
-    return false;
-  }
-}
-
-/** La voz que toca: la guardada en la cuenta si la hay; si no, la de la URL. */
-function pickVoice(saved: string | undefined, fromUrl: string | null): string {
-  return (settingsComeFromCloud() ? saved || fromUrl : fromUrl || saved) || '';
-}
-
-function urlOverrides(): Partial<TTSSettings> {
-  if (settingsComeFromCloud()) return {};
-  const overrides: Partial<TTSSettings> = { ...appearanceFromParams(getURLParam), ...moderationFromParams(getURLParam) };
-  const volume = parseFloat(getURLParam('vol') || '');
-  if (Number.isFinite(volume)) overrides.volume = Math.min(1, Math.max(0, volume));
-  const speed = parseFloat(getURLParam('speed') || '');
-  if (Number.isFinite(speed)) overrides.speed = Math.min(1.5, Math.max(0.75, speed));
-  return overrides;
-}
+const widgetTtsSettings = () => resolveWidgetSettings(loadSettings(), getURLParam, cloudDelivered('tts'));
 
 /**
- * Ajustes del chat para esta fuente. Sin cuenta en la nube llegan enteros en
- * `cs`; `tpl`, `side`, `motion` y `energy` permiten cambiar uno suelto a mano.
+ * Ajustes del chat para esta fuente. Llegan enteros en `cs`, que vale mientras la
+ * cuenta en la nube no haya entregado los suyos; `tpl`, `side`, `motion` y
+ * `energy` permiten cambiar uno suelto a mano.
  */
 function chatSettingsForWidget(base: ChatSettings): ChatSettings {
-  const fromUrl = decodeChatSettings(getURLParam('cs')) || base;
+  const fromUrl = (cloudDelivered('chat') ? null : decodeChatSettings(getURLParam('cs'))) || base;
   const overrides: Record<string, string> = {};
   const map: [string, string][] = [
     ['tpl', 'template'],
@@ -143,11 +119,12 @@ function chatSettingsForWidget(base: ChatSettings): ChatSettings {
 }
 
 /**
- * Ajustes del saludo de raid para esta fuente. Sin cuenta en la nube llegan
- * enteros en `rs`; `frame` permite cambiar el marco a mano.
+ * Ajustes del saludo de raid para esta fuente. Llegan enteros en `rs`, que vale
+ * mientras la cuenta en la nube no haya entregado los suyos; `frame` permite
+ * cambiar el marco a mano.
  */
 function raidSettingsForWidget(base: RaidSettings): RaidSettings {
-  const fromUrl = decodeRaidSettings(getURLParam('rs')) || base;
+  const fromUrl = (cloudDelivered('raid') ? null : decodeRaidSettings(getURLParam('rs'))) || base;
   const frame = (getURLParam('frame') || '').toLowerCase();
   return RAID_FRAMES.some((item) => item.id === frame) ? { ...fromUrl, frame: frame as RaidFrame } : fromUrl;
 }
@@ -253,60 +230,34 @@ function rewardSpotStyle(spot: Spot | undefined, margin: number, scale: number):
   };
 }
 
-const LALOPLAY_DEFAULT_VOICE ='37f9f4eec7624089a49b188d47588f2c';
-const OLD_PRESET_VOICE = '7f92f8afb8ec43bf81429cc1c9199cb1';
+/** demo=1 en la fuente de la voz o de las alertas: una tarjeta de muestra fija, sin sonido, para colocarla en OBS. */
+const DEMO_CARD: SanitizedTTSMessage = {
+  id: 'demo-card',
+  rawText: '!s Así se ve un mensaje leído en tu directo',
+  cleanText: 'Así se ve un mensaje leído en tu directo',
+  username: 'superviewer',
+  displayName: 'SuperViewer',
+  userColor: '#22c7e0',
+  timestamp: 0,
+  trigger: 'test',
+};
 
 export const Widget: React.FC = () => {
-  const [settings, setSettings] = useState(() => {
-    const base = loadSettings();
-    const channelParam = getURLParam('channel') || getURLParam('c');
-    const voiceParam = getURLParam('voice') || getURLParam('reference_id') || getURLParam('v');
-    const modelParam = getURLParam('model') || getURLParam('m');
-    const announceParam = getURLParam('announce') || getURLParam('a');
-
-    const rawModel = (modelParam || base.model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
-    const cleanModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
-
-    // Resolver voz: si no se especificó o es la antigua voz de muestra, asignar la voz clonada oficial
-    const rawVoice = (pickVoice(base.referenceId, voiceParam) || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
-    const cleanVoice = (!rawVoice || rawVoice === OLD_PRESET_VOICE || rawVoice === 'default' || rawVoice === 'undefined')
-      ? LALOPLAY_DEFAULT_VOICE
-      : rawVoice;
-
-    return {
-      ...base,
-      channel: channelParam || base.channel || 'laloplay_',
-      referenceId: cleanVoice,
-      model: cleanModel,
-      announceSender: announceParam !== null ? announceParam === 'true' || announceParam === '1' : base.announceSender,
-      ...urlOverrides(),
-    };
-  });
+  const [settings, setSettings] = useState(widgetTtsSettings);
+  // Los ajustes vigentes, para lo que se ejecuta fuera del pintado (avisos del bus, temporizadores)
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  // Las frases que dicen otras capas (batallas) usan la misma voz y el mismo volumen
+  setActiveVoice(settings);
 
   const activeChannel = settings.channel || 'laloplay_';
 
-  // Sincronizar cambios en localStorage
+  // Ajustes nuevos en este navegador: los trae la nube (widgetCloud) o el panel si comparte navegador
   useEffect(() => {
-    const handleStorage = () => {
-      const updated = loadSettings();
-      const voiceParam = getURLParam('voice') || getURLParam('reference_id') || getURLParam('v');
-      const rawVoice = (pickVoice(updated.referenceId, voiceParam) || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
-      const cleanVoice = (!rawVoice || rawVoice === OLD_PRESET_VOICE || rawVoice === 'default' || rawVoice === 'undefined')
-        ? LALOPLAY_DEFAULT_VOICE
-        : rawVoice;
-
-      const modelParam = getURLParam('model') || getURLParam('m');
-      const rawModel = (modelParam || updated.model || 's2.1-pro-free').trim().replace(/[.,;/\\]+$/, '');
-      const cleanModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
-
-      setSettings((prev) => ({
-        ...prev,
-        ...updated,
-        channel: getURLParam('channel') || getURLParam('c') || updated.channel,
-        referenceId: cleanVoice,
-        model: cleanModel,
-        ...urlOverrides(),
-      }));
+    // Un cambio en lo guardado es lo último que eligió el streamer: manda sobre la URL
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== TTS_STORAGE_KEY) return;
+      setSettings(resolveWidgetSettings(loadSettings(), getURLParam, true));
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
@@ -521,6 +472,16 @@ export const Widget: React.FC = () => {
   const speakRoulette = useCallback((text: string) => enqueueManualMessage(text, 'Ruleta', true), [enqueueManualMessage]);
   const handleTwitchEvent = useCallback((event: TwitchEvent) => rouletteRef.current?.event(event), []);
 
+  // Sonido antes de la voz: se carga por adelantado y se recuerda cuándo habló la voz por última vez
+  const preSoundRef = useRef<ReturnType<typeof createPreSoundPlayer> | null>(null);
+  if (!preSoundRef.current) preSoundRef.current = createPreSoundPlayer();
+  const lastSpokenAtRef = useRef(0);
+  // Mensajes que ya llegan con su propio sonido (alertas): no llevan otro encima
+  const ownSoundIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    preSoundRef.current?.preload(settings.preSound);
+  }, [settings.preSound]);
+
   const [currentMessage, setCurrentMessage] = useState<SanitizedTTSMessage | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isAudioLoading, setIsAudioLoading] = useState<boolean>(false);
@@ -566,10 +527,8 @@ export const Widget: React.FC = () => {
         }
         if (event.data?.type === 'SETTINGS_UPDATE' && event.data.settings) {
           console.log('[Lalo Widget] Configuración actualizada dinámicamente desde el Dashboard.');
-          setSettings((prev) => {
-            const merged = { ...prev, ...event.data.settings };
-            return { ...merged, ...normalizeAppearance(merged), ...normalizeModeration(merged) };
-          });
+          // Lo envía el panel o la nube: es lo último que eligió el streamer y manda sobre la URL
+          setSettings((prev) => resolveWidgetSettings({ ...prev, ...event.data.settings }, getURLParam, true));
         }
         if (event.data?.type === 'FORCE_RELOAD' || event.data?.type === 'RELOAD') {
           console.log('[Lalo Widget] Orden de recarga remota recibida vía BroadcastChannel.');
@@ -637,6 +596,12 @@ export const Widget: React.FC = () => {
       clearInterval(intervalTimer);
     };
   }, [isPlaying, messageQueue.length]);
+
+  // demo=1 en la fuente de la voz o de las alertas: tarjeta de muestra fija para colocarla y ver el tamaño
+  const cardDemo = getURLParam('demo') === '1' && ['', 'tts', 'alerts'].includes(appParam);
+  useEffect(() => {
+    if (cardDemo && !currentMessage && !isPlaying) setCurrentMessage(DEMO_CARD);
+  }, [cardDemo, currentMessage, isPlaying]);
 
   // Animación de entrada GSAP según el estilo de alerta elegido.
   // useLayoutEffect evita que la tarjeta se vea un fotograma antes de animar.
@@ -710,8 +675,11 @@ export const Widget: React.FC = () => {
         finalized = true;
 
         if (watchdogTimer) clearTimeout(watchdogTimer);
+        lastSpokenAtRef.current = Date.now();
+        ownSoundIdsRef.current.delete(message.id);
         if (skipped) {
-          // Saltado por el streamer: cortar la voz ya
+          // Saltado por el streamer: cortar la voz y el sonido previo ya
+          preSoundRef.current?.stop();
           if (audioRef.current) audioRef.current.pause();
           if ('speechSynthesis' in window && window.speechSynthesis) window.speechSynthesis.cancel();
         }
@@ -744,6 +712,19 @@ export const Widget: React.FC = () => {
         watchdogTimer = setTimeout(() => finalizePlayback(), seconds * 1000);
         return;
       }
+
+      // Sonido antes de la voz: empieza ya, mientras se pide el audio, para que no haya hueco.
+      // La promesa se cumple cuando la voz puede empezar y nunca falla
+      const preSound = shouldPlayPreSound(settings.preSound, {
+        trigger: message.trigger,
+        system: message.system,
+        hasOwnSound: ownSoundIdsRef.current.has(message.id),
+        textOnly: false,
+        lastSpokenAt: lastSpokenAtRef.current,
+        now: Date.now(),
+      })
+        ? (preSoundRef.current?.play(settings.preSound) ?? Promise.resolve()).catch(() => {})
+        : Promise.resolve();
 
       try {
         const controller = new AbortController();
@@ -850,6 +831,10 @@ export const Widget: React.FC = () => {
           setTimeout(onReady, 350);
         });
 
+        // La voz espera a que acabe el sonido previo (o a su tope)
+        await preSound;
+        if (finalized) return;
+
         // Intentar reproducción
         await audio.play();
       } catch (err) {
@@ -875,6 +860,8 @@ export const Widget: React.FC = () => {
               ?`${cleanUserName} dice: ${speechText}`
               : speechText;
 
+            await preSound;
+            if (finalized) return;
             const utterance = new SpeechSynthesisUtterance(fallbackText);
             utterance.lang = 'es-ES';
             utterance.rate = settings.speed;
@@ -914,6 +901,14 @@ export const Widget: React.FC = () => {
     },
     [settings, animateExit, startSpeakingAnimation, stopSpeakingAnimation, pushLog]
   );
+
+  // Un cambio de volumen o de velocidad se nota también en el mensaje que está sonando
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.volume = settings.volume;
+    audio.playbackRate = settings.speed;
+  }, [settings.volume, settings.speed]);
 
   // Órdenes de control: llegan del chat (streamer y mods) o del control en vivo de este navegador
   controlRef.current = (command: LiveControl) => {
@@ -1070,6 +1065,8 @@ export const Widget: React.FC = () => {
   // Soporte para Metas Comunitarias en OBS
   const isGoalsApp = getURLParam('app') === 'goals' || window.location.hash.includes('app=goals');
   const [goalsSettings, setGoalsSettings] = useState(() => loadGoalsSettings());
+  const goalsSettingsRef = useRef(goalsSettings);
+  goalsSettingsRef.current = goalsSettings;
   const [currentGoalEvent, setCurrentGoalEvent] = useState<GoalProgressEvent | null>(null);
 
   // Soporte para Batallas & Encuestas en OBS
@@ -1089,6 +1086,9 @@ export const Widget: React.FC = () => {
     }
     return base;
   });
+  // Los avisos del bus se atienden con los ajustes vigentes, no con los del arranque
+  const pollSettingsRef = useRef(pollSettings);
+  pollSettingsRef.current = pollSettings;
   const [activePollState, setActivePollState] = useState<PollBattleUpdateEvent | null>(null);
   const pollsContainerRef = useRef<HTMLDivElement | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1169,7 +1169,7 @@ export const Widget: React.FC = () => {
 
         // Reproducir audio si el modo incluye sonido sintetizado o clip personalizado
         if (mode === 'synth' || mode === 'custom_audio' || mode === 'both') {
-          playAlertOrCustomSound(alert.customAudioUrl, alert.soundType || 'synth-bell', alert.customAudioVolume ?? 0.85);
+          playAlertOrCustomSound(alert.customAudioUrl, alert.soundType || 'synth-bell', alert.customAudioVolume ?? alertsRef.current.soundVolume);
         }
 
         // Sacudida de pantalla si está habilitada en la alerta
@@ -1199,7 +1199,7 @@ export const Widget: React.FC = () => {
             blendMode: alert.blendMode || 'transparent',
             position: 'center',
             scale: alert.videoScale || 1.0,
-            volume: 0.85,
+            volume: alert.customAudioVolume ?? alertsRef.current.soundVolume,
             screenShake: alert.screenShake,
             accentColor: alert.accent || '#9146ff',
             soundType: alert.soundType,
@@ -1211,6 +1211,8 @@ export const Widget: React.FC = () => {
         if (mode === 'tts' || mode === 'both') {
           const queued = enqueueManualMessage(alert.text, alert.user);
           if (queued && alertSpot) alertSpotsRef.current.set(queued.id, alertSpot);
+          // La alerta ya sonó con lo suyo: la voz entra sin el sonido previo
+          if (queued && mode === 'both') ownSoundIdsRef.current.add(queued.id);
         }
       }
       if (message.type === 'REWARD_TRIGGER') {
@@ -1278,7 +1280,7 @@ export const Widget: React.FC = () => {
             try {
               const utter = new SpeechSynthesisUtterance(message.goal.announcement);
               utter.lang = 'es-MX';
-              utter.volume = goalsSettings.announceTtsVolume ?? 0.85;
+              utter.volume = goalsSettingsRef.current.announceTtsVolume ?? 0.85;
               window.speechSynthesis.speak(utter);
             } catch (err) {
               console.warn('OBS TTS speech error:', err);
@@ -1354,7 +1356,7 @@ export const Widget: React.FC = () => {
           optionALabel: poll.optionA.label,
           optionBLabel: poll.optionB.label,
           durationSec: poll.durationSec,
-          volume: settings.volume,
+          volume: settingsRef.current.volume,
         });
 
         // 3. Estado inicial de la batalla
@@ -1404,8 +1406,8 @@ export const Widget: React.FC = () => {
                   : 'Empate';
 
               // Fanfarria de victoria
-              if (pollSettings.audioEffectsEnabled) {
-                playPollVictoryFanfare(settings.volume);
+              if (pollSettingsRef.current.audioEffectsEnabled) {
+                playPollVictoryFanfare(pollSettingsRef.current.audioVolume);
               }
 
               // Locución TTS con la voz oficial de Fish Audio
@@ -1447,13 +1449,13 @@ export const Widget: React.FC = () => {
 
           // Alerta a los 10 segundos finales
           if (remainingSeconds === 10) {
-            if (pollSettings.audioEffectsEnabled) {
-              playCountdownBeep(settings.volume, true);
+            if (pollSettingsRef.current.audioEffectsEnabled) {
+              playCountdownBeep(pollSettingsRef.current.audioVolume, true);
             }
             speakPollEmotionCue('[susurro] Quedan solo 10 segundos, ¡emitan sus votos en el chat!', '[susurro]');
           } else if (remainingSeconds <= 5 && remainingSeconds > 0) {
-            if (pollSettings.audioEffectsEnabled) {
-              playCountdownBeep(settings.volume, true);
+            if (pollSettingsRef.current.audioEffectsEnabled) {
+              playCountdownBeep(pollSettingsRef.current.audioVolume, true);
             }
           }
 
@@ -1498,7 +1500,7 @@ export const Widget: React.FC = () => {
 
           const existingVote = pollVotersRef.current.get(voter);
           if (existingVote !== undefined) {
-            if (!pollSettings.allowVoteChange) return prev;
+            if (!pollSettingsRef.current.allowVoteChange) return prev;
             if (existingVote === message.option) return prev;
           }
 
@@ -1516,13 +1518,13 @@ export const Widget: React.FC = () => {
           const newLeader = determineLeader(votesA, votesB);
           if (newLeader !== 'TIE' && newLeader !== pollLeaderRef.current) {
             pollLeaderRef.current = newLeader;
-            if (pollSettings.audioEffectsEnabled) {
-              playLeadClash(pollSettings.audioVolume);
+            if (pollSettingsRef.current.audioEffectsEnabled) {
+              playLeadClash(pollSettingsRef.current.audioVolume);
             }
           }
 
-          if (pollSettings.audioEffectsEnabled) {
-            playVoteTick(pollSettings.audioVolume, message.option);
+          if (pollSettingsRef.current.audioEffectsEnabled) {
+            playVoteTick(pollSettingsRef.current.audioVolume, message.option);
           }
 
           const nextState: PollBattleUpdateEvent = {
@@ -1539,8 +1541,8 @@ export const Widget: React.FC = () => {
       }
       if (message.type === 'POLL_STATE_UPDATE') {
         setActivePollState(message.state);
-        if (message.state.lastVoteOption !== undefined && pollSettings.audioEffectsEnabled) {
-          playVoteTick(pollSettings.audioVolume, message.state.lastVoteOption);
+        if (message.state.lastVoteOption !== undefined && pollSettingsRef.current.audioEffectsEnabled) {
+          playVoteTick(pollSettingsRef.current.audioVolume, message.state.lastVoteOption);
         }
       }
       if (message.type === 'POLL_TTS_CUE') {
@@ -1810,7 +1812,11 @@ export const Widget: React.FC = () => {
             {/* Reproductor de Video Transparente */}
             {activeReward.videoUrl ? (
               <video
-                ref={rewardVideoRef}
+                ref={(element) => {
+                  rewardVideoRef.current = element;
+                  // El volumen del vídeo es el de la alerta o la recompensa, no el máximo
+                  if (element) element.volume = Math.min(1, Math.max(0, activeReward.volume ?? 0.85));
+                }}
                 src={activeReward.videoUrl}
                 autoPlay
                 playsInline

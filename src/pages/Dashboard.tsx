@@ -41,6 +41,7 @@ import { AlertCard } from '../components/AlertCard';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { Field, Range, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
 import { RulesPanel } from '../components/voz/RulesPanel';
+import { PreSoundSection } from '../components/voz/PreSoundSection';
 import { useRewardDetect } from '../components/voz/useRewardDetect';
 import { readLastCopiedUrl, urlChangedSinceCopy, withEmotion, writeLastCopiedUrl } from '../components/voz/vozLogic';
 import '../styles/voz-envivo.css';
@@ -280,7 +281,9 @@ export const Dashboard: React.FC = () => {
   const [lastCopied, setLastCopied] = useState<string | null>(readLastCopiedUrl);
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle');
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const urlChanged = urlChangedSinceCopy(widgetUrl, lastCopied);
+  // Con cuenta en la nube los cambios llegan solos a OBS: no hace falta volver a copiar la URL
+  const cloudActive = cloud.profile?.status === 'active';
+  const urlChanged = !cloudActive && urlChangedSinceCopy(widgetUrl, lastCopied);
 
   useEffect(
     () => () => {
@@ -399,6 +402,8 @@ export const Dashboard: React.FC = () => {
                     {announce ? 'Antes del mensaje, la voz dice quién lo escribió.' : 'La voz lee solo el mensaje.'}
                   </span>
                 </div>
+
+                <PreSoundSection settings={settings} cloudOn={cloud.profile?.status === 'active'} update={update} />
 
                 <details className="studio-details">
                   <summary>Avanzado</summary>

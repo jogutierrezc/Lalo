@@ -50,10 +50,13 @@ describe('aviso de URL cambiada', () => {
     expect(urlChangedSinceCopy(buildSuiteWidgetUrl(origin, 'tts', louder.channel, louder), copied)).toBe(true);
     const stricter = { ...settings, blockedWords: ['spoiler'] };
     expect(urlChangedSinceCopy(buildSuiteWidgetUrl(origin, 'tts', stricter.channel, stricter), copied)).toBe(true);
+    // La frase del anuncio también viaja: sin ella, OBS seguía diciendo «dice» aunque se cambiara
+    const phrase = { ...settings, announceTemplate: '{user}: {message}' };
+    expect(urlChangedSinceCopy(buildSuiteWidgetUrl(origin, 'tts', phrase.channel, phrase), copied)).toBe(true);
   });
 
   it('no avisa por un ajuste que no viaja en la URL', () => {
-    const other = { ...settings, announceTemplate: '{user}: {message}' };
+    const other = { ...settings, enableVisualizer: !settings.enableVisualizer };
     expect(urlChangedSinceCopy(buildSuiteWidgetUrl(origin, 'tts', other.channel, other), copied)).toBe(false);
   });
 });

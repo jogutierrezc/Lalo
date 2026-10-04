@@ -7,7 +7,7 @@
  * (Chispa, Seda, Atlas, Vera, Brisa o ID propio) con modulación emocional.
  */
 
-import { loadSettings } from '../types/settings';
+import { getActiveVoice } from './activeVoice';
 import { normalizeTextForFishAudio } from './emotionMapper';
 
 let sharedAudioCtx: AudioContext | null = null;
@@ -198,7 +198,8 @@ export async function speakPollEmotionCue(
     currentPollAudio = null;
   }
 
-  const ttsSettings = loadSettings();
+  // La voz de esta fuente: en OBS puede venir de la URL y no estar guardada en el navegador
+  const ttsSettings = getActiveVoice();
   const normalized = normalizeTextForFishAudio(fullText);
 
   // 1. Intentar reproducir con la voz oficial configurada en TTS mediante /api/tts
@@ -226,7 +227,9 @@ export async function speakPollEmotionCue(
       const blob = await res.blob();
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
-      audio.volume = Math.max(0.1, Math.min(1, ttsSettings.volume ?? 0.85));
+      // El volumen y la velocidad son los de «Voz del chat»; con el volumen a cero no suena
+      audio.volume = Math.max(0, Math.min(1, ttsSettings.volume ?? 0.85));
+      audio.playbackRate = ttsSettings.speed || 1;
       currentPollAudio = audio;
 
       audio.onplay = () => onStart?.();
@@ -290,6 +293,9 @@ function fallbackSpeechSynthesis(
     utterance.rate = 1.1;
     utterance.pitch = 1.05;
   }
+
+  // La voz de reserva respeta también el volumen de «Voz del chat»
+  utterance.volume = Math.max(0, Math.min(1, utterance.volume * (getActiveVoice().volume ?? 0.85)));
 
   utterance.onstart = () => onStart?.();
   utterance.onend = () => onEnd?.();

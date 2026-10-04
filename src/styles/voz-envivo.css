@@ -60,3 +60,9 @@
   font-variant-numeric: tabular-nums;
   color: var(--cb-bad);
 }
+
+/* Sonido antes de la voz: un bloque más de la pestaña Voz, con el mismo ritmo que el resto de campos */
+.vz-presound {
+  display: grid;
+  gap: 18px;
+}
