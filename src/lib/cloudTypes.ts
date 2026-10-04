@@ -2,7 +2,7 @@
  * src/lib/cloudTypes.ts
  *
  * Tipos de las tablas y RPCs de Supabase. Escritos a mano: deben coincidir con
- * supabase/migrations (0001 a 0008). Las fechas llegan como texto ISO.
+ * supabase/migrations (0001 a 0009). Las fechas llegan como texto ISO.
  */
 
 export type ProfileRole = 'streamer' | 'admin';
@@ -112,6 +112,32 @@ export interface TermsAcceptanceRow {
   accepted_at: string;
 }
 
+/** Desde 0009: lo que cualquier cuenta con sesión lee de una voz visible del catálogo. */
+export interface PublicVoiceRow {
+  id: string;
+  name: string;
+  description: string;
+  /** Id del modelo en Fish Audio: lo que guarda cada streamer como su voz. */
+  reference_id: string;
+  visible: boolean;
+  is_default: boolean;
+  origin: 'initial' | 'recorded' | 'uploaded';
+  created_at: string;
+}
+
+/** Desde 0009: una voz tal como la ve el administrador (admin_voices). */
+export interface AdminVoiceRow extends PublicVoiceRow {
+  voice_owner: 'own' | 'other' | 'unknown';
+  permission_by: string | null;
+  permission_confirmed_at: string | null;
+  created_by: string | null;
+  /** Cuántos streamers la tienen guardada en su configuración sincronizada. */
+  streamers?: number;
+}
+
+/** voice_state(p_reference_id): qué pasa con el id de voz que alguien tiene guardado. */
+export type VoiceState = 'visible' | 'retired' | 'unknown';
+
 export type MediaProvider = NonNullable<MediaFileRow['provider']>;
 
 // --- RPCs -------------------------------------------------------------------
@@ -218,6 +244,10 @@ export interface RpcArgs {
   storage_ready: Record<string, never>;
   complete_onboarding: Record<string, never>;
   accept_terms: { p_versions: Record<string, string> };
+  voice_state: { p_reference_id: string };
+  admin_voices: Record<string, never>;
+  admin_set_voice_visible: { p_voice: string; p_visible: boolean };
+  admin_set_default_voice: { p_voice: string };
 }
 
 /** Resultado de cada RPC (lo que llega en `data`). */
@@ -241,4 +271,9 @@ export interface RpcResult {
   complete_onboarding: string;
   /** Desde 0008: la fecha en que quedó registrada la aceptación. */
   accept_terms: string;
+  /** Desde 0009. */
+  voice_state: VoiceState;
+  admin_voices: AdminVoiceRow[];
+  admin_set_voice_visible: null;
+  admin_set_default_voice: null;
 }

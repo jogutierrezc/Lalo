@@ -22,7 +22,8 @@ import { completeOnboarding, fetchOwnPlan, getCaminoElegido, getPendingCode } fr
 import { outcomeMessage } from '../lib/accesoMensajes';
 import { claveBienvenida, lineasDelPlan, pasoConSesion, type PasoId, type PasoNarrado } from '../lib/recorrido';
 import { alertasActivas, guardarCanal, limpiarCanal } from '../lib/recorridoCanal';
-import { loadSettings, PRESET_VOICES } from '../types/settings';
+import { loadSettings } from '../types/settings';
+import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { ALERT_STYLES, type AlertStyle } from '../utils/appearance';
 import { LateralRecorrido, MarcoRecorrido, TarjetaPlan, TituloPaso, usePasoAnimado } from '../components/recorrido/piezas';
 import { PrimerosPasos, anotarTarea } from '../components/recorrido/PrimerosPasos';
@@ -107,6 +108,8 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
 
   // Elecciones de «Tu canal». Parten de lo guardado; en una cuenta nueva, la voz es Chispa
   const [voz, setVoz] = useState(() => loadSettings().referenceId);
+  // Las voces salen del catálogo de la nube; si la guardada ya no está, se pasa a la voz por defecto
+  const { catalogue: catalogoVoces } = useVoiceCatalogue(voz, setVoz);
   const [estilo, setEstilo] = useState<AlertStyle>(() => loadSettings().alertStyle);
   const [comando, setComando] = useState(true);
   const [avisos, setAvisos] = useState(true);
@@ -226,7 +229,7 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
   };
 
   const notice = problem || (paso === 'codigo' ? outcomeMessage(outcome) : null) || error;
-  const vozConocida = PRESET_VOICES.some((preset) => preset.id === voz);
+  const vozConocida = catalogoVoces.voices.some((preset) => preset.id === voz);
   // Mientras se trae la configuración de la cuenta no se guarda nada encima
   const preparando = loading;
 
@@ -395,14 +398,14 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
                 Voz que lee el chat
               </span>
               <div className="cab-seg">
-                {PRESET_VOICES.map((preset) => (
+                {catalogoVoces.voices.map((preset) => (
                   <button key={preset.id} type="button" aria-pressed={voz === preset.id} onClick={() => setVoz(preset.id)}>
                     {preset.name}
                   </button>
                 ))}
               </div>
               {vozConocida ? (
-                <span className="cab-hint">{PRESET_VOICES.find((preset) => preset.id === voz)?.description}</span>
+                <span className="cab-hint">{catalogoVoces.voices.find((preset) => preset.id === voz)?.description}</span>
               ) : (
                 <span className="cab-hint">Ahora tienes una voz propia. Si no eliges otra, se queda esa.</span>
               )}

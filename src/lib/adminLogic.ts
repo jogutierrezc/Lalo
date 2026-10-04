@@ -11,13 +11,14 @@ import type { InviteCodeRow, InviteRedemptionRow, ProfileUsageRow } from './clou
 
 // ---------- Secciones ----------
 
-export type AdminSection = 'resumen' | 'codigos' | 'limites' | 'almacenamiento' | 'streamers' | 'acceso';
+export type AdminSection = 'resumen' | 'codigos' | 'limites' | 'almacenamiento' | 'voces' | 'streamers' | 'acceso';
 
 export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'codigos', label: 'Códigos de invitación' },
   { id: 'limites', label: 'Límites' },
   { id: 'almacenamiento', label: 'Almacenamiento' },
+  { id: 'voces', label: 'Voces' },
   { id: 'streamers', label: 'Streamers' },
   { id: 'acceso', label: 'Mi acceso' },
 ];

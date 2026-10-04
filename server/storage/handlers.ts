@@ -60,17 +60,17 @@ export const DEFAULT_CAPACITY_BYTES = 10 * 1024 * 1024 * 1024;
 /** Minutos que vale la URL de subida. */
 const UPLOAD_URL_SECONDS = 300;
 
-const fail = (status: number, code: string, error: string, extra: Record<string, unknown> = {}): ApiResult => ({
+export const fail = (status: number, code: string, error: string, extra: Record<string, unknown> = {}): ApiResult => ({
   status,
   body: { error, code, ...extra },
 });
 
-function header(req: ApiRequest, name: string): string {
+export function header(req: ApiRequest, name: string): string {
   const value = req.headers[name] ?? req.headers[name.toLowerCase()];
   return (Array.isArray(value) ? value[0] : value) ?? '';
 }
 
-function bodyOf(req: ApiRequest): Record<string, unknown> {
+export function bodyOf(req: ApiRequest): Record<string, unknown> {
   if (req.body && typeof req.body === 'object') return req.body as Record<string, unknown>;
   if (typeof req.body === 'string') {
     try {
@@ -85,7 +85,7 @@ function bodyOf(req: ApiRequest): Record<string, unknown> {
 
 // ---------- Quién llama ----------
 
-interface Caller {
+export interface Caller {
   id: string;
   role: string;
   status: string;
@@ -93,7 +93,7 @@ interface Caller {
   mediaFolder: string;
 }
 
-interface Context {
+export interface Context {
   db: SupabaseClient;
   caller: Caller;
 }
@@ -106,7 +106,7 @@ export function missingSupabaseEnv(env: Env): string[] {
   return missing;
 }
 
-async function identify(req: ApiRequest, env: Env): Promise<Context | ApiResult> {
+export async function identify(req: ApiRequest, env: Env): Promise<Context | ApiResult> {
   const missing = missingSupabaseEnv(env);
   if (missing.length > 0) {
     return fail(503, 'server_not_configured', 'Al servidor le faltan variables para comprobar quién eres.', { missing });
@@ -141,8 +141,8 @@ async function identify(req: ApiRequest, env: Env): Promise<Context | ApiResult>
   };
 }
 
-const isResult = (value: Context | ApiResult): value is ApiResult => 'status' in value && 'body' in value;
-const isAdmin = (caller: Caller) => caller.role === 'admin' && caller.status === 'active';
+export const isResult = (value: Context | ApiResult): value is ApiResult => 'status' in value && 'body' in value;
+export const isAdmin = (caller: Caller) => caller.role === 'admin' && caller.status === 'active';
 
 // ---------- Lecturas comunes ----------
 
@@ -543,12 +543,12 @@ export async function handleApi(route: ApiRoute, req: ApiRequest, env: Env = pro
   }
 }
 
-interface NodeLikeRequest {
+export interface NodeLikeRequest {
   method?: string;
   headers: Record<string, string | string[] | undefined>;
   body?: unknown;
 }
-interface NodeLikeResponse {
+export interface NodeLikeResponse {
   setHeader(name: string, value: string): unknown;
   status(code: number): { json(body: unknown): unknown };
 }

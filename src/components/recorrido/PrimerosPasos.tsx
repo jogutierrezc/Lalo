@@ -25,6 +25,7 @@ import {
   type TareaId,
 } from '../../lib/recorrido';
 import { useReproductor } from './useReproductor';
+import { voiceForSpeaking } from '../../lib/voicesCloud';
 import '../../styles/recorrido.css';
 
 const FRASE_DE_PRUEBA = 'Hola, soy la voz de tu canal. Así sonarán los mensajes de tu chat.';
@@ -96,7 +97,9 @@ export const PrimerosPasos: React.FC<PrimerosPasosProps> = ({ perfilId, variante
       voz.detener();
       return;
     }
-    if (await voz.sonar({ texto: FRASE_DE_PRUEBA, voz: loadSettings().referenceId })) anotar('voz', 'hecha');
+    // Si la voz guardada ya no está en el catálogo, suena la voz por defecto
+    const referencia = await voiceForSpeaking(loadSettings().referenceId);
+    if (await voz.sonar({ texto: FRASE_DE_PRUEBA, voz: referencia })) anotar('voz', 'hecha');
   };
 
   const hacer = (id: TareaId) => {

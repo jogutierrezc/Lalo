@@ -14,7 +14,8 @@
 
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check, Copy, Play, Upload } from 'lucide-react';
-import { saveSettings, PRESET_VOICES } from '../types/settings';
+import { saveSettings } from '../types/settings';
+import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { useSettings } from '../hooks/useSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { postBus } from '../utils/bus';
@@ -141,12 +142,18 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   // ---------- Voz ----------
-  const isPresetVoice = PRESET_VOICES.some((voice) => voice.id === settings.referenceId);
+  // El catálogo sale de la nube; sin ella, son las cinco voces de siempre. Si la voz guardada
+  // era del catálogo y ya no está, se pasa a la voz por defecto y se avisa
+  const voiceList = useVoiceCatalogue(settings.referenceId, (defaultId) => update({ referenceId: defaultId }));
+  const voices = voiceList.catalogue.voices;
+  const isPresetVoice = voices.some((voice) => voice.id === settings.referenceId);
+  // Mientras llega el catálogo no se sabe si un id desconocido es propio o de una voz nueva
+  const voiceUnknownYet = voiceList.loading && !isPresetVoice;
   // «Usar ID propio» es una elección del streamer aunque todavía no haya pegado ningún ID
   const [customChosen, setCustomChosen] = useState(false);
   const [customDraft, setCustomDraft] = useState(() => (isPresetVoice ? '' : settings.referenceId));
-  const customVoice = customChosen || !isPresetVoice;
-  const currentVoiceName = PRESET_VOICES.find((voice) => voice.id === settings.referenceId)?.name;
+  const customVoice = customChosen || (!isPresetVoice && !voiceUnknownYet);
+  const currentVoiceName = voices.find((voice) => voice.id === settings.referenceId)?.name;
 
   const chooseVoice = (value: string) => {
     if (value === 'custom') {
@@ -328,7 +335,13 @@ export const Dashboard: React.FC = () => {
                 <Field
                   label="Voz"
                   htmlFor={`${uid}-voice`}
-                  hint={customVoice ? undefined : PRESET_VOICES.find((voice) => voice.id === settings.referenceId)?.description}
+                  hint={
+                    voiceList.replacedBy
+                      ? `La voz que tenías ya no está en el catálogo. Ahora se usa ${voiceList.replacedBy}.`
+                      : customVoice
+                        ? undefined
+                        : voices.find((voice) => voice.id === settings.referenceId)?.description
+                  }
                 >
                   <select
                     id={`${uid}-voice`}
@@ -336,7 +349,8 @@ export const Dashboard: React.FC = () => {
                     onChange={(e) => chooseVoice(e.target.value)}
                     className="cab-inp"
                   >
-                    {PRESET_VOICES.map((voice) => (
+                    {voiceUnknownYet && <option value={settings.referenceId}>Leyendo el catálogo</option>}
+                    {voices.map((voice) => (
                       <option key={voice.id} value={voice.id}>
                         {voice.name}
                       </option>

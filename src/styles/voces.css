@@ -1,0 +1,327 @@
+/* ==========================================================================
+   Consola de administración · Voces
+   Layout: dos columnas que se apilan en pantallas estrechas. A la izquierda el
+   catálogo (una ficha por voz, con su prueba y sus acciones); a la derecha el
+   alta de una voz en pasos (audio, datos, permiso, crear).
+   Solo añade lo que le falta al lenguaje Cabina (.cab-*) y a la consola (.adm-*).
+   ========================================================================== */
+
+.voc-console {
+  --voc-rec: #ff5a52;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .voc-console {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.voc-count {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--cb-mut);
+}
+
+/* ---------- Catálogo ---------- */
+.voc-list {
+  display: grid;
+  gap: 8px;
+}
+.voc-item {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+}
+.voc-item[data-fresh] {
+  animation: voc-in 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes voc-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+.voc-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.voc-name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+}
+.voc-name b {
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1.15rem;
+}
+.voc-desc {
+  margin-top: 2px;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.9375rem;
+  color: var(--cb-mut);
+}
+.voc-meta {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--cb-mut);
+  overflow-wrap: anywhere;
+}
+.voc-vis {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.875rem;
+  color: var(--cb-mut);
+}
+.voc-vis .cab-tog:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.voc-play {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--cb-bg);
+}
+.voc-play i {
+  position: absolute;
+  inset: 0;
+  background: var(--ui);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s linear;
+}
+.voc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.voc-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--cb-bad);
+  border-radius: 3px;
+  background: var(--cb-bad-bg);
+  color: var(--cb-bad);
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.voc-msg {
+  padding: 10px 12px;
+  border: 1px solid var(--cb-warn);
+  border-radius: 3px;
+  background: var(--cb-warn-bg);
+  color: var(--cb-warn);
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.9375rem;
+}
+
+/* ---------- Nueva voz ---------- */
+.voc-steps {
+  display: grid;
+  gap: 16px;
+}
+.voc-step {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--cb-line);
+}
+.voc-step:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.voc-step h3 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1rem;
+}
+.voc-step h3 i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--cb-fg);
+  color: var(--cb-panel);
+  font-style: normal;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+}
+.voc-script {
+  padding: 11px 13px;
+  border-left: 3px solid var(--ui);
+  background: var(--cb-bg);
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.9375rem;
+}
+.voc-recbar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.voc-recbtn::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--voc-rec);
+}
+.voc-recbtn[data-on]::before {
+  border-radius: 2px;
+}
+.voc-meter {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  height: 34px;
+  min-width: 0;
+  overflow: hidden;
+}
+.voc-meter i {
+  flex: 1 1 3px;
+  min-width: 2px;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--ui);
+  transform: scaleY(0.08);
+  transform-origin: center;
+}
+.voc-time {
+  min-width: 5ch;
+  text-align: right;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+.voc-listen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.voc-listen audio {
+  height: 36px;
+  max-width: 100%;
+}
+.voc-drop {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 16px;
+  border: 1px dashed var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-bg);
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.voc-drop input {
+  max-width: 100%;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--cb-mut);
+}
+.voc-files {
+  display: grid;
+  gap: 6px;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+.voc-files li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  justify-content: space-between;
+  padding: 6px 9px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  overflow-wrap: anywhere;
+}
+.voc-files li[data-bad] {
+  border-color: var(--cb-bad);
+  color: var(--cb-bad);
+}
+.voc-check {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  font-family: 'Onest', system-ui, sans-serif;
+  cursor: pointer;
+}
+.voc-check input {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--ui);
+  cursor: pointer;
+}
+.voc-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+.voc-prog {
+  display: grid;
+  gap: 6px;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.voc-prog li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--cb-mut);
+}
+.voc-prog li::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--cb-off);
+  border-radius: 50%;
+}
+.voc-prog li[data-s='on'] {
+  color: var(--cb-fg);
+}
+.voc-prog li[data-s='on']::before {
+  border-color: var(--ui);
+}
+.voc-prog li[data-s='done'] {
+  color: var(--cb-ok);
+}
+.voc-prog li[data-s='done']::before {
+  border-color: var(--cb-ok);
+  background: var(--cb-ok);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voc-item[data-fresh] {
+    animation: none;
+  }
+  .voc-play i {
+    transition: none;
+  }
+}

@@ -22,7 +22,8 @@ import {
 import { usePollsSettings } from '../hooks/usePollsSettings';
 import { BattleBarView } from '../components/polls/BattleBarView';
 import { speakPollEmotionCue } from '../utils/pollsAudio';
-import { loadSettings, PRESET_VOICES } from '../types/settings';
+import { loadSettings, saveSettings } from '../types/settings';
+import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { Field, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { useCloudSession } from '../hooks/useCloudSession';
@@ -150,7 +151,12 @@ export const PollsStudio: React.FC = () => {
 
   // ---------- Locutor ----------
   const announcer = settings.ttsAnnouncer;
-  const voiceName = PRESET_VOICES.find((voice) => voice.id === loadSettings().referenceId)?.name || 'voz personalizada';
+  // El nombre sale del catálogo. Si la voz guardada ya no está en él, se pasa a la voz por defecto
+  const voiceList = useVoiceCatalogue(loadSettings().referenceId, (defaultId) =>
+    saveSettings({ ...loadSettings(), referenceId: defaultId })
+  );
+  const voiceName =
+    voiceList.catalogue.voices.find((voice) => voice.id === loadSettings().referenceId)?.name || 'voz personalizada';
   const lead = optionB.votes > optionA.votes ? optionB : optionA;
   const leadPct = totalVotes > 0 ? Math.round((lead.votes / totalVotes) * 100) : 50;
   const lines = [

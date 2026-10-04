@@ -2,7 +2,7 @@
  * src/pages/admin/useAdminData.ts
  *
  * Toda la lectura de datos de la consola de administración en un solo sitio:
- * cuentas y totales, planes, códigos, canjes y el estado del almacenamiento.
+ * cuentas y totales, planes, códigos, canjes, voces y el estado del almacenamiento.
  * Las secciones reciben este objeto y piden `reload` después de cambiar algo.
  */
 
@@ -16,7 +16,8 @@ import {
   rpc,
   type ProfileMeta,
 } from '../../lib/cloud';
-import type { AdminOverview, InviteCodeRow, InviteRedemptionRow, PlanRow, TermsAcceptanceRow } from '../../lib/cloudTypes';
+import type { AdminOverview, AdminVoiceRow, InviteCodeRow, InviteRedemptionRow, PlanRow, TermsAcceptanceRow } from '../../lib/cloudTypes';
+import { fetchAdminVoices } from '../../lib/voicesCloud';
 import { StorageApiError, fetchStorageStatus, type StorageStatus } from '../../lib/storageApi';
 
 export interface AdminData {
@@ -29,6 +30,10 @@ export interface AdminData {
   meta: Map<string, ProfileMeta>;
   /** Aceptaciones de términos por cuenta. null: no se pudieron leer (falta la migración 0008). */
   acceptances: Map<string, TermsAcceptanceRow[]> | null;
+  /** Catálogo de voces. null: aún no se leyó o no se pudo leer (falta la migración 0009). */
+  voices: AdminVoiceRow[] | null;
+  /** Por qué no se pudo leer el catálogo de voces, o null. */
+  voicesError: string | null;
   /** Error de la lectura principal (Supabase). */
   error: string | null;
   setError: (message: string | null) => void;
@@ -38,6 +43,7 @@ export interface AdminData {
   storageLoading: boolean;
   reload: () => Promise<void>;
   reloadStorage: () => Promise<void>;
+  reloadVoices: () => Promise<void>;
   planName: (id: string | null) => string;
 }
 
@@ -49,6 +55,8 @@ export function useAdminData(): AdminData {
   const [metaRows, setMetaRows] = useState<ProfileMeta[]>([]);
   const [acceptanceRows, setAcceptanceRows] = useState<TermsAcceptanceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [voices, setVoices] = useState<AdminVoiceRow[] | null>(null);
+  const [voicesError, setVoicesError] = useState<string | null>(null);
   const [storage, setStorage] = useState<StorageStatus | null>(null);
   const [storageError, setStorageError] = useState<StorageApiError | null>(null);
   const [storageLoading, setStorageLoading] = useState(true);
@@ -76,6 +84,16 @@ export function useAdminData(): AdminData {
     }
   }, []);
 
+  const reloadVoices = useCallback(async () => {
+    try {
+      setVoices(await fetchAdminVoices());
+      setVoicesError(null);
+    } catch (err) {
+      setVoices(null);
+      setVoicesError(err instanceof Error ? err.message : 'No se pudo leer el catálogo de voces.');
+    }
+  }, []);
+
   const reloadStorage = useCallback(async () => {
     setStorageLoading(true);
     try {
@@ -94,7 +112,8 @@ export function useAdminData(): AdminData {
   useEffect(() => {
     reload();
     reloadStorage();
-  }, [reload, reloadStorage]);
+    reloadVoices();
+  }, [reload, reloadStorage, reloadVoices]);
 
   const meta = useMemo(() => new Map(metaRows.map((row) => [row.id, row])), [metaRows]);
   const acceptances = useMemo(() => {
@@ -113,6 +132,8 @@ export function useAdminData(): AdminData {
     redemptions,
     meta,
     acceptances,
+    voices,
+    voicesError,
     error,
     setError,
     storage,
@@ -120,6 +141,7 @@ export function useAdminData(): AdminData {
     storageLoading,
     reload,
     reloadStorage,
+    reloadVoices,
     planName,
   };
 }

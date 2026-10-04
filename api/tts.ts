@@ -189,7 +189,9 @@ async function synthesizeSingleFishChunk(
   selectedModel: string,
   effectiveRefId: string,
   cleanRefId: string
-): Promise<Buffer> {
+): Promise<{ buffer: Buffer; fallback: boolean }> {
+  // true si Fish Audio no aceptó la voz pedida y se usó la voz base
+  let fallback = false;
   let fishResponse = await fetch('https://api.fish.audio/v1/tts', {
     method: 'POST',
     headers: {
@@ -208,6 +210,7 @@ async function synthesizeSingleFishChunk(
 
   // Si la voz personalizada falla (ej. 400), reintentar con voz base
   if (!fishResponse.ok && cleanRefId) {
+    fallback = true;
     console.warn(`[Fish Audio Vercel] Voz personalizada retornó ${fishResponse.status}. Reintentando con voz base por defecto...`);
     fishResponse = await fetch('https://api.fish.audio/v1/tts', {
       method: 'POST',
@@ -231,7 +234,7 @@ async function synthesizeSingleFishChunk(
   }
 
   const arrayBuffer = await fishResponse.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  return { buffer: Buffer.from(arrayBuffer), fallback };
 }
 
 async function processTTSRequest(text: string, reference_id?: string, _model = 's2.1-pro-free'): Promise<TTSProcessResult> {
@@ -264,9 +267,12 @@ async function processTTSRequest(text: string, reference_id?: string, _model = '
   console.log(`[TTS Engine Vercel] Sintetizando ${boundedText.length} caracteres divididos en ${chunks.length} fragmento(s) en paralelo.`);
 
   let finalBuffer: Buffer;
+  let usedFallback = false;
 
   if (chunks.length === 1) {
-    finalBuffer = await synthesizeSingleFishChunk(chunks[0], apiKey, selectedModel, effectiveRefId, cleanRefId);
+    const single = await synthesizeSingleFishChunk(chunks[0], apiKey, selectedModel, effectiveRefId, cleanRefId);
+    finalBuffer = single.buffer;
+    usedFallback = single.fallback;
   } else {
     // Síntesis concurrente de todos los fragmentos
     const buffers = await Promise.all(
@@ -274,13 +280,16 @@ async function processTTSRequest(text: string, reference_id?: string, _model = '
         synthesizeSingleFishChunk(chunk, apiKey, selectedModel, effectiveRefId, cleanRefId)
       )
     );
-    finalBuffer = Buffer.concat(buffers);
+    finalBuffer = Buffer.concat(buffers.map((part) => part.buffer));
+    usedFallback = buffers.some((part) => part.fallback);
   }
 
   return {
     status: 200,
     contentType: 'audio/mpeg',
     buffer: finalBuffer,
+    // La consola lo mira al probar una voz: si no, la voz base pasaría por la voz probada
+    headers: usedFallback ? { 'X-Lalo-Voice-Fallback': '1' } : undefined,
   };
 }
 

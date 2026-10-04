@@ -27,7 +27,8 @@ import { AlertSoundType } from '../types/alerts';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
 import { RouletteOverlayView } from '../components/roulette/RouletteOverlayView';
 import { speakRouletteSpinAnnouncement, speakRouletteWinnerAnnouncement } from '../utils/rouletteAudio';
-import { loadSettings, PRESET_VOICES } from '../types/settings';
+import { loadSettings, saveSettings } from '../types/settings';
+import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import { MediaItem } from '../types/mediaLibrary';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
@@ -294,7 +295,12 @@ export const RouletteStudio: React.FC = () => {
       .catch(() => say('No se pudo copiar. Usa «Fuentes de OBS» en la cabecera.'));
   };
 
-  const voiceName = PRESET_VOICES.find((voice) => voice.id === loadSettings().referenceId)?.name || 'voz personalizada';
+  // El nombre sale del catálogo. Si la voz guardada ya no está en él, se pasa a la voz por defecto
+  const voiceList = useVoiceCatalogue(loadSettings().referenceId, (defaultId) =>
+    saveSettings({ ...loadSettings(), referenceId: defaultId })
+  );
+  const voiceName =
+    voiceList.catalogue.voices.find((voice) => voice.id === loadSettings().referenceId)?.name || 'voz personalizada';
 
   return (
     <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>

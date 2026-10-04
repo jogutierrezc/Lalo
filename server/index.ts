@@ -12,6 +12,7 @@ import dotenv from 'dotenv';
 import { processTTSRequest } from './ttsHandler';
 import { nodeHandler, type ApiRoute } from './storage/handlers.js';
 import { clipNodeHandler } from './twitch/clips.js';
+import { voicesNodeHandler } from './voices/handlers.js';
 
 // .env.local tiene prioridad sobre .env (el primero que define una variable gana)
 dotenv.config({ path: ['.env.local', '.env'] });
@@ -102,6 +103,12 @@ const storageRoutes: ApiRoute[] = ['storage/status', 'storage/test', 'media/uplo
 for (const route of storageRoutes) {
   app.all(`/api/${route}`, nodeHandler(route));
 }
+
+// Voces del catálogo (solo administrador). La misma lógica que api/voices/*.
+// Crear recibe el audio en un cuerpo binario; el tope real lo pone server/voices/rules.ts
+app.post('/api/voices/create', express.raw({ type: 'application/octet-stream', limit: '5mb' }), voicesNodeHandler('voices/create'));
+app.all('/api/voices/create', voicesNodeHandler('voices/create'));
+app.all('/api/voices/delete', voicesNodeHandler('voices/delete'));
 
 // Cortos de Twitch para el saludo de raid. La misma lógica que api/twitch/clip.ts
 app.all('/api/twitch/clip', clipNodeHandler);
