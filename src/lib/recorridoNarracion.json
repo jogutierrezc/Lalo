@@ -1,8 +1,9 @@
 {
-  "entrar": "¡Hola! Soy Teemo y te acompaño en la puesta en marcha. Son cinco pasos cortos. Puedes empezar con tu cuenta de Twitch o con tu código de invitación.",
+  "entrar": "¡Hola! Soy Chispa y te acompaño en la puesta en marcha. Son pocos pasos y son cortos. Puedes empezar con tu cuenta de Twitch o con tu código de invitación.",
   "permisos": "Para saber quién eres, Lalo te lleva un momento a Twitch. Antes de ir, mira qué le pedimos y qué no. Lalo puede escribir en tu chat con el bot y con las herramientas de LSS AI, que están en beta. No modera por ti ni cambia los ajustes de tu directo.",
   "datos": "Esto es lo que Twitch nos entregó. Solo lo usamos para ponerle tu nombre a tu cuenta y para conectar las capas con tu canal.",
   "codigo": "Ahora tu código de invitación. Te lo dio quien administra Lalo, y con él sabremos qué plan te corresponde.",
+  "terminos": "Antes de configurar tu canal, cuatro cosas que conviene saber. Las voces son sintéticas, lo que creas es tuyo, hay usos prohibidos y el servicio puede cambiar. El texto completo está en los enlaces.",
   "canal": "Dejemos listo tu canal. Elige la voz que leerá el chat y cómo se verán los mensajes. Todo esto lo puedes cambiar después.",
   "bienvenida": "¡Ya está! Tu cuenta quedó creada. Te dejo tres cosas para tu primer directo, en el orden en que conviene hacerlas."
 }

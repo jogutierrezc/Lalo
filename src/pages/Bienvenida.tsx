@@ -6,6 +6,8 @@
  *
  *   - Lo que tomamos: los datos reales que entregó Twitch. «No es mi canal» cierra la sesión.
  *   - Código de invitación: solo si la cuenta aún no está activa. Al canjearlo se descubre el plan.
+ *   - Antes de empezar: los términos y políticas, con dos casillas obligatorias. Solo si
+ *     la cuenta aún no aceptó la versión vigente (src/hooks/useAceptacion.ts).
  *   - Tu canal: voz, estilo de los mensajes, comando !s y avisos. El canal viene de Twitch.
  *   - Bienvenida: saludo, plan y las tres primeras tareas.
  *
@@ -24,6 +26,8 @@ import { loadSettings, PRESET_VOICES } from '../types/settings';
 import { ALERT_STYLES, type AlertStyle } from '../utils/appearance';
 import { LateralRecorrido, MarcoRecorrido, TarjetaPlan, TituloPaso, usePasoAnimado } from '../components/recorrido/piezas';
 import { PrimerosPasos, anotarTarea } from '../components/recorrido/PrimerosPasos';
+import { Aceptacion } from '../components/legal/Aceptacion';
+import type { Aceptacion as EstadoAceptacion } from '../hooks/useAceptacion';
 
 type Plan = { nombre: string; lineas: string[] };
 type EstadoPlan = 'sin-pedir' | 'cargando' | 'listo' | 'fallo';
@@ -63,9 +67,11 @@ interface BienvenidaProps {
   onTerminar: (perfilId: string) => void;
   /** El streamer tiene un código de recuperación en vez de uno de invitación. */
   onRecuperar: () => void;
+  /** Qué documentos legales le falta aceptar a esta cuenta. */
+  aceptacion: EstadoAceptacion;
 }
 
-export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar }) => {
+export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar, aceptacion }) => {
   const { session, profile, outcome, error, redeem, refresh, signOut, loading } = useCloudSession();
   const uid = useId();
   const perfilId = profile?.id ?? '';
@@ -76,8 +82,16 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar 
 
   const [camino] = useState(getCaminoElegido);
   const [avance, setAvance] = useState<Avance>(() => leerAvance(perfilId));
+  // Aceptados en este paso: el estado de la cuenta tarda un instante en reflejarlo
+  const terminosHechos = useRef(false);
+  const terminosAceptados = () => aceptacion.pendientes.length === 0 || terminosHechos.current;
   const [paso, setPaso] = useState<PasoId>(() =>
-    pasoConSesion(camino, { activo, datosConfirmados: Boolean(avance.datos), canalListo: Boolean(avance.canal) })
+    pasoConSesion(camino, {
+      activo,
+      datosConfirmados: Boolean(avance.datos),
+      terminosAceptados: terminosAceptados(),
+      canalListo: Boolean(avance.canal),
+    })
   );
   // Al volver de Twitch con un código escrito antes, la sesión lo canjea sola: se espera el resultado
   const [canjeAutomatico, setCanjeAutomatico] = useState(() => !activo && getPendingCode() !== null);
@@ -91,7 +105,7 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar 
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan>('sin-pedir');
   const [cierre, setCierre] = useState<string | null>(null);
 
-  // Elecciones de «Tu canal». Parten de lo guardado; en una cuenta nueva, la voz es Teemo
+  // Elecciones de «Tu canal». Parten de lo guardado; en una cuenta nueva, la voz es Chispa
   const [voz, setVoz] = useState(() => loadSettings().referenceId);
   const [estilo, setEstilo] = useState<AlertStyle>(() => loadSettings().alertStyle);
   const [comando, setComando] = useState(true);
@@ -101,7 +115,12 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar 
 
   const siguiente = (extra: Partial<{ datos: boolean; canal: boolean }> = {}) => {
     const nuevo = { ...avance, ...extra };
-    return pasoConSesion(camino, { activo, datosConfirmados: Boolean(nuevo.datos), canalListo: Boolean(nuevo.canal) });
+    return pasoConSesion(camino, {
+      activo,
+      datosConfirmados: Boolean(nuevo.datos),
+      terminosAceptados: terminosAceptados(),
+      canalListo: Boolean(nuevo.canal),
+    });
   };
 
   const avanzar = (extra: Avance = {}) =>
@@ -146,8 +165,15 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar 
   // Si la cuenta se activó sin pasar por el formulario de este paso, el código ya no hace falta
   useEffect(() => {
     if (paso !== 'codigo' || !activo || canjeadoAqui.current) return;
-    setPaso(pasoConSesion(camino, { activo: true, datosConfirmados: Boolean(avance.datos), canalListo: Boolean(avance.canal) }));
-  }, [paso, activo, camino, avance]);
+    setPaso(
+      pasoConSesion(camino, {
+        activo: true,
+        datosConfirmados: Boolean(avance.datos),
+        terminosAceptados: aceptacion.pendientes.length === 0 || terminosHechos.current,
+        canalListo: Boolean(avance.canal),
+      })
+    );
+  }, [paso, activo, camino, avance, aceptacion.pendientes.length]);
 
   const canjear = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -206,7 +232,7 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar 
 
   return (
     <MarcoRecorrido pulso={paso} lateral={<LateralRecorrido camino={camino} paso={paso as PasoNarrado} />}>
-      <div key={paso} ref={pasoRef} className="acc-step">
+      <div key={paso} ref={pasoRef} className={paso === 'terminos' ? 'acc-step lg-acc' : 'acc-step'}>
         {paso === 'datos' ? (
           <>
             <TituloPaso>Esto tomamos de tu Twitch</TituloPaso>
@@ -344,6 +370,14 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar 
               </div>
             </form>
           )
+        ) : paso === 'terminos' ? (
+          <Aceptacion
+            aceptacion={aceptacion}
+            onHecho={() => {
+              terminosHechos.current = true;
+              avanzar();
+            }}
+          />
         ) : paso === 'canal' ? (
           <>
             <TituloPaso>Deja listo tu canal</TituloPaso>
@@ -367,7 +401,11 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar 
                   </button>
                 ))}
               </div>
-              {!vozConocida && <span className="cab-hint">Ahora tienes una voz propia. Si no eliges otra, se queda esa.</span>}
+              {vozConocida ? (
+                <span className="cab-hint">{PRESET_VOICES.find((preset) => preset.id === voz)?.description}</span>
+              ) : (
+                <span className="cab-hint">Ahora tienes una voz propia. Si no eliges otra, se queda esa.</span>
+              )}
             </div>
             <div className="cab-field" role="group" aria-labelledby={`${uid}-estilo`}>
               <span id={`${uid}-estilo`} className="cab-label">

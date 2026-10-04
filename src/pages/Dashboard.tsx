@@ -325,7 +325,11 @@ export const Dashboard: React.FC = () => {
 
             {tab === 'voz' && (
               <>
-                <Field label="Voz" htmlFor={`${uid}-voice`}>
+                <Field
+                  label="Voz"
+                  htmlFor={`${uid}-voice`}
+                  hint={customVoice ? undefined : PRESET_VOICES.find((voice) => voice.id === settings.referenceId)?.description}
+                >
                   <select
                     id={`${uid}-voice`}
                     value={customVoice ? 'custom' : settings.referenceId}

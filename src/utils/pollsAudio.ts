@@ -4,7 +4,7 @@
  * Motor de síntesis de audio para Batallas & Encuestas en Vivo (Polls & Versus Studio).
  * Utiliza Web Audio API de baja latencia sin dependencias externas para efectos táctiles,
  * y se conecta directamente al motor TTS de Fish Audio con la voz configurada por el streamer
- * (Teemo, Ahri, Jarvis, Diana, Luz o ID propio) con modulación emocional.
+ * (Chispa, Seda, Atlas, Vera, Brisa o ID propio) con modulación emocional.
  */
 
 import { loadSettings } from '../types/settings';

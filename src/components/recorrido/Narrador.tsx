@@ -1,8 +1,8 @@
 /**
  * src/components/recorrido/Narrador.tsx
  *
- * «Teemo te explica»: el texto del paso siempre a la vista y un botón para
- * escucharlo con la voz de Teemo. Nunca suena solo. Si el audio falla, se dice
+ * «Chispa te explica»: el texto del paso siempre a la vista y un botón para
+ * escucharlo con la voz de Chispa. Nunca suena solo. Si el audio falla, se dice
  * y el texto sigue ahí.
  */
 
@@ -17,7 +17,7 @@ gsap.registerPlugin(useGSAP);
 interface NarradorProps {
   /** Nombre del paso: con él se busca el audio ya generado. */
   paso: string;
-  /** Lo que dice Teemo. */
+  /** Lo que dice Chispa. */
   texto: string;
 }
 
@@ -25,7 +25,7 @@ export const Narrador: React.FC<NarradorProps> = ({ paso, texto }) => {
   const { estado, error, sonar, detener } = useReproductor();
   const ondaRef = useRef<HTMLSpanElement | null>(null);
 
-  // Al cambiar de paso, Teemo calla
+  // Al cambiar de paso, Chispa calla
   useEffect(() => detener, [paso, detener]);
 
   // Onda mientras suena
@@ -47,13 +47,13 @@ export const Narrador: React.FC<NarradorProps> = ({ paso, texto }) => {
   const ocupado = estado !== 'reposo';
 
   return (
-    <div className="rec-teemo">
-      <div className="rec-teemo-cab">
-        <span className="rec-teemo-av" aria-hidden="true">
-          T
+    <div className="rec-narra">
+      <div className="rec-narra-cab">
+        <span className="rec-narra-av" aria-hidden="true">
+          C
         </span>
         <div>
-          <b>Teemo te explica</b>
+          <b>Chispa te explica</b>
           <span role="status">
             {estado === 'cargando' ? 'Preparando la voz' : estado === 'sonando' ? 'Hablando' : 'Voz por defecto de Lalo'}
           </span>
@@ -65,11 +65,11 @@ export const Narrador: React.FC<NarradorProps> = ({ paso, texto }) => {
           {error} El texto de arriba dice lo mismo.
         </p>
       )}
-      <div className="rec-teemo-pie">
+      <div className="rec-narra-pie">
         <button
           type="button"
           className="cab-btn2 cab-btn-sm"
-          aria-label={ocupado ? 'Detener la explicación de Teemo' : 'Escuchar la explicación de Teemo'}
+          aria-label={ocupado ? 'Detener la explicación de Chispa' : 'Escuchar la explicación de Chispa'}
           onClick={() => (ocupado ? detener() : sonar({ paso, texto }))}
         >
           {ocupado ? 'Detener' : 'Escuchar'}

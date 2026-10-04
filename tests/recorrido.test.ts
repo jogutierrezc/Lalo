@@ -32,8 +32,8 @@ import { DEFAULT_SETTINGS, PRESET_VOICES } from '../src/types/settings';
 describe('orden de los pasos', () => {
   it('los dos caminos tienen los mismos pasos y solo cambia el orden', () => {
     expect([...ORDEN.tw].sort()).toEqual([...ORDEN.co].sort());
-    expect(ORDEN.tw).toEqual(['entrar', 'permisos', 'datos', 'codigo', 'canal', 'bienvenida', 'panel']);
-    expect(ORDEN.co).toEqual(['entrar', 'codigo', 'permisos', 'datos', 'canal', 'bienvenida', 'panel']);
+    expect(ORDEN.tw).toEqual(['entrar', 'permisos', 'datos', 'codigo', 'terminos', 'canal', 'bienvenida', 'panel']);
+    expect(ORDEN.co).toEqual(['entrar', 'codigo', 'permisos', 'datos', 'terminos', 'canal', 'bienvenida', 'panel']);
   });
 
   it('en los dos caminos se explica qué se pide antes de enseñar lo que se tomó', () => {
@@ -44,7 +44,7 @@ describe('orden de los pasos', () => {
 
   it('la lista visible no incluye el panel y todos los pasos tienen etiqueta', () => {
     expect(pasosVisibles('tw')).not.toContain('panel');
-    expect(pasosVisibles('co')).toHaveLength(6);
+    expect(pasosVisibles('co')).toHaveLength(7);
     ORDEN.tw.forEach((paso) => expect(ETIQUETA[paso]).toBeTruthy());
   });
 
@@ -102,24 +102,33 @@ describe('qué le falta a un perfil', () => {
     expect(necesitaRecorrido(null, true, false)).toBe(false);
   });
 
-  it('empezando con Twitch, tras entrar quedan datos, código, canal y bienvenida', () => {
-    const nada = { activo: false, datosConfirmados: false, canalListo: false };
-    expect(pasosPendientes('tw', nada)).toEqual(['datos', 'codigo', 'canal', 'bienvenida']);
+  it('empezando con Twitch, tras entrar quedan datos, código, términos, canal y bienvenida', () => {
+    const nada = { activo: false, datosConfirmados: false, terminosAceptados: false, canalListo: false };
+    expect(pasosPendientes('tw', nada)).toEqual(['datos', 'codigo', 'terminos', 'canal', 'bienvenida']);
     expect(pasoConSesion('tw', nada)).toBe('datos');
     expect(pasoConSesion('tw', { ...nada, datosConfirmados: true })).toBe('codigo');
   });
 
   it('empezando con el código, si ya se canjeó no se vuelve a pedir', () => {
-    const canjeado = { activo: true, datosConfirmados: false, canalListo: false };
-    expect(pasosPendientes('co', canjeado)).toEqual(['datos', 'canal', 'bienvenida']);
+    const canjeado = { activo: true, datosConfirmados: false, terminosAceptados: false, canalListo: false };
+    expect(pasosPendientes('co', canjeado)).toEqual(['datos', 'terminos', 'canal', 'bienvenida']);
     // Si el canje falló al volver de Twitch, el código es lo primero
     expect(pasoConSesion('co', { ...canjeado, activo: false })).toBe('codigo');
   });
 
   it('con todo hecho solo queda la bienvenida', () => {
-    const todo = { activo: true, datosConfirmados: true, canalListo: true };
+    const todo = { activo: true, datosConfirmados: true, terminosAceptados: true, canalListo: true };
     expect(pasosPendientes('tw', todo)).toEqual(['bienvenida']);
     expect(pasoConSesion('co', todo)).toBe('bienvenida');
+  });
+
+  it('la aceptación de los términos va justo antes de «Tu canal» y se salta si ya se aceptó', () => {
+    for (const camino of ['tw', 'co'] as const) {
+      expect(ORDEN[camino].indexOf('terminos')).toBe(ORDEN[camino].indexOf('canal') - 1);
+    }
+    const base = { activo: true, datosConfirmados: true, canalListo: false };
+    expect(pasoConSesion('tw', { ...base, terminosAceptados: false })).toBe('terminos');
+    expect(pasoConSesion('tw', { ...base, terminosAceptados: true })).toBe('canal');
   });
 });
 
@@ -179,7 +188,7 @@ describe('primeros pasos', () => {
   });
 });
 
-describe('Teemo', () => {
+describe('Chispa, la voz que narra', () => {
   it('tiene explicación para cada paso de la bienvenida', () => {
     pasosVisibles('tw').forEach((paso) => expect(NARRACION[paso as keyof typeof NARRACION]).toBeTruthy());
   });
@@ -193,6 +202,12 @@ describe('Teemo', () => {
   });
 
   it('es la voz por defecto de las cuentas nuevas', () => {
-    expect(PRESET_VOICES.find((voice) => voice.id === DEFAULT_SETTINGS.referenceId)?.name).toBe('Teemo');
+    expect(PRESET_VOICES.find((voice) => voice.id === DEFAULT_SETTINGS.referenceId)?.name).toBe('Chispa');
+  });
+
+  it('se presenta con su nombre nuevo y las voces llevan nombres genéricos con descripción', () => {
+    expect(NARRACION.entrar).toMatch(/Soy Chispa/);
+    expect(PRESET_VOICES.map((voice) => voice.name)).toEqual(['Chispa', 'Seda', 'Atlas', 'Vera', 'Brisa']);
+    PRESET_VOICES.forEach((voice) => expect(voice.description).toBeTruthy());
   });
 });

@@ -17,20 +17,24 @@ export interface TTSSettings extends Appearance, Moderation {
 export interface PresetVoice {
   id: string;
   name: string;
+  /** Cómo suena, en pocas palabras. Se enseña donde se elige la voz. */
+  description: string;
 }
 
+// Los nombres son genéricos a propósito (ver src/legal/voces.ts). El id es el de
+// la voz en el proveedor y no cambia: los ajustes guardados siguen valiendo.
 export const PRESET_VOICES: PresetVoice[] = [
-  { id: '5669f8e58ecb476a982bc2b67ac6b538', name: 'Teemo' },
-  { id: '31dbd39039854d379d1d692a6a97451d', name: 'Ahri' },
-  { id: '59fb1f7a5e69481387cc280b9d2b3ad8', name: 'Jarvis' },
-  { id: '37f9f4eec7624089a49b188d47588f2c', name: 'Diana' },
-  { id: '654e33e85be3406d90b9723712a035a9', name: 'Luz' },
+  { id: '5669f8e58ecb476a982bc2b67ac6b538', name: 'Chispa', description: 'Aguda y traviesa. La voz por defecto y la del narrador.' },
+  { id: '31dbd39039854d379d1d692a6a97451d', name: 'Seda', description: 'Suave y cercana.' },
+  { id: '59fb1f7a5e69481387cc280b9d2b3ad8', name: 'Atlas', description: 'Formal y serena, de asistente.' },
+  { id: '37f9f4eec7624089a49b188d47588f2c', name: 'Vera', description: 'Firme y pausada.' },
+  { id: '654e33e85be3406d90b9723712a035a9', name: 'Brisa', description: 'Joven y alegre.' },
 ];
 
 export const DEFAULT_SETTINGS: TTSSettings = {
   channel: 'laloplay_',
   model: 's2.1-pro-free',
-  referenceId: '5669f8e58ecb476a982bc2b67ac6b538', // Teemo (por defecto en cuentas nuevas)
+  referenceId: '5669f8e58ecb476a982bc2b67ac6b538', // Chispa (por defecto en cuentas nuevas)
   volume: 0.85,
   speed: 1.0,
   theme: 'glass-dark',

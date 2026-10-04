@@ -29,7 +29,7 @@ const SALIDA = 'expo.out';
 interface MarcoProps {
   /** Cambia en cada cambio de paso: la aurora da un pulso. */
   pulso: string;
-  /** Columna izquierda: la marca, los pasos y Teemo. */
+  /** Columna izquierda: la marca, los pasos y Chispa. */
   lateral: React.ReactNode;
   children: React.ReactNode;
 }
@@ -86,7 +86,7 @@ export const ListaPasos: React.FC<{ camino: Camino; actual: PasoId }> = ({ camin
   </ol>
 );
 
-/** Marca, pasos y Teemo: la columna izquierda durante la bienvenida. */
+/** Marca, pasos y Chispa: la columna izquierda durante la bienvenida. */
 export const LateralRecorrido: React.FC<{ camino: Camino; paso: PasoNarrado }> = ({ camino, paso }) => (
   <>
     <div>

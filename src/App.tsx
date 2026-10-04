@@ -14,6 +14,9 @@
  *     administrador solo ve esa consola; a un streamer, #admin lo lleva a Inicio
  *   - Bienvenida: un streamer que entra con Twitch y aún no la terminó la ve
  *     antes del panel, escriba la dirección que escriba. El administrador no la ve
+ *   - #legal, #legal/voces...: Términos y políticas. Página pública: se ve sin iniciar sesión
+ *   - Aceptación: con la nube, una cuenta activa que no aceptó la versión vigente de los
+ *     términos los ve antes de su panel o su consola (las cuentas nuevas, en la bienvenida)
  *   - #nube: Qué falta para encender la nube (sin la nube configurada)
  *   - #widget / /widget / ?channel=: Overlay transparente para OBS Studio
  */
@@ -35,6 +38,10 @@ import { Bienvenida, bienvenidaHechaAqui } from './pages/Bienvenida';
 import { Account } from './pages/Account';
 import { AdminShell } from './components/admin/AdminShell';
 import { CloudSetup } from './pages/CloudSetup';
+import { Legal } from './pages/Legal';
+import { AceptacionCargando, AceptacionGate } from './pages/AceptacionGate';
+import { useAceptacion } from './hooks/useAceptacion';
+import { parseRutaLegal } from './legal/logica';
 import { CloudProvider, useCloudSession } from './hooks/useCloudSession';
 import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
 import { isCloudEnabled } from './lib/supabase';
@@ -55,6 +62,7 @@ export type AppRoute =
   | 'cuenta'
   | 'admin'
   | 'nube'
+  | 'legal'
   | 'widget';
 
 function resolveRoute(): AppRoute {
@@ -63,6 +71,9 @@ function resolveRoute(): AppRoute {
   // Limpiar '#' inicial y cualquier barra del hash: '#/control' -> 'control', '#tts' -> 'tts'
   const hash = rawHash.replace(/^#\/?/, '').replace(/\/$/, '');
   const search = window.location.search.toLowerCase();
+
+  // Términos y políticas: página pública
+  if (parseRutaLegal(rawHash)) return 'legal';
 
   // 1. Ajustes de TTS (prioridad alta ante cualquier query param)
   if (
@@ -216,14 +227,22 @@ const Routes: React.FC = () => {
     };
   }, [isWidget]);
 
+  // Qué documentos legales le falta aceptar a la cuenta que ha entrado (solo con la nube)
+  const aceptacion = useAceptacion(cloud.enabled && !isWidget && cloud.session ? (cloud.profile?.id ?? null) : null);
+
   // Las capas de OBS nunca piden iniciar sesión
   if (isWidget) return widgetReady ? <Widget /> : null;
+
+  // Los términos y políticas se leen sin iniciar sesión y con la nube apagada
+  if (currentRoute === 'legal') return <Legal />;
 
   // Bienvenida: el streamer que entró con Twitch y aún no la terminó (o aún no canjeó su código)
   if (cloud.enabled && cloud.session && cloud.profile) {
     const perfil = cloud.profile;
     const hechaAqui = bienvenidas.includes(perfil.id) || bienvenidaHechaAqui(perfil.id);
     if (necesitaRecorrido(perfil, hasTwitchIdentity(cloud.session.user), hechaAqui)) {
+      // El paso de los términos necesita saber qué aceptó ya la cuenta
+      if (aceptacion.cargando) return <AceptacionCargando />;
       if (recuperando && perfil.status === 'pending') {
         return <Access inicio="recovery-code" onVolver={() => setRecuperando(false)} />;
       }
@@ -231,6 +250,7 @@ const Routes: React.FC = () => {
         <Bienvenida
           onTerminar={(perfilId) => setBienvenidas((prev) => (prev.includes(perfilId) ? prev : [...prev, perfilId]))}
           onRecuperar={() => setRecuperando(true)}
+          aceptacion={aceptacion}
         />
       );
     }
@@ -239,6 +259,12 @@ const Routes: React.FC = () => {
   // Con la nube configurada, el panel exige una cuenta activa
   if (cloud.enabled && (cloud.loading || !cloud.session || cloud.profile?.status !== 'active')) {
     return <Access />;
+  }
+
+  // Cuentas que ya existían y administradores: aceptan una vez, y otra si cambia algún documento
+  if (cloud.enabled) {
+    if (aceptacion.cargando) return <AceptacionCargando />;
+    if (aceptacion.pendientes.length > 0) return <AceptacionGate aceptacion={aceptacion} />;
   }
 
   // El administrador no es un streamer: solo ve su consola, escriba la dirección que escriba

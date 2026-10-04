@@ -27,6 +27,7 @@ import { INVITE_PROBLEM, outcomeMessage } from '../lib/accesoMensajes';
 import { pasoAnterior, pasoSiguiente, type Camino } from '../lib/recorrido';
 import type { InviteStatus } from '../lib/cloudTypes';
 import { LateralRecorrido, MarcoRecorrido, TarjetaPlan, TituloPaso, usePasoAnimado } from '../components/recorrido/piezas';
+import '../styles/legal.css';
 
 type Step = 'entrar' | 'permisos' | 'codigo' | 'recover' | 'recovery-code' | 'admin';
 const DEL_RECORRIDO: Step[] = ['entrar', 'permisos', 'codigo'];
@@ -507,6 +508,13 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
           </form>
         )}
       </div>
+      {/* Se abre en otra pestaña para no perder el paso ni el código escrito */}
+      <p className="lg-pie">
+        <a className="studio-link" href="#legal" target="_blank" rel="noopener">
+          Términos y políticas
+          <span className="sr-only"> (se abre en otra pestaña)</span>
+        </a>
+      </p>
     </MarcoRecorrido>
   );
 };

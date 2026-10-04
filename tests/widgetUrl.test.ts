@@ -18,7 +18,7 @@ describe('OBS Widget URL Builder', () => {
       const customSettings: TTSSettings = {
         ...DEFAULT_SETTINGS,
         channel: 'elstreamer',
-        referenceId: '59fb1f7a5e69481387cc280b9d2b3ad8', // Jarvis
+        referenceId: '59fb1f7a5e69481387cc280b9d2b3ad8', // Atlas
         volume: 0.85,
         speed: 1.15,
         alertStyle: 'cabina',
@@ -76,7 +76,7 @@ describe('OBS Widget URL Builder', () => {
       const ttsSettings: TTSSettings = {
         ...DEFAULT_SETTINGS,
         channel: 'laloplay_',
-        referenceId: '5669f8e58ecb476a982bc2b67ac6b538', // Teemo
+        referenceId: '5669f8e58ecb476a982bc2b67ac6b538', // Chispa
         volume: 0.9,
       };
 

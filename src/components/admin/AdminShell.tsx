@@ -15,7 +15,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Gauge, HardDrive, KeyRound, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, Ticket, Users, X } from 'lucide-react';
+import { FileText, Gauge, HardDrive, KeyRound, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, Ticket, Users, X } from 'lucide-react';
 import { ThemeSwitch } from '../ThemeSwitch';
 import { useCloudSession } from '../../hooks/useCloudSession';
 import {
@@ -179,6 +179,10 @@ export const AdminShell: React.FC = () => {
           <br />
           Sin canal de Twitch
         </p>
+        <a href="#legal" className="shell-link" title={collapsed ? 'Términos y políticas' : undefined} onClick={() => setDrawerOpen(false)}>
+          <FileText className="h-4 w-4 flex-none" />
+          <span className="shell-lab">Términos y políticas</span>
+        </a>
         <div className="shell-lab">
           <ThemeSwitch />
         </div>

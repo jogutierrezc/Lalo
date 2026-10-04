@@ -96,6 +96,9 @@ orden**:
 3. `supabase/migrations/0003_admin_access.sql`
 4. `supabase/migrations/0004_invite_requires_twitch.sql`
 5. `supabase/migrations/0005_r2_storage.sql` (archivos en Cloudflare R2; ver `CLOUDFLARE-R2.md`)
+6. `supabase/migrations/0006_onboarding.sql` (bienvenida de streamers)
+7. `supabase/migrations/0007_chat_module.sql` (capa Chat en vivo)
+8. `supabase/migrations/0008_terms_acceptance.sql` (aceptación de los términos y políticas; sin probar)
 
 **Opción A — SQL Editor (la más simple)**
 

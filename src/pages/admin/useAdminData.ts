@@ -7,8 +7,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { fetchInvites, fetchPlans, fetchProfileMeta, fetchRedemptions, rpc, type ProfileMeta } from '../../lib/cloud';
-import type { AdminOverview, InviteCodeRow, InviteRedemptionRow, PlanRow } from '../../lib/cloudTypes';
+import {
+  fetchAllAcceptances,
+  fetchInvites,
+  fetchPlans,
+  fetchProfileMeta,
+  fetchRedemptions,
+  rpc,
+  type ProfileMeta,
+} from '../../lib/cloud';
+import type { AdminOverview, InviteCodeRow, InviteRedemptionRow, PlanRow, TermsAcceptanceRow } from '../../lib/cloudTypes';
 import { StorageApiError, fetchStorageStatus, type StorageStatus } from '../../lib/storageApi';
 
 export interface AdminData {
@@ -19,6 +27,8 @@ export interface AdminData {
   invites: InviteCodeRow[];
   redemptions: InviteRedemptionRow[];
   meta: Map<string, ProfileMeta>;
+  /** Aceptaciones de términos por cuenta. null: no se pudieron leer (falta la migración 0008). */
+  acceptances: Map<string, TermsAcceptanceRow[]> | null;
   /** Error de la lectura principal (Supabase). */
   error: string | null;
   setError: (message: string | null) => void;
@@ -37,6 +47,7 @@ export function useAdminData(): AdminData {
   const [invites, setInvites] = useState<InviteCodeRow[]>([]);
   const [redemptions, setRedemptions] = useState<InviteRedemptionRow[]>([]);
   const [metaRows, setMetaRows] = useState<ProfileMeta[]>([]);
+  const [acceptanceRows, setAcceptanceRows] = useState<TermsAcceptanceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [storage, setStorage] = useState<StorageStatus | null>(null);
   const [storageError, setStorageError] = useState<StorageApiError | null>(null);
@@ -44,19 +55,21 @@ export function useAdminData(): AdminData {
 
   const reload = useCallback(async () => {
     try {
-      const [nextOverview, nextPlans, nextInvites, nextRedemptions, nextMeta] = await Promise.all([
+      const [nextOverview, nextPlans, nextInvites, nextRedemptions, nextMeta, nextAcceptances] = await Promise.all([
         rpc('admin_overview', {}),
         fetchPlans(),
         fetchInvites(),
-        // Estas dos solo enriquecen la vista: si fallan, la consola sigue
+        // Estas tres solo enriquecen la vista: si fallan, la consola sigue
         fetchRedemptions().catch(() => []),
         fetchProfileMeta().catch(() => []),
+        fetchAllAcceptances().catch(() => null),
       ]);
       setOverview(nextOverview);
       setPlans(nextPlans);
       setInvites(nextInvites);
       setRedemptions(nextRedemptions);
       setMetaRows(nextMeta);
+      setAcceptanceRows(nextAcceptances);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo leer la consola.');
@@ -84,6 +97,12 @@ export function useAdminData(): AdminData {
   }, [reload, reloadStorage]);
 
   const meta = useMemo(() => new Map(metaRows.map((row) => [row.id, row])), [metaRows]);
+  const acceptances = useMemo(() => {
+    if (!acceptanceRows) return null;
+    const byProfile = new Map<string, TermsAcceptanceRow[]>();
+    for (const row of acceptanceRows) byProfile.set(row.profile_id, [...(byProfile.get(row.profile_id) ?? []), row]);
+    return byProfile;
+  }, [acceptanceRows]);
   const planName = useCallback((id: string | null) => plans.find((plan) => plan.id === id)?.name || 'Sin plan', [plans]);
 
   return {
@@ -93,6 +112,7 @@ export function useAdminData(): AdminData {
     invites,
     redemptions,
     meta,
+    acceptances,
     error,
     setError,
     storage,

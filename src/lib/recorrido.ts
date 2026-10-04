@@ -10,12 +10,12 @@
 import narracion from './recorridoNarracion.json';
 
 export type Camino = 'tw' | 'co';
-export type PasoId = 'entrar' | 'permisos' | 'datos' | 'codigo' | 'canal' | 'bienvenida' | 'panel';
+export type PasoId = 'entrar' | 'permisos' | 'datos' | 'codigo' | 'terminos' | 'canal' | 'bienvenida' | 'panel';
 
-/** Mismos pasos en los dos caminos; solo cambia cuál va primero. */
+/** Mismos pasos en los dos caminos; solo cambia cuál va primero. La aceptación de los términos va justo antes de «Tu canal». */
 export const ORDEN: Record<Camino, PasoId[]> = {
-  tw: ['entrar', 'permisos', 'datos', 'codigo', 'canal', 'bienvenida', 'panel'],
-  co: ['entrar', 'codigo', 'permisos', 'datos', 'canal', 'bienvenida', 'panel'],
+  tw: ['entrar', 'permisos', 'datos', 'codigo', 'terminos', 'canal', 'bienvenida', 'panel'],
+  co: ['entrar', 'codigo', 'permisos', 'datos', 'terminos', 'canal', 'bienvenida', 'panel'],
 };
 
 export const ETIQUETA: Record<PasoId, string> = {
@@ -23,15 +23,16 @@ export const ETIQUETA: Record<PasoId, string> = {
   permisos: 'Conectar Twitch',
   datos: 'Lo que tomamos',
   codigo: 'Código de invitación',
+  terminos: 'Antes de empezar',
   canal: 'Tu canal',
   bienvenida: 'Bienvenida',
   panel: 'Tu panel',
 };
 
-/** Pasos que tienen explicación de Teemo. */
+/** Pasos que tienen explicación de Chispa, la voz que narra la bienvenida. */
 export type PasoNarrado = keyof typeof narracion;
 
-/** Lo que dice Teemo en cada paso. El mismo texto se usa para generar los audios. */
+/** Lo que dice Chispa en cada paso. El mismo texto se usa para generar los audios. */
 export const NARRACION: Record<PasoNarrado, string> = narracion;
 
 export const esCamino = (value: unknown): value is Camino => value === 'tw' || value === 'co';
@@ -88,6 +89,8 @@ export interface AvanceConSesion {
   activo: boolean;
   /** El streamer ya confirmó que los datos de Twitch son los suyos. */
   datosConfirmados: boolean;
+  /** Ya aceptó la versión vigente de los términos y políticas. */
+  terminosAceptados: boolean;
   /** Ya guardó o saltó la configuración del canal. */
   canalListo: boolean;
 }
@@ -98,6 +101,7 @@ export function pasosPendientes(camino: Camino, avance: AvanceConSesion): PasoId
     if (paso === 'entrar' || paso === 'permisos' || paso === 'panel') return false;
     if (paso === 'codigo') return !avance.activo;
     if (paso === 'datos') return !avance.datosConfirmados;
+    if (paso === 'terminos') return !avance.terminosAceptados;
     if (paso === 'canal') return !avance.canalListo;
     return true;
   });

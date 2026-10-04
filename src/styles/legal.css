@@ -1,0 +1,314 @@
+/* ==========================================================================
+   Términos y políticas: página legal (bajo .lg) y piezas de la aceptación
+   (.lg-pts, .lg-ck...), que van dentro del marco de la bienvenida.
+   Usa los tokens --cb-* de Cabina; las reglas base viven en index.css.
+   ========================================================================== */
+
+/* ---------- Página ---------- */
+.lg-page {
+  display: grid;
+  gap: 20px;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding: 28px 20px 96px;
+}
+.lg-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+.lg-top p {
+  margin: 0;
+}
+.lg-marca {
+  font-stretch: 70%;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 4vw, 2.1rem);
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.lg-top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- Aviso de borrador ---------- */
+.lg-aviso {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--cb-warn);
+  border-radius: 3px;
+  background: var(--cb-warn-bg);
+  color: var(--cb-warn);
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.9375rem;
+}
+.lg-aviso p,
+.lg-aviso ul {
+  margin: 0;
+}
+.lg-aviso ul {
+  padding-left: 1.2em;
+}
+
+/* ---------- Índice y documento ---------- */
+.lg-legal {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  align-items: start;
+  border: 1px solid var(--cb-line);
+  border-radius: 6px;
+  background: var(--cb-panel);
+}
+.lg-toc {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  padding: 16px 10px;
+}
+.lg-toc p {
+  margin: 0;
+  padding: 0 8px 8px;
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+.lg-toc a {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  color: var(--cb-mut);
+  font-weight: 650;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: color 0.15s var(--ease-out), background-color 0.15s var(--ease-out);
+}
+@media (hover: hover) {
+  .lg-toc a:hover {
+    color: var(--cb-fg);
+  }
+}
+.lg-toc a[aria-current='page'] {
+  background: var(--cb-fg);
+  color: var(--cb-panel);
+}
+
+.lg-doc {
+  min-width: 0;
+  padding: 26px clamp(18px, 4vw, 40px) 40px;
+  border-left: 1px solid var(--cb-line);
+}
+.lg-doc h1 {
+  margin: 0;
+  font-stretch: 70%;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 3.4vw, 1.9rem);
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.lg-doc h1:focus-visible,
+.lg-doc section:focus-visible {
+  outline-offset: 6px;
+}
+.lg-meta {
+  margin: 6px 0 0;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+.lg-doc section {
+  scroll-margin-top: 16px;
+}
+.lg-doc h2 {
+  max-width: 68ch;
+  margin: 26px 0 0;
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+.lg-doc h3 {
+  max-width: 68ch;
+  margin: 18px 0 0;
+  font-stretch: 78%;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cb-mut);
+}
+.lg-doc p,
+.lg-doc li {
+  max-width: 68ch;
+  margin: 8px 0 0;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+.lg-doc ul,
+.lg-doc ol {
+  margin: 0;
+  padding-left: 1.3em;
+}
+.lg-doc ul {
+  list-style: disc;
+}
+.lg-doc ol {
+  list-style: decimal;
+}
+.lg-doc a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lg-doc b {
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .lg-legal {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lg-toc {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+    top: 0;
+    z-index: 1;
+    padding: 8px;
+    border-bottom: 1px solid var(--cb-line);
+    border-radius: 6px 6px 0 0;
+    background: var(--cb-panel);
+  }
+  .lg-doc {
+    border-left: 0;
+  }
+  .lg-toc p {
+    display: none;
+  }
+  .lg-toc a {
+    white-space: nowrap;
+  }
+  .lg-doc section {
+    scroll-margin-top: 70px;
+  }
+}
+
+/* ---------- Impresión: solo el documento, en negro sobre blanco ---------- */
+@media print {
+  :root body .cab.lg {
+    --cb-bg: #fff;
+    --cb-panel: #fff;
+    --cb-fg: #000;
+    --cb-mut: #333;
+    --cb-line: #999;
+    min-height: 0;
+    background: #fff;
+    color: #000;
+  }
+  .lg-top-actions,
+  .lg-toc {
+    display: none;
+  }
+  .lg-page {
+    padding: 0;
+  }
+  .lg-legal {
+    grid-template-columns: minmax(0, 1fr);
+    border: 0;
+  }
+  .lg-doc {
+    padding: 0;
+    border: 0;
+  }
+  .lg-doc h2,
+  .lg-doc h3 {
+    break-after: avoid;
+  }
+}
+
+/* ---------- Aceptación (dentro del marco de la bienvenida) ---------- */
+.acc-step.lg-acc {
+  max-width: 520px;
+}
+.lg-pts {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: lg-punto;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.lg-pts li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 10px;
+}
+.lg-pts li::before {
+  content: counter(lg-punto);
+  counter-increment: lg-punto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ui);
+  color: var(--ui-ink);
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+.lg-pts span {
+  color: var(--cb-mut);
+  font-size: 0.9375rem;
+}
+.lg-pts b {
+  display: block;
+  color: var(--cb-fg);
+  font-weight: 600;
+}
+.lg-ck {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.lg-ck input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--ui);
+}
+.lg-ck label {
+  cursor: pointer;
+}
+.lg-cambios {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+  list-style: disc;
+}
+
+/* Enlace a los documentos al pie de la pantalla de acceso */
+.lg-pie {
+  margin: 22px 0 0;
+  font-size: 0.8125rem;
+}
+.lg-pie .studio-link {
+  color: var(--cb-mut);
+  font-weight: 600;
+}

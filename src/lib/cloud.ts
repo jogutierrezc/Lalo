@@ -17,6 +17,7 @@ import type {
   ProfileUsageRow,
   RpcArgs,
   RpcResult,
+  TermsAcceptanceRow,
 } from './cloudTypes';
 
 function client() {
@@ -111,6 +112,35 @@ export async function completeOnboarding(): Promise<string | null> {
   } catch (err) {
     return err instanceof Error ? err.message : 'error desconocido';
   }
+}
+
+// ---------- Aceptación de términos (migración 0008) ----------
+
+/**
+ * Lo que la cuenta ha aceptado, según la nube. Lanza un Error si no se pudo
+ * leer; pasa, por ejemplo, si la migración 0008 aún no está aplicada.
+ */
+export async function fetchOwnAcceptances(profileId: string): Promise<TermsAcceptanceRow[]> {
+  const { data, error } = await client().from('terms_acceptances').select('*').eq('profile_id', profileId);
+  if (error) throw new Error(error.message);
+  return (data as TermsAcceptanceRow[]) || [];
+}
+
+/** Registra en la cuenta que aceptó esas versiones. Devuelve null si se guardó, o el motivo. */
+export async function acceptTerms(versions: Record<string, string>): Promise<string | null> {
+  try {
+    await rpc('accept_terms', { p_versions: versions });
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : 'error desconocido';
+  }
+}
+
+/** Aceptaciones de todas las cuentas. Solo las lee un administrador. */
+export async function fetchAllAcceptances(): Promise<TermsAcceptanceRow[]> {
+  const { data, error } = await client().from('terms_acceptances').select('*');
+  if (error) throw new Error(error.message);
+  return (data as TermsAcceptanceRow[]) || [];
 }
 
 /** Plan y límites de la cuenta que ha entrado. null si no se pudieron leer. */

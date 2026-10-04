@@ -174,7 +174,7 @@ export function stopRouletteAudio(): void {
 
 /**
  * Sintetiza y reproduce una locución emocional para la ruleta usando
- * la voz de Fish Audio configurada en el sistema (Teemo, Ahri, Jarvis, Diana, Luz, etc.)
+ * la voz de Fish Audio configurada en el sistema (Chispa, Seda, Atlas, Vera, Brisa, etc.)
  */
 export async function speakRouletteTtsCue(
   fullText: string,

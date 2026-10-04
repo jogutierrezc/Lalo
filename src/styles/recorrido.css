@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Bienvenida de streamers: lista de pasos, Teemo, tarjeta del plan y tareas.
+   Bienvenida de streamers: lista de pasos, narrador, tarjeta del plan y tareas.
    Vive sobre la pantalla de acceso (.acc, ver acceso.css) y usa sus tokens.
    La lista de tareas (.rec-tareas) también se usa en Inicio, con los tokens
    del panel. Ningún texto baja de 13px (0.8125rem).
@@ -103,8 +103,8 @@
   color: #fff;
 }
 
-/* ---------- Teemo te explica ---------- */
-.rec-teemo {
+/* ---------- Chispa te explica ---------- */
+.rec-narra {
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -112,12 +112,12 @@
   border-radius: 6px;
   background: rgb(145 70 255 / 0.18);
 }
-.rec-teemo-cab {
+.rec-narra-cab {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.rec-teemo-av {
+.rec-narra-av {
   flex: none;
   display: grid;
   place-items: center;
@@ -129,26 +129,26 @@
   font-weight: 800;
   font-stretch: 80%;
 }
-.rec-teemo-cab b {
+.rec-narra-cab b {
   display: block;
   font-stretch: 78%;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.rec-teemo-cab div span {
+.rec-narra-cab div span {
   display: block;
   color: var(--cb-mut);
   font-family: 'Onest', system-ui, sans-serif;
   font-size: 0.8125rem;
 }
-.rec-teemo p {
+.rec-narra p {
   margin: 0;
   font-family: 'Onest', system-ui, sans-serif;
   font-size: 0.9375rem;
   line-height: 1.45;
 }
-.rec-teemo-pie {
+.rec-narra-pie {
   display: flex;
   align-items: center;
   gap: 12px;

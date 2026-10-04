@@ -1,18 +1,19 @@
 /**
  * src/lib/narracion.ts
  *
- * Audio de las explicaciones de Teemo en la bienvenida.
+ * Audio de las explicaciones de Chispa, la voz que narra la bienvenida.
  *
  * De dónde sale el audio, en este orden:
  *   1. Un archivo ya generado en public/voz/recorrido/<paso>.mp3 (no gasta nada).
- *   2. Si no existe, el servicio de voz de la app (/api/tts) con la voz de Teemo.
+ *   2. Si no existe, el servicio de voz de la app (/api/tts) con la voz de Chispa.
  * Lo que se consigue se guarda en memoria hasta cerrar la pestaña, así repetir
  * una explicación no vuelve a gastar cuota. Nunca suena solo: lo pide un botón.
  */
 
-import { PRESET_VOICES } from '../types/settings';
+import { DEFAULT_SETTINGS } from '../types/settings';
 
-export const TEEMO_ID = PRESET_VOICES.find((voice) => voice.name === 'Teemo')?.id ?? PRESET_VOICES[0].id;
+/** La voz del narrador es la voz por defecto de las cuentas nuevas (Chispa). */
+export const NARRADOR_ID = DEFAULT_SETTINGS.referenceId;
 
 const MODELO = 's2.1-pro-free';
 const ESPERA_MS = 20000;
@@ -54,12 +55,12 @@ export interface PedidoDeVoz {
   /** Nombre del archivo generado que se busca primero. Sin él, se va directo al servicio de voz. */
   paso?: string;
   texto: string;
-  /** Voz con la que se sintetiza si no hay archivo. Por defecto, Teemo. */
+  /** Voz con la que se sintetiza si no hay archivo. Por defecto, Chispa. */
   voz?: string;
 }
 
 /** Dirección de un audio listo para sonar. Lanza un Error si no se pudo conseguir. */
-export async function audioDeVoz({ paso, texto, voz = TEEMO_ID }: PedidoDeVoz): Promise<string> {
+export async function audioDeVoz({ paso, texto, voz = NARRADOR_ID }: PedidoDeVoz): Promise<string> {
   const clave = `${paso ?? ''}|${voz}|${texto}`;
   const previo = guardados.get(clave);
   if (previo) return previo;

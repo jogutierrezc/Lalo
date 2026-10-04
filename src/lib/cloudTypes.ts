@@ -2,7 +2,7 @@
  * src/lib/cloudTypes.ts
  *
  * Tipos de las tablas y RPCs de Supabase. Escritos a mano: deben coincidir con
- * supabase/migrations (0001 a 0007). Las fechas llegan como texto ISO.
+ * supabase/migrations (0001 a 0008). Las fechas llegan como texto ISO.
  */
 
 export type ProfileRole = 'streamer' | 'admin';
@@ -102,6 +102,14 @@ export interface MediaFileRow {
   provider?: 'r2' | 'supabase';
   /** Desde 0005: nombre del objeto en R2. */
   object_key?: string | null;
+}
+
+/** Desde 0008: una fila por cuenta, documento y versión aceptada. */
+export interface TermsAcceptanceRow {
+  profile_id: string;
+  document: string;
+  version: string;
+  accepted_at: string;
 }
 
 export type MediaProvider = NonNullable<MediaFileRow['provider']>;
@@ -209,6 +217,7 @@ export interface RpcArgs {
   admin_set_storage_capacity: { p_bytes: number };
   storage_ready: Record<string, never>;
   complete_onboarding: Record<string, never>;
+  accept_terms: { p_versions: Record<string, string> };
 }
 
 /** Resultado de cada RPC (lo que llega en `data`). */
@@ -230,4 +239,6 @@ export interface RpcResult {
   storage_ready: boolean;
   /** Desde 0006: la fecha en que quedó terminada la bienvenida. */
   complete_onboarding: string;
+  /** Desde 0008: la fecha en que quedó registrada la aceptación. */
+  accept_terms: string;
 }

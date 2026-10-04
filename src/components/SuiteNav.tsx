@@ -23,6 +23,7 @@ import {
   Coins,
   Copy,
   ExternalLink,
+  FileText,
   Gamepad2,
   LayoutGrid,
   Menu,
@@ -307,6 +308,10 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
       </nav>
 
       <div className="shell-foot">
+        <a href="#legal" className="shell-link" title={collapsed ? 'Términos y políticas' : undefined} onClick={() => setDrawerOpen(false)}>
+          <FileText className="h-4 w-4 flex-none" />
+          <span className="shell-lab">Términos y políticas</span>
+        </a>
         <div className="shell-lab">
           <ThemeSwitch />
         </div>

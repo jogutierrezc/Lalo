@@ -2,7 +2,7 @@
 /**
  * scripts/generar-narracion.mjs
  *
- * Genera una sola vez los audios de «Teemo te explica» de la bienvenida y los
+ * Genera una sola vez los audios de «Chispa te explica» de la bienvenida y los
  * deja en public/voz/recorrido/<paso>.mp3. Con esos archivos, el botón
  * «Escuchar» ya no gasta cuota del servicio de voz en cada alta.
  *
@@ -24,8 +24,8 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Deben coincidir con src/types/settings.ts (PRESET_VOICES, Teemo) y src/lib/narracion.ts
-const TEEMO_ID = '5669f8e58ecb476a982bc2b67ac6b538';
+// Deben coincidir con src/types/settings.ts (PRESET_VOICES, Chispa) y src/lib/narracion.ts
+const NARRADOR_ID = '5669f8e58ecb476a982bc2b67ac6b538';
 const MODELO = 's2.1-pro-free';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -56,7 +56,7 @@ for (const [paso, texto] of Object.entries(textos)) {
     const res = await fetch(`${base}/api/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: texto, reference_id: TEEMO_ID, model: MODELO }),
+      body: JSON.stringify({ text: texto, reference_id: NARRADOR_ID, model: MODELO }),
     });
     const tipo = res.headers.get('content-type') || '';
     if (!res.ok || !tipo.startsWith('audio/')) {

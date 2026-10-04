@@ -340,6 +340,22 @@ export const Account: React.FC = () => {
                   Clave nueva generada. Copia otra vez las URL desde «Fuentes de OBS».
                 </p>
               )}
+              <div className="cab-field">
+                <span className="cab-label">Términos y políticas</span>
+                <span>
+                  <a className="studio-link" href="#legal">
+                    Leer los documentos
+                  </a>
+                </span>
+                <span className="cab-hint">
+                  Los aceptaste al entrar. Si cambian, te lo avisamos y te pedimos aceptarlos de nuevo. Cómo tratamos tus
+                  datos está en{' '}
+                  <a className="studio-link" href="#legal/privacidad">
+                    Privacidad
+                  </a>
+                  .
+                </span>
+              </div>
               <button type="button" className="cab-btn2" onClick={signOut}>
                 Cerrar sesión
               </button>

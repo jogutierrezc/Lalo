@@ -13,6 +13,8 @@ import { formatBytes, rpc } from '../../lib/cloud';
 import type { ProfileStatus } from '../../lib/cloudTypes';
 import { formatDate } from './adminFormat';
 import type { AdminData } from './useAdminData';
+import { VERSIONES_ACTUALES } from '../../legal';
+import { resumenAceptacion } from '../../legal/logica';
 
 const STATUS_LABEL: Record<ProfileStatus, string> = { active: 'Activa', pending: 'Sin código', suspended: 'Suspendida' };
 const STATUS_CHIP: Record<ProfileStatus, string> = { active: 'read', pending: 'skipped', suspended: 'rejected' };
@@ -25,7 +27,7 @@ const FILTERS: { id: ProfileFilter; label: string }[] = [
 ];
 
 export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null }> = ({ data, ownId }) => {
-  const { overview, plans, invites, meta, planName, reload, setError } = data;
+  const { overview, plans, invites, meta, acceptances, planName, reload, setError } = data;
   const [filter, setFilter] = useState<ProfileFilter>('todas');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -87,6 +89,13 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
   const enteredWith = selectedMeta?.invite_code_id
     ? invites.find((invite) => invite.id === selectedMeta.invite_code_id)?.code ?? 'Un código que ya no existe'
     : 'Sin código';
+  // Solo lectura: si la cuenta aceptó los términos vigentes y cuándo
+  const terms = selected && acceptances ? resumenAceptacion(acceptances.get(selected.profile_id) ?? [], VERSIONES_ACTUALES) : null;
+  const termsText = !terms
+    ? 'Sin datos: falta aplicar la migración 0008'
+    : terms.estado === 'nunca'
+      ? 'Sin aceptar'
+      : `${terms.estado === 'al-dia' ? 'Aceptados' : 'Aceptó una versión anterior'} el ${formatDate(terms.fecha ?? '')}`;
 
   return (
     <>
@@ -206,6 +215,8 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                 <dd>{selectedMeta ? formatDate(selectedMeta.created_at) : 'Sin datos'}</dd>
                 <dt>Entró con</dt>
                 <dd className="cab-mono">{enteredWith}</dd>
+                <dt>Términos</dt>
+                <dd>{termsText}</dd>
               </dl>
               <UsageMeter used={selected.bytes_used} limit={selected.storage_limit_bytes} label={`Espacio de ${profileName(selected)}`} />
               {isNearlyFull(selected) && (
