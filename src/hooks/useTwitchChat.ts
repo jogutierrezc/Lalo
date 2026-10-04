@@ -45,7 +45,6 @@ import { ChatDisplayMessage, ChatModerationEvent, toDisplayMessage } from '../ut
 import { postBus } from '../utils/bus';
 import { parseVoteCommand, loadPollSettings } from '../types/polls';
 import { parsePollCommand } from '../utils/pollCommands';
-import { loadRouletteSettings, calculateTargetRotation, pickRandomSegment } from '../types/roulette';
 
 export interface RejectedMessage {
   id: string;
@@ -75,7 +74,7 @@ export interface UseTwitchChatOptions {
   onStaffMessage?: (message: string, sender: { name: string; role: UserRole }) => boolean;
   /**
    * Cada mensaje con sus etiquetas tal como llegan de Twitch y el rol de quien escribe.
-   * Lo usa la capa «Recompensas» para ver los cheers (bits) y los canjes con texto.
+   * Lo usan las capas «Recompensas» y «Ruleta» para ver los cheers (bits) y los canjes con texto.
    */
   onChatEvent?: (tags: tmi.ChatUserstate, message: string, role: UserRole) => void;
 }
@@ -245,7 +244,7 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
         return false;
       }
 
-      // Comandos de moderación de otras capas (saludo de raid: !so, !clip, !cortar)
+      // Comandos de moderación de otras capas (saludo de raid: !so, !clip, !cortar; ruleta: abrirla y cerrarla)
       if ((role === 'broadcaster' || role === 'mod') && onStaffMessageRef.current?.(message, { name: displayName, role })) {
         return false;
       }
@@ -302,45 +301,8 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
         });
       }
 
-      // Activación remota de la Ruleta de Castigos (!ruleta, !spin, !wheel)
-      const cleanMsg = message.trim().toLowerCase();
-      if (cleanMsg === '!ruleta' || cleanMsg === '!spin' || cleanMsg === '!wheel') {
-        const rs = loadRouletteSettings();
-        const activeSegments = rs.segments.filter((s) => s.enabled);
-        if (activeSegments.length > 0) {
-          const picked = pickRandomSegment(activeSegments);
-          if (picked) {
-            const finalRotation = calculateTargetRotation(
-              picked.index,
-              activeSegments.length,
-              0,
-              5
-            );
-            postBus({
-              type: 'ROULETTE_SPIN',
-              spin: {
-                id: `spin-chat-${Date.now()}`,
-                user: displayName,
-                winnerSegment: picked.segment,
-                winnerIndex: picked.index,
-                totalActiveSegments: activeSegments.length,
-                startRotation: 0,
-                finalRotation,
-                spinDurationSec: rs.spinDurationSec || 6.0,
-                screenShake: rs.screenShake,
-                confetti: rs.confetti,
-                victorySoundType: rs.victorySoundType,
-                victoryCustomAudioUrl: rs.victoryCustomAudioUrl,
-                victoryCustomAudioVolume: rs.victoryCustomAudioVolume ?? 0.85,
-                showWinnerBanner: rs.showWinnerBanner,
-                winnerBannerDurationSec: rs.winnerBannerDurationSec || 8,
-                ttsAnnounceSpin: rs.ttsAnnounceSpin !== false,
-                ttsAnnounceWinner: rs.ttsAnnounceWinner !== false,
-              },
-            });
-          }
-        }
-      }
+      // La ruleta ya no se gira con un comando: la giran los puntos del canal o los bits
+      // (onChatEvent) y la abren o cierran el streamer y sus moderadores (onStaffMessage)
 
       const trigger = classifyTrigger(moderation, message, tags, role);
       if (!trigger) return false;

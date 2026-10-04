@@ -8,8 +8,10 @@
  * y principios de diseño de Emil Kowalski e Impeccable.
  */
 
-import { queueCloudPush } from '../lib/cloudConfig';
+import { queueCloudPush, stripDataUrls } from '../lib/cloudConfig';
+import { decodeBase64Url, encodeBase64Url } from '../utils/appearance';
 import { AlertSoundType } from './alerts';
+import type { RewardAudience } from './rewards';
 
 export type PenaltyCategory =
   | 'fitness'
@@ -56,11 +58,47 @@ export interface RouletteSettings {
   showWinnerBanner: boolean;
   winnerBannerDurationSec: number;
   segments: RouletteSegment[];
-  triggerRewardName?: string; // Nombre del canje de puntos de Twitch
-  triggerCommand?: string; // Comando de chat (ej: !ruleta)
   ttsAnnounceSpin?: boolean; // Anunciar con voz TTS cuando la ruleta va a girar
   ttsAnnounceWinner?: boolean; // Anunciar con voz TTS el resultado seleccionado
+
+  // ---------- Actividad: se abre y se cierra, con el panel o con un comando ----------
+  /** Nombre que se escribe tras el comando para abrirla (ej: !ruleta castigos). */
+  name: string;
+  /** Abierta desde el panel. Cerrada, ni los puntos ni los bits la giran. */
+  active: boolean;
+  /** Cuándo se abrió o cerró desde el panel (ms). El cambio más reciente manda sobre el del chat. */
+  activeAt: number;
+  /** Comandos del streamer y sus moderadores para abrirla y cerrarla. */
+  openCommand: string;
+  closeCommand: string;
+
+  // ---------- Qué la hace girar: puntos del canal o bits, nunca un comando ----------
+  triggerKind: RouletteTriggerKind;
+  /** Id de la recompensa de puntos en Twitch, en minúsculas. Vacío: sin enlazar. */
+  twitchRewardId: string;
+  bitsMode: 'exact' | 'range';
+  bitsMin: number;
+  /** Tope del rango. null = sin tope. */
+  bitsMax: number | null;
+  /** Quién puede girarla. */
+  audience: RewardAudience;
+  /** Segundos de espera entre un giro aceptado y el siguiente. */
+  cooldownSeconds: number;
+  /** Aviso pendiente: estos ajustes venían de la versión que giraba con un comando del chat. */
+  spinNotice: boolean;
 }
+
+export type RouletteTriggerKind = 'points' | 'bits';
+
+export const ROULETTE_LIMITS = {
+  bits: { min: 1, max: 100000 },
+  cooldown: { min: 0, max: 3600 },
+  nameMax: 30,
+} as const;
+
+export const DEFAULT_OPEN_COMMAND = '!ruleta';
+export const DEFAULT_CLOSE_COMMAND = '!cerrarruleta';
+export const DEFAULT_ROULETTE_NAME = 'castigos';
 
 export const ROULETTE_STORAGE_KEY = 'lalo_roulette_settings';
 
@@ -168,11 +206,92 @@ export const DEFAULT_ROULETTE_SETTINGS: RouletteSettings = {
   showWinnerBanner: true,
   winnerBannerDurationSec: 8,
   segments: ROULETTE_PRESETS[0].segments,
-  triggerRewardName: 'Girar Ruleta de Castigos',
-  triggerCommand: '!ruleta',
   ttsAnnounceSpin: true,
   ttsAnnounceWinner: true,
+  name: DEFAULT_ROULETTE_NAME,
+  active: false,
+  activeAt: 0,
+  openCommand: DEFAULT_OPEN_COMMAND,
+  closeCommand: DEFAULT_CLOSE_COMMAND,
+  triggerKind: 'points',
+  twitchRewardId: '',
+  bitsMode: 'exact',
+  bitsMin: 100,
+  bitsMax: null,
+  audience: 'all',
+  cooldownSeconds: 0,
+  spinNotice: false,
 };
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+const whole = (value: unknown, fallback: number, min: number, max: number): number => {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
+};
+
+/** Un comando válido: empieza por «!», va en minúsculas, sin espacios y con 25 caracteres como mucho. */
+export function normalizeRouletteCommand(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback;
+  const word = value.trim().toLowerCase().split(/\s+/)[0] || '';
+  const clean = `!${word.replace(/^!+/, '').replace(/[^a-z0-9_ñáéíóúü-]/g, '')}`.slice(0, 25);
+  return clean.length > 1 ? clean : fallback;
+}
+
+/** Nombre de la ruleta: una línea corta, sin saltos ni espacios repetidos. */
+export function normalizeRouletteName(value: unknown): string {
+  if (typeof value !== 'string') return DEFAULT_ROULETTE_NAME;
+  const clean = value
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, ROULETTE_LIMITS.nameMax);
+  return clean || DEFAULT_ROULETTE_NAME;
+}
+
+/**
+ * Completa unos ajustes guardados o recibidos (nube, URL, otra pestaña).
+ *
+ * Migración: hasta ahora cualquiera giraba la rueda escribiendo un comando
+ * (`triggerCommand`) y el canje se anotaba por su nombre (`triggerRewardName`),
+ * que nunca llegó a enlazarse. Esos dos campos desaparecen. El comando guardado
+ * pasa a ser el que abre la ruleta, la ruleta queda cerrada y sin recompensa
+ * enlazada, y `spinNotice` pide al editor que lo explique una vez.
+ */
+export function normalizeRouletteSettings(raw: unknown): RouletteSettings {
+  const d = DEFAULT_ROULETTE_SETTINGS;
+  if (!isObject(raw)) return d;
+  const { triggerCommand, triggerRewardName, ...rest } = raw;
+  const legacy = raw.triggerKind === undefined && (triggerCommand !== undefined || triggerRewardName !== undefined);
+
+  const bitsMin = whole(raw.bitsMin, d.bitsMin, ROULETTE_LIMITS.bits.min, ROULETTE_LIMITS.bits.max);
+  const rawMax =
+    raw.bitsMax === null || raw.bitsMax === undefined || raw.bitsMax === ''
+      ? null
+      : whole(raw.bitsMax, bitsMin, ROULETTE_LIMITS.bits.min, ROULETTE_LIMITS.bits.max);
+  const openCommand = normalizeRouletteCommand(legacy ? triggerCommand : raw.openCommand, d.openCommand);
+  const closeCommand = normalizeRouletteCommand(raw.closeCommand, d.closeCommand);
+
+  return {
+    ...d,
+    ...(rest as Partial<RouletteSettings>),
+    segments: Array.isArray(raw.segments) && raw.segments.length > 0 ? (raw.segments as RouletteSegment[]) : d.segments,
+    name: normalizeRouletteName(raw.name),
+    active: raw.active === true,
+    activeAt: whole(raw.activeAt, 0, 0, Number.MAX_SAFE_INTEGER),
+    openCommand,
+    // Los dos comandos no pueden ser el mismo: no se sabría si abre o cierra
+    closeCommand: closeCommand === openCommand ? (openCommand === d.closeCommand ? '!finruleta' : d.closeCommand) : closeCommand,
+    triggerKind: raw.triggerKind === 'bits' ? 'bits' : 'points',
+    twitchRewardId: typeof raw.twitchRewardId === 'string' ? raw.twitchRewardId.trim().toLowerCase().slice(0, 64) : '',
+    bitsMode: raw.bitsMode === 'range' ? 'range' : 'exact',
+    bitsMin,
+    bitsMax: rawMax === null ? null : Math.max(bitsMin, rawMax),
+    audience: raw.audience === 'sub' || raw.audience === 'vip' ? raw.audience : 'all',
+    cooldownSeconds: whole(raw.cooldownSeconds, d.cooldownSeconds, ROULETTE_LIMITS.cooldown.min, ROULETTE_LIMITS.cooldown.max),
+    spinNotice: legacy ? true : raw.spinNotice === true,
+  };
+}
 
 /** Carga segura desde LocalStorage */
 export function loadRouletteSettings(): RouletteSettings {
@@ -180,14 +299,7 @@ export function loadRouletteSettings(): RouletteSettings {
     if (typeof localStorage === 'undefined') return DEFAULT_ROULETTE_SETTINGS;
     const raw = localStorage.getItem(ROULETTE_STORAGE_KEY);
     if (!raw) return DEFAULT_ROULETTE_SETTINGS;
-    const parsed = JSON.parse(raw);
-    return {
-      ...DEFAULT_ROULETTE_SETTINGS,
-      ...parsed,
-      segments: Array.isArray(parsed.segments) && parsed.segments.length > 0
-        ? parsed.segments
-        : DEFAULT_ROULETTE_SETTINGS.segments,
-    };
+    return normalizeRouletteSettings(JSON.parse(raw));
   } catch {
     return DEFAULT_ROULETTE_SETTINGS;
   }
@@ -201,6 +313,26 @@ export function saveRouletteSettings(settings: RouletteSettings): void {
     queueCloudPush('roulette', settings);
   } catch {
     // Silencioso ante cuotas restringidas
+  }
+}
+
+/**
+ * Ajustes para la URL de OBS cuando no hay cuenta en la nube (parámetro `rl`).
+ * Los archivos incrustados (data:) no caben en una URL y se quedan fuera.
+ */
+export function encodeRouletteSettings(settings: RouletteSettings): string {
+  return encodeBase64Url(JSON.stringify(stripDataUrls(settings).value));
+}
+
+/** Ajustes recibidos por URL, o null si el valor no se puede leer. */
+export function decodeRouletteSettings(param: string | null | undefined): RouletteSettings | null {
+  const text = decodeBase64Url(param);
+  if (!text) return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isObject(parsed) ? normalizeRouletteSettings(parsed) : null;
+  } catch {
+    return null;
   }
 }
 

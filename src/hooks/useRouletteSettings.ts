@@ -11,11 +11,10 @@ import {
   RouletteSegment,
   loadRouletteSettings,
   saveRouletteSettings,
-  calculateTargetRotation,
-  pickRandomSegment,
   ROULETTE_PRESETS,
 } from '../types/roulette';
 import { postBus, RouletteSpinEvent } from '../utils/bus';
+import { buildSpin } from '../utils/rouletteLogic';
 
 export function useRouletteSettings() {
   const [rouletteSettings, setRouletteSettings] = useState<RouletteSettings>(() =>
@@ -98,70 +97,21 @@ export function useRouletteSettings() {
   );
 
   /**
-   * Dispara un giro de ruleta (calculando la física angular con GSAP).
-   * Puede seleccionar un castigo específico o elegir uno al azar con probabilidades justas.
+   * Gira la rueda en el monitor y en las fuentes de la ruleta abiertas en este navegador.
+   * `why` cuenta qué lo hizo girar (una prueba, un canje simulado, un cheer simulado).
    */
   const triggerSpin = useCallback(
-    (user = 'Streamer', targetSegmentId?: string): RouletteSpinEvent | null => {
-      const activeSegments = rouletteSettings.segments.filter((s) => s.enabled);
-      if (activeSegments.length === 0) return null;
-
-      let winnerSegment: RouletteSegment;
-      let winnerIndex: number;
-
-      if (targetSegmentId) {
-        const foundIndex = activeSegments.findIndex((s) => s.id === targetSegmentId);
-        if (foundIndex !== -1) {
-          winnerSegment = activeSegments[foundIndex];
-          winnerIndex = foundIndex;
-        } else {
-          const picked = pickRandomSegment(activeSegments);
-          if (!picked) return null;
-          winnerSegment = picked.segment;
-          winnerIndex = picked.index;
-        }
-      } else {
-        const picked = pickRandomSegment(activeSegments);
-        if (!picked) return null;
-        winnerSegment = picked.segment;
-        winnerIndex = picked.index;
-      }
-
-      // Ángulo de partida limpio y normalizado en [0, 360)
-      const baseRotation = ((currentRotationRef.current % 360) + 360) % 360;
-
-      // 5 vueltas completas de inercia para una desaceleración fluida y constante
-      const fullSpins = 5;
-      const finalRotation = calculateTargetRotation(
-        winnerIndex,
-        activeSegments.length,
-        baseRotation,
-        fullSpins
-      );
-
-      // Actualizar el ángulo de reposo para el siguiente giro
-      currentRotationRef.current = ((finalRotation % 360) + 360) % 360;
-
-      const spinEvent: RouletteSpinEvent = {
+    (user = 'Streamer', targetSegmentId?: string, why?: string): RouletteSpinEvent | null => {
+      const spinEvent = buildSpin(rouletteSettings, {
         id: `spin-${Date.now()}`,
         user,
-        winnerSegment,
-        winnerIndex,
-        totalActiveSegments: activeSegments.length,
-        startRotation: baseRotation,
-        finalRotation,
-        spinDurationSec: rouletteSettings.spinDurationSec || 6.0,
-        screenShake: rouletteSettings.screenShake,
-        confetti: rouletteSettings.confetti,
-        victorySoundType: rouletteSettings.victorySoundType,
-        victoryCustomAudioUrl: rouletteSettings.victoryCustomAudioUrl,
-        victoryCustomAudioVolume: rouletteSettings.victoryCustomAudioVolume ?? 0.85,
-        showWinnerBanner: rouletteSettings.showWinnerBanner,
-        winnerBannerDurationSec: rouletteSettings.winnerBannerDurationSec || 8,
-        ttsAnnounceSpin: rouletteSettings.ttsAnnounceSpin !== false,
-        ttsAnnounceWinner: rouletteSettings.ttsAnnounceWinner !== false,
-      };
-
+        why,
+        baseRotation: currentRotationRef.current,
+        targetSegmentId,
+      });
+      if (!spinEvent) return null;
+      // Ángulo de reposo para el siguiente giro
+      currentRotationRef.current = ((spinEvent.finalRotation % 360) + 360) % 360;
       postBus({ type: 'ROULETTE_SPIN', spin: spinEvent });
       return spinEvent;
     },

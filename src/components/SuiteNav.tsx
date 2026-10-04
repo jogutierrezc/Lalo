@@ -48,6 +48,7 @@ import { loadSettings } from '../types/settings';
 import { encodeChatSettings, loadChatSettings } from '../types/chat';
 import { encodeRaidSettings, loadRaidSettings } from '../types/raid';
 import { encodeRewardsSettings, loadRewardsSettings } from '../types/rewards';
+import { encodeRouletteSettings, loadRouletteSettings } from '../types/roulette';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -205,14 +206,21 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   useEffect(() => onCloudSyncMessage(setSyncMessage), []);
   const current = nav.flatMap((section) => section.items).find((item) => item.app === currentApp);
 
-  // Sin cuenta en la nube, los ajustes del chat y del saludo de raid viajan en la URL:
+  // Sin cuenta en la nube, los ajustes del chat, del saludo de raid, de las recompensas y de la ruleta viajan en la URL:
   // OBS no comparte almacenamiento con el panel
   const extraFor = (mode: WidgetAppType): Record<string, string> | undefined => {
     if (widgetKeyParam) return widgetKeyParam;
     if (mode === 'chat') return { cs: encodeChatSettings(loadChatSettings()) };
     if (mode === 'rewards') return { rw: encodeRewardsSettings(loadRewardsSettings()) };
     if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
-    if (mode === 'all') return { rs: encodeRaidSettings(loadRaidSettings()), rw: encodeRewardsSettings(loadRewardsSettings()) };
+    if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
+    if (mode === 'all') {
+      return {
+        rs: encodeRaidSettings(loadRaidSettings()),
+        rw: encodeRewardsSettings(loadRewardsSettings()),
+        rl: encodeRouletteSettings(loadRouletteSettings()),
+      };
+    }
     return undefined;
   };
 

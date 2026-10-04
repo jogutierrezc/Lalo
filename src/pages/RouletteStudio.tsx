@@ -6,13 +6,18 @@
  *
  * - Cada segmento se edita en su propia fila.
  * - «Cargar plantilla» reemplaza los segmentos, lo avisa y se puede deshacer.
- * - Hay un solo botón para probar: Girar. El giro también llega a las capas
- *   de OBS abiertas.
+ * - «Cómo se gira»: la ruleta se abre y se cierra (aquí o con un comando y su
+ *   nombre) y la giran los puntos del canal o los bits. Nadie la gira con un
+ *   comando.
+ * - Para probar: Girar, y un canje o un cheer simulados que pasan por las mismas
+ *   reglas que en directo. El giro también llega a las fuentes de la ruleta
+ *   abiertas en este navegador.
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Check, Copy, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
+import { RouletteTriggerFields } from '../components/roulette/RouletteTriggerFields';
 import { SuiteNav } from '../components/SuiteNav';
 import { useRouletteSettings } from '../hooks/useRouletteSettings';
 import {
@@ -22,11 +27,14 @@ import {
   ROULETTE_STYLE_PRESETS,
   RouletteSegment,
   VIBRANT_SEGMENT_COLORS,
+  encodeRouletteSettings,
 } from '../types/roulette';
 import { AlertSoundType } from '../types/alerts';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
 import { RouletteOverlayView } from '../components/roulette/RouletteOverlayView';
-import { speakRouletteSpinAnnouncement, speakRouletteWinnerAnnouncement } from '../utils/rouletteAudio';
+import { speakRoulettePreview, stopRoulettePreview } from '../utils/rouletteAudio';
+import { IncomingTrigger, judgeTrigger, spinAnnouncement, triggerRuleText, winnerAnnouncement } from '../utils/rouletteLogic';
+import { emptyGate } from '../utils/rewardsLogic';
 import { loadSettings, saveSettings } from '../types/settings';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
@@ -50,6 +58,12 @@ const ROULETTE_TOUR_STEPS: TourStep[] = [
     body: 'Cada fila es un segmento: cambia el texto, el color, la categoría o los segundos del reto. El interruptor lo saca de la rueda sin borrarlo.',
   },
   {
+    target: 'roulette-trigger',
+    badge: 'Giros',
+    title: 'Cómo se gira',
+    body: 'Abre la ruleta aquí o con tu comando y su nombre. Mientras está abierta la giran los puntos del canal o los bits, lo que elijas.',
+  },
+  {
     target: 'roulette-actions',
     badge: 'Al caer',
     title: 'Qué pasa cuando se detiene',
@@ -59,7 +73,7 @@ const ROULETTE_TOUR_STEPS: TourStep[] = [
     target: 'roulette-monitor',
     badge: 'Monitor',
     title: 'Gira y copia la URL',
-    body: '«Girar» prueba la rueda aquí y en las capas de OBS abiertas. «Copiar URL para OBS» te da la fuente de navegador a 1920 × 1080.',
+    body: '«Girar» prueba la rueda aquí. «Simular canje» y «Simular cheer» comprueban lo que pasaría en directo. «Copiar URL para OBS» te da la fuente de navegador a 1920 × 1080.',
   },
 ];
 
@@ -100,6 +114,8 @@ export const RouletteStudio: React.FC = () => {
   const [currentRotation, setCurrentRotation] = useState(0);
   const [targetWinner, setTargetWinner] = useState<RouletteSegment | undefined>(undefined);
   const [activeWinner, setActiveWinner] = useState<{ segment: RouletteSegment; user: string } | null>(null);
+  // Quién gira en el monitor: el streamer en una prueba o el espectador de un canje simulado
+  const [spinUser, setSpinUser] = useState('Streamer');
   const [confettiActive, setConfettiActive] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
@@ -125,6 +141,7 @@ export const RouletteStudio: React.FC = () => {
   useEffect(
     () => () => {
       if (statusTimer.current) clearTimeout(statusTimer.current);
+      stopRoulettePreview();
     },
     []
   );
@@ -190,34 +207,82 @@ export const RouletteStudio: React.FC = () => {
   }, [confettiActive]);
 
   // ---------- Girar ----------
-  const spin = () => {
+  // La voz de la prueba: una sola frase a la vez, con la voz de «Voz del chat». Si hay una fuente de
+  // la ruleta abierta en este navegador, la dice ella por su cola de voz y el panel calla
+  const announce = (text: string) => {
+    speakRoulettePreview(text).then((who) => {
+      if (who === 'none') say('El servicio de voz no respondió: la prueba sigue sin voz.');
+    });
+  };
+
+  const startSpin = (user: string, why: string | undefined, note: string) => {
     if (isSpinning || !canSpin) return;
     setActiveWinner(null);
-    const spinEvent = triggerSpin('Streamer');
+    const spinEvent = triggerSpin(user, undefined, why);
     if (!spinEvent) {
       say('No se pudo iniciar el giro. Comprueba que hay segmentos activos.');
       return;
     }
+    setSpinUser(user);
     setIsSpinning(true);
     setStartRotation(spinEvent.startRotation ?? currentRotation % 360);
     setCurrentRotation(spinEvent.finalRotation);
     setTargetWinner(spinEvent.winnerSegment);
-    say('Girando aquí y en las capas de OBS abiertas.');
-    if (rouletteSettings.ttsAnnounceSpin !== false) {
-      speakRouletteSpinAnnouncement('Streamer', rouletteSettings.title);
+    say(note);
+    if (rouletteSettings.ttsAnnounceSpin !== false) announce(spinAnnouncement(user, rouletteSettings.title));
+  };
+
+  const spin = () => startSpin('Streamer', undefined, 'Girando aquí y en las fuentes de la ruleta abiertas en este navegador.');
+
+  /** Un canje o un cheer de mentira que pasa por las mismas reglas que uno de verdad. */
+  const simulate = (kind: 'points' | 'bits') => {
+    if (isSpinning || !canSpin) return;
+    if (rouletteSettings.triggerKind !== kind) {
+      say(
+        kind === 'points'
+          ? 'La ruleta está puesta para girar con bits: un canje de puntos no la mueve.'
+          : 'La ruleta está puesta para girar con puntos de canal: un cheer no la mueve.'
+      );
+      return;
     }
+    if (kind === 'points' && !rouletteSettings.twitchRewardId) {
+      say('Aún no hay recompensa de Twitch enlazada: en directo ningún canje la giraría. Pulsa «Detectar».');
+      return;
+    }
+    const who = { user: 'mar_ia', username: 'mar_ia', role: 'viewer' as const, via: 'test' as const };
+    const incoming: IncomingTrigger =
+      kind === 'points'
+        ? { kind: 'points', rewardId: rouletteSettings.twitchRewardId, ...who }
+        : { kind: 'bits', bits: rouletteSettings.bitsMin, ...who };
+    const verdict = judgeTrigger(rouletteSettings, incoming, {
+      active: rouletteSettings.active,
+      activeSegments: activeCount,
+      gate: emptyGate(),
+      now: Date.now(),
+    });
+    if (!verdict.ok) {
+      say(
+        verdict.reason === 'closed'
+          ? 'La ruleta está cerrada: en directo este giro se descartaría. Ábrela en «Cómo se gira» y prueba otra vez.'
+          : verdict.message || 'Ese disparo no gira la ruleta.'
+      );
+      return;
+    }
+    startSpin(who.user, verdict.why, `${verdict.why} de ${who.user}: gira como en directo.`);
   };
 
   const handleWheelComplete = (winner: RouletteSegment) => {
     setIsSpinning(false);
-    setActiveWinner({ segment: winner, user: 'Streamer' });
+    // La rueda descansa donde cayó
+    setStartRotation(((currentRotation % 360) + 360) % 360);
+    setActiveWinner({ segment: winner, user: spinUser });
 
     playAlertOrCustomSound(
       rouletteSettings.victoryCustomAudioUrl,
       rouletteSettings.victorySoundType,
       rouletteSettings.victoryCustomAudioVolume ?? 0.85
     );
-    if (rouletteSettings.ttsAnnounceWinner !== false) speakRouletteWinnerAnnouncement(winner, 'Streamer');
+    if (rouletteSettings.ttsAnnounceWinner !== false) announce(winnerAnnouncement(winner, spinUser));
     if (rouletteSettings.confetti) setConfettiActive(true);
     if (rouletteSettings.screenShake && stageRef.current) {
       gsap.fromTo(
@@ -279,12 +344,13 @@ export const RouletteStudio: React.FC = () => {
   // ---------- URL de OBS ----------
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const copyWidgetUrl = () => {
+    // Con cuenta en la nube viaja la clave; sin ella, los ajustes enteros van en la URL
     const url = buildSuiteWidgetUrl(
       baseUrl,
       'roulette',
       rouletteSettings.channel,
       loadSettings(),
-      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
+      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : { rl: encodeRouletteSettings(rouletteSettings) }
     );
     navigator.clipboard
       ?.writeText(url)
@@ -427,6 +493,15 @@ export const RouletteStudio: React.FC = () => {
                   </button>
                 )}
               </div>
+            </section>
+
+            {/* ---------- Cómo se gira ---------- */}
+            <section className="cab-mod" data-tour="roulette-trigger">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2>Cómo se gira</h2>
+                <span className="cab-hint">Con {triggerRuleText(rouletteSettings)}</span>
+              </div>
+              <RouletteTriggerFields settings={rouletteSettings} update={updateSettings} onNote={say} />
             </section>
 
             {/* ---------- Al caer ---------- */}
@@ -600,10 +675,6 @@ export const RouletteStudio: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <p className="cab-note">
-                    Desde el chat, cualquiera puede girarla escribiendo <span className="cab-mono">!ruleta</span>,{' '}
-                    <span className="cab-mono">!spin</span> o <span className="cab-mono">!wheel</span>.
-                  </p>
                 </div>
               </details>
             </section>
@@ -623,7 +694,7 @@ export const RouletteStudio: React.FC = () => {
                 startRotation={startRotation}
                 targetWinner={targetWinner}
                 isSpinning={isSpinning}
-                activeUser="Streamer"
+                activeUser={spinUser}
                 winnerBanner={rouletteSettings.showWinnerBanner ? activeWinner : null}
                 onSpinComplete={handleWheelComplete}
                 onBannerDismiss={() => setActiveWinner(null)}
@@ -641,10 +712,21 @@ export const RouletteStudio: React.FC = () => {
                 <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
               </button>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn2 cab-btn-sm flex-1" disabled={isSpinning || !canSpin} onClick={() => simulate('points')}>
+                Simular canje
+              </button>
+              <button type="button" className="cab-btn2 cab-btn-sm flex-1" disabled={isSpinning || !canSpin} onClick={() => simulate('bits')}>
+                Simular cheer
+              </button>
+            </div>
             <p className="cab-hint" role="status">
               {!canSpin
                 ? 'Para girar hacen falta al menos dos segmentos activos.'
-                : status || 'El giro suena aquí y aparece en las capas de OBS que estén abiertas.'}
+                : status ||
+                  (cloud.profile?.status === 'active'
+                    ? 'La prueba suena aquí. A OBS le llegan los ajustes solos, por la nube.'
+                    : 'La prueba suena aquí. Sin cuenta en la nube, los ajustes viajan en la URL: cópiala otra vez en OBS cuando cambies algo.')}
             </p>
           </section>
         </div>

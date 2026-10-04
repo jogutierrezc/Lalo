@@ -27,7 +27,7 @@ import {
   pickNext,
   UserRole,
 } from '../utils/moderation';
-import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus, RewardTriggerEvent, GoalProgressEvent, RouletteSpinEvent } from '../utils/bus';
+import { BusMessage, LiveItem, LogItem, SessionStats, WidgetState, listenBus, postBus, RewardTriggerEvent, GoalProgressEvent } from '../utils/bus';
 import { MotionOptions, playEnter, playExit, reduced, startSpeaking, stopSpeaking } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
@@ -35,13 +35,7 @@ import { playModerationChime, announceModerationAction, ACTION_DESCRIPTIONS } fr
 import { Radio, VolumeX } from 'lucide-react';
 import { loadGoalsSettings } from '../types/goals';
 import { GoalsOverlayView } from '../components/goals/GoalsOverlayView';
-import { loadRouletteSettings, RouletteSegment } from '../types/roulette';
-import { RouletteOverlayView } from '../components/roulette/RouletteOverlayView';
-import {
-  speakRouletteSpinAnnouncement,
-  speakRouletteWinnerAnnouncement,
-  speakRouletteTtsCue,
-} from '../utils/rouletteAudio';
+import { RouletteLayer, RouletteLayerHandle } from '../components/roulette/RouletteLayer';
 import { loadPollSettings, determineLeader, PollStyleTheme } from '../types/polls';
 import { BattleBarView } from '../components/polls/BattleBarView';
 import { PollBattleUpdateEvent } from '../utils/bus';
@@ -64,6 +58,7 @@ import '../styles/raid.css';
 import type { RewardsLayerHandle } from '../components/recompensas/RewardsLayer';
 import { RewardsWidgetLayer, rewardsSettingsForWidget } from '../components/recompensas/RewardsWidgetLayer';
 import { TwitchEventLayer } from '../components/powerups/TwitchEventLayer';
+import type { TwitchEvent } from '../utils/twitchEvents';
 import { loadStudioSettings, normalizeStudioSettings, sceneForWidget } from '../types/studio';
 import { SceneData, SceneHandle, SceneView } from '../components/estudio/SceneView';
 import { loadAlertsSettings } from '../types/alerts';
@@ -415,9 +410,16 @@ export const Widget: React.FC = () => {
     raidRef.current?.raid(raid.channel, raid.viewers, raid.login);
     sceneRef.current?.raid(raid.channel, raid.viewers, raid.login);
   }, []);
+  // Ruleta: fuente propia (app=roulette) o dentro de «Todo en uno». La giran los puntos del canal o
+  // los bits; el streamer y sus moderadores la abren y la cierran con un comando
+  const isRouletteApp = appParam === 'roulette' || appParam === 'ruleta' || appParam === 'wheel';
+  const showRoulette = isRouletteApp || appParam === 'all';
+  const rouletteRef = useRef<RouletteLayerHandle | null>(null);
   const handleStaffMessage = useCallback(
     (message: string, sender: { name: string; role: UserRole }) =>
-      (raidRef.current?.command(message, sender) ?? false) || (sceneRef.current?.raidCommand(message, sender) ?? false),
+      (raidRef.current?.command(message, sender) ?? false) ||
+      (sceneRef.current?.raidCommand(message, sender) ?? false) ||
+      (rouletteRef.current?.command(message, sender) ?? false),
     []
   );
 
@@ -435,6 +437,7 @@ export const Widget: React.FC = () => {
   const handleRewardChat = useCallback(
     (tags: Parameters<RewardsLayerHandle['chat']>[0], message: string, role: UserRole) => {
       rewardsRef.current?.chat(tags, message, role);
+      rouletteRef.current?.chat(tags, role);
     },
     []
   );
@@ -491,6 +494,9 @@ export const Widget: React.FC = () => {
 
   // La bienvenida de una raid entra en la misma cola de voz que el chat
   const speakRaidWelcome = useCallback((text: string) => enqueueManualMessage(text, 'Raid', true), [enqueueManualMessage]);
+  // Lo que dice la ruleta también: una sola voz, la de «Voz del chat», y una frase detrás de otra
+  const speakRoulette = useCallback((text: string) => enqueueManualMessage(text, 'Ruleta', true), [enqueueManualMessage]);
+  const handleTwitchEvent = useCallback((event: TwitchEvent) => rouletteRef.current?.event(event), []);
 
   const [currentMessage, setCurrentMessage] = useState<SanitizedTTSMessage | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -1043,24 +1049,6 @@ export const Widget: React.FC = () => {
   const [goalsSettings, setGoalsSettings] = useState(() => loadGoalsSettings());
   const [currentGoalEvent, setCurrentGoalEvent] = useState<GoalProgressEvent | null>(null);
 
-  // Soporte para Ruleta de Castigos & Retos en OBS
-  const isRouletteApp =
-    getURLParam('app') === 'roulette' ||
-    getURLParam('app') === 'ruleta' ||
-    getURLParam('app') === 'wheel' ||
-    window.location.hash.includes('app=roulette') ||
-    window.location.hash.includes('app=ruleta');
-  const [rouletteSettings, setRouletteSettings] = useState(() => loadRouletteSettings());
-  const [activeRouletteSpin, setActiveRouletteSpin] = useState<RouletteSpinEvent | null>(null);
-  const [rouletteStartRotation, setRouletteStartRotation] = useState(0);
-  const [rouletteRotation, setRouletteRotation] = useState(0);
-  const [isRouletteSpinning, setIsRouletteSpinning] = useState(false);
-  const [rouletteWinnerBanner, setRouletteWinnerBanner] = useState<{
-    segment: RouletteSegment;
-    user: string;
-  } | null>(null);
-  const rouletteContainerRef = useRef<HTMLDivElement | null>(null);
-
   // Soporte para Batallas & Encuestas en OBS
   const isPollsApp =
     getURLParam('app') === 'polls' ||
@@ -1109,51 +1097,6 @@ export const Widget: React.FC = () => {
     }, 4200);
     return () => clearTimeout(timer);
   }, [modNotice]);
-
-  const handleObsWheelComplete = useCallback((winner: RouletteSegment) => {
-    setIsRouletteSpinning(false);
-    setActiveRouletteSpin((prev) => {
-      if (prev) {
-        const finalWinner = prev.winnerSegment || winner;
-        setRouletteWinnerBanner({
-          segment: finalWinner,
-          user: prev.user || 'Streamer',
-        });
-
-        playAlertOrCustomSound(
-          prev.victoryCustomAudioUrl,
-          prev.victorySoundType || 'arcade-chime',
-          prev.victoryCustomAudioVolume ?? 0.85
-        );
-
-        // Anunciar con la voz oficial de Fish Audio configurada en TTS
-        if (prev.ttsAnnounceWinner !== false && rouletteSettings.ttsAnnounceWinner !== false) {
-          speakRouletteWinnerAnnouncement(finalWinner, prev.user);
-        }
-
-        const bannerDuration = prev.winnerBannerDurationSec || 8;
-        setTimeout(() => {
-          if (rouletteContainerRef.current) {
-            gsap.to(rouletteContainerRef.current, {
-              opacity: 0,
-              scale: 0.96,
-              duration: 0.22,
-              ease: 'power2.out',
-              onComplete: () => {
-                setActiveRouletteSpin(null);
-                setRouletteWinnerBanner(null);
-                gsap.set(rouletteContainerRef.current, { clearProps: 'all' });
-              },
-            });
-          } else {
-            setActiveRouletteSpin(null);
-            setRouletteWinnerBanner(null);
-          }
-        }, bannerDuration * 1000);
-      }
-      return prev;
-    });
-  }, []);
 
   useEffect(() => {
     if (activeReward && rewardOverlayRef.current) {
@@ -1361,45 +1304,6 @@ export const Widget: React.FC = () => {
             setActiveReward(null);
           }, (cel.duration || 6) * 1000);
         }
-      }
-      if (message.type === 'ROULETTE_SETTINGS_UPDATE') {
-        setRouletteSettings(message.settings);
-      }
-      if (message.type === 'ROULETTE_SPIN') {
-        const spin = message.spin;
-        setActiveRouletteSpin(spin);
-        setRouletteStartRotation(spin.startRotation ?? 0);
-        setRouletteRotation(spin.finalRotation);
-        setIsRouletteSpinning(true);
-        setRouletteWinnerBanner(null);
-
-        // Anunciar con la voz TTS del sistema que la ruleta va a girar
-        if (spin.ttsAnnounceSpin !== false && rouletteSettings.ttsAnnounceSpin !== false) {
-          speakRouletteSpinAnnouncement(spin.user, rouletteSettings.title);
-        }
-
-        if (spin.screenShake && containerRef.current) {
-          gsap.fromTo(
-            containerRef.current,
-            { x: -16, y: 12, rotate: -1.2 },
-            {
-              x: 0,
-              y: 0,
-              rotate: 0,
-              duration: 0.8,
-              ease: 'elastic.out(1.2, 0.18)',
-              clearProps: 'transform',
-            }
-          );
-        }
-      }
-      if (message.type === 'ROULETTE_TTS_CUE') {
-        speakRouletteTtsCue(message.cue.text, message.cue.emotion);
-      }
-      if (message.type === 'ROULETTE_CLEAR') {
-        setActiveRouletteSpin(null);
-        setRouletteWinnerBanner(null);
-        setIsRouletteSpinning(false);
       }
       if (message.type === 'POLL_SETTINGS_UPDATE') {
         setPollSettings(message.settings);
@@ -1659,8 +1563,8 @@ export const Widget: React.FC = () => {
         return;
       }
     }
-    // La fuente que solo muestra el saludo de raid solo dice su bienvenida: el chat lo lee otra fuente
-    if (isRaidOnly) {
+    // Las fuentes del saludo de raid y de la ruleta solo dicen lo suyo: el chat lo lee otra fuente
+    if (isRaidOnly || isRouletteApp) {
       const foreign = messageQueue.find((m) => !m.system);
       if (foreign) {
         removeMessageFromQueue(foreign.id);
@@ -1675,7 +1579,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRewardsOnly, isScene, clearQueue]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1778,6 +1682,7 @@ export const Widget: React.FC = () => {
         speak={enqueueManualMessage}
         blockedWords={moderation.blockedWords}
         blockedUsers={moderation.blockedUsers}
+        onEvent={handleTwitchEvent}
       />
 
       {/* Escena de Studio: las capas colocadas en el lienzo de 1920 × 1080 */}
@@ -1810,27 +1715,8 @@ export const Widget: React.FC = () => {
         </div>
       )}
 
-      {/* Overlay Cinemático de Ruleta de Castigos & Retos en OBS */}
-      {(isRouletteApp || activeRouletteSpin) && (
-        <div
-          ref={rouletteContainerRef}
-          className="pointer-events-none fixed inset-0 z-40 flex flex-col items-center justify-center p-6"
-        >
-          <div className="pointer-events-auto w-full">
-            <RouletteOverlayView
-              settings={rouletteSettings}
-              targetRotation={rouletteRotation}
-              startRotation={rouletteStartRotation}
-              targetWinner={activeRouletteSpin?.winnerSegment}
-              isSpinning={isRouletteSpinning}
-              activeUser={activeRouletteSpin?.user || 'Streamer'}
-              winnerBanner={rouletteWinnerBanner}
-              onSpinComplete={handleObsWheelComplete}
-              isStudio={false}
-            />
-          </div>
-        </div>
-      )}
+      {/* Ruleta: se ve mientras está abierta o gira; la giran los puntos del canal o los bits */}
+      {showRoulette && <RouletteLayer ref={rouletteRef} speak={speakRoulette} demo={getURLParam('demo') === '1'} />}
 
       {/* Overlay de Batallas & Encuestas en OBS */}
       {(isPollsApp || (activePollState && (activePollState.isActive || Boolean(activePollState.winner)))) && (

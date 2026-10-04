@@ -151,188 +151,89 @@ export function playWheelWhoosh(volume = 0.75): void {
 }
 
 // ==========================================
-// LOCUCIÓN EMOCIONAL DE RULETA CON TTS
-// (Usa la voz oficial configurada en el sistema)
+// VOZ DE PRUEBA EN EL ESTUDIO
 // ==========================================
+//
+// En la emisión la ruleta no habla por aquí: sus frases entran en la cola de voz
+// del sistema (la misma de «Voz del chat»), una detrás de otra, con la voz que
+// eligió el streamer. Ver RouletteLayer.tsx y createAnnouncer en rouletteLogic.ts.
+//
+// Esto es solo para oír la prueba en el panel, donde no hay cola: pide la frase
+// con la voz configurada y nunca recurre a la voz del navegador. Una frase nueva
+// corta la anterior, así que no pueden sonar dos a la vez.
 
 import { loadSettings } from '../types/settings';
 import { normalizeTextForFishAudio } from './emotionMapper';
-import type { RouletteSegment } from '../types/roulette';
+import { ROULETTE_LOCK } from './rouletteLogic';
 
-let currentRouletteAudio: HTMLAudioElement | null = null;
+let previewAudio: HTMLAudioElement | null = null;
+let previewUrl: string | null = null;
+let previewTurn = 0;
 
-export function stopRouletteAudio(): void {
-  if (currentRouletteAudio) {
-    currentRouletteAudio.pause();
-    currentRouletteAudio.src = '';
-    currentRouletteAudio = null;
+/** Corta la voz de prueba que esté sonando o en camino. */
+export function stopRoulettePreview(): void {
+  previewTurn += 1;
+  if (previewAudio) {
+    previewAudio.pause();
+    previewAudio.src = '';
+    previewAudio = null;
   }
-  if (typeof window !== 'undefined' && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
+  if (previewUrl) {
+    URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+  }
+}
+
+/** ¿Hay una fuente de la ruleta abierta en este mismo navegador? Entonces la voz la pone ella. */
+export async function rouletteSourceOpen(): Promise<boolean> {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.locks?.query) return false;
+    const state = await navigator.locks.query();
+    return (state.held || []).some((lock) => lock.name === ROULETTE_LOCK);
+  } catch {
+    return false;
   }
 }
 
 /**
- * Sintetiza y reproduce una locución emocional para la ruleta usando
- * la voz de Fish Audio configurada en el sistema (Chispa, Seda, Atlas, Vera, Brisa, etc.)
+ * Dice una frase de la ruleta en el panel con la voz de «Voz del chat».
+ * Devuelve quién habla: 'panel', 'source' (lo dirá la fuente abierta en este
+ * navegador) o 'none' si el servicio de voz no respondió.
  */
-export async function speakRouletteTtsCue(
-  fullText: string,
-  emotion: string,
-  onStart?: () => void,
-  onEnd?: () => void
-): Promise<void> {
-  if (typeof window === 'undefined') return;
+export async function speakRoulettePreview(text: string): Promise<'panel' | 'source' | 'none'> {
+  if (typeof window === 'undefined') return 'none';
+  stopRoulettePreview();
+  const turn = previewTurn;
+  if (await rouletteSourceOpen()) return 'source';
 
-  stopRouletteAudio();
-
-  const ttsSettings = loadSettings();
-  const normalized = normalizeTextForFishAudio(fullText);
-
-  // 1. Intentar endpoint de Fish Audio con la voz configurada
+  const tts = loadSettings();
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 9000);
-
     const res = await fetch('/api/tts', {
       method: 'POST',
       signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: normalized,
-        reference_id: ttsSettings.referenceId,
-        model: ttsSettings.model || 's2.1-pro-free',
-        speed: ttsSettings.speed || 1.0,
+        text: normalizeTextForFishAudio(text),
+        reference_id: tts.referenceId || undefined,
+        model: tts.model || 's2.1-pro-free',
       }),
     });
-
     clearTimeout(timeout);
-
-    if (res.ok) {
-      const blob = await res.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      audio.volume = Math.max(0.1, Math.min(1, ttsSettings.volume ?? 0.85));
-      currentRouletteAudio = audio;
-
-      audio.onplay = () => onStart?.();
-      audio.onended = () => {
-        currentRouletteAudio = null;
-        onEnd?.();
-      };
-      audio.onerror = () => {
-        currentRouletteAudio = null;
-        fallbackRouletteSpeech(fullText, emotion, onStart, onEnd);
-      };
-
-      await audio.play();
-      return;
-    }
+    if (!res.ok) return 'none';
+    const blob = await res.blob();
+    // Mientras llegaba el audio se pidió otra frase o se cortó: esta ya no suena
+    if (turn !== previewTurn) return 'none';
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    audio.volume = Math.max(0, Math.min(1, tts.volume ?? 0.85));
+    audio.playbackRate = tts.speed || 1;
+    previewAudio = audio;
+    previewUrl = url;
+    await audio.play();
+    return 'panel';
   } catch {
-    // Si falla la red o API, pasar a síntesis de respaldo
+    return 'none';
   }
-
-  // 2. Fallback resiliente a Web Speech API
-  fallbackRouletteSpeech(fullText, emotion, onStart, onEnd);
 }
-
-function fallbackRouletteSpeech(
-  fullText: string,
-  emotion: string,
-  onStart?: () => void,
-  onEnd?: () => void
-): void {
-  if (typeof window === 'undefined' || !window.speechSynthesis) {
-    onEnd?.();
-    return;
-  }
-
-  window.speechSynthesis.cancel();
-
-  // Limpiar etiquetas de corchetes
-  const cleanText = fullText.replace(/\[[^\]]+\]/g, '').trim();
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-
-  const voices = window.speechSynthesis.getVoices();
-  const esVoice = voices.find((v) => v.lang.toLowerCase().startsWith('es'));
-  if (esVoice) utterance.voice = esVoice;
-
-  const emoLower = emotion.toLowerCase();
-  if (emoLower.includes('emocionado') || emoLower.includes('hype')) {
-    utterance.rate = 1.25;
-    utterance.pitch = 1.22;
-  } else if (emoLower.includes('susurro') || emoLower.includes('misterio')) {
-    utterance.rate = 0.9;
-    utterance.pitch = 0.88;
-  } else if (emoLower.includes('triunfal') || emoLower.includes('alegria')) {
-    utterance.rate = 1.15;
-    utterance.pitch = 1.18;
-  }
-
-  utterance.onstart = () => onStart?.();
-  utterance.onend = () => onEnd?.();
-  utterance.onerror = () => onEnd?.();
-
-  window.speechSynthesis.speak(utterance);
-}
-
-/**
- * Anuncia con voz emocionada que la ruleta va a comenzar a girar.
- */
-export async function speakRouletteSpinAnnouncement(
-  user?: string,
-  title?: string,
-  onStart?: () => void,
-  onEnd?: () => void
-): Promise<void> {
-  const cleanUser = user && user !== 'Streamer' && user !== 'Admin' ? user : null;
-  const script = cleanUser
-    ? `[emocionado] ¡Atención al stream! ¡${cleanUser} ha puesto a girar la ruleta de retos! ¡Hagan sus apuestas, la rueda comienza a girar!`
-    : title
-    ? `[emocionado] ¡Atención a todos! La ${title} está girando ahora mismo. ¿Qué penitencia tocará?`
-    : `[emocionado] ¡Atención al stream! ¡La ruleta de castigos y retos está girando! ¿Qué penitencia tocará hoy?`;
-
-  return speakRouletteTtsCue(script, '[emocionado]', onStart, onEnd);
-}
-
-/**
- * Anuncia con voz triunfal / dramática el castigo o reto resultante tras detenerse la ruleta.
- */
-export async function speakRouletteWinnerAnnouncement(
-  winner: RouletteSegment,
-  user?: string,
-  onStart?: () => void,
-  onEnd?: () => void
-): Promise<void> {
-  let script = '';
-  let emotion = '[triunfal]';
-
-  const targetUser = user && user !== 'Streamer' && user !== 'Admin' ? `@${user}` : null;
-
-  if (winner.category === 'safe') {
-    emotion = '[alegria]';
-    script = targetUser
-      ? `[alegria] ¡Increíble golpe de suerte para ${targetUser}! ¡Ha salido: ${winner.text}! ¡Te salvaste del castigo!`
-      : `[alegria] ¡Increíble golpe de suerte! ¡Ha salido: ${winner.text}! ¡Te salvaste de la penitencia por esta ronda!`;
-  } else if (winner.durationSec && winner.durationSec > 0) {
-    emotion = '[triunfal]';
-    script = targetUser
-      ? `[triunfal] ¡La ruleta se ha detenido para ${targetUser}! El reto asignado es: ${winner.text}. Tienes ${winner.durationSec} segundos para cumplirlo.`
-      : `[triunfal] ¡La ruleta se ha detenido! El reto seleccionado es: ${winner.text}. Tienes ${winner.durationSec} segundos en el reloj para cumplirlo.`;
-  } else if (winner.intensity === 'extreme') {
-    emotion = '[sorprendido]';
-    script = targetUser
-      ? `[sorprendido] ¡Madre mía! ¡Castigo extremo para ${targetUser}! El destino ha dictado: ${winner.text}. ¡A cumplirlo sin excusas!`
-      : `[sorprendido] ¡Madre mía! ¡Castigo extremo! El destino ha dictado: ${winner.text}. ¡A cumplirlo sin excusas!`;
-  } else {
-    emotion = '[emocionado]';
-    script = targetUser
-      ? `[emocionado] ¡La ruleta ha hablado para ${targetUser}! El reto asignado es: ${winner.text}. ¡A cumplir ante el chat!`
-      : `[emocionado] ¡La ruleta ha hablado! El reto asignado es: ${winner.text}. ¡A cumplirlo ante el chat!`;
-  }
-
-  return speakRouletteTtsCue(script, emotion, onStart, onEnd);
-}
-

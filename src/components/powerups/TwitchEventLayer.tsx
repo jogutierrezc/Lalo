@@ -13,6 +13,8 @@
  *   recompensa de Lalo (por la puerta común de src/utils/rewardsEngine.ts), un
  *   aviso en pantalla, que la voz lea un mensaje, y poner el total nuevo de las
  *   metas de bits.
+ * - Entrega además cada evento a `onEvent`: la ruleta lo usa para girar con los
+ *   canjes de puntos que no piden texto.
  *
  * Los ajustes se leen en cada evento: el widget ya los deja en localStorage.
  */
@@ -29,7 +31,7 @@ import { playAlertAudio } from '../../utils/alertsAudio';
 import { listenBus, postBus } from '../../utils/bus';
 import { findBlockedWord, normalizeUser } from '../../utils/moderation';
 import { triggerReward } from '../../utils/rewardsEngine';
-import { PlannedAction, parseTwitchEvent, planActions } from '../../utils/twitchEvents';
+import { PlannedAction, TwitchEvent, parseTwitchEvent, planActions } from '../../utils/twitchEvents';
 
 /** Cada cuánto se pregunta por eventos con el canal encendido y apagado. */
 export const POLL_ACTIVE_MS = 4000;
@@ -37,8 +39,8 @@ export const POLL_IDLE_MS = 20000;
 const NOTICE_SECONDS = 5;
 const NOTICE_QUEUE_MAX = 6;
 
-/** Fuentes que pueden hacer algo con un evento. Las demás (chat, raid, ruleta...) ni preguntan. */
-const LISTENING_APPS = ['', 'tts', 'all', 'rewards', 'recompensas', 'goals', 'scene'];
+/** Fuentes que pueden hacer algo con un evento. Las demás (chat, raid...) ni preguntan. */
+const LISTENING_APPS = ['', 'tts', 'all', 'rewards', 'recompensas', 'goals', 'scene', 'roulette', 'ruleta', 'wheel'];
 const NOTICE_APPS = ['all', 'rewards', 'recompensas'];
 const VOICE_APPS = ['', 'tts', 'all'];
 
@@ -49,6 +51,8 @@ interface TwitchEventLayerProps {
   speak: (text: string, user?: string, system?: boolean) => unknown;
   blockedWords: string[];
   blockedUsers: string[];
+  /** Cada evento leído, antes de las acciones de «Power-ups». Lo usa la ruleta. */
+  onEvent?: (event: TwitchEvent) => void;
 }
 
 interface Notice {
@@ -57,9 +61,16 @@ interface Notice {
   text: string;
 }
 
-export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, blockedWords, blockedUsers }) => {
-  const live = useRef({ app, speak, blockedWords, blockedUsers });
-  live.current = { app, speak, blockedWords, blockedUsers };
+export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, blockedWords, blockedUsers, onEvent }) => {
+  const live = useRef({ app, speak, blockedWords, blockedUsers, onEvent });
+  live.current = { app, speak, blockedWords, blockedUsers, onEvent };
+
+  /** Un evento ya leído: primero a quien escucha (la ruleta), luego lo que mande «Power-ups». */
+  const handle = useRef<(event: TwitchEvent) => void>(() => {});
+  handle.current = (event) => {
+    live.current.onEvent?.(event);
+    planActions(event, loadPowerupsSettings()).forEach((action) => run.current(action));
+  };
 
   const [notice, setNotice] = useState<Notice | null>(null);
   const waiting = useRef<Notice[]>([]);
@@ -130,7 +141,7 @@ export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, 
     return listenBus((message) => {
       if (message.type !== 'TWITCH_EVENT') return;
       const event = parseTwitchEvent(message.kind, message.payload, true);
-      if (event) planActions(event, loadPowerupsSettings()).forEach((action) => run.current(action));
+      if (event) handle.current(event);
     });
   }, [listening]);
 
@@ -149,7 +160,7 @@ export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, 
         result.events.forEach((row) => {
           if (cursor !== null && row.id <= cursor) return;
           const event = parseTwitchEvent(row.kind, row.payload, row.test);
-          if (event) planActions(event, loadPowerupsSettings()).forEach((action) => run.current(action));
+          if (event) handle.current(event);
         });
         cursor = Math.max(cursor ?? 0, result.cursor);
       }

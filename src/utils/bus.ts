@@ -141,6 +141,8 @@ export interface GoalCelebrationEvent {
 export interface RouletteSpinEvent {
   id: string;
   user?: string;
+  /** Qué lo hizo girar, tal como se cuenta en pantalla: «Canje de puntos», «Cheer de 100 bits». */
+  why?: string;
   winnerSegment: RouletteSegment;
   winnerIndex: number;
   totalActiveSegments: number;
@@ -156,11 +158,6 @@ export interface RouletteSpinEvent {
   winnerBannerDurationSec?: number;
   ttsAnnounceSpin?: boolean;
   ttsAnnounceWinner?: boolean;
-}
-
-export interface RouletteTtsCueEvent {
-  text: string;
-  emotion: string;
 }
 
 export interface PollBattleUpdateEvent {
@@ -192,7 +189,6 @@ export type BusMessage =
   | { type: 'GOAL_CELEBRATE'; celebration: GoalCelebrationEvent }
   | { type: 'ROULETTE_SETTINGS_UPDATE'; settings: RouletteSettings }
   | { type: 'ROULETTE_SPIN'; spin: RouletteSpinEvent }
-  | { type: 'ROULETTE_TTS_CUE'; cue: RouletteTtsCueEvent }
   | { type: 'ROULETTE_CLEAR' }
   | { type: 'POLL_SETTINGS_UPDATE'; settings: PollSettings }
   | { type: 'POLL_STATE_UPDATE'; state: PollBattleUpdateEvent }
