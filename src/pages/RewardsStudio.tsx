@@ -4,36 +4,43 @@
  * Estudio de Recompensas sobre la plantilla común del panel: lista de
  * recompensas, editor de la elegida y monitor 16:9 siempre a la vista.
  *
- * - Lo básico (nombre, costo, texto y color) está abierto; vídeo, sonido y el
- *   resto van plegados.
- * - Hay una sola forma de probar: el botón bajo el monitor. La prueba suena
- *   aquí y se envía a las fuentes de OBS abiertas, sin gastar puntos.
- * - El color de una recompensa solo tiñe su aviso, no el panel.
+ * - Una recompensa se activa con puntos del canal o con bits, y puede ser solo
+ *   sonido, sonido con placa o sonido con vídeo.
+ * - El monitor pinta la misma capa que OBS (RewardsLayer). Las pruebas de debajo
+ *   la disparan aquí y en las fuentes de OBS abiertas en este navegador, sin
+ *   gastar puntos ni bits.
+ * - Los archivos se suben al almacén de la cuenta para que OBS los cargue; sin
+ *   cuenta se quedan en este navegador y se dice.
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import gsap from 'gsap';
 import { Check, Copy, Play, Plus, Trash2 } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { useRewardsSettings } from '../hooks/useRewardsSettings';
 import {
   CustomRewardItem,
-  RewardBlendMode,
-  RewardVideoPosition,
-  buildRewardNotice,
+  DEFAULT_BITS_COOLDOWN_SECONDS,
+  RewardsSettings,
+  encodeRewardsSettings,
+  normalizeReward,
+  plateStyleFor,
 } from '../types/rewards';
-import { AlertSoundType } from '../types/alerts';
-import { playAlertOrCustomSound } from '../utils/alertsAudio';
 import { postBus } from '../utils/bus';
-import { inkFor } from '../utils/appearance';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
-import { MediaItem, MediaType, inspectAudioFile, MAX_AUDIO_DURATION_SECONDS } from '../types/mediaLibrary';
+import { MediaItem, MediaType } from '../types/mediaLibrary';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
-import { Field, Range, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
+import { Field, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { loadSettings } from '../types/settings';
 import { useCloudSession } from '../hooks/useCloudSession';
-import '../styles/capas.css';
+import { releaseMedia } from '../lib/mediaRef';
+import { matchBitsReward, triggerLabel } from '../utils/rewardsLogic';
+import { RewardRequest, RewardsLayer, RewardsLayerHandle } from '../components/recompensas/RewardsLayer';
+import { TriggerFields } from '../components/recompensas/TriggerFields';
+import { SoundFields, VideoFields } from '../components/recompensas/MediaFields';
+import { PlateFields } from '../components/recompensas/PlateFields';
+import { GeneralRules } from '../components/recompensas/GeneralRules';
+import '../styles/recompensas.css';
 
 const TOUR_ID = 'recompensas';
 
@@ -41,25 +48,25 @@ const REWARDS_TOUR_STEPS: TourStep[] = [
   {
     badge: 'Bienvenida',
     title: 'Recompensas',
-    body: 'Aquí decides qué aparece y qué suena cuando alguien canjea puntos del canal.',
+    body: 'Aquí decides qué suena y qué aparece cuando alguien canjea puntos del canal o envía bits.',
   },
   {
     target: 'rewards-list',
     badge: 'Lista',
     title: 'Elige una recompensa',
-    body: 'Cada fila es una recompensa con su costo. «Nueva recompensa» añade otra.',
+    body: 'Cada fila es una recompensa, con lo que la activa. Debajo puedes añadir otra, por puntos o por bits.',
   },
   {
     target: 'reward-editor',
     badge: 'Editor',
-    title: 'Nombre, costo y texto',
-    body: 'Lo básico está a la vista. El vídeo, el sonido, la posición y el resto están plegados debajo.',
+    title: 'Qué la activa y qué hace',
+    body: 'Elige puntos o bits, el sonido, si sale una placa y con qué estilo, y un vídeo si quieres. Debajo están las reglas comunes a todas.',
   },
   {
     target: 'rewards-monitor',
     badge: 'Monitor',
     title: 'Prueba y copia la URL',
-    body: '«Probar» muestra el aviso aquí y en las fuentes de OBS abiertas, sin gastar puntos. «Copiar URL para OBS» te da la fuente de navegador a 1920 × 1080.',
+    body: 'Las pruebas disparan la capa aquí y en las fuentes de OBS abiertas, sin gastar nada. «Copiar URL para OBS» te da la fuente de navegador a 1920 × 1080.',
   },
 ];
 
@@ -72,63 +79,41 @@ const ACCENTS = [
   { color: '#ff6b4a', name: 'Coral' },
 ];
 
-const SOUNDS: { id: AlertSoundType; name: string }[] = [
-  { id: 'arcade-chime', name: 'Arcade' },
-  { id: 'retro-fanfare', name: 'Fanfarria' },
-  { id: 'synth-bell', name: 'Campana' },
-  { id: 'soft-pop', name: 'Pop suave' },
-  { id: 'none', name: 'Sin sonido' },
-];
-
-const POSITIONS: { id: RewardVideoPosition; name: string }[] = [
-  { id: 'center', name: 'Centro' },
-  { id: 'fullscreen', name: 'Pantalla completa' },
-  { id: 'top-left', name: 'Arriba a la izquierda' },
-  { id: 'top-right', name: 'Arriba a la derecha' },
-  { id: 'bottom-left', name: 'Abajo a la izquierda' },
-  { id: 'bottom-right', name: 'Abajo a la derecha' },
-];
-
-const BLEND_MODES: { id: RewardBlendMode; label: string }[] = [
-  { id: 'transparent', label: 'Vídeo con transparencia (WebM)' },
-  { id: 'screen', label: 'Quitar el fondo negro' },
-  { id: 'chroma-green', label: 'Quitar el fondo verde' },
-];
-
-const STAGE_POSITION: Record<RewardVideoPosition, string> = {
-  center: 'items-center justify-center',
-  fullscreen: 'items-center justify-center',
-  'top-left': 'items-start justify-start',
-  'top-right': 'items-start justify-end',
-  'bottom-left': 'items-end justify-start',
-  'bottom-right': 'items-end justify-end',
-};
-
-const DEMO_USER = 'EspectadorFan';
+const DEMO_USERS = ['mar_ia', 'dani_gg', 'caro_tv', 'luz88'];
 const DEMO_MESSAGE = '¡Vamos con todo!';
-const DEFAULT_VOLUME = 0.85;
-const DEFAULT_DURATION = 5;
+const LOG_LINES = 6;
+/** Un archivo de una recompensa borrada se libera cuando ya no se puede deshacer. */
+const RELEASE_AFTER_DELETE_MS = 9000;
+
+const usesMedia = (settings: RewardsSettings, mediaId: string) =>
+  settings.customPlate.mediaId === mediaId ||
+  settings.rewards.some((entry) => entry.videoMediaId === mediaId || entry.customAudioMediaId === mediaId);
+
+const whyFor = (reward: CustomRewardItem) =>
+  reward.trigger === 'points' ? 'Canje de puntos' : `Cheer de ${reward.bitsMin} ${reward.bitsMin === 1 ? 'bit' : 'bits'}`;
 
 export const RewardsStudio: React.FC = () => {
-  const { rewardsSettings, updateRewards, updateRewardItem, addRewardItem, deleteRewardItem, saved } =
-    useRewardsSettings();
+  const { rewardsSettings, updateRewards, updateRewardItem, addRewardItem, deleteRewardItem, saved } = useRewardsSettings();
   const cloud = useCloudSession();
   const uid = useId();
   const rewards = rewardsSettings.rewards;
+  const cloudOn = cloud.enabled && cloud.profile?.status === 'active';
 
   const [selectedId, setSelectedId] = useState<string>(rewards[0]?.id || '');
-  const [copiedUrl, setCopiedUrl] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const [audioError, setAudioError] = useState<string | null>(null);
-  const [wantsFile, setWantsFile] = useState(false);
+  const [copied, setCopied] = useState<'url' | 'demo' | null>(null);
+  const [log, setLog] = useState<string[]>([]);
+  const [counts, setCounts] = useState({ waiting: 0, active: 0 });
+  const [gates, setGates] = useState(false);
+  const [cheer, setCheer] = useState(100);
   const [vault, setVault] = useState<MediaType | null>(null);
-  const [playing, setPlaying] = useState<number | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const undo = useUndo<{ rewards: CustomRewardItem[]; id: string }>();
 
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const layerRef = useRef<RewardsLayerHandle | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settingsRef = useRef(rewardsSettings);
+  settingsRef.current = rewardsSettings;
+  const releasesRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // La guía se abre sola la primera vez; después se accede desde la cabecera
   useEffect(() => {
@@ -137,64 +122,68 @@ export const RewardsStudio: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (statusTimer.current) clearTimeout(statusTimer.current);
-      if (playTimer.current) clearTimeout(playTimer.current);
-    },
-    []
-  );
+  // Al salir, lo que estaba pendiente de liberar se libera ya (si sigue sin usarse)
+  useEffect(() => {
+    const releases = releasesRef.current;
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      releases.forEach((timer, mediaId) => {
+        clearTimeout(timer);
+        if (!usesMedia(settingsRef.current, mediaId)) void releaseMedia(mediaId);
+      });
+      releases.clear();
+    };
+  }, []);
 
-  const say = (message: string) => {
-    setStatus(message);
-    if (statusTimer.current) clearTimeout(statusTimer.current);
-    statusTimer.current = setTimeout(() => setStatus(null), 3500);
+  const say = (message: string) => setLog((prev) => [message, ...prev].slice(0, LOG_LINES));
+
+  // Al abrir, una muestra sin sonido de la primera recompensa para que el monitor no esté vacío
+  useEffect(() => {
+    const first = settingsRef.current.rewards[0];
+    if (!first) return;
+    layerRef.current?.fire({ reward: { ...first, showPlate: true }, user: DEMO_USERS[0], why: whyFor(first), silent: true, holdSeconds: 6 }, false);
+  }, []);
+
+  /** Libera un archivo del almacén cuando ya ninguna recompensa lo usa. */
+  const scheduleRelease = (mediaId: string, delay = 150) => {
+    const previous = releasesRef.current.get(mediaId);
+    if (previous) clearTimeout(previous);
+    releasesRef.current.set(
+      mediaId,
+      setTimeout(() => {
+        releasesRef.current.delete(mediaId);
+        if (usesMedia(settingsRef.current, mediaId)) return;
+        releaseMedia(mediaId).then((ok) => {
+          if (!ok) say('No se pudo borrar el archivo anterior de tu espacio. Puedes borrarlo en «Mi cuenta».');
+        });
+      }, delay)
+    );
   };
 
   // ---------- Recompensa seleccionada ----------
   const reward: CustomRewardItem | undefined = rewards.find((entry) => entry.id === selectedId) || rewards[0];
-  const hasFile = Boolean(reward?.customAudioUrl);
-  const volume = reward?.customAudioVolume ?? reward?.volume ?? DEFAULT_VOLUME;
-  const duration = reward?.duration || DEFAULT_DURATION;
-
-  const stopPlaying = () => {
-    if (playTimer.current) clearTimeout(playTimer.current);
-    setPlaying(null);
-  };
-
-  const select = (id: string) => {
-    setSelectedId(id);
-    setWantsFile(false);
-    setAudioError(null);
-    stopPlaying();
-  };
 
   const patch = (value: Partial<CustomRewardItem>) => {
     if (reward) updateRewardItem(reward.id, value);
   };
 
-  const createReward = () => {
+  const createReward = (trigger: 'points' | 'bits') => {
     const id = `custom-reward-${Date.now()}`;
-    addRewardItem({
-      id,
-      name: 'Recompensa nueva',
-      cost: 500,
-      description: '',
-      enabled: true,
-      cooldownSeconds: 30,
-      userInputRequired: false,
-      blendMode: 'transparent',
-      position: 'center',
-      scale: 1,
-      volume: DEFAULT_VOLUME,
-      showNoticeText: true,
-      noticeTemplate: '¡{user} canjeó {reward}!',
-      duration: DEFAULT_DURATION,
-      screenShake: false,
-      soundType: 'arcade-chime',
-      accentColor: '#9146ff',
-    });
-    select(id);
+    addRewardItem(
+      normalizeReward({
+        id,
+        name: trigger === 'bits' ? 'Sonido por bits' : 'Recompensa nueva',
+        cost: 500,
+        trigger,
+        bitsMode: 'exact',
+        bitsMin: 100,
+        cooldownSeconds: trigger === 'bits' ? DEFAULT_BITS_COOLDOWN_SECONDS : 30,
+        showPlate: true,
+        showNoticeText: false,
+        soundType: 'arcade-chime',
+      })
+    );
+    setSelectedId(id);
   };
 
   const removeReward = () => {
@@ -202,143 +191,106 @@ export const RewardsStudio: React.FC = () => {
     const index = rewards.findIndex((entry) => entry.id === reward.id);
     const next = rewards[index + 1] || rewards[index - 1];
     undo.offer(`Se eliminó «${reward.name}».`, { rewards, id: reward.id });
+    [reward.videoMediaId, reward.customAudioMediaId].forEach((mediaId) => mediaId && scheduleRelease(mediaId, RELEASE_AFTER_DELETE_MS));
     deleteRewardItem(reward.id);
-    select(next?.id || '');
+    setSelectedId(next?.id || '');
   };
 
   const restoreReward = () => {
     if (!undo.pending) return;
     updateRewards({ rewards: undo.pending.snapshot.rewards });
-    select(undo.pending.snapshot.id);
+    setSelectedId(undo.pending.snapshot.id);
     undo.clear();
-  };
-
-  // ---------- Sonido ----------
-  const chooseSound = (value: string) => {
-    if (value === 'file') {
-      setWantsFile(true);
-      return;
-    }
-    setWantsFile(false);
-    setAudioError(null);
-    patch({ soundType: value as AlertSoundType, customAudioUrl: undefined, customAudioName: undefined });
-  };
-
-  const assignAudio = (url: string, name: string) => {
-    setWantsFile(false);
-    setAudioError(null);
-    patch({ customAudioUrl: url, customAudioName: name, customAudioVolume: volume });
-    say(`Sonido «${name}» asignado.`);
-  };
-
-  const handleAudioUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      const { dataUrl } = await inspectAudioFile(file);
-      assignAudio(dataUrl, file.name);
-    } catch (err) {
-      setAudioError(
-        err instanceof Error && err.message
-          ? err.message
-          : `El archivo supera la duración máxima de ${MAX_AUDIO_DURATION_SECONDS} s. Elige uno más corto.`
-      );
-    }
-  };
-
-  // ---------- Vídeo ----------
-  const assignVideo = (url: string, name: string, isWebm: boolean) => {
-    patch({ videoUrl: url, videoName: name, blendMode: isWebm ? 'transparent' : 'screen' });
-    say(`Vídeo «${name}» asignado.`);
-  };
-
-  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (loaded) => {
-      assignVideo(loaded.target?.result as string, file.name, file.name.toLowerCase().endsWith('.webm'));
-    };
-    reader.onerror = () => say('No se pudo leer el vídeo. Prueba con otro archivo.');
-    reader.readAsDataURL(file);
   };
 
   const handleVaultSelect = (media: MediaItem) => {
     const type = vault;
     setVault(null);
-    if (type === 'audio') assignAudio(media.url, media.name);
-    else assignVideo(media.url, media.name, media.format === 'webm');
+    if (!reward) return;
+    if (type === 'audio') {
+      if (reward.customAudioMediaId) scheduleRelease(reward.customAudioMediaId);
+      patch({ customAudioUrl: media.url, customAudioName: media.name, customAudioMediaId: undefined, customAudioVolume: reward.volume });
+    } else {
+      if (reward.videoMediaId) scheduleRelease(reward.videoMediaId);
+      patch({ videoUrl: media.url, videoName: media.name, videoMediaId: undefined, blendMode: media.format === 'webm' ? 'transparent' : 'screen' });
+    }
+    say(`«${media.name}» asignado desde la biblioteca.`);
   };
 
-  // ---------- Probar ----------
-  const noticeFor = (item: CustomRewardItem) =>
-    item.showNoticeText ? buildRewardNotice(item.noticeTemplate, DEMO_USER, item.name, DEMO_MESSAGE) : '';
+  // ---------- Pruebas ----------
+  const run = (item: CustomRewardItem, user: string, why: string, extra: Partial<RewardRequest> = {}) => {
+    const accepted = layerRef.current?.fire({ reward: item, user, username: user.toLowerCase(), why, message: DEMO_MESSAGE, ...extra }, gates);
+    // Las fuentes de OBS abiertas en este navegador reciben la misma prueba
+    if (accepted && !extra.sampleVideo) postBus({ type: 'REWARD_TEST', test: { reward: item, user, why, amount: extra.amount, unit: extra.unit } });
+  };
 
-  const test = () => {
-    if (!reward) return;
-    playAlertOrCustomSound(reward.customAudioUrl, reward.soundType || 'arcade-chime', volume);
+  const testCurrent = () => reward && run(reward, DEMO_USERS[0], whyFor(reward));
 
-    if (reward.screenShake && stageRef.current) {
-      gsap.fromTo(
-        stageRef.current,
-        { x: -14, y: 10, rotate: -0.8 },
-        { x: 0, y: 0, rotate: 0, duration: 0.65, ease: 'elastic.out(1.2, 0.2)', clearProps: 'transform' }
-      );
-    }
+  const testPoints = () => {
+    const item = reward?.trigger === 'points' ? reward : rewards.find((entry) => entry.trigger === 'points');
+    if (!item) return say('No hay ninguna recompensa de puntos de canal en la lista.');
+    run(item, DEMO_USERS[0], 'Canje de puntos');
+  };
 
-    if (playTimer.current) clearTimeout(playTimer.current);
-    setPlaying(Date.now());
-    playTimer.current = setTimeout(() => setPlaying(null), duration * 1000);
+  const testCheer = () => {
+    const item = matchBitsReward(rewards, cheer);
+    if (!item) return say(`Ninguna recompensa encendida coincide con un cheer de ${cheer} ${cheer === 1 ? 'bit' : 'bits'}.`);
+    run(item, DEMO_USERS[1], `Cheer de ${cheer} ${cheer === 1 ? 'bit' : 'bits'}`, { amount: String(cheer), unit: cheer === 1 ? 'bit' : 'bits' });
+  };
 
-    postBus({
-      type: 'REWARD_TRIGGER',
-      reward: {
-        id: `reward-run-${Date.now()}`,
-        user: DEMO_USER,
-        rewardName: reward.name,
-        noticeText: noticeFor(reward),
-        videoUrl: reward.videoUrl,
-        blendMode: reward.blendMode,
-        position: reward.position,
-        scale: reward.scale,
-        volume: reward.volume,
-        screenShake: reward.screenShake,
-        accentColor: reward.accentColor,
-        soundType: reward.soundType,
-        duration,
-        customAudioUrl: reward.customAudioUrl,
-        customAudioVolume: volume,
-      },
-    });
-    say(`Prueba de «${reward.name}» enviada al monitor y a OBS.`);
+  const testThree = () => {
+    if (!rewards.length) return;
+    // Si hay menos de tres, se repite la elegida con espectadores distintos
+    const three = rewards.length >= 3 ? rewards.slice(0, 3) : [0, 1, 2].map(() => reward || rewards[0]);
+    three.forEach((item, index) => run(item, DEMO_USERS[index + 1], whyFor(item)));
+  };
+
+  const testShort = () =>
+    run(
+      normalizeReward({
+        id: 'prueba-clip-corto',
+        name: 'Clip de 0,25 s',
+        soundType: 'soft-pop',
+        volume: reward?.volume ?? 0.85,
+        showPlate: reward?.showPlate ?? true,
+        showNoticeText: false,
+        plateStyle: reward ? plateStyleFor(reward, rewardsSettings) : 'default',
+        accentColor: reward?.accentColor,
+      }),
+      DEMO_USERS[0],
+      'Prueba'
+    );
+
+  const testVideo = () => reward && run(reward, DEMO_USERS[0], whyFor(reward), { sampleVideo: true, silent: true, holdSeconds: 3 });
+
+  const clearAll = () => {
+    layerRef.current?.clear();
+    postBus({ type: 'REWARD_TEST', test: { user: '', why: '', clear: true } });
   };
 
   // ---------- URL de OBS ----------
-  // Los avisos de recompensa salen en la capa general de la suite
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const copyWidgetUrl = () => {
-    const url = buildSuiteWidgetUrl(
-      baseUrl,
-      'all',
-      rewardsSettings.channel,
-      loadSettings(),
-      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
-    );
+  const copyUrl = (withDemo: boolean) => {
+    const extra: Record<string, string> =
+      cloudOn && cloud.profile ? { k: cloud.profile.widget_key } : { rw: encodeRewardsSettings(rewardsSettings) };
+    if (withDemo) {
+      extra.demo = '1';
+      extra.plate = reward ? plateStyleFor(reward, rewardsSettings) : rewardsSettings.defaultPlateStyle;
+    }
+    const url = buildSuiteWidgetUrl(baseUrl, 'rewards', rewardsSettings.channel, loadSettings(), extra);
     navigator.clipboard
       ?.writeText(url)
       .then(() => {
-        setCopiedUrl(true);
-        setTimeout(() => setCopiedUrl(false), 2200);
+        setCopied(withDemo ? 'demo' : 'url');
+        if (copyTimer.current) clearTimeout(copyTimer.current);
+        copyTimer.current = setTimeout(() => setCopied(null), 2200);
       })
       .catch(() => say('No se pudo copiar. Usa «Fuentes de OBS» en la cabecera.'));
   };
 
-  // ---------- Vista previa ----------
-  const showVideo = Boolean(reward?.videoUrl) && playing !== null;
-  const showNotice = Boolean(reward) && (reward!.showNoticeText || !reward!.videoUrl);
-  const previewText = reward ? noticeFor(reward) || `Canjeado por ${DEMO_USER}` : '';
+  const customInUse =
+    rewardsSettings.defaultPlateStyle === 'custom' || rewards.some((entry) => entry.showPlate && entry.plateStyle === 'custom');
+  const mediaCount = reward ? Number(Boolean(reward.customAudioUrl)) : 0;
 
   return (
     <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
@@ -351,7 +303,7 @@ export const RewardsStudio: React.FC = () => {
           tourAvailable={!tourOpen}
         />
 
-        <div className="grid items-start gap-5 min-[1200px]:grid-cols-[230px_minmax(0,1fr)_minmax(0,350px)]">
+        <div className="grid items-start gap-5 min-[1200px]:grid-cols-[220px_minmax(0,1fr)_minmax(0,410px)]">
           {/* ---------- Lista de recompensas ---------- */}
           <section className="cab-mod" data-tour="rewards-list">
             <h2>Recompensas</h2>
@@ -361,374 +313,220 @@ export const RewardsStudio: React.FC = () => {
                   const current = entry.id === reward?.id;
                   return (
                     <li key={entry.id} className="cab-row" data-current={current ? '' : undefined}>
-                      <button
-                        type="button"
-                        className="studio-pick"
-                        aria-current={current ? 'true' : undefined}
-                        onClick={() => select(entry.id)}
-                      >
+                      <button type="button" className="studio-pick" aria-current={current ? 'true' : undefined} onClick={() => setSelectedId(entry.id)}>
                         {entry.name || 'Sin nombre'}
-                        <span className="cab-mono">{entry.cost.toLocaleString('es')} puntos</span>
+                        <span className="cab-mono">
+                          {triggerLabel(entry)} · {entry.showPlate ? 'con placa' : entry.videoUrl ? 'vídeo' : 'solo sonido'}
+                          {entry.enabled ? '' : ' · apagada'}
+                        </span>
                       </button>
                     </li>
                   );
                 })}
               </ul>
             )}
-            <button type="button" className="cab-btn2" onClick={createReward}>
-              <Plus className="h-4 w-4" />
-              <span>Nueva recompensa</span>
-            </button>
+            <span className="cab-label">Nueva recompensa</span>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className="cab-btn2" onClick={() => createReward('points')}>
+                <Plus className="h-4 w-4" />
+                <span>Puntos</span>
+              </button>
+              <button type="button" className="cab-btn2" onClick={() => createReward('bits')}>
+                <Plus className="h-4 w-4" />
+                <span>Bits</span>
+              </button>
+            </div>
             {undo.pending && <UndoNote label={undo.pending.label} onUndo={restoreReward} />}
           </section>
 
           {/* ---------- Editor ---------- */}
-          <section className="cab-mod" data-tour="reward-editor">
-            {!reward ? (
-              <>
-                <h2>Sin recompensas</h2>
-                <p className="cab-note">
-                  No hay ninguna recompensa. Crea una con «Nueva recompensa» para elegir qué aparece y qué suena al
-                  canjearla.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2>{reward.name || 'Sin nombre'}</h2>
-                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={removeReward}>
-                    <Trash2 className="h-4 w-4" />
-                    <span>Eliminar</span>
-                  </button>
-                </div>
+          <div className="grid min-w-0 gap-5">
+            <section className="cab-mod" data-tour="reward-editor">
+              {!reward ? (
+                <>
+                  <h2>Sin recompensas</h2>
+                  <p className="cab-note">
+                    No hay ninguna recompensa. Crea una con «Puntos» o «Bits», bajo «Nueva recompensa», para elegir qué suena y
+                    qué aparece al activarla.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2>{reward.name || 'Sin nombre'}</h2>
+                    <button type="button" className="cab-btn2 cab-btn-sm" onClick={removeReward}>
+                      <Trash2 className="h-4 w-4" />
+                      <span>Eliminar</span>
+                    </button>
+                  </div>
 
-                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_160px]">
-                  <Field label="Nombre" htmlFor={`${uid}-name`}>
-                    <input
-                      id={`${uid}-name`}
-                      className="cab-inp"
-                      value={reward.name}
-                      onChange={(e) => patch({ name: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Costo en puntos" htmlFor={`${uid}-cost`}>
-                    <input
-                      id={`${uid}-cost`}
-                      type="number"
-                      min={0}
-                      step={50}
-                      className="cab-inp cab-mono"
-                      value={reward.cost}
-                      onChange={(e) => patch({ cost: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
-                    />
-                  </Field>
-                </div>
-
-                <Toggle
-                  label="Mostrar texto en pantalla"
-                  checked={reward.showNoticeText}
-                  onChange={(next) => patch({ showNoticeText: next })}
-                />
-                {reward.showNoticeText && (
-                  <Field
-                    label="Texto"
-                    htmlFor={`${uid}-template`}
-                    hint={
-                      <>
-                        Variables: <span className="cab-mono">{'{user}, {reward}, {message}'}</span>
-                      </>
-                    }
-                  >
-                    <input
-                      id={`${uid}-template`}
-                      className="cab-inp"
-                      value={reward.noticeTemplate}
-                      onChange={(e) => patch({ noticeTemplate: e.target.value })}
-                    />
-                  </Field>
-                )}
-
-                <Field label="Color del aviso">
-                  <div className="cab-sw">
-                    {ACCENTS.map((accent) => (
-                      <button
-                        key={accent.color}
-                        type="button"
-                        style={{ background: accent.color }}
-                        aria-label={accent.name}
-                        aria-pressed={reward.accentColor === accent.color}
-                        onClick={() => patch({ accentColor: accent.color })}
+                  <div className="rw-two">
+                    <Field label="Nombre" htmlFor={`${uid}-name`} hint="Es el nombre del sonido que sale en la placa.">
+                      <input
+                        id={`${uid}-name`}
+                        className="cab-inp"
+                        maxLength={60}
+                        value={reward.name}
+                        onChange={(e) => patch({ name: e.target.value })}
                       />
-                    ))}
-                    <input
-                      type="color"
-                      value={reward.accentColor}
-                      aria-label="Otro color"
-                      onChange={(e) => patch({ accentColor: e.target.value })}
-                    />
-                  </div>
-                </Field>
-
-                <details className="studio-details">
-                  <summary>Vídeo y sonido{reward.videoUrl ? ' · 1 vídeo' : ''}</summary>
-                  <div>
-                    <Field
-                      label="Vídeo"
-                      hint={
-                        reward.videoUrl
-                          ? `Archivo: ${reward.videoName || 'vídeo sin nombre'}`
-                          : 'Sin vídeo. Acepta WebM y MP4; se reproduce junto al aviso.'
-                      }
-                    >
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setVault('video')}>
-                          Elegir de la biblioteca
-                        </button>
-                        <label className="cab-btn2 cab-btn-sm" htmlFor={`${uid}-video-file`}>
-                          Subir archivo
-                        </label>
-                        <input
-                          id={`${uid}-video-file`}
-                          type="file"
-                          accept="video/webm,video/mp4"
-                          className="studio-file"
-                          onChange={handleVideoUpload}
-                        />
-                        {reward.videoUrl && (
+                    </Field>
+                    <Field label="Color">
+                      <div className="cab-sw">
+                        {ACCENTS.map((accent) => (
                           <button
+                            key={accent.color}
                             type="button"
-                            className="cab-btn2 cab-btn-sm"
-                            onClick={() => patch({ videoUrl: undefined, videoName: undefined })}
-                          >
-                            Quitar vídeo
-                          </button>
-                        )}
-                      </div>
-                    </Field>
-
-                    <Field label="Sonido" htmlFor={`${uid}-sound`}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          id={`${uid}-sound`}
-                          className="cab-inp flex-1 basis-48"
-                          value={hasFile || wantsFile ? 'file' : reward.soundType}
-                          onChange={(e) => chooseSound(e.target.value)}
-                        >
-                          {SOUNDS.map((sound) => (
-                            <option key={sound.id} value={sound.id}>
-                              {sound.name}
-                            </option>
-                          ))}
-                          <option value="file">Archivo propio</option>
-                        </select>
-                        <button
-                          type="button"
-                          className="cab-btn2"
-                          onClick={() => playAlertOrCustomSound(reward.customAudioUrl, reward.soundType, volume)}
-                        >
-                          <Play className="h-4 w-4" />
-                          <span>Escuchar</span>
-                        </button>
-                      </div>
-
-                      {(hasFile || wantsFile) && (
-                        <div className="grid gap-3 rounded border border-[color:var(--cb-line)] p-3">
-                          <p className="cab-hint">
-                            {hasFile
-                              ? `Archivo: ${reward.customAudioName || 'sin nombre'}`
-                              : `Elige un sonido de hasta ${MAX_AUDIO_DURATION_SECONDS} segundos.`}
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setVault('audio')}>
-                              Elegir de la biblioteca
-                            </button>
-                            <label className="cab-btn2 cab-btn-sm" htmlFor={`${uid}-audio-file`}>
-                              Subir archivo
-                            </label>
-                            <input
-                              id={`${uid}-audio-file`}
-                              type="file"
-                              accept="audio/*"
-                              className="studio-file"
-                              onChange={handleAudioUpload}
-                            />
-                            {hasFile && (
-                              <button
-                                type="button"
-                                className="cab-btn2 cab-btn-sm"
-                                onClick={() => patch({ customAudioUrl: undefined, customAudioName: undefined })}
-                              >
-                                Quitar
-                              </button>
-                            )}
-                          </div>
-                          {audioError && (
-                            <p className="cab-error" role="alert">
-                              {audioError}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </Field>
-                  </div>
-                </details>
-
-                <details className="studio-details">
-                  <summary>Avanzado</summary>
-                  <div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field label="Posición" htmlFor={`${uid}-position`}>
-                        <select
-                          id={`${uid}-position`}
-                          className="cab-inp"
-                          value={reward.position}
-                          onChange={(e) => patch({ position: e.target.value as RewardVideoPosition })}
-                        >
-                          {POSITIONS.map((position) => (
-                            <option key={position.id} value={position.id}>
-                              {position.name}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Fondo del vídeo" htmlFor={`${uid}-blend`}>
-                        <select
-                          id={`${uid}-blend`}
-                          className="cab-inp"
-                          value={reward.blendMode}
-                          onChange={(e) => patch({ blendMode: e.target.value as RewardBlendMode })}
-                        >
-                          {BLEND_MODES.map((mode) => (
-                            <option key={mode.id} value={mode.id}>
-                              {mode.label}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Tamaño">
-                        <Range
-                          label="Tamaño"
-                          min={0.5}
-                          max={2}
-                          step={0.05}
-                          value={reward.scale}
-                          format={(value) => `${Math.round(value * 100)}%`}
-                          onChange={(value) => patch({ scale: value })}
-                        />
-                      </Field>
-                      <Field label="Tiempo en pantalla">
-                        <Range
-                          label="Tiempo en pantalla"
-                          min={2}
-                          max={20}
-                          value={duration}
-                          format={(value) => `${value} s`}
-                          onChange={(value) => patch({ duration: value })}
-                        />
-                      </Field>
-                      <Field label="Volumen">
-                        <Range
-                          label="Volumen"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={volume}
-                          format={(value) => `${Math.round(value * 100)}%`}
-                          onChange={(value) => patch({ volume: value, customAudioVolume: value })}
-                        />
-                      </Field>
-                      <Field
-                        label="Espera entre canjes"
-                        htmlFor={`${uid}-cooldown`}
-                        hint="En segundos. Con 0 no hay espera."
-                      >
+                            style={{ background: accent.color }}
+                            aria-label={accent.name}
+                            aria-pressed={reward.accentColor === accent.color}
+                            onClick={() => patch({ accentColor: accent.color })}
+                          />
+                        ))}
                         <input
-                          id={`${uid}-cooldown`}
-                          type="number"
-                          min={0}
-                          max={3600}
-                          className="cab-inp cab-mono sm:max-w-[160px]"
-                          value={reward.cooldownSeconds}
-                          onChange={(e) =>
-                            patch({ cooldownSeconds: Math.max(0, Math.round(Number(e.target.value) || 0)) })
-                          }
+                          type="color"
+                          value={reward.accentColor}
+                          aria-label="Otro color"
+                          onChange={(e) => patch({ accentColor: e.target.value })}
                         />
-                      </Field>
-                    </div>
-                    <Toggle
-                      label="Sacudir la pantalla"
-                      checked={reward.screenShake}
-                      onChange={(next) => patch({ screenShake: next })}
-                    />
+                      </div>
+                    </Field>
                   </div>
-                </details>
-              </>
-            )}
-          </section>
+                  <Toggle label="Encendida" checked={reward.enabled} onChange={(enabled) => patch({ enabled })} />
+
+                  <TriggerFields key={reward.id} reward={reward} settings={rewardsSettings} patch={patch} onNote={say} />
+
+                  <details className="studio-details" open>
+                    <summary>Sonido{mediaCount ? ' · archivo propio' : ''}</summary>
+                    <div>
+                      <SoundFields reward={reward} cloudOn={cloudOn} patch={patch} onRelease={scheduleRelease} onOpenVault={setVault} />
+                    </div>
+                  </details>
+
+                  <details className="studio-details" open>
+                    <summary>Placa{reward.showPlate ? '' : ' · apagada, solo sonido'}</summary>
+                    <div>
+                      <PlateFields reward={reward} settings={rewardsSettings} patch={patch} />
+                    </div>
+                  </details>
+
+                  <details className="studio-details">
+                    <summary>Vídeo{reward.videoUrl ? ' · 1 vídeo' : ''}</summary>
+                    <div>
+                      <VideoFields reward={reward} cloudOn={cloudOn} patch={patch} onRelease={scheduleRelease} onOpenVault={setVault} />
+                    </div>
+                  </details>
+                </>
+              )}
+            </section>
+
+            <section className="cab-mod">
+              <h2>Reglas para todas</h2>
+              <GeneralRules
+                settings={rewardsSettings}
+                cloudOn={cloudOn}
+                update={updateRewards}
+                onRelease={scheduleRelease}
+                customInUse={customInUse}
+              />
+            </section>
+          </div>
 
           {/* ---------- Monitor ---------- */}
-          <section
-            className="cab-mod max-[1199px]:order-first min-[1200px]:sticky min-[1200px]:top-4"
-            data-tour="rewards-monitor"
-          >
+          <section className="cab-mod max-[1199px]:order-first min-[1200px]:sticky min-[1200px]:top-4" data-tour="rewards-monitor">
             <h2>Monitor</h2>
-            <div ref={stageRef} className={`cab-stage ${STAGE_POSITION[reward?.position || 'center']}`}>
-              {reward && (
-                <div
-                  className="ovl capas-reward"
-                  data-studio=""
-                  data-full={reward.position === 'fullscreen' ? '' : undefined}
-                  style={{
-                    transform: `scale(${reward.scale || 1})`,
-                    transformOrigin: reward.position === 'bottom-right' ? 'bottom right' : 'center',
-                  }}
-                >
-                  {showVideo && (
-                    <video
-                      key={playing}
-                      ref={(element) => {
-                        if (element) element.volume = Math.max(0, Math.min(1, volume));
-                      }}
-                      src={reward.videoUrl}
-                      autoPlay
-                      playsInline
-                      style={{ mixBlendMode: reward.blendMode === 'screen' ? 'screen' : 'normal' }}
-                    />
-                  )}
-                  {showNotice ? (
-                    <div
-                      className="ovl-plate nt"
-                      data-big={reward.videoUrl ? undefined : ''}
-                      style={
-                        {
-                          '--c': reward.accentColor || '#9146ff',
-                          '--c-ink': inkFor(reward.accentColor || '#9146ff'),
-                        } as React.CSSProperties
-                      }
-                    >
-                      <span className="nt-tag ovl-caps">{reward.name}</span>
-                      <span className="nt-text">{previewText}</span>
-                    </div>
-                  ) : (
-                    !showVideo && <p className="capas-rest">Pulsa «Probar» para ver el vídeo.</p>
-                  )}
-                </div>
-              )}
+            <div className="cab-stage rw-stage">
+              {reward?.position === 'random' && <div className="rw-safe" style={{ inset: `${reward.randomMargin}%` }} />}
+              <RewardsLayer
+                ref={layerRef}
+                settings={rewardsSettings}
+                isStudio
+                onLog={say}
+                onCounts={(waiting, active) => setCounts({ waiting, active })}
+              />
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn flex-1" disabled={!reward} onClick={test}>
+              <button type="button" className="cab-btn flex-1" disabled={!reward} onClick={testCurrent}>
                 <Play className="h-4 w-4" />
-                <span>Probar</span>
+                <span>Probar esta</span>
               </button>
-              <button type="button" className="cab-btn2 flex-1" onClick={copyWidgetUrl}>
-                {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+              <button type="button" className="cab-btn2" onClick={clearAll}>
+                Vaciar
               </button>
             </div>
+
+            <div className="cab-field">
+              <span className="cab-label">Qué la dispara</span>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testPoints}>
+                  Canje de puntos
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testThree}>
+                  Tres seguidos
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testShort}>
+                  Clip corto
+                </button>
+                {reward && (
+                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={testVideo}>
+                    Posición del vídeo
+                  </button>
+                )}
+              </div>
+              <div className="rw-inline">
+                <label htmlFor={`${uid}-cheer`}>Cheer de</label>
+                <input
+                  id={`${uid}-cheer`}
+                  type="number"
+                  min={1}
+                  max={100000}
+                  className="cab-inp cab-mono"
+                  value={cheer}
+                  onChange={(e) => setCheer(Math.min(100000, Math.max(1, Math.round(Number(e.target.value) || 1))))}
+                />
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testCheer}>
+                  Enviar {cheer === 1 ? 'bit' : 'bits'}
+                </button>
+              </div>
+            </div>
+
+            <div className="cab-field">
+              <Toggle label="Aplicar esperas y límites en estas pruebas" checked={gates} onChange={setGates} />
+              <span className="cab-hint">Apagado, puedes repetir una prueba sin esperar. En directo se aplican siempre.</span>
+            </div>
+
             <p className="cab-hint" role="status">
-              {status || 'La prueba suena aquí y aparece en las fuentes de OBS que estén abiertas. No gasta puntos.'}
+              En cola: {counts.waiting}. Sonando: {counts.active}.
             </p>
+            {log.length > 0 ? (
+              <ul className="rw-log" aria-label="Registro de la capa">
+                {log.map((line, index) => (
+                  <li key={`${log.length}-${index}`}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="cab-hint">
+                Las pruebas suenan aquí y en las fuentes de OBS abiertas en este navegador. No gastan puntos ni bits. Si no
+                oyes nada, pulsa una vez en la página: el navegador pide un clic antes de dejar sonar.
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(false)}>
+                {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span>{copied === 'url' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+              </button>
+              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(true)}>
+                {copied === 'demo' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span>{copied === 'demo' ? 'URL copiada' : 'URL con placa de muestra'}</span>
+              </button>
+            </div>
+            {!cloudOn && (
+              <p className="cab-note">
+                Sin cuenta en la nube, los ajustes viajan dentro de la URL: vuelve a copiarla en OBS cuando cambies algo.
+                Los archivos que subas se quedan en este navegador y no llegan a OBS.
+              </p>
+            )}
           </section>
         </div>
 

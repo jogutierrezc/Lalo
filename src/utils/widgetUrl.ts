@@ -36,7 +36,7 @@ export function buildWidgetUrl(origin: string, settings: TTSSettings): string {
   return `${origin}/#widget?${query.toString()}${hash ? `&${hash}` : ''}`;
 }
 
-export type WidgetAppType = 'tts' | 'alerts' | 'roulette' | 'goals' | 'polls' | 'chat' | 'raid' | 'scene' | 'all';
+export type WidgetAppType = 'tts' | 'alerts' | 'roulette' | 'goals' | 'polls' | 'chat' | 'raid' | 'rewards' | 'scene' | 'all';
 
 /**
  * Construye la URL completa y parametrizada para cualquier herramienta de Lalo Stream Suite en OBS Studio.

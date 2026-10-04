@@ -17,6 +17,7 @@ import type { PollStartEvent } from './pollCommands';
 import type { ChatSettings } from '../types/chat';
 import type { RaidSettings } from '../types/raid';
 import type { StudioSettings } from '../types/studio';
+import type { CustomRewardItem } from '../types/rewards';
 
 export type { PollStartEvent };
 
@@ -99,6 +100,17 @@ export interface RewardTriggerEvent {
   duration?: number;
 }
 
+/** Prueba de una recompensa enviada desde el panel a la capa «Recompensas» de este navegador. */
+export interface RewardTestEvent {
+  /** La recompensa tal como está en el editor. Sin ella y con `clear`, la capa se vacía. */
+  reward?: CustomRewardItem;
+  user: string;
+  why: string;
+  amount?: string;
+  unit?: string;
+  clear?: boolean;
+}
+
 export interface GoalProgressEvent {
   goalId: string;
   title: string;
@@ -174,6 +186,7 @@ export type BusMessage =
   | { type: 'ALERT_SETTINGS_UPDATE'; settings: StreamAlertsSettings }
   | { type: 'ALERT_TRIGGER'; alert: StreamAlertEvent }
   | { type: 'REWARD_TRIGGER'; reward: RewardTriggerEvent }
+  | { type: 'REWARD_TEST'; test: RewardTestEvent }
   | { type: 'GOALS_SETTINGS_UPDATE'; settings: GoalsSettings }
   | { type: 'GOAL_UPDATE'; goal: GoalProgressEvent }
   | { type: 'GOAL_CELEBRATE'; celebration: GoalCelebrationEvent }
