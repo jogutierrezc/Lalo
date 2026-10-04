@@ -1,4 +1,5 @@
 import { Appearance, DEFAULT_APPEARANCE, normalizeAppearance } from '../utils/appearance';
+import { queueCloudPush } from '../lib/cloudConfig';
 import { DEFAULT_MODERATION, Moderation, normalizeModeration } from '../utils/moderation';
 
 export interface TTSSettings extends Appearance, Moderation {
@@ -29,7 +30,7 @@ export const PRESET_VOICES: PresetVoice[] = [
 export const DEFAULT_SETTINGS: TTSSettings = {
   channel: 'laloplay_',
   model: 's2.1-pro-free',
-  referenceId: '37f9f4eec7624089a49b188d47588f2c', // Diana (por defecto)
+  referenceId: '5669f8e58ecb476a982bc2b67ac6b538', // Teemo (por defecto en cuentas nuevas)
   volume: 0.85,
   speed: 1.0,
   theme: 'glass-dark',
@@ -65,6 +66,7 @@ export function loadSettings(): TTSSettings {
 export function saveSettings(settings: TTSSettings): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    queueCloudPush('tts', settings);
   } catch (e) {
     console.error('Error saving settings to localStorage:', e);
   }

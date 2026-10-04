@@ -5,6 +5,8 @@
  * Diseñado bajo directivas de Impeccable (jerarquía visual, estética broadcast) y GSAP.
  */
 
+import { queueCloudPush } from '../lib/cloudConfig';
+
 export type PollLayoutMode = '1v1_battle' | 'multi_choice';
 export type PollStyleTheme = 'cabina' | 'neon' | 'esports' | 'cyber' | 'minimal';
 
@@ -20,41 +22,41 @@ export interface PollThemeDefinition {
 export const POLL_THEMES: PollThemeDefinition[] = [
   {
     id: 'cabina',
-    name: 'Cabina Broadcast',
-    description: 'Estética de rack de máster de transmisión, tally LED al aire, vúmetros de audio y telemetría analógica.',
-    badge: 'ON AIR',
+    name: 'Cabina',
+    description: 'Placa gris mate, esquinas casi rectas y letra condensada en mayúsculas.',
+    badge: 'Mate',
     accent: '#00e5ff',
     previewBg: 'from-slate-900 to-slate-950',
   },
   {
     id: 'neon',
-    name: 'Neon Synthwave',
-    description: 'Tubos de neón láser, scanlines retro, resplandor difuso cian/magenta y estética arcade 80s.',
-    badge: 'LASER GLOW',
+    name: 'Neón',
+    description: 'Fondo casi negro, borde morado y esquinas redondeadas.',
+    badge: 'Redondeado',
     accent: '#ff007f',
     previewBg: 'from-fuchsia-950/60 to-purple-950/80',
   },
   {
     id: 'esports',
-    name: 'Arena Esports',
-    description: 'Chasis de fibra de carbono, cortes angulares 45°, corona de campeonato y partículas de choque sísmico.',
-    badge: 'TOURNAMENT',
+    name: 'Esports',
+    description: 'Fondo azul noche y letra muy condensada en mayúsculas.',
+    badge: 'Condensado',
     accent: '#ffd700',
     previewBg: 'from-cyan-950/50 to-rose-950/60',
   },
   {
     id: 'cyber',
-    name: 'Tactical Cyber HUD',
-    description: 'Matriz militar futurista con retículas de apuntado, bloques de datos segmentados y telemetría digital.',
-    badge: 'HUD TÁCTICO',
+    name: 'Cyber',
+    description: 'Esquinas rectas y letra monoespaciada sobre fondo azul oscuro.',
+    badge: 'Monoespaciado',
     accent: '#00ff66',
     previewBg: 'from-emerald-950/40 to-slate-950',
   },
   {
     id: 'minimal',
-    name: 'Minimal Frosted Glass',
-    description: 'Vidrio esmerilado flotante ultra refinado, tipografía suiza limpia y gradientes líquidos sutiles.',
-    badge: 'SWISS CLEAN',
+    name: 'Minimal',
+    description: 'Fondo oscuro translúcido sin borde, esquinas muy redondeadas y texto sin mayúsculas.',
+    badge: 'Sin borde',
     accent: '#38bdf8',
     previewBg: 'from-slate-900/60 to-slate-950/80',
   },
@@ -271,6 +273,7 @@ export function savePollSettings(settings: PollSettings): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(POLLS_STORAGE_KEY, JSON.stringify(settings));
+    queueCloudPush('polls', settings);
   } catch {
     // Ignorar si el almacenamiento está restringido
   }

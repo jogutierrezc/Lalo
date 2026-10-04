@@ -1,93 +1,89 @@
 /**
  * Control.tsx
  *
- * Control en vivo de las alertas, en estilo Cabina. Es la mesa que el streamer
- * usa durante el directo, separada de los ajustes:
- *   - Al aire: qué suena, la cola, pausar, saltar y vaciar.
- *   - Reglas: quién puede usar el TTS, espera, longitud, cola y bloqueos.
- *   - Disparadores: comando !s, puntos del canal y bits.
- *   - Registro: lo leído, lo saltado y lo descartado, con el motivo.
+ * En vivo: la página para manejar la voz del chat durante el directo.
+ *   - Al aire: qué suena, pausar, saltar, aprobación manual y solo texto.
+ *   - Emergencia: vaciar la cola y silencio total, con cuenta atrás cancelable.
+ *   - En cola: lo que espera, con sus acciones por mensaje.
+ *   - Sesión y Registro: lo que ya pasó.
+ * Las reglas (quién puede usarla, bloqueos, puntos y bits) están en Voz del chat.
  *
- * Los botones de "Al aire" hablan con el widget por BroadcastChannel, que solo
- * une pestañas del mismo navegador. En OBS, el streamer y los mods controlan lo
- * mismo con comandos de chat (!s skip, !s pausa, !s block usuario...).
+ * Los botones hablan con el widget por BroadcastChannel, que solo une pestañas
+ * del mismo navegador. En OBS, el streamer y los mods controlan lo mismo con
+ * comandos de chat (!s skip, !s pausa, !s block usuario...).
  */
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import tmi from 'tmi.js';
-import { Ban, Check, Clock, Copy, Pause, VolumeX, Play, Radar, RotateCcw, SkipForward, Trash2, X } from 'lucide-react';
+import { Pause, Play, SkipForward, X } from 'lucide-react';
 import { useSettings } from '../hooks/useSettings';
+import { useCloudSession } from '../hooks/useCloudSession';
 import { inkFor } from '../utils/appearance';
-import { DEFAULT_TIMEOUT_MINUTES, LIMITS, MIN_ROLES, normalizeUser, parseWordList } from '../utils/moderation';
+import { DEFAULT_TIMEOUT_MINUTES, normalizeUser } from '../utils/moderation';
 import { LiveItem, LogItem, WidgetState, listenBus, postBus } from '../utils/bus';
-import { buildWidgetUrl } from '../utils/widgetUrl';
+import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { SuiteNav } from '../components/SuiteNav';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
+import { Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
+import { useDelayedAction } from '../components/envivo/useDelayedAction';
+import '../styles/voz-envivo.css';
 
 const TRIGGER_LABEL: Record<string, string> = { reward: 'Puntos', bits: 'Bits', test: 'Prueba' };
 const STATUS_LABEL: Record<LogItem['status'], string> = { read: 'Leído', skipped: 'Saltado', rejected: 'Descartado' };
 const STALE_MS = 12000;
+const CONFIRM_SECONDS = 5;
 
-// Guía del control en vivo: qué mirar y qué tocar durante el directo
+// Guía de En vivo: qué mirar y qué tocar durante el directo
 const TOUR_ID = 'control';
 const TOUR_STEPS: TourStep[] = [
   {
-    title: 'La mesa para el directo',
-    body: 'Ajustes se prepara antes de salir al aire. Aquí decides, en directo, qué mensajes se leen y cuáles no. Son cinco pasos y puedes usar el panel mientras tanto.',
+    title: 'La página para el directo',
+    body: 'Aquí decides, con el directo en marcha, qué mensajes se leen y cuáles no. Son cuatro pasos y puedes usar el panel mientras tanto.',
   },
   {
     target: 'al-aire',
-    title: 'Lo que suena y lo que espera',
-    body: 'Arriba ves el mensaje que se está leyendo; debajo, la cola. Pausar deja terminar el mensaje actual y detiene los siguientes. Saltar lo corta al instante y Silencio lo para todo de golpe. Con la aprobación manual, cada mensaje espera tu visto bueno. En cada mensaje en espera puedes quitarlo o bloquear a quien lo escribió.',
+    title: 'Lo que suena ahora',
+    body: 'Ves el mensaje que se está leyendo. «Pausar cola» deja terminar el mensaje actual y detiene los siguientes; «Saltar mensaje» lo corta al instante. Con la aprobación manual, cada mensaje espera tu visto bueno.',
   },
   {
-    target: 'reglas',
-    title: 'Decide quién habla y cuánto',
-    body: 'Limita el comando a subs, VIP o mods, pon una espera entre mensajes del mismo espectador y acorta la longitud. Un mensaje con una palabra bloqueada se descarta entero.',
+    target: 'emergencia',
+    title: 'Si algo se tuerce',
+    body: '«Vaciar cola» y «Silencio total» no se pueden deshacer, así que cuentan cinco segundos antes de actuar. Puedes cancelar o pulsar «ahora» si no quieres esperar.',
   },
   {
-    target: 'disparadores',
-    title: 'Puntos del canal y bits',
-    body: 'Además del comando !s, puedes leer el texto de un canje de puntos o de un cheer. Para los puntos, pulsa Detectar y canjea la recompensa una vez: queda enlazada sin iniciar sesión en Twitch.',
+    target: 'cola',
+    title: 'Lo que espera',
+    body: 'Cada mensaje en espera se puede aprobar. «Más» muestra el resto: quitarlo, silenciar a su autor diez minutos o bloquearlo.',
   },
   {
-    target: 'obs',
+    target: 'comandos',
     title: 'En OBS, el control va por el chat',
     body: (
       <>
         El widget de OBS es otro navegador y no recibe estos botones. Allí tú y tus mods escribís <code>!s skip</code>, <code>!s pausa</code> o{' '}
-        <code>!s block usuario</code>. Cuando cambies reglas, copia la URL de nuevo en la fuente de OBS.
+        <code>!s block usuario</code>.
       </>
     ),
   },
-  {
-    target: 'registro',
-    title: 'Revisa lo que pasó',
-    body: 'Cada mensaje queda como leído, saltado o descartado, con el motivo. Desde aquí puedes volver a leer uno o bloquear a su autor.',
-  },
 ];
 
-const reduced = () => !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+type Where = 'cola' | 'registro';
+type Emergency = 'clear' | 'panic';
 
-const Field: React.FC<{ label: string; htmlFor?: string; hint?: React.ReactNode; children: React.ReactNode }> = ({
-  label,
-  htmlFor,
-  hint,
-  children,
-}) => (
-  <div className="cab-field">
-    {htmlFor ? (
-      <label className="cab-label" htmlFor={htmlFor}>
-        {label}
-      </label>
-    ) : (
-      <span className="cab-label">{label}</span>
-    )}
-    {children}
-    {hint && <span className="cab-hint">{hint}</span>}
-  </div>
-);
+const EMERGENCY_COPY: Record<Emergency, { warning: string; now: string; sent: string }> = {
+  clear: {
+    warning: 'Se va a vaciar la cola. Los mensajes que esperan no se leerán.',
+    now: 'Vaciar ahora',
+    sent: 'Cola vaciada. Los mensajes quedan en Registro como saltados; desde ahí puedes volver a leer uno.',
+  },
+  panic: {
+    warning: 'Silencio total: se corta la voz, se vacía la cola y queda en pausa.',
+    now: 'Silenciar ahora',
+    sent: 'Silencio total enviado. La cola queda en pausa: pulsa «Reanudar cola» para volver a leer mensajes.',
+  },
+};
+
+const reduced = () => !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const TriggerChip: React.FC<{ item: LiveItem }> = ({ item }) =>
   item.trigger && TRIGGER_LABEL[item.trigger] ? (
@@ -96,13 +92,17 @@ const TriggerChip: React.FC<{ item: LiveItem }> = ({ item }) =>
 
 export const Control: React.FC = () => {
   const { settings, update, saved } = useSettings();
+  const cloud = useCloudSession();
+  const uid = useId();
   const [live, setLive] = useState<WidgetState | null>(null);
   const [clock, setClock] = useState(Date.now());
-  const [wordsDraft, setWordsDraft] = useState(() => settings.blockedWords.join(', '));
-  const [userDraft, setUserDraft] = useState('');
-  const [detecting, setDetecting] = useState(false);
-  const [copiedUrl, setCopiedUrl] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  // Fila con sus acciones desplegadas («Más»)
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  // Aviso de lo último que se hizo en una fila; si fue un bloqueo, se puede deshacer
+  const feedback = useUndo<{ where: Where; blocked?: string }>();
+  const emergency = useDelayedAction<Emergency>(CONFIRM_SECONDS);
+  const emergencySent = useUndo<null>();
 
   // La guía se abre sola la primera vez; después solo desde el botón de la cabecera
   useEffect(() => {
@@ -114,7 +114,6 @@ export const Control: React.FC = () => {
   const nowRef = useRef<HTMLDivElement | null>(null);
   const listsRef = useRef<HTMLDivElement | null>(null);
   const seenRowsRef = useRef<Set<string> | null>(null);
-  const stopDetectRef = useRef<(() => void) | null>(null);
 
   // Estado que publica el widget abierto en este navegador
   useEffect(() => {
@@ -128,8 +127,6 @@ export const Control: React.FC = () => {
       clearInterval(timer);
     };
   }, []);
-
-  useEffect(() => () => stopDetectRef.current?.(), []);
 
   const online = !!live && clock - live.at < STALE_MS;
   const now = online ? live.now : null;
@@ -147,6 +144,14 @@ export const Control: React.FC = () => {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 3)
     : [];
+
+  const widgetUrl = buildSuiteWidgetUrl(
+    typeof window !== 'undefined' ? window.location.origin : '',
+    'tts',
+    settings.channel,
+    settings,
+    cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
+  );
 
   const setApproval = (on: boolean) => {
     update({ approvalMode: on });
@@ -181,47 +186,88 @@ export const Control: React.FC = () => {
     }
   }, [queue, log]);
 
-  const blockUser = (username: string) => {
-    const user = normalizeUser(username);
-    if (!user || settings.blockedUsers.includes(user)) return;
+  // ---------- Acciones por mensaje ----------
+  const blockUser = (where: Where, item: LiveItem) => {
+    setOpenRow(null);
+    const user = normalizeUser(item.username);
+    if (!user) return;
+    if (settings.blockedUsers.includes(user)) {
+      feedback.offer(`${item.user} ya estaba en la lista de bloqueados.`, { where });
+      return;
+    }
     update({ blockedUsers: [...settings.blockedUsers, user] });
+    feedback.offer(`Se bloqueó a ${item.user}. Sus mensajes ya no se leerán.`, { where, blocked: user });
   };
-  const unblockUser = (user: string) => update({ blockedUsers: settings.blockedUsers.filter((u) => u !== user) });
-  const addUserDraft = () => {
-    blockUser(userDraft);
-    setUserDraft('');
+  const undoBlock = () => {
+    const user = feedback.pending?.snapshot.blocked;
+    if (user) update({ blockedUsers: settings.blockedUsers.filter((entry) => entry !== user) });
+    feedback.clear();
+  };
+  const timeoutUser = (where: Where, item: LiveItem) => {
+    setOpenRow(null);
+    postBus({ type: 'CONTROL', action: 'timeout', user: item.username, minutes: DEFAULT_TIMEOUT_MINUTES });
+    feedback.offer(`Se silenció a ${item.user} durante ${DEFAULT_TIMEOUT_MINUTES} minutos. Puedes quitarlo en Sesión.`, { where });
+  };
+  const removeFromQueue = (item: LiveItem) => {
+    setOpenRow(null);
+    postBus({ type: 'CONTROL', action: 'remove', id: item.id });
+    feedback.offer(`Se quitó el mensaje de ${item.user}. Queda en Registro, desde donde puedes volver a leerlo.`, { where: 'cola' });
+  };
+  const readAgain = (item: LogItem) => {
+    postBus({ type: 'ENQUEUE', text: item.text, user: item.user });
+    feedback.offer(`El mensaje de ${item.user} volvió a la cola.`, { where: 'registro' });
   };
 
-  // Detecta la recompensa de puntos: escucha el chat público hasta que alguien la canjea
-  const startDetect = () => {
-    const channel = settings.channel.trim().toLowerCase();
-    if (!channel || detecting) return;
-    const client = new tmi.Client({ connection: { reconnect: false, secure: true }, channels: [channel] });
-    const stop = () => {
-      clearTimeout(timer);
-      client.removeAllListeners();
-      client.disconnect().catch(() => {});
-      stopDetectRef.current = null;
-      setDetecting(false);
-    };
-    const timer = setTimeout(stop, 90000);
-    client.on('message', (_channel, tags) => {
-      const rewardId = tags['custom-reward-id'];
-      if (rewardId) {
-        update({ rewardId: String(rewardId).toLowerCase() });
-        stop();
-      }
+  const renderFeedback = (where: Where) => {
+    const pending = feedback.pending;
+    if (!pending || pending.snapshot.where !== where) return null;
+    return pending.snapshot.blocked ? (
+      <UndoNote label={pending.label} onUndo={undoBlock} />
+    ) : (
+      <p className="cab-note" role="status">
+        {pending.label}
+      </p>
+    );
+  };
+
+  const renderMore = (where: Where, rowKey: string, item: LiveItem, canRemove: boolean) => (
+    <div id={`${uid}-${rowKey}`} className="ev-more" role="group" aria-label={`Acciones para el mensaje de ${item.user}`}>
+      {canRemove && (
+        <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => removeFromQueue(item)}>
+          Quitar
+        </button>
+      )}
+      <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => timeoutUser(where, item)}>
+        Silenciar {DEFAULT_TIMEOUT_MINUTES} min
+      </button>
+      <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => blockUser(where, item)}>
+        Bloquear
+      </button>
+    </div>
+  );
+
+  const renderMoreButton = (rowKey: string, item: LiveItem) => (
+    <button
+      type="button"
+      className="cab-btn2 cab-btn-sm"
+      aria-expanded={openRow === rowKey}
+      aria-controls={`${uid}-${rowKey}`}
+      aria-label={`Más acciones para el mensaje de ${item.user}`}
+      onClick={() => setOpenRow(openRow === rowKey ? null : rowKey)}
+    >
+      Más
+    </button>
+  );
+
+  // ---------- Emergencia ----------
+  // El widget no sabe devolver una cola vaciada ni un mensaje cortado, así que en vez de
+  // prometer un «deshacer» la orden espera cinco segundos y se puede cancelar.
+  const armEmergency = (action: Emergency) => {
+    emergencySent.clear();
+    emergency.arm(action, () => {
+      postBus({ type: 'CONTROL', action });
+      emergencySent.offer(EMERGENCY_COPY[action].sent, null);
     });
-    stopDetectRef.current = stop;
-    setDetecting(true);
-    client.connect().catch(stop);
-  };
-
-  const widgetUrl = buildWidgetUrl(window.location.origin, settings);
-  const copyWidgetUrl = () => {
-    navigator.clipboard.writeText(widgetUrl).catch(() => {});
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2200);
   };
 
   const rootStyle = { '--acc': settings.accent, '--acc-ink': inkFor(settings.accent) } as React.CSSProperties;
@@ -229,7 +275,6 @@ export const Control: React.FC = () => {
   return (
     <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        {/* Barra de navegación de la Suite */}
         <SuiteNav
           currentApp="control"
           channel={settings.channel}
@@ -239,10 +284,26 @@ export const Control: React.FC = () => {
         />
 
         <div ref={listsRef} className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          {/* Columna izquierda: lo que pasa ahora */}
+          {/* Columna izquierda: lo que se maneja ahora */}
           <div className="grid gap-5">
             <section className="cab-mod" data-tour="al-aire">
               <h2>Al aire</h2>
+
+              {!online && (
+                <div className="cab-note">
+                  <p>
+                    No hay ningún widget abierto en este navegador, así que estos botones no tienen a quién avisar. Abre el widget en otra pestaña
+                    y déjala abierta. Con el widget que corre dentro de OBS, tú y tus mods controláis lo mismo con los comandos de chat de esta
+                    página.
+                  </p>
+                  <p className="mt-3">
+                    <a className="cab-btn2 cab-btn-sm" href={widgetUrl} target="_blank" rel="noreferrer">
+                      Abrir widget
+                    </a>
+                  </p>
+                </div>
+              )}
+
               <p className="cab-tally" data-state={!online ? 'off' : paused ? 'paused' : 'on'} role="status">
                 <i />
                 {!online
@@ -271,44 +332,93 @@ export const Control: React.FC = () => {
                   onClick={() => postBus({ type: 'CONTROL', action: paused ? 'resume' : 'pause' })}
                 >
                   {paused ? <Play className="h-4 w-4 fill-current" aria-hidden="true" /> : <Pause className="h-4 w-4 fill-current" aria-hidden="true" />}
-                  {paused ? 'Reanudar cola' : 'Pausar cola'}
+                  <span>{paused ? 'Reanudar cola' : 'Pausar cola'}</span>
                 </button>
                 <button type="button" className="cab-btn2" disabled={!now} onClick={() => postBus({ type: 'CONTROL', action: 'skip' })}>
                   <SkipForward className="h-4 w-4" aria-hidden="true" />
-                  Saltar mensaje
-                </button>
-                <button type="button" className="cab-btn2" disabled={!queue.length} onClick={() => postBus({ type: 'CONTROL', action: 'clear' })}>
-                  <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  Vaciar cola
-                </button>
-                <button type="button" className="cab-btn cab-btn-danger" disabled={!online} onClick={() => postBus({ type: 'CONTROL', action: 'panic' })}>
-                  <VolumeX className="h-4 w-4" aria-hidden="true" />
-                  Silencio
+                  <span>Saltar mensaje</span>
                 </button>
               </div>
 
               <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
-                <Field
-                  label="Aprobación manual"
-                  htmlFor="approvalMode"
-                  hint={approval ? 'Cada mensaje espera tu visto bueno. Los tuyos y los de tus mods pasan solos.' : 'Los mensajes se leen según llegan.'}
-                >
-                  <input id="approvalMode" type="checkbox" className="cab-tog" checked={approval} onChange={(e) => setApproval(e.target.checked)} />
-                </Field>
-                <Field label="Solo texto" htmlFor="textOnly" hint={textOnly ? 'La alerta aparece sin voz.' : 'La alerta aparece y se lee en voz alta.'}>
-                  <input id="textOnly" type="checkbox" className="cab-tog" checked={textOnly} onChange={(e) => setTextOnly(e.target.checked)} />
-                </Field>
+                <div className="cab-field">
+                  <Toggle label="Aprobación manual" checked={approval} onChange={setApproval} />
+                  <span className="cab-hint">
+                    {approval ? 'Cada mensaje espera tu visto bueno. Los tuyos y los de tus mods pasan solos.' : 'Los mensajes se leen según llegan.'}
+                  </span>
+                </div>
+                <div className="cab-field">
+                  <Toggle label="Solo texto" checked={textOnly} onChange={setTextOnly} />
+                  <span className="cab-hint">{textOnly ? 'La alerta aparece sin voz.' : 'La alerta aparece y se lee en voz alta.'}</span>
+                </div>
               </div>
+            </section>
 
-              <div className="cab-field">
-                <span className="cab-label">
-                  {pendingCount > 0 && <span className="cab-chip" data-status="skipped">{pendingCount} por aprobar</span>}{' '}
-                  En cola · {queue.length} de {settings.maxQueueSize}
+            <section className="cab-mod" data-tour="emergencia">
+              <h2>Emergencia</h2>
+              {emergency.pending ? (
+                <div className="ev-armed">
+                  <p role="status">{EMERGENCY_COPY[emergency.pending.key].warning} No se puede deshacer.</p>
+                  <p className="ev-count" aria-hidden="true">
+                    {emergency.pending.left} s
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="cab-btn2" autoFocus onClick={emergency.cancel}>
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className={emergency.pending.key === 'panic' ? 'cab-btn cab-btn-danger' : 'cab-btn'}
+                      onClick={emergency.runNow}
+                    >
+                      {EMERGENCY_COPY[emergency.pending.key].now}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className="cab-btn2" disabled={!queue.length} onClick={() => armEmergency('clear')}>
+                      Vaciar cola
+                    </button>
+                    <button type="button" className="cab-btn cab-btn-danger" disabled={!online} onClick={() => armEmergency('panic')}>
+                      Silencio total
+                    </button>
+                  </div>
+                  <p className="cab-hint">
+                    «Silencio total» corta la voz, vacía la cola y la deja en pausa. Las dos acciones esperan {CONFIRM_SECONDS} segundos antes de
+                    actuar, por si quieres cancelar.
+                  </p>
+                </>
+              )}
+              {emergencySent.pending && !emergency.pending && (
+                <p className="cab-note" role="status">
+                  {emergencySent.pending.label}
+                </p>
+              )}
+            </section>
+
+            <section className="cab-mod" data-tour="cola">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2>En cola</h2>
+                <span className="cab-hint">
+                  {pendingCount > 0 && (
+                    <>
+                      <span className="cab-chip" data-status="skipped">
+                        {pendingCount} por aprobar
+                      </span>{' '}
+                    </>
+                  )}
+                  {queue.length} de {settings.maxQueueSize}
                 </span>
-                {queue.length ? (
-                  <ul className="cab-rows">
-                    {queue.map((item) => (
-                      <li key={item.id} data-row={`q-${item.id}`} className="cab-row">
+              </div>
+              {renderFeedback('cola')}
+              {queue.length ? (
+                <ul className="cab-rows">
+                  {queue.map((item) => {
+                    const rowKey = `q-${item.id}`;
+                    return (
+                      <li key={item.id} data-row={rowKey} className="cab-row">
                         <div className="min-w-0">
                           <p className="cab-row-user">
                             {item.user} <TriggerChip item={item} />{' '}
@@ -324,44 +434,28 @@ export const Control: React.FC = () => {
                           {item.pending && (
                             <button
                               type="button"
-                              className="cab-icon cab-icon-ok"
+                              className="cab-btn cab-btn-sm"
                               aria-label={`Aprobar el mensaje de ${item.user}`}
                               onClick={() => postBus({ type: 'CONTROL', action: 'approve', id: item.id })}
                             >
-                              <Check className="h-4 w-4" aria-hidden="true" />
+                              Aprobar
                             </button>
                           )}
-                          <button type="button" className="cab-icon" aria-label={`Quitar el mensaje de ${item.user}`} onClick={() => postBus({ type: 'CONTROL', action: 'remove', id: item.id })}>
-                            <X className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            className="cab-icon"
-                            aria-label={`Silenciar a ${item.user} durante ${DEFAULT_TIMEOUT_MINUTES} minutos`}
-                            onClick={() => postBus({ type: 'CONTROL', action: 'timeout', user: item.username, minutes: DEFAULT_TIMEOUT_MINUTES })}
-                          >
-                            <Clock className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          <button type="button" className="cab-icon" aria-label={`Bloquear a ${item.user}`} onClick={() => blockUser(item.username)}>
-                            <Ban className="h-4 w-4" aria-hidden="true" />
-                          </button>
+                          {renderMoreButton(rowKey, item)}
                         </div>
+                        {openRow === rowKey && renderMore('cola', rowKey, item, true)}
                       </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <span className="cab-hint">La cola está vacía.</span>
-                )}
-              </div>
-
-              {!online && (
-                <p className="cab-note">
-                  Estos botones controlan un widget abierto en este mismo navegador: usa «Abrir widget» en Ajustes y deja esa pestaña abierta. El widget
-                  que corre dentro de OBS es otro navegador; allí tú y tus mods controláis lo mismo desde el chat con los comandos de la sección En OBS.
-                </p>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <span className="cab-hint">La cola está vacía.</span>
               )}
             </section>
+          </div>
 
+          {/* Columna derecha: lo que ya pasó y la ayuda */}
+          <div className="grid gap-5">
             <section className="cab-mod" data-tour="sesion">
               <h2>Sesión</h2>
               {stats ? (
@@ -390,7 +484,7 @@ export const Control: React.FC = () => {
                       <ol className="cab-cmds">
                         {topUsers.map(([user, count]) => (
                           <li key={user}>
-                            <b className="text-[color:var(--cb-fg)]">{user}</b> · {count} {count === 1 ? 'mensaje' : 'mensajes'}
+                            <b className="vz-code">{user}</b> · {count} {count === 1 ? 'mensaje' : 'mensajes'}
                           </li>
                         ))}
                       </ol>
@@ -406,14 +500,21 @@ export const Control: React.FC = () => {
                           <li key={item.user} className="cab-chip cab-chip-lg">
                             <span className="cab-mono">{item.user}</span>
                             <span className="cab-hint">{Math.max(1, Math.ceil((item.until - clock) / 60000))} min</span>
-                            <button type="button" aria-label={`Quitar el silencio a ${item.user}`} onClick={() => postBus({ type: 'CONTROL', action: 'unblock', user: item.user })}>
+                            <button
+                              type="button"
+                              aria-label={`Quitar el silencio a ${item.user}`}
+                              title="Quitar el silencio"
+                              onClick={() => postBus({ type: 'CONTROL', action: 'unblock', user: item.user })}
+                            >
                               <X className="h-3.5 w-3.5" aria-hidden="true" />
                             </button>
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <span className="cab-hint">Nadie. El reloj de cada mensaje silencia a su autor {DEFAULT_TIMEOUT_MINUTES} minutos.</span>
+                      <span className="cab-hint">
+                        Nadie. «Silenciar {DEFAULT_TIMEOUT_MINUTES} min», dentro de «Más» en cada mensaje, calla a su autor ese tiempo.
+                      </span>
                     )}
                   </div>
                 </>
@@ -424,43 +525,38 @@ export const Control: React.FC = () => {
 
             <section className="cab-mod" data-tour="registro">
               <h2>Registro</h2>
+              {renderFeedback('registro')}
               {log.length ? (
                 <ul className="cab-rows">
-                  {log.map((item) => (
-                    <li key={`${item.id}-${item.at}`} data-row={`l-${item.id}-${item.at}`} className="cab-row">
-                      <div className="min-w-0">
-                        <p className="cab-row-user">
-                          {item.user}{' '}
-                          <span className="cab-chip" data-status={item.status}>
-                            {STATUS_LABEL[item.status]}
-                          </span>
-                          {item.reason && <span className="cab-hint"> {item.reason}</span>}
-                        </p>
-                        <p className="cab-row-text">{item.text}</p>
-                      </div>
-                      <div className="cab-row-actions">
-                        <button
-                          type="button"
-                          className="cab-icon"
-                          aria-label={`Volver a leer el mensaje de ${item.user}`}
-                          onClick={() => postBus({ type: 'ENQUEUE', text: item.text, user: item.user })}
-                        >
-                          <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
+                  {log.map((item) => {
+                    const rowKey = `l-${item.id}-${item.at}`;
+                    return (
+                      <li key={rowKey} data-row={rowKey} className="cab-row">
+                        <div className="min-w-0">
+                          <p className="cab-row-user">
+                            {item.user}{' '}
+                            <span className="cab-chip" data-status={item.status}>
+                              {STATUS_LABEL[item.status]}
+                            </span>
+                            {item.reason && <span className="cab-hint"> {item.reason}</span>}
+                          </p>
+                          <p className="cab-row-text">{item.text}</p>
+                        </div>
+                        <div className="cab-row-actions">
+                          <button
                             type="button"
-                            className="cab-icon"
-                            aria-label={`Silenciar a ${item.user} durante ${DEFAULT_TIMEOUT_MINUTES} minutos`}
-                            onClick={() => postBus({ type: 'CONTROL', action: 'timeout', user: item.username, minutes: DEFAULT_TIMEOUT_MINUTES })}
+                            className="cab-btn2 cab-btn-sm"
+                            aria-label={`Volver a leer el mensaje de ${item.user}`}
+                            onClick={() => readAgain(item)}
                           >
-                            <Clock className="h-4 w-4" aria-hidden="true" />
+                            Volver a leer
                           </button>
-                          <button type="button" className="cab-icon" aria-label={`Bloquear a ${item.user}`} onClick={() => blockUser(item.username)}>
-                          <Ban className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                          {renderMoreButton(rowKey, item)}
+                        </div>
+                        {openRow === rowKey && renderMore('registro', rowKey, item, false)}
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : (
                 <span className="cab-hint">
@@ -468,238 +564,55 @@ export const Control: React.FC = () => {
                 </span>
               )}
             </section>
-          </div>
 
-          {/* Columna derecha: reglas, disparadores y OBS */}
-          <div className="grid gap-5">
-            <section className="cab-mod" data-tour="reglas">
-              <h2>Reglas</h2>
-              <Field label="Quién puede usar !s" hint="Tú y tus mods siempre podéis. Los canjes de puntos y los bits no dependen de este filtro.">
-                <div className="cab-seg" role="group" aria-label="Quién puede usar el comando">
-                  {MIN_ROLES.map((role) => (
-                    <button key={role.id} type="button" aria-pressed={settings.minRole === role.id} onClick={() => update({ minRole: role.id })}>
-                      {role.name}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-
-              <Field label="Espera por usuario" htmlFor="cooldown" hint="Tiempo mínimo entre dos mensajes del mismo espectador.">
-                <div className="cab-range">
-                  <input
-                    id="cooldown"
-                    type="range"
-                    min={LIMITS.cooldown.min}
-                    max={300}
-                    step={5}
-                    value={Math.min(300, settings.cooldownSec)}
-                    onChange={(e) => update({ cooldownSec: parseInt(e.target.value, 10) })}
-                  />
-                  <output htmlFor="cooldown">{settings.cooldownSec ? `${settings.cooldownSec} s` : 'Sin'}</output>
-                </div>
-              </Field>
-
-              <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
-                <Field label="Longitud máxima" htmlFor="maxLength">
-                  <div className="cab-range">
-                    <input
-                      id="maxLength"
-                      type="range"
-                      min={50}
-                      max={LIMITS.length.max}
-                      step={50}
-                      value={Math.max(50, settings.maxLength)}
-                      onChange={(e) => update({ maxLength: parseInt(e.target.value, 10) })}
-                    />
-                    <output htmlFor="maxLength">{settings.maxLength}</output>
-                  </div>
-                </Field>
-                <Field label="Cola máxima" htmlFor="maxQueue">
-                  <div className="cab-range">
-                    <input
-                      id="maxQueue"
-                      type="range"
-                      min={LIMITS.queue.min}
-                      max={LIMITS.queue.max}
-                      step={1}
-                      value={settings.maxQueueSize}
-                      onChange={(e) => update({ maxQueueSize: parseInt(e.target.value, 10) })}
-                    />
-                    <output htmlFor="maxQueue">{settings.maxQueueSize}</output>
-                  </div>
-                </Field>
-              </div>
-
-              <Field label="Prioridad a puntos y bits" htmlFor="priorityPaid" hint="Los mensajes de canjes y cheers pasan delante de los del comando !s.">
-                <input
-                  id="priorityPaid"
-                  type="checkbox"
-                  className="cab-tog"
-                  checked={settings.priorityPaid}
-                  onChange={(e) => update({ priorityPaid: e.target.checked })}
-                />
-              </Field>
-
-              <Field
-                label="Palabras bloqueadas"
-                htmlFor="blockedWords"
-                hint="Separadas por comas. Un mensaje que contenga alguna se descarta entero. No distingue mayúsculas ni tildes."
-              >
-                <textarea
-                  id="blockedWords"
-                  rows={2}
-                  value={wordsDraft}
-                  onChange={(e) => {
-                    setWordsDraft(e.target.value);
-                    update({ blockedWords: parseWordList(e.target.value) });
-                  }}
-                  spellCheck={false}
-                  className="cab-inp"
-                />
-              </Field>
-
-              <Field label="Usuarios bloqueados" htmlFor="blockedUser">
-                <div className="flex gap-2">
-                  <input
-                    id="blockedUser"
-                    type="text"
-                    value={userDraft}
-                    onChange={(e) => setUserDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') addUserDraft();
-                    }}
-                    placeholder="nombre_de_usuario"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="cab-inp cab-mono"
-                  />
-                  <button type="button" className="cab-btn2" onClick={addUserDraft} disabled={!normalizeUser(userDraft)}>
-                    Bloquear
-                  </button>
-                </div>
-                {settings.blockedUsers.length ? (
-                  <ul className="flex flex-wrap gap-2">
-                    {settings.blockedUsers.map((user) => (
-                      <li key={user} className="cab-chip cab-chip-lg">
-                        <span className="cab-mono">{user}</span>
-                        <button type="button" aria-label={`Desbloquear a ${user}`} onClick={() => unblockUser(user)}>
-                          <X className="h-3.5 w-3.5" aria-hidden="true" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <span className="cab-hint">Nadie bloqueado.</span>
-                )}
-              </Field>
-            </section>
-
-            <section className="cab-mod" data-tour="disparadores">
-              <h2>Disparadores</h2>
-              <Field label="Comando !s" htmlFor="commandEnabled" hint="Cualquier mensaje que empiece con !s se lee, según las reglas de arriba.">
-                <input
-                  id="commandEnabled"
-                  type="checkbox"
-                  className="cab-tog"
-                  checked={settings.commandEnabled}
-                  onChange={(e) => update({ commandEnabled: e.target.checked })}
-                />
-              </Field>
-
-              <Field
-                label="Puntos del canal"
-                hint={
-                  detecting
-                    ? 'Escuchando el chat. Canjea ahora la recompensa con cualquier texto.'
-                    : settings.rewardId
-                      ? 'Recompensa enlazada. El texto que escriba quien la canjee se lee en voz alta.'
-                      : 'Crea en Twitch una recompensa que pida texto al espectador. Pulsa Detectar y canjéala una vez para enlazarla.'
-                }
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  {settings.rewardId ? (
-                    <>
-                      <code className="cab-url cab-mono">{settings.rewardId}</code>
-                      <button type="button" className="cab-btn2" onClick={() => update({ rewardId: '' })}>
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        Quitar
-                      </button>
-                    </>
-                  ) : detecting ? (
-                    <button type="button" className="cab-btn2" onClick={() => stopDetectRef.current?.()}>
-                      <Radar className="h-4 w-4 animate-spin" aria-hidden="true" />
-                      Cancelar
-                    </button>
-                  ) : (
-                    <button type="button" className="cab-btn2" onClick={startDetect} disabled={!settings.channel.trim()}>
-                      <Radar className="h-4 w-4" aria-hidden="true" />
-                      Detectar recompensa
-                    </button>
-                  )}
-                </div>
-              </Field>
-
-              <Field label="Bits mínimos" htmlFor="minBits" hint="Un cheer con al menos estos bits lee su mensaje. Con 0 queda desactivado.">
-                <input
-                  id="minBits"
-                  type="number"
-                  inputMode="numeric"
-                  min={LIMITS.bits.min}
-                  max={LIMITS.bits.max}
-                  step={50}
-                  value={settings.minBits}
-                  onChange={(e) => update({ minBits: Math.max(0, Math.min(LIMITS.bits.max, parseInt(e.target.value, 10) || 0)) })}
-                  className="cab-inp cab-mono"
-                  style={{ maxWidth: 160 }}
-                />
-              </Field>
-            </section>
-
-            <section className="cab-mod" data-tour="obs">
-              <h2>En OBS</h2>
+            <section className="cab-mod" data-tour="comandos">
+              <h2>Desde el chat</h2>
               <p className="cab-hint">
-                Las reglas y los disparadores viajan en la URL del widget. Cuando los cambies, copia la URL de nuevo y pégala en la fuente de OBS.
+                Tú y tus mods podéis manejar la cola escribiendo en el chat. Es la forma de hacerlo cuando el widget está dentro de OBS.
               </p>
-              <div>
-                <button type="button" className="cab-btn" onClick={copyWidgetUrl}>
-                  {copiedUrl ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-                  {copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}
-                </button>
-              </div>
-              <div className="cab-field">
-                <span className="cab-label">Comandos de chat para ti y tus mods</span>
-                <ul className="cab-cmds">
-                  <li>
-                    <code className="cab-mono">!s skip</code> salta el mensaje que suena
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s pausa</code> y <code className="cab-mono">!s reanudar</code> detienen y retoman la cola
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s vaciar</code> borra la cola
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s block usuario</code> y <code className="cab-mono">!s unblock usuario</code> bloquean al instante, sin tocar la
-                    URL
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s silencio</code> corta la voz, vacía la cola y pausa
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s manual</code> y <code className="cab-mono">!s auto</code> activan y quitan la aprobación manual;{' '}
-                    <code className="cab-mono">!s ok</code> y <code className="cab-mono">!s no</code> aprueban o rechazan el mensaje más antiguo
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s mudo</code> y <code className="cab-mono">!s voz</code> ponen y quitan el modo solo texto
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s timeout usuario 10</code> silencia a alguien durante esos minutos
-                  </li>
-                  <li>
-                    <code className="cab-mono">!s reload</code> recarga el overlay
-                  </li>
-                </ul>
-              </div>
+              <details className="studio-details">
+                <summary>Comandos de chat para ti y tus mods</summary>
+                <div>
+                  <ul className="cab-cmds">
+                    <li>
+                      <code className="cab-mono">!s skip</code> salta el mensaje que suena
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s pausa</code> y <code className="cab-mono">!s reanudar</code> detienen y retoman la cola
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s vaciar</code> borra la cola
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s block usuario</code> y <code className="cab-mono">!s unblock usuario</code> bloquean y
+                      desbloquean al instante
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s silencio</code> corta la voz, vacía la cola y pausa
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s manual</code> y <code className="cab-mono">!s auto</code> activan y quitan la aprobación manual;{' '}
+                      <code className="cab-mono">!s ok</code> y <code className="cab-mono">!s no</code> aprueban o rechazan el mensaje más antiguo
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s mudo</code> y <code className="cab-mono">!s voz</code> ponen y quitan el modo solo texto
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s timeout usuario 10</code> silencia a alguien durante esos minutos
+                    </li>
+                    <li>
+                      <code className="cab-mono">!s reload</code> recarga la capa
+                    </li>
+                  </ul>
+                </div>
+              </details>
+              <p className="cab-hint">
+                Las reglas están en{' '}
+                <a className="studio-link" href="#tts">
+                  Voz del chat
+                </a>
+                .
+              </p>
             </section>
           </div>
         </div>

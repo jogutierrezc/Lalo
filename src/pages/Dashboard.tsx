@@ -1,19 +1,24 @@
 /**
  * Dashboard.tsx
  *
- * Panel de control del streamer en estilo Cabina: una mesa de mezclas que sigue
- * la señal del mensaje, de izquierda a derecha y de arriba abajo.
- *   1 Entrada (canal) · 2 Voz · 3 Mezcla · 4 Imagen (estilo de alerta) · 5 Salida (OBS)
- * El monitor muestra la alerta real con su movimiento y permite probar mensajes.
- * Los cambios se guardan solos y se envían a los widgets abiertos.
+ * Voz del chat sobre la plantilla común del panel: a la izquierda se edita, en
+ * tres pestañas (Voz, Apariencia y Reglas); a la derecha el monitor 16:9 queda
+ * siempre a la vista, con la alerta real, el mensaje de prueba y la URL de OBS.
+ *
+ * - La voz se elige en un solo sitio; el ID propio solo aparece si se pide.
+ * - Hay una sola forma de probar: «Enviar al widget», que además repite la
+ *   animación en el monitor.
+ * - El canal se escribe en Inicio; aquí solo se muestra.
+ * - Los cambios se guardan solos y se envían a los widgets abiertos.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Copy, ExternalLink, Play, RefreshCw, RotateCcw, Trash2, Upload } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Check, Copy, Play, Upload } from 'lucide-react';
 import { saveSettings, PRESET_VOICES } from '../types/settings';
 import { useSettings } from '../hooks/useSettings';
+import { useCloudSession } from '../hooks/useCloudSession';
 import { postBus } from '../utils/bus';
-import { buildWidgetUrl } from '../utils/widgetUrl';
+import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { SuiteNav } from '../components/SuiteNav';
 import { sanitizeTwitchMessage } from '../utils/twitchSanitizer';
 import { AVAILABLE_EMOTIONS, normalizeTextForFishAudio, EmotionInfo } from '../utils/emotionMapper';
@@ -33,8 +38,11 @@ import {
 import { playDemo } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
-
-
+import { Field, Range, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
+import { RulesPanel } from '../components/voz/RulesPanel';
+import { useRewardDetect } from '../components/voz/useRewardDetect';
+import { readLastCopiedUrl, urlChangedSinceCopy, withEmotion, writeLastCopiedUrl } from '../components/voz/vozLogic';
+import '../styles/voz-envivo.css';
 
 const ACCENTS = [
   { color: '#9146ff', name: 'Morado' },
@@ -45,46 +53,39 @@ const ACCENTS = [
   { color: '#ffb020', name: 'Ámbar' },
 ];
 
+type Tab = 'voz' | 'apariencia' | 'reglas';
+
+const TABS: { id: Tab; name: string }[] = [
+  { id: 'voz', name: 'Voz' },
+  { id: 'apariencia', name: 'Apariencia' },
+  { id: 'reglas', name: 'Reglas' },
+];
+
 // Guía de primeros pasos: lo mínimo para llegar a oír el primer mensaje en el stream
 const TOUR_STEPS: TourStep[] = [
   {
     title: 'Tu chat, leído en voz alta',
     body: (
       <>
-        Lalo TTS lee en el stream los mensajes del chat que empiezan con <code>!s</code> y los muestra como una alerta animada. Te enseño lo esencial en
-        seis pasos; lleva alrededor de un minuto y puedes usar el panel mientras tanto.
+        Esta capa lee en el stream los mensajes del chat que empiezan con <code>!s</code> y los muestra como una alerta animada. Son tres pasos y
+        puedes usar el panel mientras tanto.
       </>
     ),
   },
   {
-    target: 'entrada',
-    title: 'Escribe tu canal',
-    body: 'Pon el nombre de tu canal de Twitch tal como aparece en la dirección. No hace falta iniciar sesión: el chat público se lee de forma anónima.',
+    target: 'voz-editor',
+    title: 'Tres pestañas para ajustarla',
+    body: 'En Voz eliges quién habla y a qué volumen. En Apariencia, cómo se ve la alerta. En Reglas, quién puede usarla, cuánto y cómo se activa.',
   },
   {
-    target: 'voz',
-    title: 'Elige la voz',
-    body: 'Escoge una voz de la lista o pega el ID de una voz tuya de Fish Audio. El modelo gratuito no consume créditos.',
-  },
-  {
-    target: 'imagen',
-    title: 'Decide cómo se ve la alerta',
-    body: 'Hay cuatro estilos. Con Sticker puedes subir el SVG de tu canal. Debajo ajustas el color, el lugar de la pantalla, el tamaño y cuánta energía tiene el movimiento.',
-  },
-  {
-    target: 'monitor',
-    title: 'Pruébala antes de salir al aire',
-    body: 'El monitor muestra la alerta tal como saldrá. Elige una emoción, escribe un mensaje y pulsa «Ver animación». «Enviar al widget» lo manda al overlay que tengas abierto.',
-  },
-  {
-    target: 'salida',
-    title: 'Llévala a OBS',
-    body: 'Copia la URL y pégala en una fuente de tipo Navegador. La URL guarda tu estilo y tu sonido: si cambias algo después, vuelve a copiarla.',
+    target: 'voz-monitor',
+    title: 'Prueba y copia la URL',
+    body: 'El monitor muestra la alerta tal como saldrá. Escribe un mensaje y pulsa «Enviar al widget». «Copiar URL para OBS» te da la fuente de navegador; si después cambias algo que viaja en la URL, aquí mismo se te avisa.',
   },
   {
     target: 'nav',
-    title: 'Durante el directo, Control en vivo',
-    body: 'Ahí pausas la cola, saltas mensajes y decides quién puede usar el TTS: solo subs, con espera entre mensajes, con palabras bloqueadas, o por puntos del canal y bits.',
+    title: 'Durante el directo, En vivo',
+    body: 'Ahí pausas la cola, saltas mensajes y apruebas o quitas los que esperan.',
   },
 ];
 
@@ -98,25 +99,6 @@ const STAGE_POSITION: Record<AlertPosition, string> = {
   bc: 'items-end justify-center',
   br: 'items-end justify-end',
 };
-
-const Field: React.FC<{ label: string; htmlFor?: string; hint?: React.ReactNode; children: React.ReactNode }> = ({
-  label,
-  htmlFor,
-  hint,
-  children,
-}) => (
-  <div className="cab-field">
-    {htmlFor ? (
-      <label className="cab-label" htmlFor={htmlFor}>
-        {label}
-      </label>
-    ) : (
-      <span className="cab-label">{label}</span>
-    )}
-    {children}
-    {hint && <span className="cab-hint">{hint}</span>}
-  </div>
-);
 
 function Segmented<T extends string>({
   label,
@@ -142,11 +124,14 @@ function Segmented<T extends string>({
 
 export const Dashboard: React.FC = () => {
   const { settings, update, saved } = useSettings();
-  const [copiedUrl, setCopiedUrl] = useState(false);
-  const [reloadingWidget, setReloadingWidget] = useState(false);
+  const cloud = useCloudSession();
+  const uid = useId();
+  const [tab, setTab] = useState<Tab>('voz');
   const [stickerError, setStickerError] = useState<string | null>(null);
   const [brightStage, setBrightStage] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const stickerUndo = useUndo<string>();
+  const detect = useRewardDetect((rewardId) => update({ rewardId }));
 
   // La guía se abre sola la primera vez; después solo desde el botón de la cabecera
   useEffect(() => {
@@ -155,7 +140,31 @@ export const Dashboard: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Estados del banco de pruebas
+  // ---------- Voz ----------
+  const isPresetVoice = PRESET_VOICES.some((voice) => voice.id === settings.referenceId);
+  // «Usar ID propio» es una elección del streamer aunque todavía no haya pegado ningún ID
+  const [customChosen, setCustomChosen] = useState(false);
+  const [customDraft, setCustomDraft] = useState(() => (isPresetVoice ? '' : settings.referenceId));
+  const customVoice = customChosen || !isPresetVoice;
+  const currentVoiceName = PRESET_VOICES.find((voice) => voice.id === settings.referenceId)?.name;
+
+  const chooseVoice = (value: string) => {
+    if (value === 'custom') {
+      setCustomChosen(true);
+      return;
+    }
+    setCustomChosen(false);
+    setCustomDraft('');
+    update({ referenceId: value });
+  };
+  const typeCustomVoice = (value: string) => {
+    const id = value.trim();
+    setCustomDraft(id);
+    // Un ID vacío dejaría al widget sin voz: se conserva la anterior hasta que haya uno
+    if (id) update({ referenceId: id });
+  };
+
+  // ---------- Mensaje de prueba ----------
   const [testText, setTestText] = useState('!s [feliz] ¡Hola chat! Este es un mensaje con emoción');
   const [testUser, setTestUser] = useState('SuperViewer');
   const [testPreview, setTestPreview] = useState<string | null>(null);
@@ -163,22 +172,7 @@ export const Dashboard: React.FC = () => {
 
   const previewRef = useRef<HTMLDivElement | null>(null);
   const cancelDemoRef = useRef<(() => void) | null>(null);
-
-  // URL del widget para OBS: lleva canal, voz, sonido, apariencia y reglas (ver utils/widgetUrl.ts)
-  const widgetUrl = buildWidgetUrl(window.location.origin, settings);
-
-  const copyWidgetUrl = () => {
-    navigator.clipboard.writeText(widgetUrl).catch(() => {});
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2200);
-  };
-
-  // Forzar recarga remota del widget en OBS Studio sin interrumpir la transmisión
-  const handleForceReloadWidget = () => {
-    setReloadingWidget(true);
-    postBus({ type: 'FORCE_RELOAD' });
-    setTimeout(() => setReloadingWidget(false), 2500);
-  };
+  const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
   // Previsualizar sanitización en tiempo real
   useEffect(() => {
@@ -190,6 +184,7 @@ export const Dashboard: React.FC = () => {
 
   const previewText = testPreview || 'Escribe un mensaje para verlo aquí.';
   const emotionTag = detectedEmotion?.tag || null;
+  const emotionChoice = AVAILABLE_EMOTIONS.some((emo) => emo.tag === emotionTag) ? (emotionTag as string) : '';
 
   // Ciclo de animación del monitor: entrada, voz, salida y reposo
   const playPreview = useCallback(() => {
@@ -237,15 +232,11 @@ export const Dashboard: React.FC = () => {
     playPreview();
   };
 
-  const applyEmotion = (tag: string, example: string) => {
-    const defaultMsg =
-      tag === 'singing'
-        ? 'Cumpleaños feliz, te deseamos a ti, que los cumplas muy feliz.'
-        : '¡Esto es una prueba de voz con emoción en el stream!';
-    const withoutTag = testText.replace(/^!s\s+/, '').replace(/^\[[^\]]+\]\s*/, '').trim();
-    setTestText(`!s ${example} ${withoutTag || defaultMsg}`);
+  const chooseEmotion = (tag: string) => {
+    setTestText(withEmotion(testText, AVAILABLE_EMOTIONS.find((emo) => emo.tag === tag) || null));
   };
 
+  // ---------- Sticker ----------
   const onStickerFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -260,24 +251,65 @@ export const Dashboard: React.FC = () => {
       return;
     }
     setStickerError(null);
+    if (settings.stickerSvg) stickerUndo.offer('Se cambió el sticker.', settings.stickerSvg);
     update({ stickerSvg: result.svg });
   };
 
+  const removeSticker = () => {
+    setStickerError(null);
+    stickerUndo.offer('Se quitó el sticker.', settings.stickerSvg);
+    update({ stickerSvg: '' });
+  };
+
+  // ---------- URL de OBS ----------
+  // Lleva canal, voz, sonido, apariencia y reglas (ver utils/widgetUrl.ts); con cuenta en la nube, también la clave del widget
+  const widgetUrl = buildSuiteWidgetUrl(
+    typeof window !== 'undefined' ? window.location.origin : '',
+    'tts',
+    settings.channel,
+    settings,
+    cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
+  );
+  const [lastCopied, setLastCopied] = useState<string | null>(readLastCopiedUrl);
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle');
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const urlChanged = urlChangedSinceCopy(widgetUrl, lastCopied);
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    []
+  );
+
+  const copyWidgetUrl = async () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    try {
+      if (!navigator.clipboard) throw new Error('Portapapeles no disponible');
+      await navigator.clipboard.writeText(widgetUrl);
+      setLastCopied(widgetUrl);
+      writeLastCopiedUrl(widgetUrl);
+      setCopyState('done');
+      copyTimer.current = setTimeout(() => setCopyState('idle'), 2200);
+    } catch {
+      setCopyState('failed');
+    }
+  };
+
   const template = settings.announceTemplate || DEFAULT_TEMPLATE;
+  const announce = settings.announceSender !== false;
   const spokenExample =
     emotionTag === 'singing'
       ? `${testUser || 'Streamer'} canta. [singing] ${normalizeTextForFishAudio(previewText).replace(/^\[singing\]\s*/i, '')}`
-      : settings.announceSender !== false
+      : announce
         ? template.replace('{user}', testUser || 'Streamer').replace('{message}', normalizeTextForFishAudio(previewText))
         : normalizeTextForFishAudio(previewText);
-  const isPresetVoice = PRESET_VOICES.some((voice) => voice.id === settings.referenceId);
   const rootStyle = { '--acc': settings.accent, '--acc-ink': inkFor(settings.accent) } as React.CSSProperties;
 
   // Con la guía abierta se deja hueco abajo para que su consola no tape el último módulo
   return (
     <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        {/* Barra de navegación de la Suite */}
         <SuiteNav
           currentApp="tts"
           channel={settings.channel}
@@ -286,290 +318,275 @@ export const Dashboard: React.FC = () => {
           tourAvailable={!tourOpen}
         />
 
-        {/* 1 Entrada · 2 Voz · 3 Mezcla */}
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          <section className="cab-mod" data-tour="entrada">
-            <h2>
-              <span>1</span>Entrada
-            </h2>
-            <Field
-              label="Canal de Twitch"
-              htmlFor="channel"
-              hint={
-                <>
-                  Se conecta de forma anónima al chat público y solo lee los mensajes que empiezan con{' '}
-                  <code className="cab-mono text-[color:var(--cb-fg)]">!s</code>.
-                </>
-              }
-            >
-              <div className="relative">
-                <span className="cab-mono pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--cb-mut)]">twitch.tv/</span>
-                <input
-                  id="channel"
-                  type="text"
-                  value={settings.channel}
-                  onChange={(e) => update({ channel: e.target.value.toLowerCase().trim() })}
-                  placeholder="tu_canal"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="cab-inp cab-mono"
-                  style={{ paddingLeft: 92 }}
-                />
-              </div>
-            </Field>
-          </section>
+        <div className="vz-layout">
+          {/* ---------- Editor ---------- */}
+          <section className="cab-mod" data-tour="voz-editor" aria-label="Ajustes de la voz del chat">
+            <Segmented label="Sección de ajustes" value={tab} options={TABS} onChange={setTab} />
 
-          <section className="cab-mod" data-tour="voz">
-            <h2>
-              <span>2</span>Voz
-            </h2>
-            <Field label="Voz" htmlFor="voice">
-              <select
-                id="voice"
-                value={isPresetVoice ? settings.referenceId : 'custom'}
-                onChange={(e) => {
-                  if (e.target.value !== 'custom') update({ referenceId: e.target.value });
-                }}
-                className="cab-inp"
-              >
-                {PRESET_VOICES.map((voice) => (
-                  <option key={voice.id} value={voice.id}>
-                    {voice.name}
-                  </option>
-                ))}
-                <option value="custom">Usar ID propio</option>
-              </select>
-            </Field>
-            <Field label="ID de voz (reference_id)" htmlFor="referenceId" hint="Pega aquí el ID de una voz propia de Fish Audio.">
-              <input
-                id="referenceId"
-                type="text"
-                value={settings.referenceId}
-                onChange={(e) => update({ referenceId: e.target.value.trim() })}
-                autoComplete="off"
-                spellCheck={false}
-                className="cab-inp cab-mono"
-              />
-            </Field>
-            <Field
-              label="Modelo"
-              hint={
-                <>
-                  El gratuito no consume créditos. La clave de Fish Audio vive en el servidor (
-                  <code className="cab-mono">FISH_AUDIO_API_KEY</code>); sin ella el widget usa el modo simulación.{' '}
-                  <a href="https://fish.audio" target="_blank" rel="noreferrer" className="underline underline-offset-2 text-[color:var(--cb-fg)]">
-                    Obtener clave
-                  </a>
-                </>
-              }
-            >
-              <Segmented
-                label="Modelo"
-                value={settings.model === 's2.1-pro' ? 's2.1-pro' : 's2.1-pro-free'}
-                options={[
-                  { id: 's2.1-pro-free', name: 'Gratis' },
-                  { id: 's2.1-pro', name: 'Pro' },
-                ]}
-                onChange={(model) => update({ model })}
-              />
-            </Field>
-          </section>
-
-          <section className="cab-mod md:col-span-2 xl:col-span-1">
-            <h2>
-              <span>3</span>Mezcla
-            </h2>
-            <Field label="Volumen" htmlFor="volume">
-              <div className="cab-range">
-                <input
-                  id="volume"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={settings.volume}
-                  onChange={(e) => update({ volume: parseFloat(e.target.value) })}
-                />
-                <output htmlFor="volume">{Math.round(settings.volume * 100)} %</output>
-              </div>
-            </Field>
-            <Field label="Velocidad" htmlFor="speed">
-              <div className="cab-range">
-                <input
-                  id="speed"
-                  type="range"
-                  min="0.75"
-                  max="1.5"
-                  step="0.05"
-                  value={settings.speed}
-                  onChange={(e) => update({ speed: parseFloat(e.target.value) })}
-                />
-                <output htmlFor="speed">{settings.speed.toFixed(2)}×</output>
-              </div>
-            </Field>
-            <Field
-              label="Anunciar quién escribe"
-              htmlFor="announce"
-              hint={
-                settings.announceSender !== false ? (
-                  <>
-                    Usa <code className="cab-mono">{'{user}'}</code> y <code className="cab-mono">{'{message}'}</code>.
-                  </>
-                ) : (
-                  'La voz leerá solo el mensaje.'
-                )
-              }
-            >
-              <div className="flex items-center gap-3">
-                <input
-                  id="announce"
-                  type="checkbox"
-                  className="cab-tog"
-                  checked={settings.announceSender !== false}
-                  onChange={(e) => update({ announceSender: e.target.checked })}
-                />
-                <input
-                  type="text"
-                  aria-label="Formato del anuncio"
-                  value={template}
-                  disabled={settings.announceSender === false}
-                  onChange={(e) => update({ announceTemplate: e.target.value })}
-                  placeholder={DEFAULT_TEMPLATE}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="cab-inp cab-mono"
-                />
-              </div>
-            </Field>
-          </section>
-        </div>
-
-        {/* 4 Imagen · Monitor */}
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)]">
-          <section className="cab-mod" data-tour="imagen">
-            <h2>
-              <span>4</span>Imagen
-            </h2>
-
-            <Field label="Estilo de alerta">
-              <div className="cab-styles" role="group" aria-label="Estilo de alerta">
-                {ALERT_STYLES.map((style) => (
-                  <button
-                    key={style.id}
-                    type="button"
-                    className="cab-style"
-                    aria-pressed={settings.alertStyle === style.id}
-                    onClick={() => update({ alertStyle: style.id })}
+            {tab === 'voz' && (
+              <>
+                <Field label="Voz" htmlFor={`${uid}-voice`}>
+                  <select
+                    id={`${uid}-voice`}
+                    value={customVoice ? 'custom' : settings.referenceId}
+                    onChange={(e) => chooseVoice(e.target.value)}
+                    className="cab-inp"
                   >
-                    <span className={`cab-style-face cab-face-${style.id}`}>
-                      {style.id === 'cabina' && <i />}
-                      {style.name}
-                    </span>
-                    <span className="cab-style-body">
-                      <b>{style.name}</b>
-                      {style.description}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </Field>
+                    {PRESET_VOICES.map((voice) => (
+                      <option key={voice.id} value={voice.id}>
+                        {voice.name}
+                      </option>
+                    ))}
+                    <option value="custom">Usar ID propio</option>
+                  </select>
+                </Field>
 
-            {settings.alertStyle === 'sticker' && (
-              <Field
-                label="Sticker del canal (SVG)"
-                hint={`Tu logo o mascota en SVG plano, hasta ${MAX_STICKER_BYTES / 1000} KB. Entra de golpe, se balancea mientras suena la voz y lleva borde de troquel.`}
-              >
-                <div className="flex flex-wrap items-center gap-3">
-                  {settings.stickerSvg && <img className="cab-sticker-thumb" src={stickerDataUri(settings.stickerSvg)} alt="Sticker actual" />}
-                  <label className="cab-btn2" htmlFor="stickerFile">
-                    <Upload className="h-4 w-4" aria-hidden="true" />
-                    {settings.stickerSvg ? 'Cambiar SVG' : 'Subir SVG'}
-                  </label>
-                  <input id="stickerFile" type="file" accept=".svg,image/svg+xml" className="sr-only" onChange={onStickerFile} />
-                  {settings.stickerSvg && (
-                    <button
-                      type="button"
-                      className="cab-btn2"
-                      onClick={() => {
-                        setStickerError(null);
-                        update({ stickerSvg: '' });
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      Quitar
-                    </button>
-                  )}
-                </div>
-                {stickerError && (
-                  <span className="cab-error" role="alert">
-                    {stickerError}
+                {customVoice && (
+                  <Field
+                    label="ID de tu voz"
+                    htmlFor={`${uid}-voice-id`}
+                    hint={
+                      customDraft
+                        ? 'Es el ID de una voz tuya en Fish Audio.'
+                        : `Pega aquí el ID de una voz tuya de Fish Audio. Hasta entonces se sigue usando ${currentVoiceName || 'la voz anterior'}.`
+                    }
+                  >
+                    <input
+                      id={`${uid}-voice-id`}
+                      type="text"
+                      value={customDraft}
+                      onChange={(e) => typeCustomVoice(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="cab-inp cab-mono"
+                    />
+                  </Field>
+                )}
+
+                <Field label="Volumen">
+                  <Range
+                    label="Volumen"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={settings.volume}
+                    format={(value) => `${Math.round(value * 100)} %`}
+                    onChange={(volume) => update({ volume })}
+                  />
+                </Field>
+
+                <div className="cab-field">
+                  <Toggle label="Anunciar quién escribe" checked={announce} onChange={(announceSender) => update({ announceSender })} />
+                  <span className="cab-hint">
+                    {announce ? 'Antes del mensaje, la voz dice quién lo escribió.' : 'La voz lee solo el mensaje.'}
                   </span>
-                )}
-                {!settings.stickerSvg && !stickerError && (
-                  <span className="cab-hint">Sin SVG, el sticker muestra la inicial de quien escribe.</span>
-                )}
-              </Field>
+                </div>
+
+                <details className="studio-details">
+                  <summary>Avanzado</summary>
+                  <div>
+                    <Field label="Modelo" hint="Gratis no consume créditos. Pro gasta créditos de Fish Audio.">
+                      <Segmented
+                        label="Modelo"
+                        value={settings.model === 's2.1-pro' ? 's2.1-pro' : 's2.1-pro-free'}
+                        options={[
+                          { id: 's2.1-pro-free', name: 'Gratis' },
+                          { id: 's2.1-pro', name: 'Pro' },
+                        ]}
+                        onChange={(model) => update({ model })}
+                      />
+                    </Field>
+                    <Field label="Velocidad">
+                      <Range
+                        label="Velocidad"
+                        min={0.75}
+                        max={1.5}
+                        step={0.05}
+                        value={settings.speed}
+                        format={(value) => `${value.toFixed(2)}×`}
+                        onChange={(speed) => update({ speed })}
+                      />
+                    </Field>
+                    <Field
+                      label="Frase del anuncio"
+                      htmlFor={`${uid}-template`}
+                      hint={
+                        announce ? (
+                          <>
+                            Usa <span className="vz-code">{'{user}'}</span> para el nombre y <span className="vz-code">{'{message}'}</span> para el
+                            mensaje.
+                          </>
+                        ) : (
+                          'Activa «Anunciar quién escribe» para usarla.'
+                        )
+                      }
+                    >
+                      <input
+                        id={`${uid}-template`}
+                        type="text"
+                        value={template}
+                        disabled={!announce}
+                        onChange={(e) => update({ announceTemplate: e.target.value })}
+                        placeholder={DEFAULT_TEMPLATE}
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="cab-inp cab-mono"
+                      />
+                    </Field>
+                  </div>
+                </details>
+
+                <details className="studio-details">
+                  <summary>Emociones que puede escribir el chat</summary>
+                  <div>
+                    <p className="cab-hint max-w-[70ch]">
+                      Van entre corchetes dentro del comando, por ejemplo <span className="vz-code">!s [susurro] no hagan ruido</span>. Cambian el
+                      tono de la voz y el gesto con el que entra el texto.
+                    </p>
+                    <ul className="flex flex-wrap gap-x-5 gap-y-1">
+                      {AVAILABLE_EMOTIONS.map((emo) => (
+                        <li key={emo.tag} className="cab-hint">
+                          <span className="vz-code">{emo.example}</span> {emo.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </details>
+              </>
             )}
 
-            <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
-              <Field label="Color de acento">
-                <div className="cab-sw" role="group" aria-label="Color de acento">
-                  {ACCENTS.map((accent) => (
-                    <button
-                      key={accent.color}
-                      type="button"
-                      aria-label={accent.name}
-                      aria-pressed={settings.accent === accent.color}
-                      style={{ backgroundColor: accent.color }}
-                      onClick={() => update({ accent: accent.color })}
+            {tab === 'apariencia' && (
+              <>
+                <Field label="Estilo de alerta">
+                  <div className="cab-styles" role="group" aria-label="Estilo de alerta">
+                    {ALERT_STYLES.map((style) => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        className="cab-style"
+                        aria-pressed={settings.alertStyle === style.id}
+                        onClick={() => update({ alertStyle: style.id })}
+                      >
+                        <span className={`cab-style-face cab-face-${style.id}`}>
+                          {style.id === 'cabina' && <i />}
+                          {style.name}
+                        </span>
+                        <span className="cab-style-body">{style.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                {settings.alertStyle === 'sticker' && (
+                  <Field
+                    label="Sticker del canal (SVG)"
+                    hint={`Tu logo o mascota en SVG plano, hasta ${MAX_STICKER_BYTES / 1000} KB. Entra de golpe, se balancea mientras suena la voz y lleva borde de troquel.`}
+                  >
+                    <div className="flex flex-wrap items-center gap-3">
+                      {settings.stickerSvg && <img className="cab-sticker-thumb" src={stickerDataUri(settings.stickerSvg)} alt="Sticker actual" />}
+                      <button type="button" className="cab-btn2" onClick={() => stickerInputRef.current?.click()}>
+                        <Upload className="h-4 w-4" aria-hidden="true" />
+                        <span>{settings.stickerSvg ? 'Cambiar SVG' : 'Subir SVG'}</span>
+                      </button>
+                      <input ref={stickerInputRef} type="file" accept=".svg,image/svg+xml" hidden tabIndex={-1} onChange={onStickerFile} />
+                      {settings.stickerSvg && (
+                        <button type="button" className="cab-btn2" onClick={removeSticker}>
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                    {stickerError && (
+                      <span className="cab-error" role="alert">
+                        {stickerError}
+                      </span>
+                    )}
+                    {!settings.stickerSvg && !stickerError && (
+                      <span className="cab-hint">Sin SVG, el sticker muestra la inicial de quien escribe.</span>
+                    )}
+                    {stickerUndo.pending && (
+                      <UndoNote
+                        label={stickerUndo.pending.label}
+                        onUndo={() => {
+                          update({ stickerSvg: stickerUndo.pending?.snapshot ?? '' });
+                          stickerUndo.clear();
+                        }}
+                      />
+                    )}
+                  </Field>
+                )}
+
+                <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
+                  <Field label="Color">
+                    <div className="cab-sw" role="group" aria-label="Color">
+                      {ACCENTS.map((accent) => (
+                        <button
+                          key={accent.color}
+                          type="button"
+                          aria-label={accent.name}
+                          title={accent.name}
+                          aria-pressed={settings.accent === accent.color}
+                          style={{ backgroundColor: accent.color }}
+                          onClick={() => update({ accent: accent.color })}
+                        />
+                      ))}
+                      <input
+                        type="color"
+                        aria-label="Color personalizado"
+                        title="Color personalizado"
+                        value={settings.accent}
+                        onChange={(e) => update({ accent: normalizeAccent(e.target.value) || settings.accent })}
+                      />
+                    </div>
+                  </Field>
+
+                  <Field label="Posición en pantalla">
+                    <div className="cab-pos" role="group" aria-label="Posición en pantalla">
+                      {ALERT_POSITIONS.map((position) => (
+                        <button
+                          key={position.id}
+                          type="button"
+                          aria-label={position.name}
+                          title={position.name}
+                          aria-pressed={settings.position === position.id}
+                          onClick={() => update({ position: position.id })}
+                        />
+                      ))}
+                    </div>
+                    <span className="cab-hint">
+                      Ahora: {ALERT_POSITIONS.find((position) => position.id === settings.position)?.name}
+                    </span>
+                  </Field>
+
+                  <Field label="Tamaño">
+                    <Range
+                      label="Tamaño"
+                      min={SCALE_MIN}
+                      max={SCALE_MAX}
+                      step={0.05}
+                      value={settings.scale}
+                      format={(value) => `${Math.round(value * 100)} %`}
+                      onChange={(scale) => update({ scale })}
                     />
-                  ))}
-                  <input
-                    type="color"
-                    aria-label="Color personalizado"
-                    value={settings.accent}
-                    onChange={(e) => update({ accent: normalizeAccent(e.target.value) || settings.accent })}
-                  />
-                </div>
-              </Field>
+                  </Field>
 
-              <Field label="Posición en pantalla">
-                <div className="cab-pos" role="group" aria-label="Posición en pantalla">
-                  {ALERT_POSITIONS.map((position) => (
-                    <button
-                      key={position.id}
-                      type="button"
-                      aria-label={position.name}
-                      aria-pressed={settings.position === position.id}
-                      onClick={() => update({ position: position.id })}
-                    />
-                  ))}
+                  <Field label="Energía del movimiento">
+                    <Segmented label="Energía del movimiento" value={settings.energy} options={ALERT_ENERGIES} onChange={(energy) => update({ energy })} />
+                  </Field>
                 </div>
-              </Field>
+              </>
+            )}
 
-              <Field label="Tamaño" htmlFor="scale">
-                <div className="cab-range">
-                  <input
-                    id="scale"
-                    type="range"
-                    min={SCALE_MIN}
-                    max={SCALE_MAX}
-                    step="0.05"
-                    value={settings.scale}
-                    onChange={(e) => update({ scale: parseFloat(e.target.value) })}
-                  />
-                  <output htmlFor="scale">{Math.round(settings.scale * 100)} %</output>
-                </div>
-              </Field>
-
-              <Field label="Energía del movimiento">
-                <Segmented label="Energía del movimiento" value={settings.energy} options={ALERT_ENERGIES} onChange={(energy) => update({ energy })} />
-              </Field>
-            </div>
+            {tab === 'reglas' && <RulesPanel settings={settings} update={update} detect={detect} />}
           </section>
 
-          <section className="cab-mod" data-tour="monitor">
-            <h2>Monitor</h2>
+          {/* ---------- Monitor ---------- */}
+          <section className="cab-mod vz-monitor" data-tour="voz-monitor">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2>Monitor</h2>
+              <button type="button" className="cab-btn2 cab-btn-sm" aria-pressed={brightStage} onClick={() => setBrightStage((value) => !value)}>
+                Fondo claro
+              </button>
+            </div>
 
             <div className={`cab-stage ${STAGE_POSITION[settings.position]}`} data-bg={brightStage ? 'claro' : 'oscuro'}>
               <AlertCard
@@ -585,29 +602,11 @@ export const Dashboard: React.FC = () => {
                 fontSize={`calc(clamp(7px, 2.5cqw, 16px) * ${settings.scale})`}
               />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="cab-btn2" onClick={playPreview}>
-                <RotateCcw className="h-4 w-4" aria-hidden="true" />
-                Ver animación
-              </button>
-              <button type="button" className="cab-btn2" aria-pressed={brightStage} onClick={() => setBrightStage((v) => !v)}>
-                {brightStage ? 'Fondo oscuro' : 'Fondo claro'}
-              </button>
-            </div>
 
-            <Field label="Emoción">
-              <div className="cab-seg" role="group" aria-label="Emoción">
-                {AVAILABLE_EMOTIONS.map((emo) => (
-                  <button key={emo.tag} type="button" aria-pressed={emotionTag === emo.tag} onClick={() => applyEmotion(emo.tag, emo.example)}>
-                    {emo.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <div className="grid gap-[18px] sm:grid-cols-[minmax(0,150px)_minmax(0,1fr)]">
-              <Field label="Usuario" htmlFor="testUser">
+            <div className="grid gap-[18px] sm:grid-cols-2">
+              <Field label="Usuario" htmlFor={`${uid}-test-user`}>
                 <input
-                  id="testUser"
+                  id={`${uid}-test-user`}
                   type="text"
                   value={testUser}
                   onChange={(e) => setTestUser(e.target.value)}
@@ -616,84 +615,104 @@ export const Dashboard: React.FC = () => {
                   className="cab-inp"
                 />
               </Field>
-              <Field label="Mensaje del chat" htmlFor="testText">
-                <textarea
-                  id="testText"
-                  rows={2}
-                  value={testText}
-                  onChange={(e) => setTestText(e.target.value)}
-                  placeholder="!s [feliz] mensaje de prueba"
-                  className="cab-inp cab-mono"
-                />
+              <Field label="Emoción" htmlFor={`${uid}-emotion`}>
+                <select id={`${uid}-emotion`} className="cab-inp" value={emotionChoice} onChange={(e) => chooseEmotion(e.target.value)}>
+                  <option value="">Sin emoción</option>
+                  {AVAILABLE_EMOTIONS.map((emo) => (
+                    <option key={emo.tag} value={emo.tag}>
+                      {emo.label}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </div>
+            <Field
+              label="Mensaje de prueba"
+              htmlFor={`${uid}-test-text`}
+              hint={testPreview ? <>Se oirá: «{spokenExample}»</> : 'Este mensaje no pasa el filtro: no se mostrará ni se leerá.'}
+            >
+              <textarea
+                id={`${uid}-test-text`}
+                rows={2}
+                value={testText}
+                onChange={(e) => setTestText(e.target.value)}
+                placeholder="!s [feliz] mensaje de prueba"
+                className="cab-inp cab-mono"
+              />
+            </Field>
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn flex-1" onClick={triggerTestTTS} disabled={!testPreview}>
+                <Play className="h-4 w-4 fill-current" aria-hidden="true" />
+                <span>Enviar al widget</span>
+              </button>
+              <button type="button" className="cab-btn2 flex-1" onClick={copyWidgetUrl}>
+                {copyState === 'done' ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+                <span>{copyState === 'done' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+              </button>
+            </div>
+
+            {urlChanged && (
+              <p className="cab-note" role="status">
+                <span className="cab-chip" data-status="skipped">
+                  La URL cambió
+                </span>{' '}
+                Has cambiado algo que viaja en la URL desde la última vez que la copiaste aquí. Vuelve a copiarla y pégala en la fuente de OBS.
+              </p>
+            )}
+            {copyState === 'failed' && (
+              <div className="cab-field">
+                <span className="cab-error" role="alert">
+                  El navegador no dejó copiar la URL. Selecciónala aquí y cópiala a mano.
+                </span>
+                <code className="cab-url cab-mono">{widgetUrl}</code>
+              </div>
+            )}
+
             <p className="cab-hint">
-              {testPreview ? <>Se oirá: «{spokenExample}»</> : 'El filtro descarta este mensaje: no se mostrará ni se leerá.'}
+              «Enviar al widget» repite la animación aquí y la manda al widget que tengas abierto en este navegador.{' '}
+              <a className="studio-link" href={widgetUrl} target="_blank" rel="noreferrer">
+                Abrir widget
+              </a>
             </p>
-            <button type="button" className="cab-btn" onClick={triggerTestTTS} disabled={!testPreview}>
-              <Play className="h-4 w-4 fill-current" aria-hidden="true" />
-              Enviar al widget
-            </button>
+            {settings.channel.trim() ? (
+              <p className="cab-hint">
+                Canal: <span className="vz-code">twitch.tv/{settings.channel}</span>. Se cambia en{' '}
+                <a className="studio-link" href="#dashboard">
+                  Inicio
+                </a>
+                .
+              </p>
+            ) : (
+              <p className="cab-note">
+                Todavía no hay canal, así que el widget no sabe qué chat leer. Escríbelo en{' '}
+                <a className="studio-link" href="#dashboard">
+                  Inicio
+                </a>
+                .
+              </p>
+            )}
+
+            <details className="studio-details">
+              <summary>Cómo añadirlo a OBS</summary>
+              <div>
+                <ol className="grid max-w-[70ch] list-decimal gap-2 pl-5 text-[color:var(--cb-mut)]">
+                  <li>En OBS, añade una fuente de tipo Navegador.</li>
+                  <li>Pega la URL que copiaste.</li>
+                  <li>Pon el ancho en 1920 y el alto en 1080, o el tamaño de tu lienzo.</li>
+                  <li>Marca «Controlar audio a través de OBS» si quieres ver el volumen en el mezclador.</li>
+                  <li>
+                    La capa queda invisible hasta que alguien escribe <span className="vz-code">!s mensaje</span>.
+                  </li>
+                  <li>
+                    Con el directo en marcha, recárgala con «Actualizar OBS» en la cabecera o con <span className="vz-code">!s reload</span> en el
+                    chat.
+                  </li>
+                </ol>
+              </div>
+            </details>
           </section>
         </div>
-
-        {/* 5 Salida */}
-        <section className="cab-mod" data-tour="salida">
-          <h2>
-            <span>5</span>Salida
-          </h2>
-          <Field
-            label="URL para OBS"
-            hint="La URL lleva el estilo, el color, la posición y el sonido. Si cambias algo aquí con el directo en marcha, vuelve a copiarla en la fuente de OBS."
-          >
-            <code className="cab-url cab-mono">{widgetUrl}</code>
-          </Field>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="cab-btn" onClick={copyWidgetUrl}>
-              {copiedUrl ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-              {copiedUrl ? 'URL copiada' : 'Copiar URL'}
-            </button>
-            <button type="button" className="cab-btn2" onClick={handleForceReloadWidget} disabled={reloadingWidget}>
-              <RefreshCw className={`h-4 w-4 ${reloadingWidget ? 'animate-spin' : ''}`} aria-hidden="true" />
-              {reloadingWidget ? 'Recarga enviada' : 'Actualizar OBS'}
-            </button>
-            <a className="cab-btn2" href={widgetUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="h-4 w-4" aria-hidden="true" />
-              Abrir widget
-            </a>
-          </div>
-
-          <details>
-            <summary>Cómo añadirlo a OBS Studio</summary>
-            <ol className="mt-3 grid max-w-[70ch] list-decimal gap-2 pl-5 text-[color:var(--cb-mut)]">
-              <li>En OBS, añade una fuente de tipo Navegador.</li>
-              <li>Pega la URL de arriba.</li>
-              <li>Pon el ancho en 1920 y el alto en 1080, o el tamaño de tu lienzo.</li>
-              <li>Marca «Controlar audio a través de OBS» si quieres ver el volumen en el mezclador.</li>
-              <li>
-                El overlay queda invisible hasta que alguien escribe <code className="cab-mono text-[color:var(--cb-fg)]">!s mensaje</code>.
-              </li>
-              <li>
-                Con el directo en marcha, recarga el overlay con «Actualizar OBS», con{' '}
-                <code className="cab-mono text-[color:var(--cb-fg)]">!s reload</code> en el chat, o con clic derecho en la fuente y «Actualizar».
-              </li>
-            </ol>
-          </details>
-          <details>
-            <summary>Emociones que puede escribir el chat</summary>
-            <p className="cab-hint mt-3 max-w-[70ch]">
-              Van entre corchetes dentro del comando, por ejemplo <code className="cab-mono text-[color:var(--cb-fg)]">!s [susurro] no hagan ruido</code>. Cambian el tono
-              de la voz y el gesto con el que entra el texto.
-            </p>
-            <ul className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
-              {AVAILABLE_EMOTIONS.map((emo) => (
-                <li key={emo.tag}>
-                  <code className="cab-mono text-[color:var(--cb-fg)]">{emo.example}</code> <span className="text-[color:var(--cb-mut)]">{emo.label}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        </section>
       </div>
       {tourOpen && <GuidedTour steps={TOUR_STEPS} onClose={() => setTourOpen(false)} />}
     </div>

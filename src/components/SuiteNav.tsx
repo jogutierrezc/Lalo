@@ -19,6 +19,7 @@ import {
   BellRing,
   Bot,
   Check,
+  CloudOff,
   Coins,
   Copy,
   ExternalLink,
@@ -33,6 +34,7 @@ import {
   Swords,
   Target,
   Tv,
+  UserRound,
   X,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
@@ -41,6 +43,8 @@ import { loadSettings } from '../types/settings';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
+import { useCloudSession } from '../hooks/useCloudSession';
+import { onCloudSyncMessage } from '../lib/cloudConfig';
 
 export type SuiteApp =
   | 'catalogo'
@@ -51,7 +55,10 @@ export type SuiteApp =
   | 'twitchio'
   | 'metas'
   | 'ruleta'
-  | 'encuestas';
+  | 'encuestas'
+  | 'cuenta'
+  | 'admin'
+  | 'nube';
 
 interface SuiteNavProps {
   currentApp: SuiteApp;
@@ -147,13 +154,32 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   const [syncState, setSyncState] = useState<'idle' | 'busy' | 'done'>('idle');
   const [activeNotice, setActiveNotice] = useState<{ appType: string; url: string } | null>(null);
   const widgetOpenHere = useWidgetOpenHere();
+  const cloud = useCloudSession();
+
+  // La cuenta solo existe con la nube configurada; sin ella, «Nube» explica qué
+  // falta para encenderla. El administrador tiene su propia consola (AdminShell)
+  const nav = cloud.enabled
+    ? [
+        ...NAV,
+        {
+          group: 'Cuenta',
+          items: [{ app: 'cuenta' as const, label: 'Mi cuenta', href: '#cuenta', icon: UserRound }],
+        },
+      ]
+    : [...NAV, { group: 'Cuenta', items: [{ app: 'nube' as const, label: 'Nube', href: '#nube', icon: CloudOff }] }];
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const current = NAV.flatMap((section) => section.items).find((item) => item.app === currentApp);
+  // Con cuenta en la nube, las URL de OBS llevan la clave privada del streamer
+  const widgetKeyParam = cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined;
+
+  // Avisos de la sincronización con la nube (null = todo guardado)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  useEffect(() => onCloudSyncMessage(setSyncMessage), []);
+  const current = nav.flatMap((section) => section.items).find((item) => item.app === currentApp);
 
   const getWidgetUrl = (mode: WidgetAppType) => {
     const ttsSettings = loadSettings();
-    return buildSuiteWidgetUrl(baseUrl, mode, channel || ttsSettings.channel, ttsSettings);
+    return buildSuiteWidgetUrl(baseUrl, mode, channel || ttsSettings.channel, ttsSettings, widgetKeyParam);
   };
 
   // La página deja sitio a la barra lateral a través de clases en <body>
@@ -203,7 +229,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
 
     const ttsSettings = loadSettings();
     const targetApp: WidgetAppType = SYNC_TARGET[currentApp] || 'all';
-    const activeUrl = buildSuiteWidgetUrl(baseUrl, targetApp, channel || ttsSettings.channel, ttsSettings);
+    const activeUrl = buildSuiteWidgetUrl(baseUrl, targetApp, channel || ttsSettings.channel, ttsSettings, widgetKeyParam);
 
     postBus({ type: 'FORCE_RELOAD' });
     postBus({
@@ -247,7 +273,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
       </div>
 
       <nav className="shell-nav" aria-label="Módulos" data-tour="nav">
-        {NAV.map((section) => (
+        {nav.map((section) => (
           <React.Fragment key={section.group || 'inicio'}>
             {section.group && <p className="shell-group">{section.group}</p>}
             {section.items.map((item) => {
@@ -405,7 +431,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
         )}
 
         <span className="shell-saved" role="status">
-          {saved ? 'Guardado' : 'Guardando'}
+          {!saved ? 'Guardando' : syncMessage || (cloud.enabled ? 'Guardado en la nube' : 'Guardado')}
         </span>
       </div>
 

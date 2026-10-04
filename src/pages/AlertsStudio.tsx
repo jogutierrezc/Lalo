@@ -38,6 +38,7 @@ import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import { inspectAudioFile, MediaItem, MediaType, MAX_AUDIO_DURATION_SECONDS } from '../types/mediaLibrary';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { loadSettings } from '../types/settings';
+import { useCloudSession } from '../hooks/useCloudSession';
 
 const TOUR_ID = 'alertas';
 
@@ -169,6 +170,7 @@ const Toggle: React.FC<{ label: string; checked: boolean; onChange: (next: boole
 
 export const AlertsStudio: React.FC = () => {
   const { alertsSettings, updateAlerts, saved } = useAlertsSettings();
+  const cloud = useCloudSession();
   const uid = useId();
   const customEvents = alertsSettings.customEvents || [];
 
@@ -506,7 +508,13 @@ export const AlertsStudio: React.FC = () => {
   // ---------- URL de OBS ----------
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const copyWidgetUrl = () => {
-    const url = buildSuiteWidgetUrl(baseUrl, 'alerts', alertsSettings.channel, loadSettings());
+    const url = buildSuiteWidgetUrl(
+      baseUrl,
+      'alerts',
+      alertsSettings.channel,
+      loadSettings(),
+      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
+    );
     navigator.clipboard
       ?.writeText(url)
       .then(() => {

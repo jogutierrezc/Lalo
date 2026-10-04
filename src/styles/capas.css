@@ -1,0 +1,87 @@
+/* ==========================================================================
+   Estudios de Recompensas, Metas y Batallas
+   Solo lo que la plantilla común no trae: la vista previa del aviso dentro del
+   monitor y un par de detalles de fila. Los colores salen de los tokens.
+   ========================================================================== */
+
+/* Aviso de recompensa dentro del monitor 16:9 */
+.capas-reward {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6em;
+  max-width: 100%;
+}
+.capas-reward video {
+  width: auto;
+  max-width: 100%;
+  max-height: 30cqw;
+  object-fit: contain;
+}
+.capas-reward[data-full] video {
+  max-height: 46cqw;
+}
+.capas-rest {
+  color: var(--p-mut);
+  font-family: 'Onest', system-ui, sans-serif;
+  text-align: center;
+}
+
+/* Capa que cubre el monitor: confeti y vídeo de celebración */
+.capas-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.capas-cover[data-video] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4%;
+}
+.capas-cover video {
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Punto con el color de una opción de la batalla */
+.capas-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--cb-line);
+  border-radius: 50%;
+}
+
+/* Tiempo de la batalla bajo el monitor */
+.capas-time {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+/* Frase del locutor con su botón de escucha */
+.capas-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+}
+.capas-line p {
+  margin: 0;
+  grid-column: 1;
+}
+.capas-line button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+/* Botones bajo el monitor: en la columna estrecha van uno debajo de otro, sin partir el texto */
+.cab-mod .flex.flex-wrap.gap-2 > .cab-btn,
+.cab-mod .flex.flex-wrap.gap-2 > .cab-btn2 {
+  white-space: nowrap;
+}

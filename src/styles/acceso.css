@@ -1,0 +1,170 @@
+/* ==========================================================================
+   Pantalla de acceso: aurora en morados de Twitch, foco de luz y panel de
+   cristal esmerilado. Solo aplica bajo .acc; las reglas base viven en index.css.
+   ========================================================================== */
+
+/* Un solo mundo oscuro, sea cual sea el tema del panel */
+:root body .cab.acc {
+  /* Opacidad de la superficie del panel: 1 lo deja totalmente sólido */
+  --acc-superficie: 0.72;
+
+  --acc-noche: #0e0720;
+  --acc-tw: #9146ff;
+  --acc-tw-hondo: #5c16c5;
+  --acc-tw-claro: #bf94ff;
+  --acc-tw-rosa: #f06bd8;
+
+  --ui: #9146ff;
+  --ui-ink: #ffffff;
+  --cb-bg: var(--acc-noche);
+  --cb-panel: #1c1038;
+  --cb-surface: rgb(10 3 28 / 0.62);
+  --cb-line: rgb(255 255 255 / 0.22);
+  --cb-fg: #f3eeff;
+  --cb-mut: #d2c8ec;
+  --cb-off: #4d3e7a;
+  --cb-live: #ff8a80;
+  --cb-warn: #ffc861;
+  --cb-warn-bg: #40351a;
+  --cb-ok: #7fe6a9;
+  --cb-ok-bg: #1f3a2c;
+  --cb-bad: #ffaba4;
+  --cb-bad-bg: #43201e;
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--acc-noche);
+  color-scheme: dark;
+}
+
+/* ---------- Fondo: aurora ---------- */
+.acc .acc-fondo {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--acc-noche);
+}
+.acc .acc-aurora {
+  position: absolute;
+  inset: -20%;
+}
+/* El desenfoque es fijo y va en cada mancha: al moverse solo cambia su transformación */
+.acc .acc-aurora i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(28px);
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.acc .acc-aurora i:nth-child(1) {
+  left: 8%;
+  top: 6%;
+  width: 46%;
+  height: 56%;
+  background: radial-gradient(closest-side, var(--acc-tw), transparent);
+}
+.acc .acc-aurora i:nth-child(2) {
+  right: 4%;
+  top: 18%;
+  width: 42%;
+  height: 52%;
+  background: radial-gradient(closest-side, var(--acc-tw-hondo), transparent);
+}
+.acc .acc-aurora i:nth-child(3) {
+  left: 26%;
+  bottom: 0;
+  width: 50%;
+  height: 54%;
+  background: radial-gradient(closest-side, var(--acc-tw-claro), transparent);
+  opacity: 0.7;
+}
+.acc .acc-aurora i:nth-child(4) {
+  right: 16%;
+  bottom: 8%;
+  width: 30%;
+  height: 38%;
+  background: radial-gradient(closest-side, var(--acc-tw-rosa), transparent);
+  opacity: 0.5;
+}
+/* Viñeta: oscurece los bordes para que el panel mande */
+.acc .acc-fondo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 60% at 50% 45%, transparent, rgb(14 7 32 / 0.5));
+}
+
+/* ---------- Foco de luz: sigue al puntero y da un pulso al cambiar de paso ---------- */
+.acc .acc-foco {
+  position: absolute;
+  left: 30%;
+  top: 34%;
+  width: min(46vw, 620px);
+  aspect-ratio: 1;
+  margin: calc(min(46vw, 620px) / -2) 0 0 calc(min(46vw, 620px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(239 228 255 / 0.5), rgb(191 148 255 / 0.2) 45%, transparent);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  will-change: transform, opacity;
+}
+
+/* ---------- Panel: mismo contenido, superficie de cristal ---------- */
+.acc .acc-card {
+  position: relative;
+  border-color: rgb(255 255 255 / 0.2);
+  background:
+    linear-gradient(140deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.02) 55%),
+    rgb(20 10 44 / var(--acc-superficie));
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  backdrop-filter: blur(22px) saturate(165%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.28),
+    inset 0 -1px 0 rgb(255 255 255 / 0.06),
+    0 28px 70px -24px rgb(6 0 22 / 0.85);
+}
+/* Velos tras el texto: mantienen el contraste aunque el foco pase por detrás */
+.acc .acc-brand {
+  background: rgb(14 7 32 / 0.22);
+  border-color: rgb(255 255 255 / 0.16);
+}
+.acc .acc-form {
+  background: rgb(8 3 22 / 0.38);
+}
+
+/* Botones fijos al mundo oscuro, sin depender del tema del panel */
+:root body .cab.acc .cab-btn {
+  background: var(--cb-fg);
+  color: var(--cb-panel);
+}
+:root body .cab.acc .acc-twitch {
+  background: var(--ui);
+  color: var(--ui-ink);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+.acc .cab-url {
+  background: rgb(10 3 28 / 0.62);
+}
+
+/* ---------- Preferencias del sistema ---------- */
+@media (prefers-reduced-motion: reduce) {
+  /* Degradado fijo: sin deriva, sin foco y sin pulso */
+  .acc .acc-foco {
+    display: none;
+  }
+  .acc .acc-aurora i {
+    will-change: auto;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root body .cab.acc {
+    --acc-superficie: 1;
+  }
+  .acc .acc-card {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

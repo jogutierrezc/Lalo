@@ -1,0 +1,101 @@
+/* ==========================================================================
+   Ruleta: dibujo de la rueda y filas de segmentos del estudio
+   ========================================================================== */
+
+.rw {
+  position: relative;
+  flex: none;
+  user-select: none;
+}
+.rw-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0.7em 1.4em rgba(0, 0, 0, 0.55));
+}
+.rw-text {
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 72%;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+/* Al detenerse, lo que no ganó se apaga */
+.rw-seg {
+  transition: opacity 0.35s ease;
+}
+.rw-seg[data-dim] {
+  opacity: 0.32;
+}
+
+/* En el monitor del estudio la rueda y el resultado caben en el 16:9 */
+.ovl.rl[data-studio] {
+  font-size: clamp(6px, 1.85cqw, 13px);
+}
+
+/* La etiqueta puede ser más ancha que la rueda: se centra bajo ella sin cortarse */
+.ovl .rl-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.ovl .rl-label {
+  flex: none;
+  max-width: 34em;
+  text-align: center;
+}
+
+/* Fila de un segmento: una línea en ancho normal, dos cuando no cabe */
+.studio-segs {
+  container-type: inline-size;
+}
+.studio-segs .studio-seg {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 150px 86px auto auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 10px;
+}
+.studio-segs .cab-inp {
+  height: 36px;
+}
+.studio-segs .studio-seg-time .cab-inp {
+  width: 62px;
+  padding: 0 8px;
+}
+.studio-segs .studio-color {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--cb-line);
+  border-radius: 50%;
+  background: transparent;
+}
+.studio-segs .studio-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.studio-segs .studio-color::-webkit-color-swatch {
+  border: 0;
+}
+.studio-segs .studio-color::-moz-color-swatch {
+  border: 0;
+}
+.studio-seg[data-off] .studio-seg-text {
+  color: var(--cb-mut);
+  text-decoration: line-through;
+}
+@container (max-width: 560px) {
+  .studio-segs .studio-seg {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+  .studio-segs .studio-seg-cat {
+    grid-column: 2;
+  }
+  .studio-segs .studio-seg-time {
+    grid-column: 3 / -1;
+    justify-self: end;
+  }
+}

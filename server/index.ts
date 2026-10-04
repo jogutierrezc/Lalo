@@ -10,8 +10,10 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { processTTSRequest } from './ttsHandler';
+import { nodeHandler, type ApiRoute } from './storage/handlers.js';
 
-dotenv.config();
+// .env.local tiene prioridad sobre .env (el primero que define una variable gana)
+dotenv.config({ path: ['.env.local', '.env'] });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -93,6 +95,12 @@ app.post('/api/twitchio/event', (req: Request, res: Response) => {
     channel,
   });
 });
+
+// Almacenamiento de archivos (Cloudflare R2). La misma lógica que las funciones de api/
+const storageRoutes: ApiRoute[] = ['storage/status', 'storage/test', 'media/upload-session', 'media/complete', 'media/delete'];
+for (const route of storageRoutes) {
+  app.all(`/api/${route}`, nodeHandler(route));
+}
 
 interface TTSRequestBody {
   text?: string;

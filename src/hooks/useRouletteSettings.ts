@@ -21,7 +21,7 @@ export function useRouletteSettings() {
   const [rouletteSettings, setRouletteSettings] = useState<RouletteSettings>(() =>
     loadRouletteSettings()
   );
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(true);
   const currentRotationRef = useRef<number>(0);
 
   // Guardar en localStorage y sincronizar con BroadcastChannel

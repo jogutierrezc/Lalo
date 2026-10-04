@@ -89,6 +89,11 @@ export default defineConfig({
   plugins: [react(), ttsDevServerPlugin()],
   server: {
     port: 3000,
+    // En local, las rutas de almacenamiento las atiende server/index.ts (npm run dev:all)
+    proxy: {
+      '/api/storage': `http://localhost:${process.env.PORT || 3001}`,
+      '/api/media': `http://localhost:${process.env.PORT || 3001}`,
+    },
     watch: {
       ignored: ['**/*.mp3', '**/*.wav', '**/dist/**', '**/.git/**', '**/test_*'],
     },

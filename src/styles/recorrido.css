@@ -1,0 +1,394 @@
+/* ==========================================================================
+   Bienvenida de streamers: lista de pasos, Teemo, tarjeta del plan y tareas.
+   Vive sobre la pantalla de acceso (.acc, ver acceso.css) y usa sus tokens.
+   La lista de tareas (.rec-tareas) también se usa en Inicio, con los tokens
+   del panel. Ningún texto baja de 13px (0.8125rem).
+   ========================================================================== */
+
+/* ---------- Panel: un poco más ancho que el acceso, para la columna de pasos ---------- */
+.acc.rec .acc-card {
+  grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  width: min(100%, 960px);
+  min-height: 540px;
+}
+.acc.rec .acc-brand {
+  gap: 22px;
+  padding: 26px;
+}
+.acc.rec .acc-step {
+  max-width: 520px;
+}
+.acc.rec .acc-step form {
+  display: grid;
+  gap: 16px;
+}
+.acc.rec .acc-step p {
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.acc.rec .cab-hint,
+.acc.rec .cab-error {
+  font-size: 0.9375rem;
+}
+.acc.rec .cab-error {
+  padding: 10px 12px;
+  border: 1px solid rgb(255 138 128 / 0.6);
+  border-radius: 4px;
+  background: rgb(255 106 96 / 0.16);
+  color: #ffd2cd;
+}
+.acc.rec .rec-fila {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+}
+
+/* ---------- Título del paso: entra palabra a palabra ---------- */
+.acc.rec .rec-titulo {
+  margin: 0;
+  font-stretch: 68%;
+  font-weight: 800;
+  font-size: clamp(1.7rem, 4vw, 2.3rem);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  outline-offset: 6px;
+}
+.rec-palabra {
+  display: inline-block;
+}
+
+/* ---------- Lista de pasos ---------- */
+.rec-pasos {
+  display: grid;
+  gap: 4px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.rec-pasos li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  color: var(--cb-mut);
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.9375rem;
+}
+.rec-pasos i {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--cb-line);
+  border-radius: 50%;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  font-style: normal;
+}
+.rec-pasos li[data-estado='actual'] {
+  color: var(--cb-fg);
+  font-weight: 700;
+}
+.rec-pasos li[data-estado='actual'] i {
+  border-color: var(--cb-fg);
+  background: var(--cb-fg);
+  color: var(--acc-noche);
+}
+.rec-pasos li[data-estado='hecho'] i {
+  border-color: var(--acc-tw);
+  background: var(--acc-tw);
+  color: #fff;
+}
+
+/* ---------- Teemo te explica ---------- */
+.rec-teemo {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--cb-line);
+  border-radius: 6px;
+  background: rgb(145 70 255 / 0.18);
+}
+.rec-teemo-cab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rec-teemo-av {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--acc-tw);
+  color: #fff;
+  font-weight: 800;
+  font-stretch: 80%;
+}
+.rec-teemo-cab b {
+  display: block;
+  font-stretch: 78%;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.rec-teemo-cab div span {
+  display: block;
+  color: var(--cb-mut);
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.8125rem;
+}
+.rec-teemo p {
+  margin: 0;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+.rec-teemo-pie {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rec-onda {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  opacity: 0.45;
+}
+.rec-onda[data-activa='true'] {
+  opacity: 1;
+}
+.rec-onda i {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--acc-tw-claro);
+  transform: scaleY(0.3);
+}
+
+/* ---------- Cajas, lo que se pide y lo que se tomó ---------- */
+.rec-caja {
+  padding: 14px;
+  border: 1px solid var(--cb-line);
+  border-radius: 6px;
+  background: rgb(10 3 28 / 0.45);
+}
+.rec-caja > b {
+  display: block;
+  margin-bottom: 8px;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cb-mut);
+}
+.rec-pide {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.rec-pide li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.rec-pide li::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--acc-tw-claro);
+}
+.rec-pide[data-tipo='no'] li::before {
+  border: 2px solid var(--cb-mut);
+  background: transparent;
+}
+.rec-pide b {
+  display: block;
+  font-weight: 600;
+}
+.rec-pide span span {
+  color: var(--cb-mut);
+  font-size: 0.9375rem;
+}
+.rec-datos {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.rec-datos > div {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: 4px 16px;
+  align-items: center;
+}
+.rec-datos dt {
+  color: var(--cb-mut);
+}
+.rec-datos dd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rec-datos dd small {
+  display: block;
+  color: var(--cb-mut);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+.rec-avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--cb-off);
+}
+
+/* ---------- Tarjeta del plan: el momento marcado ---------- */
+.rec-plan {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 6px;
+  background: var(--acc-tw, #9146ff);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+.rec-plan > span {
+  font-size: 0.8125rem;
+}
+.rec-plan b {
+  font-stretch: 70%;
+  font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.rec-plan ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-weight: 600;
+}
+
+/* ---------- Elección de voz y estilo ---------- */
+.acc.rec .cab-seg {
+  background: rgb(10 3 28 / 0.5);
+}
+.acc.rec .cab-seg button {
+  min-height: 36px;
+}
+.rec-tog {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+
+/* ---------- Primeros pasos (bienvenida e Inicio) ---------- */
+.rec-tareas {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rec-tareas li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--cb-line);
+  border-radius: 4px;
+}
+.rec-tareas li > i {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ui, #9146ff);
+  color: var(--ui-ink, #fff);
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  font-style: normal;
+}
+.rec-tareas li[data-hecha='true'] > i {
+  background: var(--cb-ok-bg, #1f3a2c);
+  color: var(--cb-ok, #7fe6a9);
+}
+.rec-tareas b {
+  font-weight: 700;
+}
+.rec-tareas p {
+  margin: 0;
+  color: var(--cb-mut);
+  font-size: 0.875rem;
+}
+.rec-tarea-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.acc.rec .rec-tareas li {
+  background: rgb(10 3 28 / 0.45);
+}
+@media (max-width: 480px) {
+  .rec-tareas li {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+  .rec-tarea-acciones {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
+/* ---------- Pantallas estrechas: los pasos pasan a una fila ---------- */
+@media (max-width: 720px) {
+  .acc.rec .acc-card {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+  .acc.rec .acc-brand,
+  .acc.rec .acc-form {
+    padding: 20px;
+  }
+  .rec-pasos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
+  .rec-datos > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Preferencias del sistema ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .rec-onda i {
+    transform: scaleY(0.6);
+  }
+}

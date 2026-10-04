@@ -8,6 +8,7 @@
  * y carrusel/slideshow rotativo dinámico (5 o más metas), más anuncios por voz y sonido.
  */
 
+import { queueCloudPush } from '../lib/cloudConfig';
 import { AlertSoundType } from './alerts';
 
 export type GoalType = 'subs' | 'followers' | 'bits' | 'raids' | 'donations';
@@ -257,6 +258,7 @@ export function loadGoalsSettings(): GoalsSettings {
 export function saveGoalsSettings(settings: GoalsSettings): void {
   try {
     localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(settings));
+    queueCloudPush('goals', settings);
   } catch (err) {
     console.error('Error guardando configuración de metas:', err);
   }

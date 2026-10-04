@@ -2255,3 +2255,272 @@ label.cab-btn2:has(+ .studio-file:focus-visible) {
   background: var(--cb-surface);
   cursor: pointer;
 }
+
+/* ==========================================================================
+   Acceso, Mi cuenta y portal de administración
+   ========================================================================== */
+
+.acc {
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+}
+.acc-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  width: min(100%, 880px);
+  min-height: 460px;
+  overflow: hidden;
+  border: 1px solid var(--cb-line);
+  border-radius: 4px;
+  background: var(--cb-bg);
+}
+.acc-brand {
+  display: grid;
+  align-content: space-between;
+  gap: 28px;
+  padding: 32px;
+  background: var(--cb-panel);
+  border-right: 1px solid var(--cb-line);
+}
+.acc-brand h1 {
+  margin: 6px 0 0;
+  font-stretch: 66%;
+  font-weight: 800;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  line-height: 0.94;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.acc-brand ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--cb-mut);
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.acc-brand li b {
+  color: var(--cb-fg);
+  font-weight: 600;
+}
+.acc-form {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  padding: 32px;
+}
+.acc-step {
+  display: grid;
+  gap: 16px;
+  max-width: 400px;
+}
+.acc-step h2 {
+  margin: 0;
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1.1;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.acc-step p {
+  margin: 0;
+}
+.cab .acc-twitch {
+  background: var(--ui);
+  color: var(--ui-ink);
+}
+.acc-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.cab-inp.acc-code {
+  height: 48px;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+}
+.acc-ok {
+  border-style: solid;
+  border-color: var(--cb-ok);
+  background: var(--cb-ok-bg);
+  color: var(--cb-ok);
+}
+.acc-case {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+@media (max-width: 720px) {
+  .acc-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .acc-brand {
+    border-right: 0;
+    border-bottom: 1px solid var(--cb-line);
+  }
+}
+
+.cab-meter {
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--cb-line);
+  background: var(--cb-bg);
+}
+.cab-meter i {
+  display: block;
+  height: 100%;
+  background: var(--cb-fg);
+  transform-origin: left;
+  transition: transform 0.4s var(--ease-out);
+}
+.cab-meter[data-level='high'] i {
+  background: var(--cb-warn);
+}
+.cab-meter[data-level='full'] i {
+  background: var(--cb-bad);
+}
+.adm-table {
+  overflow-x: auto;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+}
+.adm-table table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.875rem;
+}
+.adm-table th,
+.adm-table td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+.adm-table th {
+  background: var(--cb-bg);
+  color: var(--cb-mut);
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.adm-table tr + tr td {
+  border-top: 1px solid var(--cb-line);
+}
+.adm-table .cab-meter {
+  width: 130px;
+  margin-top: 5px;
+}
+.cab-inp.adm-select {
+  width: auto;
+  height: 32px;
+  padding: 0 8px;
+}
+
+/* Fila editable de un segmento de la ruleta */
+.studio-seg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 12px;
+}
+.studio-seg + .studio-seg {
+  border-top: 1px solid var(--cb-line);
+}
+.cab-inp.studio-seg-text {
+  flex: 1 1 180px;
+}
+.cab-inp.studio-seg-cat {
+  flex: 0 1 170px;
+}
+.studio-seg-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.studio-seg-time .cab-inp {
+  width: 76px;
+}
+
+/* Invitaciones del portal y página «Nube» */
+.cab a.cab-btn,
+.cab a.cab-btn2 {
+  text-decoration: none;
+}
+textarea.cab-inp.adm-invite-msg {
+  min-height: 190px;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.nube-steps {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: nube;
+}
+.nube-steps > li {
+  display: grid;
+  gap: 8px;
+  padding-left: 40px;
+  position: relative;
+  counter-increment: nube;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.nube-steps > li::before {
+  content: counter(nube);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  color: var(--cb-mut);
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+.nube-steps p {
+  margin: 0;
+}
+.nube-steps b {
+  font-weight: 600;
+}
+
+/* Selector de tema en el menú lateral: tres opciones en una sola línea */
+.shell-foot .cab-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.shell-foot .cab-seg button {
+  padding: 0 4px;
+}
+
+/* Metas: si el título y la cifra no caben en una línea, la cifra baja en vez de salirse */
+.gl-top {
+  flex-wrap: wrap;
+}
+.gl-title {
+  flex: 1 1 8em;
+}
+/* En los monitores del estudio las capas se reducen más para caber en el 16:9 */
+.ovl[data-studio] {
+  font-size: clamp(8px, 1.9cqw, 13px);
+}
+/* Controles del carrusel dentro del monitor: siempre sobre fondo oscuro */
+.cab-stage .gl-ctl,
+.cab-stage .gl-ctl .cab-icon {
+  color: #efe9dc;
+}

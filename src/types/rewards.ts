@@ -5,6 +5,7 @@
  * y Avisos con Videos Transparentes (WebM con canal alfa, Screen blend y Chroma Key).
  */
 
+import { queueCloudPush } from '../lib/cloudConfig';
 import { AlertSoundType } from './alerts';
 
 export type RewardVideoPosition =
@@ -165,6 +166,7 @@ export function loadRewardsSettings(): RewardsSettings {
 export function saveRewardsSettings(settings: RewardsSettings): void {
   try {
     localStorage.setItem(REWARDS_STORAGE_KEY, JSON.stringify(settings));
+    queueCloudPush('rewards', settings);
   } catch (err) {
     console.error('Error saving rewards settings:', err);
   }

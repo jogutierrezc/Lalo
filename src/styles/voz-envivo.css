@@ -1,0 +1,62 @@
+/* ==========================================================================
+   Voz del chat y En vivo: piezas propias de estas dos páginas.
+   Solo usan los tokens --cb-* del panel, así que siguen a los tres temas.
+   ========================================================================== */
+
+/* Código corto dentro de un texto de ayuda (comandos del chat, variables) */
+.vz-code {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: var(--cb-fg);
+}
+
+/* Editor a la izquierda y monitor a la derecha; en pantallas estrechas el monitor va primero */
+.vz-layout {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+@media (min-width: 1100px) {
+  .vz-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 520px);
+  }
+  .vz-monitor {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    scrollbar-color: var(--cb-line) transparent;
+  }
+}
+@media (max-width: 1099px) {
+  .vz-monitor {
+    order: -1;
+  }
+}
+
+/* En vivo: acciones que aparecen al pulsar «Más» en una fila */
+.ev-more {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* En vivo: cuenta atrás antes de vaciar la cola o silenciar todo */
+.ev-armed {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--cb-bad);
+  border-radius: 3px;
+  background: var(--cb-bad-bg);
+}
+.ev-armed p {
+  margin: 0;
+}
+.ev-count {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--cb-bad);
+}

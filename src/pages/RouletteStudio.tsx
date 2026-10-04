@@ -1,152 +1,146 @@
 /**
  * src/pages/RouletteStudio.tsx
  *
- * Módulo 6: Estudio de Ruleta de Castigos & Retos en Vivo de Lalo Stream Suite.
- * Diseñado con estética de hardware Cabina Broadcast, física de rotación con GSAP,
- * síntesis de ticks mecánicos con Web Audio API y modo Operate de Impeccable.
+ * Estudio de la Ruleta de Castigos sobre la plantilla común del panel:
+ * a la izquierda se edita, a la derecha el monitor 16:9 queda siempre a la vista.
+ *
+ * - Cada segmento se edita en su propia fila.
+ * - «Cargar plantilla» reemplaza los segmentos, lo avisa y se puede deshacer.
+ * - Hay un solo botón para probar: Girar. El giro también llega a las capas
+ *   de OBS abiertas.
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import gsap from 'gsap';
-import {
-  Check,
-  Copy,
-  ExternalLink,
-  Flame,
-  FolderOpen,
-  Gamepad2,
-  Mic,
-  Plus,
-  RotateCw,
-  Skull,
-  Timer,
-  Trash2,
-  Tv,
-  Zap,
-} from 'lucide-react';
+import { Check, Copy, Play, Plus, RotateCw, Trash2 } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { useRouletteSettings } from '../hooks/useRouletteSettings';
 import {
-  RouletteSegment,
+  CATEGORY_LABELS,
   PenaltyCategory,
   ROULETTE_PRESETS,
   ROULETTE_STYLE_PRESETS,
-  CATEGORY_LABELS,
+  RouletteSegment,
   VIBRANT_SEGMENT_COLORS,
 } from '../types/roulette';
 import { AlertSoundType } from '../types/alerts';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
 import { RouletteOverlayView } from '../components/roulette/RouletteOverlayView';
-import {
-  speakRouletteSpinAnnouncement,
-  speakRouletteWinnerAnnouncement,
-} from '../utils/rouletteAudio';
+import { speakRouletteSpinAnnouncement, speakRouletteWinnerAnnouncement } from '../utils/rouletteAudio';
 import { loadSettings, PRESET_VOICES } from '../types/settings';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import { MediaItem } from '../types/mediaLibrary';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
-import { Volume2, Sparkles } from 'lucide-react';
+import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
+import { useCloudSession } from '../hooks/useCloudSession';
 
 const TOUR_ID = 'ruleta';
 
 const ROULETTE_TOUR_STEPS: TourStep[] = [
   {
     badge: 'Bienvenida',
-    title: 'Estudio de Ruleta de Castigos & Retos',
-    body: (
-      <>
-        Bienvenido a la Ruleta Interactiva de Lalo Stream Suite. Aquí diseñas ruletas de retos, penitencias y minijuegos con física inercial de GSAP, ticks mecánicos y animaciones sincronizadas en tiempo real con OBS Studio y Puntos de Canal.
-      </>
-    ),
-  },
-  {
-    target: 'roulette-monitor',
-    badge: 'Previsualización',
-    title: 'Monitor 16:9 y Simulador en Vivo',
-    body: 'El monitor simula con precisión milimétrica la escena de OBS. Pulsa «¡Girar Ruleta!» para disparar la animación inercial, escuchar los clicks percutivos de la aguja y ver la revelación dramática del castigo.',
-  },
-  {
-    target: 'roulette-presets',
-    badge: 'Preajustes',
-    title: 'Colecciones de Retos Preconfiguradas',
-    body: 'Carga al instante plantillas temáticas listas para el stream: Castigos Gamer, Retos Físicos & Fitness, Comida Picante, o Actuación & Show con voces divertidas.',
+    title: 'Ruleta de castigos',
+    body: 'Aquí preparas la rueda de retos y castigos que gira en tu directo.',
   },
   {
     target: 'roulette-segments',
-    badge: 'Gestión',
-    title: 'Biblioteca de Castigos y Segmentos',
-    body: 'Crea, edita o desactiva penitencias personalizadas. Cada segmento puede tener su propio color, categoría y temporizador activo de cuenta regresiva en pantalla.',
-  },
-  {
-    target: 'roulette-appearance',
-    badge: 'Personalización',
-    title: 'Estilos Visuales & Chasis de Transmisión',
-    body: 'Elige entre 4 skins profesionales (Cabina Broadcast con LEDs perimetrales, Neón Glow, Cyberpunk o Casino Oro VIP) y ajusta la duración del giro para crear máximo suspenso.',
+    badge: 'Segmentos',
+    title: 'Lo que puede salir',
+    body: 'Cada fila es un segmento: cambia el texto, el color, la categoría o los segundos del reto. El interruptor lo saca de la rueda sin borrarlo.',
   },
   {
     target: 'roulette-actions',
-    badge: 'Acción del Sistema',
-    title: 'Efectos al Caer el Castigo',
-    body: 'Configura sacudida sísmica de pantalla (Screen Shake), lluvia de confeti, chimes arcade o fanfarrias personalizadas desde la Biblioteca de Medios al detenerse la ruleta.',
+    badge: 'Al caer',
+    title: 'Qué pasa cuando se detiene',
+    body: 'Sacudida, confeti, sonido y la voz que anuncia el giro y el resultado.',
   },
   {
-    target: 'roulette-obs',
-    badge: 'Acción del Sistema',
-    title: 'Fuente de Navegador para OBS Studio',
-    body: 'Copia el enlace del widget de ruleta y pégalo como Fuente de Navegador en tu escena (1920 × 1080). La ruleta aparecerá con transparencia total cuando tú o tus espectadores la hagan girar.',
+    target: 'roulette-monitor',
+    badge: 'Monitor',
+    title: 'Gira y copia la URL',
+    body: '«Girar» prueba la rueda aquí y en las capas de OBS abiertas. «Copiar URL para OBS» te da la fuente de navegador a 1920 × 1080.',
   },
 ];
 
-const SOUND_PRESETS: { id: AlertSoundType; name: string }[] = [
-  { id: 'arcade-chime', name: 'Chime Arcade (16-bit)' },
-  { id: 'retro-fanfare', name: 'Fanfarria Retro Victoria' },
-  { id: 'synth-bell', name: 'Campana Synth' },
-  { id: 'soft-pop', name: 'Pop Cálido' },
-  { id: 'none', name: 'Sin sonido de victoria' },
+const SOUNDS: { id: AlertSoundType; name: string }[] = [
+  { id: 'arcade-chime', name: 'Arcade' },
+  { id: 'retro-fanfare', name: 'Fanfarria' },
+  { id: 'synth-bell', name: 'Campana' },
+  { id: 'soft-pop', name: 'Pop suave' },
+  { id: 'none', name: 'Sin sonido' },
 ];
 
+const CATEGORIES = Object.entries(CATEGORY_LABELS) as [PenaltyCategory, { label: string }][];
+
+const Toggle: React.FC<{ label: string; checked: boolean; onChange: (next: boolean) => void }> = ({
+  label,
+  checked,
+  onChange,
+}) => {
+  const id = useId();
+  return (
+    <div className="flex items-center gap-3">
+      <input id={id} type="checkbox" className="cab-tog" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <label htmlFor={id}>{label}</label>
+    </div>
+  );
+};
+
 export const RouletteStudio: React.FC = () => {
-  const {
-    rouletteSettings,
-    saved,
-    updateSettings,
-    updateSegment,
-    addSegment,
-    deleteSegment,
-    loadPreset,
-    triggerSpin,
-  } = useRouletteSettings();
+  const { rouletteSettings, saved, updateSettings, updateSegment, addSegment, loadPreset, triggerSpin } =
+    useRouletteSettings();
+  const cloud = useCloudSession();
+  const uid = useId();
 
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [startRotation, setStartRotation] = useState<number>(0);
+  const [startRotation, setStartRotation] = useState(0);
   const [currentRotation, setCurrentRotation] = useState(0);
   const [targetWinner, setTargetWinner] = useState<RouletteSegment | undefined>(undefined);
   const [activeWinner, setActiveWinner] = useState<{ segment: RouletteSegment; user: string } | null>(null);
   const [confettiActive, setConfettiActive] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [presetChoice, setPresetChoice] = useState('');
+  // Segmentos anteriores a la última acción destructiva, para deshacerla
+  const [undo, setUndo] = useState<{ label: string; segments: RouletteSegment[] } | null>(null);
 
-  // Modal de Biblioteca de Medios (Media Vault)
-  const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
-
-  // Formulario rápido para nuevo segmento
-  const [newText, setNewText] = useState('');
-  const [newCategory, setNewCategory] = useState<PenaltyCategory>('gameplay');
-  const [newColor, setNewColor] = useState(VIBRANT_SEGMENT_COLORS[0]);
-  const [newDuration, setNewDuration] = useState(0);
-
-  const monitorStageRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-lanzar el tutorial la primera vez
+  const segments = rouletteSettings.segments;
+  const activeCount = segments.filter((segment) => segment.enabled).length;
+  const canSpin = activeCount >= 2;
+
+  // La guía se abre sola la primera vez
   useEffect(() => {
     if (isTourDone(TOUR_ID)) return;
     const timer = setTimeout(() => setTourOpen(true), 600);
     return () => clearTimeout(timer);
   }, []);
 
-  // Efecto de lluvia de confeti
+  useEffect(
+    () => () => {
+      if (statusTimer.current) clearTimeout(statusTimer.current);
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), 8000);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  const say = (message: string) => {
+    setStatus(message);
+    if (statusTimer.current) clearTimeout(statusTimer.current);
+    statusTimer.current = setTimeout(() => setStatus(null), 4000);
+  };
+
+  // Lluvia de confeti sobre el monitor
   useEffect(() => {
     if (!confettiActive || !canvasRef.current) return;
     const canvas = canvasRef.current;
@@ -160,9 +154,7 @@ export const RouletteStudio: React.FC = () => {
       vx: (Math.random() - 0.5) * 4,
       vy: Math.random() * 4 + 3,
       size: Math.random() * 6 + 4,
-      color: ['#9146ff', '#00f5ff', '#ffd700', '#53fc18', '#ff2d46', '#ec4899'][
-        Math.floor(Math.random() * 6)
-      ],
+      color: VIBRANT_SEGMENT_COLORS[Math.floor(Math.random() * VIBRANT_SEGMENT_COLORS.length)],
       rotation: Math.random() * 360,
       vRot: (Math.random() - 0.5) * 10,
     }));
@@ -182,7 +174,6 @@ export const RouletteStudio: React.FC = () => {
       });
       animId = requestAnimationFrame(render);
     };
-
     render();
 
     const timer = setTimeout(() => {
@@ -197,39 +188,20 @@ export const RouletteStudio: React.FC = () => {
     };
   }, [confettiActive]);
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const widgetUrl = `${baseUrl}/#widget?app=roulette&channel=${encodeURIComponent(
-    rouletteSettings.channel
-  )}`;
-
-  const copyWidgetUrl = () => {
-    navigator.clipboard?.writeText(widgetUrl).catch(() => {});
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2200);
-  };
-
-  const [isSpeakingTts, setIsSpeakingTts] = useState<string | null>(null);
-  const ttsSettings = loadSettings();
-  const activeVoiceName = PRESET_VOICES.find((v) => v.id === ttsSettings.referenceId)?.name || 'Voz Personalizada';
-
-  // Disparar giro local y sincronizar con OBS
-  const handleStartSpin = (targetId?: string) => {
-    if (isSpinning) return;
+  // ---------- Girar ----------
+  const spin = () => {
+    if (isSpinning || !canSpin) return;
     setActiveWinner(null);
-    setIsSpinning(true);
-
-    const spinEvent = triggerSpin('Streamer', targetId);
+    const spinEvent = triggerSpin('Streamer');
     if (!spinEvent) {
-      setIsSpinning(false);
+      say('No se pudo iniciar el giro. Comprueba que hay segmentos activos.');
       return;
     }
-
-    setStartRotation(spinEvent.startRotation ?? (currentRotation % 360));
+    setIsSpinning(true);
+    setStartRotation(spinEvent.startRotation ?? currentRotation % 360);
     setCurrentRotation(spinEvent.finalRotation);
     setTargetWinner(spinEvent.winnerSegment);
-    setTestStatus('¡Ruleta girando con inercia GSAP! (Sincronizado con OBS)');
-
-    // Anunciar con la voz TTS del sistema que la ruleta va a girar
+    say('Girando aquí y en las capas de OBS abiertas.');
     if (rouletteSettings.ttsAnnounceSpin !== false) {
       speakRouletteSpinAnnouncement('Streamer', rouletteSettings.title);
     }
@@ -239,79 +211,94 @@ export const RouletteStudio: React.FC = () => {
     setIsSpinning(false);
     setActiveWinner({ segment: winner, user: 'Streamer' });
 
-    // 1. Audio de victoria
     playAlertOrCustomSound(
       rouletteSettings.victoryCustomAudioUrl,
       rouletteSettings.victorySoundType,
       rouletteSettings.victoryCustomAudioVolume ?? 0.85
     );
-
-    // 2. Anunciar con la voz TTS oficial del sistema el castigo resultante
-    if (rouletteSettings.ttsAnnounceWinner !== false) {
-      speakRouletteWinnerAnnouncement(winner, 'Streamer');
-    }
-
-    // 3. Confeti
-    if (rouletteSettings.confetti) {
-      setConfettiActive(true);
-    }
-
-    // 4. Screen Shake sísmico con GSAP
-    if (rouletteSettings.screenShake && monitorStageRef.current) {
+    if (rouletteSettings.ttsAnnounceWinner !== false) speakRouletteWinnerAnnouncement(winner, 'Streamer');
+    if (rouletteSettings.confetti) setConfettiActive(true);
+    if (rouletteSettings.screenShake && stageRef.current) {
       gsap.fromTo(
-        monitorStageRef.current,
+        stageRef.current,
         { x: -16, y: 12, rotate: -1.2 },
-        {
-          x: 0,
-          y: 0,
-          rotate: 0,
-          duration: 0.75,
-          ease: 'elastic.out(1.2, 0.18)',
-          clearProps: 'transform',
-        }
+        { x: 0, y: 0, rotate: 0, duration: 0.75, ease: 'elastic.out(1.2, 0.18)', clearProps: 'transform' }
       );
     }
-
-    setTestStatus(`¡La ruleta se detuvo en: «${winner.text}»!`);
-    setTimeout(() => setTestStatus(null), 4000);
+    say(`Salió «${winner.text}».`);
   };
 
-  const handleAddSegmentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newText.trim()) return;
-
-    const newSeg: RouletteSegment = {
+  // ---------- Segmentos ----------
+  const addBlank = () => {
+    const color = VIBRANT_SEGMENT_COLORS[segments.length % VIBRANT_SEGMENT_COLORS.length];
+    addSegment({
       id: `seg-${Date.now()}`,
-      text: newText.trim(),
-      category: newCategory,
-      color: newColor,
-      durationSec: newDuration > 0 ? newDuration : undefined,
+      text: 'Nuevo castigo',
+      category: 'custom',
+      color,
       intensity: 'medium',
       enabled: true,
-    };
-
-    addSegment(newSeg);
-    setNewText('');
-    setNewDuration(0);
-    // Cambiar al siguiente color de la paleta
-    const nextIdx = (VIBRANT_SEGMENT_COLORS.indexOf(newColor) + 1) % VIBRANT_SEGMENT_COLORS.length;
-    setNewColor(VIBRANT_SEGMENT_COLORS[nextIdx]);
-  };
-
-  const handleMediaModalSelect = (item: MediaItem) => {
-    setIsMediaModalOpen(false);
-    updateSettings({
-      victoryCustomAudioUrl: item.url,
-      victorySoundType: 'none',
     });
-    setTestStatus(`¡Audio «${item.name}» asignado para la ruleta!`);
-    setTimeout(() => setTestStatus(null), 3000);
   };
+
+  const removeSegment = (segment: RouletteSegment) => {
+    setUndo({ label: `Se quitó «${segment.text}».`, segments });
+    updateSettings({ segments: segments.filter((entry) => entry.id !== segment.id) });
+  };
+
+  const applyPreset = () => {
+    const preset = ROULETTE_PRESETS.find((entry) => entry.id === presetChoice);
+    if (!preset) return;
+    setUndo({ label: `Se cargó la plantilla «${preset.name}» y reemplazó tus segmentos.`, segments });
+    loadPreset(preset.id);
+    setPresetChoice('');
+  };
+
+  const restore = () => {
+    if (!undo) return;
+    updateSettings({ segments: undo.segments });
+    setUndo(null);
+  };
+
+  // ---------- Sonido ----------
+  const hasFile = Boolean(rouletteSettings.victoryCustomAudioUrl);
+  const chooseSound = (value: string) => {
+    if (value === 'file') {
+      setVaultOpen(true);
+      return;
+    }
+    updateSettings({ victorySoundType: value as AlertSoundType, victoryCustomAudioUrl: undefined });
+  };
+  const handleVaultSelect = (media: MediaItem) => {
+    setVaultOpen(false);
+    updateSettings({ victoryCustomAudioUrl: media.url, victorySoundType: 'none' });
+    say(`Sonido «${media.name}» asignado.`);
+  };
+
+  // ---------- URL de OBS ----------
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const copyWidgetUrl = () => {
+    const url = buildSuiteWidgetUrl(
+      baseUrl,
+      'roulette',
+      rouletteSettings.channel,
+      loadSettings(),
+      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
+    );
+    navigator.clipboard
+      ?.writeText(url)
+      .then(() => {
+        setCopiedUrl(true);
+        setTimeout(() => setCopiedUrl(false), 2200);
+      })
+      .catch(() => say('No se pudo copiar. Usa «Fuentes de OBS» en la cabecera.'));
+  };
+
+  const voiceName = PRESET_VOICES.find((voice) => voice.id === loadSettings().referenceId)?.name || 'voz personalizada';
 
   return (
     <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-6">
-        {/* Barra superior de la Suite */}
+      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
         <SuiteNav
           currentApp="ruleta"
           channel={rouletteSettings.channel}
@@ -320,107 +307,310 @@ export const RouletteStudio: React.FC = () => {
           tourAvailable={!tourOpen}
         />
 
-        {/* Encabezado del Módulo */}
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[color:var(--cb-line)] pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white">
-                MÓDULO 6
-              </span>
-              <span className="cab-caps text-xs text-[color:var(--cb-mut)]">
-                MINIJUEGOS & CASTIGOS EN VIVO
-              </span>
-            </div>
-            <h1
-              className="cab-caps mt-1 text-2xl font-extrabold"
-              style={{ fontStretch: '70%', fontWeight: 800 }}
-            >
-              Ruleta de Castigos, Retos & Penitencias
-            </h1>
-            <p className="mt-1 text-xs text-[color:var(--cb-mut)]">
-              Minijuego interactivo accionado por Puntos de Canal o comandos de chat. Física inercial GSAP,
-              clicks mecánicos sintetizados, aguja elástica y temporizadores activos en pantalla.
-            </p>
-          </div>
+        <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="grid gap-5">
+            {/* ---------- Segmentos ---------- */}
+            <section className="cab-mod" data-tour="roulette-segments">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2>Segmentos</h2>
+                <span className="cab-hint">
+                  {activeCount} de {segments.length} activos
+                </span>
+              </div>
 
-          <div className="flex flex-wrap items-center gap-2" data-tour="roulette-obs">
-            <button
-              type="button"
-              className="cab-btn2 !h-8 !px-3 !text-xs font-bold transition-transform active:scale-[0.97]"
-              onClick={copyWidgetUrl}
-              title="Copiar URL para OBS Browser Source"
-            >
-              {copiedUrl ? (
-                <Check className="h-3.5 w-3.5 text-emerald-400" />
+              {segments.length === 0 ? (
+                <p className="cab-note">La rueda está vacía. Añade un segmento o carga una plantilla.</p>
               ) : (
-                <Copy className="h-3.5 w-3.5" />
+                <ul className="cab-rows studio-segs !max-h-none">
+                  {segments.map((segment) => (
+                    <li key={segment.id} className="studio-seg" data-off={segment.enabled ? undefined : ''}>
+                      <input
+                        type="color"
+                        className="studio-color"
+                        value={segment.color}
+                        aria-label={`Color de ${segment.text}`}
+                        onChange={(e) => updateSegment(segment.id, { color: e.target.value })}
+                      />
+                      <input
+                        className="cab-inp studio-seg-text"
+                        value={segment.text}
+                        aria-label="Texto del segmento"
+                        onChange={(e) => updateSegment(segment.id, { text: e.target.value })}
+                      />
+                      <select
+                        className="cab-inp studio-seg-cat"
+                        value={segment.category}
+                        aria-label={`Categoría de ${segment.text}`}
+                        onChange={(e) => updateSegment(segment.id, { category: e.target.value as PenaltyCategory })}
+                      >
+                        {CATEGORIES.map(([id, meta]) => (
+                          <option key={id} value={id}>
+                            {meta.label}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="studio-seg-time">
+                        <input
+                          type="number"
+                          min={0}
+                          max={3600}
+                          className="cab-inp cab-mono"
+                          title="Segundos del reto. Con 0 no hay cuenta atrás."
+                          value={segment.durationSec ?? 0}
+                          aria-label={`Segundos del reto ${segment.text}`}
+                          onChange={(e) => {
+                            const seconds = Math.max(0, Math.round(Number(e.target.value) || 0));
+                            updateSegment(segment.id, { durationSec: seconds > 0 ? seconds : undefined });
+                          }}
+                        />
+                        <span className="cab-hint">s</span>
+                      </label>
+                      <input
+                        type="checkbox"
+                        className="cab-tog"
+                        checked={segment.enabled}
+                        aria-label={`Incluir ${segment.text} en la rueda`}
+                        onChange={(e) => updateSegment(segment.id, { enabled: e.target.checked })}
+                      />
+                      <button
+                        type="button"
+                        className="cab-icon"
+                        aria-label={`Quitar ${segment.text}`}
+                        title="Quitar"
+                        onClick={() => removeSegment(segment)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
-              <span>{copiedUrl ? '¡URL Copiada!' : 'Copiar URL OBS'}</span>
-            </button>
 
-            <a
-              href={widgetUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="cab-btn2 !h-8 !px-3 !text-xs font-bold no-underline transition-transform active:scale-[0.97]"
-              title="Abrir vista de overlay en pestaña nueva"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span>Ver Overlay</span>
-            </a>
+              <p className="cab-hint">Los segundos son la cuenta atrás del reto; con 0 no hay temporizador.</p>
+
+              {undo && (
+                <p className="cab-note" role="status">
+                  {undo.label}{' '}
+                  <button type="button" className="studio-link" onClick={restore}>
+                    Deshacer
+                  </button>
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2" data-tour="roulette-presets">
+                <button type="button" className="cab-btn2" onClick={addBlank}>
+                  <Plus className="h-4 w-4" />
+                  <span>Añadir segmento</span>
+                </button>
+                <select
+                  className="cab-inp w-auto flex-1 basis-52"
+                  value={presetChoice}
+                  aria-label="Plantilla de segmentos"
+                  onChange={(e) => setPresetChoice(e.target.value)}
+                >
+                  <option value="">Cargar una plantilla</option>
+                  {ROULETTE_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name}
+                    </option>
+                  ))}
+                </select>
+                {presetChoice && (
+                  <button type="button" className="cab-btn2" onClick={applyPreset}>
+                    Reemplazar mis segmentos
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* ---------- Al caer ---------- */}
+            <section className="cab-mod" data-tour="roulette-actions">
+              <h2>Al caer</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Toggle
+                  label="Mostrar el resultado en pantalla"
+                  checked={rouletteSettings.showWinnerBanner}
+                  onChange={(next) => updateSettings({ showWinnerBanner: next })}
+                />
+                <Toggle
+                  label="Sacudir la pantalla"
+                  checked={rouletteSettings.screenShake}
+                  onChange={(next) => updateSettings({ screenShake: next })}
+                />
+                <Toggle label="Confeti" checked={rouletteSettings.confetti} onChange={(next) => updateSettings({ confetti: next })} />
+                <Toggle
+                  label="Anunciar el giro con voz"
+                  checked={rouletteSettings.ttsAnnounceSpin !== false}
+                  onChange={(next) => updateSettings({ ttsAnnounceSpin: next })}
+                />
+                <Toggle
+                  label="Anunciar el resultado con voz"
+                  checked={rouletteSettings.ttsAnnounceWinner !== false}
+                  onChange={(next) => updateSettings({ ttsAnnounceWinner: next })}
+                />
+              </div>
+              <p className="cab-hint">
+                La voz es la de «Voz del chat»: {voiceName}.{' '}
+                <a className="studio-link" href="#tts">
+                  Cambiarla
+                </a>
+              </p>
+
+              <div className="cab-field">
+                <label className="cab-label" htmlFor={`${uid}-sound`}>
+                  Sonido
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    id={`${uid}-sound`}
+                    className="cab-inp flex-1 basis-48"
+                    value={hasFile ? 'file' : rouletteSettings.victorySoundType}
+                    onChange={(e) => chooseSound(e.target.value)}
+                  >
+                    {SOUNDS.map((sound) => (
+                      <option key={sound.id} value={sound.id}>
+                        {sound.name}
+                      </option>
+                    ))}
+                    <option value="file">Archivo de la biblioteca</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="cab-btn2"
+                    onClick={() =>
+                      playAlertOrCustomSound(
+                        rouletteSettings.victoryCustomAudioUrl,
+                        rouletteSettings.victorySoundType,
+                        rouletteSettings.victoryCustomAudioVolume ?? 0.85
+                      )
+                    }
+                  >
+                    <Play className="h-4 w-4" />
+                    <span>Escuchar</span>
+                  </button>
+                </div>
+                {hasFile && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="cab-range flex-1 basis-48">
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={rouletteSettings.victoryCustomAudioVolume ?? 0.85}
+                        aria-label="Volumen del archivo"
+                        onChange={(e) => updateSettings({ victoryCustomAudioVolume: Number(e.target.value) })}
+                      />
+                      <output>{Math.round((rouletteSettings.victoryCustomAudioVolume ?? 0.85) * 100)}%</output>
+                    </div>
+                    <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setVaultOpen(true)}>
+                      Cambiar archivo
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <details className="studio-details" data-tour="roulette-appearance">
+                <summary>Avanzado</summary>
+                <div>
+                  <div className="cab-field">
+                    <label className="cab-label" htmlFor={`${uid}-title`}>
+                      Título
+                    </label>
+                    <input
+                      id={`${uid}-title`}
+                      className="cab-inp"
+                      value={rouletteSettings.title}
+                      onChange={(e) => updateSettings({ title: e.target.value })}
+                    />
+                    <span className="cab-hint">Aparece bajo la rueda y es lo que dice la voz al anunciar el giro.</span>
+                  </div>
+                  <div className="cab-field">
+                    <span className="cab-label">Estilo</span>
+                    <div className="cab-seg" role="group" aria-label="Estilo de la ruleta">
+                      {ROULETTE_STYLE_PRESETS.map((style) => (
+                        <button
+                          key={style.id}
+                          type="button"
+                          aria-pressed={rouletteSettings.style === style.id}
+                          onClick={() => updateSettings({ style: style.id })}
+                        >
+                          {style.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="cab-field">
+                      <span className="cab-label">Duración del giro</span>
+                      <div className="cab-range">
+                        <input
+                          type="range"
+                          min={3}
+                          max={12}
+                          step={0.5}
+                          value={rouletteSettings.spinDurationSec}
+                          aria-label="Duración del giro"
+                          onChange={(e) => updateSettings({ spinDurationSec: Number(e.target.value) })}
+                        />
+                        <output>{rouletteSettings.spinDurationSec} s</output>
+                      </div>
+                    </div>
+                    <div className="cab-field">
+                      <span className="cab-label">Resultado en pantalla</span>
+                      <div className="cab-range">
+                        <input
+                          type="range"
+                          min={3}
+                          max={30}
+                          step={1}
+                          value={rouletteSettings.winnerBannerDurationSec || 8}
+                          aria-label="Segundos que dura el resultado en pantalla"
+                          onChange={(e) => updateSettings({ winnerBannerDurationSec: Number(e.target.value) })}
+                        />
+                        <output>{rouletteSettings.winnerBannerDurationSec || 8} s</output>
+                      </div>
+                    </div>
+                  </div>
+                  <Toggle
+                    label="Sonido de la rueda al girar"
+                    checked={rouletteSettings.soundEnabled}
+                    onChange={(next) => updateSettings({ soundEnabled: next })}
+                  />
+                  {rouletteSettings.soundEnabled && (
+                    <div className="cab-field">
+                      <span className="cab-label">Volumen de la rueda</span>
+                      <div className="cab-range">
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={rouletteSettings.tickVolume}
+                          aria-label="Volumen de la rueda"
+                          onChange={(e) => updateSettings({ tickVolume: Number(e.target.value) })}
+                        />
+                        <output>{Math.round(rouletteSettings.tickVolume * 100)}%</output>
+                      </div>
+                    </div>
+                  )}
+                  <p className="cab-note">
+                    Desde el chat, cualquiera puede girarla escribiendo <span className="cab-mono">!ruleta</span>,{' '}
+                    <span className="cab-mono">!spin</span> o <span className="cab-mono">!wheel</span>.
+                  </p>
+                </div>
+              </details>
+            </section>
           </div>
-        </header>
 
-        {testStatus && (
-          <div className="flex items-center gap-2 rounded border border-rose-500/40 bg-rose-950/40 px-3 py-2 text-xs font-bold text-rose-300">
-            <Check className="h-4 w-4 text-rose-400" />
-            <span>{testStatus}</span>
-          </div>
-        )}
-
-        {/* MONITOR EN VIVO 16:9 DE LA RULETA */}
-        <section aria-label="Monitor de simulación de ruleta" data-tour="roulette-monitor">
-          <div className="flex items-center justify-between pb-2">
-            <div className="flex items-center gap-2">
-              <Tv className="h-4 w-4 text-[color:var(--cb-mut)]" />
-              <span className="cab-caps text-xs font-extrabold text-[color:var(--cb-fg)]">
-                MONITOR DE ESCENARIO 16:9 (VISTA PREVIA OBS)
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="cab-mono text-xs font-bold text-rose-400">
-                {rouletteSettings.segments.filter((s) => s.enabled).length} SEGMENTOS ACTIVOS
-              </span>
-            </div>
-          </div>
-
-          <div
-            ref={monitorStageRef}
-            className="relative flex min-h-[460px] w-full flex-col items-center justify-center overflow-hidden rounded-lg border border-[color:var(--cb-line)] shadow-2xl p-6"
-            style={{
-              background: 'radial-gradient(ellipse at 50% 40%, #171922 0%, #0a0b0e 100%)',
-            }}
+          {/* ---------- Monitor ---------- */}
+          <section
+            className="cab-mod max-[1099px]:order-first min-[1100px]:sticky min-[1100px]:top-4"
+            data-tour="roulette-monitor"
           >
-            {/* Rejilla técnica broadcast */}
-            <div
-              className="pointer-events-none absolute inset-0 opacity-10"
-              style={{
-                backgroundImage:
-                  'linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)',
-                backgroundSize: '32px 32px',
-              }}
-            />
-
-            {/* Canvas de Confeti */}
-            <canvas
-              ref={canvasRef}
-              width={900}
-              height={460}
-              className="pointer-events-none absolute inset-0 z-20 h-full w-full"
-            />
-
-            {/* Ruleta SVG Interactiva con GSAP & Overlay Broadcast */}
-            <div className="relative z-10 flex flex-col items-center w-full max-w-3xl">
+            <h2>Monitor</h2>
+            <div ref={stageRef} className="cab-stage items-center justify-center">
+              <canvas ref={canvasRef} width={900} height={506} className="pointer-events-none absolute inset-0 z-20 h-full w-full" />
               <RouletteOverlayView
                 settings={rouletteSettings}
                 targetRotation={currentRotation}
@@ -428,530 +618,43 @@ export const RouletteStudio: React.FC = () => {
                 targetWinner={targetWinner}
                 isSpinning={isSpinning}
                 activeUser="Streamer"
-                winnerBanner={activeWinner}
+                winnerBanner={rouletteSettings.showWinnerBanner ? activeWinner : null}
                 onSpinComplete={handleWheelComplete}
                 onBannerDismiss={() => setActiveWinner(null)}
                 isStudio={true}
               />
             </div>
 
-            {/* Barra de control rápido de prueba en el monitor */}
-            <div className="absolute bottom-3 left-4 right-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded bg-black/80 px-4 py-2.5 backdrop-blur border border-white/10">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleStartSpin()}
-                  disabled={isSpinning}
-                  className="cab-btn !h-8 !px-4 text-xs font-black transition-transform active:scale-[0.97] disabled:opacity-50"
-                  style={{
-                    background: 'linear-gradient(135deg, #ff2d46, #9146ff)',
-                    color: '#ffffff',
-                  }}
-                >
-                  <RotateCw className={`h-3.5 w-3.5 ${isSpinning ? 'animate-spin' : ''}`} />
-                  <span>{isSpinning ? 'GIRANDO...' : '¡GIRAR RULETA!'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const active = rouletteSettings.segments.filter((s) => s.enabled);
-                    if (active.length > 0) {
-                      const rand = active[Math.floor(Math.random() * active.length)];
-                      handleStartSpin(rand.id);
-                    }
-                  }}
-                  disabled={isSpinning}
-                  className="cab-btn2 !h-8 !px-3 !text-xs font-bold transition-transform active:scale-[0.97]"
-                  title="Elegir un castigo forzado para probar"
-                >
-                  <Zap className="h-3 w-3 text-amber-400" />
-                  <span>Giro Forzado (Test)</span>
-                </button>
-              </div>
-
-              {/* Selector de Presets Rápidos */}
-              <div className="flex items-center gap-2" data-tour="roulette-presets">
-                <span className="cab-caps text-[10px] font-bold text-zinc-400">
-                  CARGAR PREAJUSTE:
-                </span>
-                <div className="flex flex-wrap gap-1">
-                  {ROULETTE_PRESETS.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        loadPreset(p.id);
-                        setTestStatus(`¡Plantilla «${p.name}» cargada en la ruleta!`);
-                        setTimeout(() => setTestStatus(null), 3000);
-                      }}
-                      className="cab-btn2 !h-6 !px-2 !text-[10px] font-bold transition-transform active:scale-[0.97]"
-                      title={p.description}
-                    >
-                      {p.id === 'gamer' && <Gamepad2 className="h-2.5 w-2.5 text-rose-400" />}
-                      {p.id === 'fitness' && <Flame className="h-2.5 w-2.5 text-amber-400" />}
-                      {p.id === 'show' && <Mic className="h-2.5 w-2.5 text-purple-400" />}
-                      {p.id === 'picante' && <Skull className="h-2.5 w-2.5 text-rose-500" />}
-                      <span>{p.name.split(' ')[0]}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn flex-1" disabled={isSpinning || !canSpin} onClick={spin}>
+                <RotateCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
+                <span>{isSpinning ? 'Girando' : 'Girar'}</span>
+              </button>
+              <button type="button" className="cab-btn2 flex-1" onClick={copyWidgetUrl} data-tour="roulette-obs">
+                {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+              </button>
             </div>
-          </div>
-        </section>
-
-        {/* LAYOUT PRINCIPAL: 2 COLUMNAS (Gestión de Segmentos & Ajustes del Sistema) */}
-        <div className="grid gap-6 lg:grid-cols-12">
-          {/* Columna Izquierda: Segmentos & Penitencias (7 columnas) */}
-          <section
-            className="cab-mod lg:col-span-7"
-            aria-label="Segmentos de la Ruleta"
-            data-tour="roulette-segments"
-          >
-            <div className="flex items-center justify-between border-b border-[color:var(--cb-line)] pb-3">
-              <div>
-                <h2>
-                  <span>1</span>Castigos & Segmentos Activos
-                </h2>
-                <p className="cab-hint text-xs">
-                  Añade o edita los retos que aparecerán en la ruleta durante la transmisión.
-                </p>
-              </div>
-
-              <span className="cab-mono text-xs font-bold text-[color:var(--cb-mut)]">
-                {rouletteSettings.segments.length} retos en catálogo
-              </span>
-            </div>
-
-            {/* Formulario rápido para agregar reto */}
-            <form onSubmit={handleAddSegmentSubmit} className="mt-4 rounded-lg border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] p-3.5">
-              <span className="cab-caps text-xs font-bold text-[color:var(--cb-fg)] block mb-2">
-                Añadir Nuevo Castigo / Reto
-              </span>
-
-              <div className="grid gap-3 sm:grid-cols-12">
-                <div className="sm:col-span-6">
-                  <label className="cab-caps mb-1 block text-[10px] font-bold text-[color:var(--cb-mut)]">
-                    Texto del Castigo
-                  </label>
-                  <input
-                    type="text"
-                    value={newText}
-                    onChange={(e) => setNewText(e.target.value)}
-                    placeholder="Ej: 20 flexiones, comer limón..."
-                    className="cab-inp text-xs font-bold"
-                    required
-                  />
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label className="cab-caps mb-1 block text-[10px] font-bold text-[color:var(--cb-mut)]">
-                    Categoría
-                  </label>
-                  <select
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value as PenaltyCategory)}
-                    className="cab-inp text-xs font-bold"
-                  >
-                    <option value="gameplay">Gameplay</option>
-                    <option value="fitness">Fitness</option>
-                    <option value="voice">Voz / Audio</option>
-                    <option value="food">Picante / Sabor</option>
-                    <option value="show">Show</option>
-                    <option value="safe">Inmunidad</option>
-                  </select>
-                </div>
-
-                <div className="sm:col-span-3">
-                  <label className="cab-caps mb-1 block text-[10px] font-bold text-[color:var(--cb-mut)]">
-                    Duración (seg)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={5}
-                    value={newDuration}
-                    onChange={(e) => setNewDuration(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                    placeholder="0 = Sin tempo"
-                    className="cab-inp cab-mono text-xs font-bold"
-                  />
-                </div>
-              </div>
-
-              {/* Selector de Color y Botón Añadir */}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--cb-line)] pt-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="cab-caps text-[10px] font-bold text-[color:var(--cb-mut)] mr-1">
-                    Color:
-                  </span>
-                  {VIBRANT_SEGMENT_COLORS.map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onClick={() => setNewColor(col)}
-                      className={`h-5 w-5 rounded-full border border-black/40 transition-transform ${
-                        newColor === col ? 'ring-2 ring-white scale-110' : 'opacity-80 hover:opacity-100'
-                      }`}
-                      style={{ backgroundColor: col }}
-                    />
-                  ))}
-                </div>
-
-                <button
-                  type="submit"
-                  className="cab-btn !h-7 !px-3 text-xs font-bold transition-transform active:scale-[0.97]"
-                >
-                  <Plus className="h-3 w-3" />
-                  <span>Añadir a la Ruleta</span>
-                </button>
-              </div>
-            </form>
-
-            {/* Lista de Segmentos */}
-            <div className="mt-4 grid gap-2">
-              {rouletteSettings.segments.map((seg) => {
-                const cat = CATEGORY_LABELS[seg.category] || CATEGORY_LABELS.custom;
-                return (
-                  <div
-                    key={seg.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[color:var(--cb-line)] bg-[color:var(--cb-panel)] p-2.5 transition-colors hover:border-[color:var(--cb-fg)]/40"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div
-                        className="h-4 w-4 shrink-0 rounded-full border border-black/40 shadow-sm"
-                        style={{ backgroundColor: seg.color }}
-                      />
-
-                      <div className="min-w-0">
-                        <span className="block truncate text-xs font-bold text-[color:var(--cb-fg)]">
-                          {seg.text}
-                        </span>
-                        <div className="flex items-center gap-2 text-[10px] text-[color:var(--cb-mut)]">
-                          <span style={{ color: cat.color }}>{cat.label}</span>
-                          {seg.durationSec && seg.durationSec > 0 && (
-                            <span className="cab-mono flex items-center gap-0.5 text-amber-400">
-                              <Timer className="h-2.5 w-2.5" />
-                              <span>{seg.durationSec}s</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold">
-                        <input
-                          type="checkbox"
-                          checked={seg.enabled}
-                          onChange={(e) => updateSegment(seg.id, { enabled: e.target.checked })}
-                          className="h-3.5 w-3.5 rounded accent-rose-500"
-                        />
-                        <span className={seg.enabled ? 'text-emerald-400' : 'text-zinc-500'}>
-                          {seg.enabled ? 'Activo' : 'Pausado'}
-                        </span>
-                      </label>
-
-                      {rouletteSettings.segments.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() => deleteSegment(seg.id)}
-                          className="cab-btn2 !h-6 !px-2 text-rose-400 hover:text-rose-300 transition-transform active:scale-[0.97]"
-                          title="Eliminar este reto"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <p className="cab-hint" role="status">
+              {!canSpin
+                ? 'Para girar hacen falta al menos dos segmentos activos.'
+                : status || 'El giro suena aquí y aparece en las capas de OBS que estén abiertas.'}
+            </p>
           </section>
-
-          {/* Columna Derecha: Configuración de la Ruleta & Acciones (5 columnas) */}
-          <div className="grid gap-5 lg:col-span-5">
-            {/* Módulo: Estilo y Físicas */}
-            <section className="cab-mod" data-tour="roulette-appearance">
-              <h2>
-                <span>2</span>Estilo Visual & Físicas
-              </h2>
-
-              <div className="mt-3 grid gap-3">
-                <div>
-                  <label className="cab-caps mb-1.5 block text-[11px] font-bold text-[color:var(--cb-mut)]">
-                    Estilo de Chasis
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {ROULETTE_STYLE_PRESETS.map((st) => (
-                      <button
-                        key={st.id}
-                        type="button"
-                        onClick={() => updateSettings({ style: st.id })}
-                        className={`rounded border p-2.5 text-left transition-all active:scale-[0.97] ${
-                          rouletteSettings.style === st.id
-                            ? 'border-rose-400 bg-rose-950/20 ring-1 ring-rose-400 font-bold text-white'
-                            : 'border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]'
-                        }`}
-                      >
-                        <span className="block text-xs">{st.name}</span>
-                        <span className="block text-[10px] opacity-70 truncate">{st.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between text-xs font-bold text-[color:var(--cb-fg)]">
-                    <span>Duración de Giro Inercial (GSAP)</span>
-                    <span className="cab-mono text-rose-400">
-                      {rouletteSettings.spinDurationSec} seg
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={3}
-                    max={12}
-                    step={0.5}
-                    value={rouletteSettings.spinDurationSec}
-                    onChange={(e) =>
-                      updateSettings({ spinDurationSec: parseFloat(e.target.value) })
-                    }
-                    className="mt-1.5 w-full accent-rose-500"
-                  />
-                  <span className="cab-hint text-[10px]">
-                    Curva física power4.out: arranque veloz y desaceleración dramática.
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {/* Módulo: Efectos al Caer el Castigo */}
-            <section className="cab-mod" data-tour="roulette-actions">
-              <h2>
-                <span>3</span>Efectos al Resolver
-              </h2>
-
-              <div className="mt-3 grid gap-3">
-                {/* Toggles: Screen Shake y Confeti */}
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => updateSettings({ screenShake: !rouletteSettings.screenShake })}
-                    className={`flex items-center justify-between rounded border p-2 text-xs font-bold transition-all active:scale-[0.97] ${
-                      rouletteSettings.screenShake
-                        ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
-                        : 'border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]'
-                    }`}
-                  >
-                    <span>Screen Shake</span>
-                    <span>{rouletteSettings.screenShake ? 'SÍ' : 'NO'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => updateSettings({ confetti: !rouletteSettings.confetti })}
-                    className={`flex items-center justify-between rounded border p-2 text-xs font-bold transition-all active:scale-[0.97] ${
-                      rouletteSettings.confetti
-                        ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
-                        : 'border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]'
-                    }`}
-                  >
-                    <span>Lluvia Confeti</span>
-                    <span>{rouletteSettings.confetti ? 'SÍ' : 'NO'}</span>
-                  </button>
-                </div>
-
-                {/* Sonido de Victoria */}
-                <div>
-                  <label className="cab-caps mb-1 block text-[11px] font-bold text-[color:var(--cb-mut)]">
-                    Sonido de Fanfarria al Detenerse
-                  </label>
-                  <select
-                    value={rouletteSettings.victorySoundType}
-                    onChange={(e) =>
-                      updateSettings({ victorySoundType: e.target.value as AlertSoundType })
-                    }
-                    className="cab-inp text-xs font-bold"
-                  >
-                    {SOUND_PRESETS.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Integración con Media Vault */}
-                <div className="rounded border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] p-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="cab-caps text-[10px] font-bold text-[color:var(--cb-mut)]">
-                      Fanfarria MP3 Personalizada
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsMediaModalOpen(true)}
-                      className="cab-btn2 !h-6 !px-2 text-[10px] font-bold text-amber-400"
-                    >
-                      <FolderOpen className="h-3 w-3" />
-                      <span>Explorar Vault</span>
-                    </button>
-                  </div>
-                  {rouletteSettings.victoryCustomAudioUrl && (
-                    <span className="mt-1 block truncate text-[11px] text-emerald-400 font-mono">
-                      ✓ Audio personalizado asignado
-                    </span>
-                  )}
-                </div>
-
-                {/* Integración con Twitch (Puntos de Canal & Chat) */}
-                <div className="border-t border-[color:var(--cb-line)] pt-3">
-                  <label className="cab-caps mb-1 block text-[11px] font-bold text-[color:var(--cb-mut)]">
-                    Nombre del Canje de Puntos de Twitch
-                  </label>
-                  <input
-                    type="text"
-                    value={rouletteSettings.triggerRewardName || ''}
-                    onChange={(e) => updateSettings({ triggerRewardName: e.target.value })}
-                    placeholder="Ej: Girar Ruleta de Castigos"
-                    className="cab-inp text-xs font-bold"
-                  />
-                  <span className="cab-hint text-[10px]">
-                    Al canjear esta recompensa en Twitch, el bot o EventSub hará girar la ruleta en directo.
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {/* Módulo: Locutor TTS con Voz de Fish Audio */}
-            <section className="cab-mod" data-tour="roulette-tts">
-              <div className="flex items-center justify-between border-b border-[color:var(--cb-line)] pb-3">
-                <div className="flex items-center gap-2">
-                  <Mic className="h-4 w-4 text-rose-400" />
-                  <h2 className="!border-none !pb-0 !mb-0">
-                    <span>4</span>Locutor TTS de la Ruleta
-                  </h2>
-                </div>
-                <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300">
-                  FISH AUDIO
-                </span>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between rounded-lg border border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-                  <span className="text-xs text-[color:var(--cb-mut)]">Voz activa:</span>
-                  <span className="rounded bg-rose-500/20 px-2 py-0.5 font-mono text-xs font-bold text-rose-300">
-                    {activeVoiceName}
-                  </span>
-                </div>
-                <a
-                  href="#tts"
-                  className="text-[11px] font-semibold text-cyan-400 hover:text-cyan-300 hover:underline"
-                >
-                  Cambiar en TTS →
-                </a>
-              </div>
-
-              <p className="mt-3 text-xs leading-relaxed text-[color:var(--cb-mut)]">
-                La voz del sistema anuncia automáticamente cuando la ruleta empieza a girar y proclama el castigo final con inflexión emocional.
-              </p>
-
-              <div className="mt-3 grid gap-2">
-                {/* Toggle Anunciar Giro */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSettings({
-                      ttsAnnounceSpin: !(rouletteSettings.ttsAnnounceSpin !== false),
-                    })
-                  }
-                  className={`flex items-center justify-between rounded border p-2 text-xs font-bold transition-all active:scale-[0.97] ${
-                    rouletteSettings.ttsAnnounceSpin !== false
-                      ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
-                      : 'border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]'
-                  }`}
-                >
-                  <span>Anunciar inicio de giro</span>
-                  <span>{rouletteSettings.ttsAnnounceSpin !== false ? 'ACTIVADO' : 'SILENCIADO'}</span>
-                </button>
-
-                {/* Toggle Anunciar Ganador */}
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSettings({
-                      ttsAnnounceWinner: !(rouletteSettings.ttsAnnounceWinner !== false),
-                    })
-                  }
-                  className={`flex items-center justify-between rounded border p-2 text-xs font-bold transition-all active:scale-[0.97] ${
-                    rouletteSettings.ttsAnnounceWinner !== false
-                      ? 'border-rose-500/50 bg-rose-500/10 text-rose-300'
-                      : 'border-[color:var(--cb-line)] bg-[color:var(--cb-surface)] text-[color:var(--cb-mut)]'
-                  }`}
-                >
-                  <span>Anunciar castigo/reto resultante</span>
-                  <span>{rouletteSettings.ttsAnnounceWinner !== false ? 'ACTIVADO' : 'SILENCIADO'}</span>
-                </button>
-              </div>
-
-              {/* Botones de prueba de locución */}
-              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[color:var(--cb-line)] pt-3">
-                <button
-                  type="button"
-                  disabled={isSpeakingTts !== null}
-                  onClick={() => {
-                    setIsSpeakingTts('spin');
-                    speakRouletteSpinAnnouncement('Streamer', rouletteSettings.title, undefined, () =>
-                      setIsSpeakingTts(null)
-                    );
-                  }}
-                  className="flex items-center justify-center gap-1.5 rounded bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 text-xs font-bold text-slate-200 transition-transform active:scale-[0.97] disabled:opacity-50"
-                >
-                  <Volume2 className="h-3.5 w-3.5 text-cyan-400" />
-                  <span>{isSpeakingTts === 'spin' ? 'Hablando...' : 'Probar Giro'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isSpeakingTts !== null}
-                  onClick={() => {
-                    setIsSpeakingTts('winner');
-                    const sampleWinner =
-                      rouletteSettings.segments.find((s) => s.enabled) || rouletteSettings.segments[0];
-                    speakRouletteWinnerAnnouncement(sampleWinner, 'Streamer', undefined, () =>
-                      setIsSpeakingTts(null)
-                    );
-                  }}
-                  className="flex items-center justify-center gap-1.5 rounded bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 text-xs font-bold text-slate-200 transition-transform active:scale-[0.97] disabled:opacity-50"
-                >
-                  <Volume2 className="h-3.5 w-3.5 text-rose-400" />
-                  <span>{isSpeakingTts === 'winner' ? 'Hablando...' : 'Probar Resultado'}</span>
-                </button>
-              </div>
-            </section>
-          </div>
         </div>
 
-        {/* Modal de Biblioteca de Medios (Media Vault) */}
         <MediaLibraryModal
-          isOpen={isMediaModalOpen}
-          onClose={() => setIsMediaModalOpen(false)}
-          onSelect={handleMediaModalSelect}
+          isOpen={vaultOpen}
+          onClose={() => setVaultOpen(false)}
+          onSelect={handleVaultSelect}
           allowedTypes={['audio']}
-          title="Media Vault · Seleccionar Audio para la Ruleta de Castigos"
+          title="Biblioteca · elegir sonido (máximo 30 s)"
         />
-
-        {/* Tutorial Guiado */}
-        {tourOpen && (
-          <GuidedTour
-            steps={ROULETTE_TOUR_STEPS}
-            onClose={() => setTourOpen(false)}
-            id={TOUR_ID}
-            appName="Ruleta de Castigos"
-          />
-        )}
       </div>
+
+      {tourOpen && (
+        <GuidedTour steps={ROULETTE_TOUR_STEPS} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Ruleta" />
+      )}
     </div>
   );
 };

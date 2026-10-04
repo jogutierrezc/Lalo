@@ -8,6 +8,12 @@
  *   - #control: Mesa de control en vivo durante el stream
  *   - #alertas: Estudio de Alertas de Stream (Follow, Sub, Bits, Raid)
  *   - #twitchio / #bot: Estudio de Bot y EventSub (Powered by TwitchIO)
+ *   - #cuenta: Mi cuenta del streamer (con la nube)
+ *   - #admin, #admin/...: consola del administrador. Quien tiene rol de
+ *     administrador solo ve esa consola; a un streamer, #admin lo lleva a Inicio
+ *   - Bienvenida: un streamer que entra con Twitch y aún no la terminó la ve
+ *     antes del panel, escriba la dirección que escriba. El administrador no la ve
+ *   - #nube: Qué falta para encender la nube (sin la nube configurada)
  *   - #widget / /widget / ?channel=: Overlay transparente para OBS Studio
  */
 
@@ -22,6 +28,16 @@ import { RewardsStudio } from './pages/RewardsStudio';
 import { GoalsStudio } from './pages/GoalsStudio';
 import { RouletteStudio } from './pages/RouletteStudio';
 import { PollsStudio } from './pages/PollsStudio';
+import { Access } from './pages/Access';
+import { Bienvenida, bienvenidaHechaAqui } from './pages/Bienvenida';
+import { Account } from './pages/Account';
+import { AdminShell } from './components/admin/AdminShell';
+import { CloudSetup } from './pages/CloudSetup';
+import { CloudProvider, useCloudSession } from './hooks/useCloudSession';
+import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
+import { isCloudEnabled } from './lib/supabase';
+import { hasTwitchIdentity } from './lib/access';
+import { necesitaRecorrido } from './lib/recorrido';
 
 export type AppRoute =
   | 'catalogo'
@@ -33,6 +49,9 @@ export type AppRoute =
   | 'metas'
   | 'ruleta'
   | 'encuestas'
+  | 'cuenta'
+  | 'admin'
+  | 'nube'
   | 'widget';
 
 function resolveRoute(): AppRoute {
@@ -118,6 +137,12 @@ function resolveRoute(): AppRoute {
     return 'encuestas';
   }
 
+  // Cuenta del streamer y portal de administración (solo con la nube configurada)
+  if (hash.startsWith('cuenta')) return 'cuenta';
+  if (hash.startsWith('admin')) return 'admin';
+  // Qué falta para encender la nube (solo cuando no está configurada)
+  if (hash.startsWith('nube')) return 'nube';
+
   // 8. Control en vivo del TTS
   if (hash.startsWith('control') || path.includes('/control')) {
     return 'control';
@@ -136,7 +161,7 @@ function resolveRoute(): AppRoute {
   return 'catalogo';
 }
 
-export const App: React.FC = () => {
+const Routes: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(resolveRoute);
 
   useEffect(() => {
@@ -153,9 +178,71 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  const cloud = useCloudSession();
+  // Cuentas que terminaron la bienvenida en esta visita (por si no se pudo guardar en ningún sitio)
+  const [bienvenidas, setBienvenidas] = useState<string[]>([]);
+  // El streamer pidió escribir un código de recuperación en vez de uno de invitación
+  const [recuperando, setRecuperando] = useState(false);
+  const sinSesion = !cloud.session;
+  useEffect(() => {
+    if (sinSesion) setRecuperando(false);
+  }, [sinSesion]);
+
+  // Las capas de OBS leen la configuración del streamer con la clave de su URL
+  const isWidget = currentRoute === 'widget';
+  const [widgetReady, setWidgetReady] = useState(() => !(isCloudEnabled && readWidgetKey()));
+  useEffect(() => {
+    const key = isWidget && isCloudEnabled ? readWidgetKey() : null;
+    if (!key) return;
+    let stop: (() => void) | null = null;
+    let alive = true;
+    startWidgetCloud(key).then((stopSync) => {
+      if (alive) {
+        stop = stopSync;
+        setWidgetReady(true);
+      } else {
+        stopSync();
+      }
+    });
+    return () => {
+      alive = false;
+      stop?.();
+    };
+  }, [isWidget]);
+
+  // Las capas de OBS nunca piden iniciar sesión
+  if (isWidget) return widgetReady ? <Widget /> : null;
+
+  // Bienvenida: el streamer que entró con Twitch y aún no la terminó (o aún no canjeó su código)
+  if (cloud.enabled && cloud.session && cloud.profile) {
+    const perfil = cloud.profile;
+    const hechaAqui = bienvenidas.includes(perfil.id) || bienvenidaHechaAqui(perfil.id);
+    if (necesitaRecorrido(perfil, hasTwitchIdentity(cloud.session.user), hechaAqui)) {
+      if (recuperando && perfil.status === 'pending') {
+        return <Access inicio="recovery-code" onVolver={() => setRecuperando(false)} />;
+      }
+      return (
+        <Bienvenida
+          onTerminar={(perfilId) => setBienvenidas((prev) => (prev.includes(perfilId) ? prev : [...prev, perfilId]))}
+          onRecuperar={() => setRecuperando(true)}
+        />
+      );
+    }
+  }
+
+  // Con la nube configurada, el panel exige una cuenta activa
+  if (cloud.enabled && (cloud.loading || !cloud.session || cloud.profile?.status !== 'active')) {
+    return <Access />;
+  }
+
+  // El administrador no es un streamer: solo ve su consola, escriba la dirección que escriba
+  if (cloud.enabled && cloud.profile?.role === 'admin') return <AdminShell />;
+
   switch (currentRoute) {
-    case 'widget':
-      return <Widget />;
+    case 'cuenta':
+      return <Account />;
+    case 'nube':
+      return cloud.enabled ? <Catalog /> : <CloudSetup />;
     case 'control':
       return <Control />;
     case 'alertas':
@@ -177,5 +264,11 @@ export const App: React.FC = () => {
       return <Catalog />;
   }
 };
+
+export const App: React.FC = () => (
+  <CloudProvider>
+    <Routes />
+  </CloudProvider>
+);
 
 export default App;

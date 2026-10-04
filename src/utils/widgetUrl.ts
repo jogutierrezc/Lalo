@@ -51,7 +51,8 @@ export function buildSuiteWidgetUrl(
   const activeChannel = (channel || ttsSettings?.channel || 'laloplay_').trim();
 
   if (app === 'tts' && ttsSettings) {
-    return buildWidgetUrl(origin, { ...ttsSettings, channel: activeChannel });
+    const extra = new URLSearchParams(extraParams || {}).toString();
+    return `${buildWidgetUrl(origin, { ...ttsSettings, channel: activeChannel })}${extra ? `&${extra}` : ''}`;
   }
 
   const query = new URLSearchParams({

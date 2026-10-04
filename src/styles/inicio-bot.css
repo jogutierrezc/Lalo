@@ -1,0 +1,131 @@
+/* ==========================================================================
+   Inicio y Bot: solo disposición. Los colores salen de los tokens --cb-*.
+   ========================================================================== */
+
+/* ---------- Inicio: fila de una herramienta ---------- */
+.inicio-tool {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px;
+}
+.inicio-tool + .inicio-tool {
+  border-top: 1px solid var(--cb-line);
+}
+.inicio-tool-icon {
+  color: var(--cb-mut);
+}
+.inicio-tool-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-weight: 700;
+}
+.inicio-tool p {
+  margin: 0;
+}
+.inicio-tool-actions {
+  display: flex;
+  gap: 6px;
+}
+@media (max-width: 560px) {
+  .inicio-tool {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .inicio-tool-actions {
+    grid-column: 2;
+  }
+}
+
+/* ---------- Inicio: campo del canal ---------- */
+.inicio-channel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inicio-channel span {
+  flex: none;
+  color: var(--cb-mut);
+}
+
+/* ---------- Bot: fila editable de un comando ---------- */
+.bot-cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 12px;
+}
+.bot-cmd + .bot-cmd {
+  border-top: 1px solid var(--cb-line);
+}
+.bot-cmd-name {
+  display: flex;
+  flex: 0 1 160px;
+  align-items: center;
+  gap: 4px;
+  min-width: 120px;
+  color: var(--cb-mut);
+}
+.cab-inp.bot-cmd-reply {
+  flex: 1 1 220px;
+}
+.cab-inp.bot-cmd-who {
+  flex: 0 1 170px;
+  width: auto;
+}
+
+/* ---------- Bot: conversación de prueba y script ---------- */
+.bot-log {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  height: 240px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-bg);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  scrollbar-color: var(--cb-line) transparent;
+}
+.bot-log li[data-kind='in'] {
+  font-weight: 700;
+}
+.bot-log li[data-kind='note'] {
+  color: var(--cb-mut);
+}
+.bot-script {
+  max-height: 320px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-bg);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  tab-size: 4;
+  scrollbar-color: var(--cb-line) transparent;
+}
+
+/* Cada comando en una sola línea; en pantallas estrechas vuelve a repartirse */
+@media (min-width: 760px) {
+  .bot-cmd {
+    display: grid;
+    grid-template-columns: auto 130px minmax(0, 1fr) 150px auto;
+    padding: 8px 10px;
+  }
+  .bot-cmd-name {
+    min-width: 0;
+  }
+  .bot-cmd .cab-inp {
+    height: 36px;
+  }
+}

@@ -21,7 +21,7 @@ import { postBus } from '../utils/bus';
 
 export function useGoalsSettings() {
   const [goalsSettings, setGoalsSettings] = useState<GoalsSettings>(() => loadGoalsSettings());
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(true);
 
   // Guardar en localStorage cuando cambian las configuraciones y notificar a OBS
   const persistSettings = useCallback((newSettings: GoalsSettings) => {

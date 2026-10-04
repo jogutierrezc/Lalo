@@ -8,6 +8,7 @@
  * y principios de diseño de Emil Kowalski e Impeccable.
  */
 
+import { queueCloudPush } from '../lib/cloudConfig';
 import { AlertSoundType } from './alerts';
 
 export type PenaltyCategory =
@@ -197,6 +198,7 @@ export function saveRouletteSettings(settings: RouletteSettings): void {
   try {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(ROULETTE_STORAGE_KEY, JSON.stringify(settings));
+    queueCloudPush('roulette', settings);
   } catch {
     // Silencioso ante cuotas restringidas
   }

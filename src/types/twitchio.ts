@@ -6,6 +6,8 @@
  * Licencia: MIT.
  */
 
+import { queueCloudPush } from '../lib/cloudConfig';
+
 export type CommandPermission = 'all' | 'sub' | 'mod' | 'broadcaster';
 
 export interface TwitchIOCommand {
@@ -124,6 +126,7 @@ export function loadTwitchIOSettings(): TwitchIOSettings {
 export function saveTwitchIOSettings(settings: TwitchIOSettings): void {
   try {
     localStorage.setItem(TWITCHIO_STORAGE_KEY, JSON.stringify(settings));
+    queueCloudPush('bot', settings);
   } catch (e) {
     console.error('Error guardando configuración de TwitchIO en localStorage:', e);
   }

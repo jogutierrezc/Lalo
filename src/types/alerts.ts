@@ -5,6 +5,7 @@
  * Coherente con los estilos visuales de Cabina (Cabina, Bocadillo, Subtítulo, Sticker).
  */
 
+import { queueCloudPush } from '../lib/cloudConfig';
 import { AlertEnergy, AlertPosition, AlertStyle, DEFAULT_APPEARANCE } from '../utils/appearance';
 
 export type AlertEventType = 'follow' | 'sub' | 'bits' | 'raid';
@@ -314,6 +315,7 @@ export function loadAlertsSettings(): StreamAlertsSettings {
 export function saveAlertsSettings(settings: StreamAlertsSettings): void {
   try {
     localStorage.setItem(ALERTS_STORAGE_KEY, JSON.stringify(settings));
+    queueCloudPush('alerts', settings);
   } catch (e) {
     console.error('Error guardando alertas en localStorage:', e);
   }
