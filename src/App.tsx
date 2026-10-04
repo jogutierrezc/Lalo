@@ -10,6 +10,7 @@
  *   - #chat: Estudio de la capa Chat en vivo
  *   - #raid: Estudio del saludo de raid con corto
  *   - #studio: Studio, el editor de escenas (cada escena, una URL para OBS)
+ *   - #powerups: Power-ups de Twitch y canal de eventos (bits, Power-ups y canjes sin texto)
  *   - #twitchio / #bot: Estudio de Bot y EventSub (Powered by TwitchIO)
  *   - #cuenta: Mi cuenta del streamer (con la nube)
  *   - #admin, #admin/...: consola del administrador. Quien tiene rol de
@@ -37,6 +38,7 @@ import { PollsStudio } from './pages/PollsStudio';
 import { ChatStudio } from './pages/ChatStudio';
 import { RaidStudio } from './pages/RaidStudio';
 import { Studio } from './pages/Studio';
+import { PowerupsStudio } from './pages/PowerupsStudio';
 import { Access } from './pages/Access';
 import { Bienvenida, bienvenidaHechaAqui } from './pages/Bienvenida';
 import { Account } from './pages/Account';
@@ -65,6 +67,7 @@ export type AppRoute =
   | 'chat'
   | 'raid'
   | 'studio'
+  | 'powerups'
   | 'cuenta'
   | 'admin'
   | 'nube'
@@ -165,6 +168,9 @@ function resolveRoute(): AppRoute {
 
   // Studio: el editor de escenas
   if (/^(studio|estudio)([?/]|$)/.test(hash)) return 'studio';
+
+  // Power-ups de Twitch y canal de eventos
+  if (/^power-?ups([?/]|$)/.test(hash)) return 'powerups';
 
   // Cuenta del streamer y portal de administración (solo con la nube configurada)
   if (hash.startsWith('cuenta')) return 'cuenta';
@@ -305,6 +311,8 @@ const Routes: React.FC = () => {
       return <RaidStudio />;
     case 'studio':
       return <Studio />;
+    case 'powerups':
+      return <PowerupsStudio />;
     case 'twitchio':
       return <TwitchIOStudio />;
     case 'tts':

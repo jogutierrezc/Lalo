@@ -1,0 +1,112 @@
+/* ==========================================================================
+   Página «Power-ups» del panel. Usa los tokens y las piezas de la plantilla
+   común (.cab-*); aquí solo va lo propio de la lista y del permiso.
+   ========================================================================== */
+
+.pu-perm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 20px;
+  align-items: center;
+}
+@media (max-width: 700px) {
+  .pu-perm {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pu-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin: 0;
+}
+.pu-line b,
+.pu-name {
+  margin: 0;
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.pu-bullets {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 1.1em;
+  color: var(--cb-mut);
+  font-size: 0.9375rem;
+}
+
+.pu-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pu-list > li {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+}
+.pu-list .cab-chip {
+  background: var(--cb-panel, transparent);
+  border: 1px solid var(--cb-line);
+}
+.pu-list .cab-chip[data-status='skipped'] {
+  border-color: transparent;
+  background: var(--cb-warn-bg);
+}
+
+.pu-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+.pu-bits {
+  color: var(--cb-mut);
+  font-size: 0.8125rem;
+}
+
+.pu-set {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+/* Sin segundo control, la acción ocupa las dos columnas */
+.pu-set > :first-child:nth-last-child(2) {
+  grid-column: span 2;
+}
+@media (max-width: 520px) {
+  .pu-set {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pu-set > :first-child:nth-last-child(2) {
+    grid-column: auto;
+  }
+}
+
+.pu-reload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Aviso de un Power-up en el monitor */
+.pu-plate {
+  position: absolute;
+  left: 3%;
+  bottom: 7%;
+  z-index: 3;
+}

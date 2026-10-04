@@ -16,7 +16,10 @@ import {
   checkMilestoneCrossed,
   formatMilestoneAnnouncement,
   formatProgressAnnouncement,
+  GOALS_STORAGE_KEY,
 } from '../types/goals';
+import { fetchCloudBitsGoalTotals } from '../lib/goalsCloud';
+import { applyGoalTotals } from '../utils/twitchEvents';
 import { postBus } from '../utils/bus';
 
 export function useGoalsSettings() {
@@ -198,6 +201,26 @@ export function useGoalsSettings() {
   useEffect(() => {
     const loaded = loadGoalsSettings();
     setGoalsSettings(loaded);
+    // Los Bits que el canal de eventos de Twitch sumó en la nube mientras tanto: se traen
+    // antes de editar, para no guardar encima un total viejo. No se vuelve a subir nada
+    let alive = true;
+    fetchCloudBitsGoalTotals().then((totals) => {
+      if (!alive || !totals || totals.length === 0) return;
+      setGoalsSettings((prev) => {
+        const goals = applyGoalTotals(prev.goals, totals);
+        if (goals.every((goal, index) => goal.current === prev.goals[index].current)) return prev;
+        const next = { ...prev, goals };
+        try {
+          localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // Sin almacenamiento: el total correcto queda solo en esta página
+        }
+        return next;
+      });
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   return {

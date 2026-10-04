@@ -40,6 +40,7 @@ import {
   Tv,
   UserRound,
   X,
+  Zap,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
 import { buildSuiteWidgetUrl, WidgetAppType } from '../utils/widgetUrl';
@@ -66,6 +67,7 @@ export type SuiteApp =
   | 'chat'
   | 'raid'
   | 'studio'
+  | 'powerups'
   | 'cuenta'
   | 'admin'
   | 'nube';
@@ -100,6 +102,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { app: 'tts', label: 'Voz del chat', href: '#tts', icon: Mic },
       { app: 'alertas', label: 'Alertas', href: '#alertas', icon: BellRing },
       { app: 'recompensas', label: 'Recompensas', href: '#recompensas', icon: Coins },
+      { app: 'powerups', label: 'Power-ups', href: '#powerups', icon: Zap },
       { app: 'metas', label: 'Metas', href: '#metas', icon: Target },
       { app: 'ruleta', label: 'Ruleta', href: '#ruleta', icon: Gamepad2 },
       { app: 'encuestas', label: 'Batallas', href: '#encuestas', icon: Swords },
@@ -130,6 +133,7 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   chat: 'chat',
   raid: 'raid',
   recompensas: 'rewards',
+  powerups: 'rewards',
   tts: 'tts',
 };
 
