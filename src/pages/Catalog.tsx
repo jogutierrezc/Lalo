@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { BellRing, Bot, Check, Coins, Copy, Gamepad2, MessagesSquare, Mic, Play, Swords, Target } from 'lucide-react';
+import { BellRing, Bot, Check, Clapperboard, Coins, Copy, Gamepad2, MessagesSquare, Mic, Play, Swords, Target } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { Field } from '../components/studio/StudioKit';
 import { useSettings } from '../hooks/useSettings';
@@ -26,6 +26,7 @@ import { loadGoalsSettings } from '../types/goals';
 import { loadRouletteSettings } from '../types/roulette';
 import { loadTwitchIOSettings } from '../types/twitchio';
 import { encodeChatSettings, loadChatSettings } from '../types/chat';
+import { encodeRaidSettings, loadRaidSettings } from '../types/raid';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { ToolId, toolStatusFrom } from '../components/inicio/toolStatus';
 import { PrimerosPasos } from '../components/recorrido/PrimerosPasos';
@@ -208,6 +209,13 @@ const TOOLS: Tool[] = [
     icon: MessagesSquare,
   },
   {
+    id: 'raid',
+    name: 'Raids',
+    text: 'Saludo a quien llega con una raid, con un corto de su canal, y comandos !so y !clip para moderadores.',
+    href: '#raid',
+    icon: Clapperboard,
+  },
+  {
     id: 'twitchio',
     name: 'Bot',
     text: 'Comandos del chat con respuestas automáticas.',
@@ -224,6 +232,7 @@ const SOURCES: { app: WidgetAppType; name: string; note: string; recommended?: b
   { app: 'roulette', name: 'Ruleta', note: 'Rueda de retos y castigos' },
   { app: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
   { app: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
+  { app: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
 ];
 
 /** Lee lo guardado de cada herramienta para decir cuánto hay activo. */
@@ -296,7 +305,9 @@ export const Catalog: React.FC = () => {
         ? { k: cloud.profile.widget_key }
         : source.app === 'chat'
           ? { cs: encodeChatSettings(loadChatSettings()) }
-          : undefined
+          : source.app === 'raid' || source.app === 'all'
+            ? { rs: encodeRaidSettings(loadRaidSettings()) }
+            : undefined
     );
     try {
       if (!navigator.clipboard) throw new Error('Portapapeles no disponible');

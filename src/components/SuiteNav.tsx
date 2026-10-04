@@ -19,6 +19,7 @@ import {
   BellRing,
   Bot,
   Check,
+  Clapperboard,
   CloudOff,
   Coins,
   Copy,
@@ -43,6 +44,7 @@ import { ThemeSwitch } from './ThemeSwitch';
 import { buildSuiteWidgetUrl, WidgetAppType } from '../utils/widgetUrl';
 import { loadSettings } from '../types/settings';
 import { encodeChatSettings, loadChatSettings } from '../types/chat';
+import { encodeRaidSettings, loadRaidSettings } from '../types/raid';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -60,6 +62,7 @@ export type SuiteApp =
   | 'ruleta'
   | 'encuestas'
   | 'chat'
+  | 'raid'
   | 'cuenta'
   | 'admin'
   | 'nube';
@@ -92,6 +95,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { app: 'ruleta', label: 'Ruleta', href: '#ruleta', icon: Gamepad2 },
       { app: 'encuestas', label: 'Batallas', href: '#encuestas', icon: Swords },
       { app: 'chat', label: 'Chat', href: '#chat', icon: MessagesSquare },
+      { app: 'raid', label: 'Raids', href: '#raid', icon: Clapperboard },
     ],
   },
   { group: 'Chat', items: [{ app: 'twitchio', label: 'Bot', href: '#twitchio', icon: Bot }] },
@@ -105,6 +109,7 @@ const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
   { mode: 'roulette', name: 'Ruleta', note: 'Rueda de castigos y retos' },
   { mode: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
   { mode: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
+  { mode: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
 ];
 
 const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
@@ -113,6 +118,7 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   metas: 'goals',
   encuestas: 'polls',
   chat: 'chat',
+  raid: 'raid',
   tts: 'tts',
 };
 
@@ -184,9 +190,14 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   useEffect(() => onCloudSyncMessage(setSyncMessage), []);
   const current = nav.flatMap((section) => section.items).find((item) => item.app === currentApp);
 
-  // Sin cuenta en la nube, los ajustes del chat viajan en la URL: OBS no comparte almacenamiento con el panel
-  const extraFor = (mode: WidgetAppType) =>
-    mode === 'chat' && !widgetKeyParam ? { cs: encodeChatSettings(loadChatSettings()) } : widgetKeyParam;
+  // Sin cuenta en la nube, los ajustes del chat y del saludo de raid viajan en la URL:
+  // OBS no comparte almacenamiento con el panel
+  const extraFor = (mode: WidgetAppType): Record<string, string> | undefined => {
+    if (widgetKeyParam) return widgetKeyParam;
+    if (mode === 'chat') return { cs: encodeChatSettings(loadChatSettings()) };
+    if (mode === 'raid' || mode === 'all') return { rs: encodeRaidSettings(loadRaidSettings()) };
+    return undefined;
+  };
 
   const getWidgetUrl = (mode: WidgetAppType) => {
     const ttsSettings = loadSettings();

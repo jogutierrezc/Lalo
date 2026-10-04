@@ -6,14 +6,25 @@
  * Diseñado con estética de hardware Cabina Broadcast, física GSAP,
  * soporte multi-meta simultánea con compresión (hasta 4 en fila)
  * y carrusel/slideshow rotativo dinámico (5 o más metas), más anuncios por voz y sonido.
+ *
+ * El diseño de cada meta (Barra, Anillo, Bloques, Cinta, Columna o Personalizado)
+ * y la posición en pantalla se definen en src/utils/goalDesign.ts.
  */
 
 import { queueCloudPush } from '../lib/cloudConfig';
 import { AlertSoundType } from './alerts';
+import {
+  DEFAULT_GOALS_POSITION,
+  GoalCustom,
+  GoalStyle,
+  GoalsPosition,
+  migrateGoalItem,
+  normalizeGoalsPosition,
+} from '../utils/goalDesign';
+
+export type { GoalCustom, GoalStyle, GoalsPosition } from '../utils/goalDesign';
 
 export type GoalType = 'subs' | 'followers' | 'bits' | 'raids' | 'donations';
-
-export type GoalStyle = 'cabina' | 'neon' | 'cyber' | 'minimal';
 
 export type GoalsDisplayMode =
   | 'auto_4_or_slideshow' // Hasta 4 en fila con compresión armónica; con 5 o más pasa automáticamente a Slideshow rotativo
@@ -31,6 +42,9 @@ export interface CommunityGoalItem {
   unit: string; // 'subs' | 'seguidores' | 'bits' | 'raids' | 'puntos'
   enabled: boolean;
   style: GoalStyle;
+  /** Ajustes del diseño personalizado; solo se usan con style 'custom'. */
+  custom?: GoalCustom;
+  /** Color de avance, en todos los diseños. */
   accentColor: string;
   showPercentage: boolean;
   showNumbers: boolean;
@@ -53,6 +67,7 @@ export interface GoalsSettings {
   activeGoalId: string;
   displayMode: GoalsDisplayMode;
   slideshowIntervalSec: number; // Duración por diapositiva en segundos (def: 8s)
+  position: GoalsPosition;       // Punto de la pantalla; la Cinta ocupa el borde entero
   announceProgress: boolean;     // Locución TTS / sonido al sumar progreso
   announceMilestones: boolean;   // Locución TTS al cruzar hitos (25%, 50%, 75%, 100%)
   announceTtsVoice?: string;
@@ -69,7 +84,7 @@ export const DEFAULT_GOALS: CommunityGoalItem[] = [
     target: 25,
     unit: 'subs',
     enabled: true,
-    style: 'cabina',
+    style: 'barra',
     accentColor: '#9146ff',
     showPercentage: true,
     showNumbers: true,
@@ -86,7 +101,7 @@ export const DEFAULT_GOALS: CommunityGoalItem[] = [
     target: 500,
     unit: 'seguidores',
     enabled: true,
-    style: 'neon',
+    style: 'barra',
     accentColor: '#00f5ff',
     showPercentage: true,
     showNumbers: true,
@@ -103,7 +118,7 @@ export const DEFAULT_GOALS: CommunityGoalItem[] = [
     target: 10000,
     unit: 'bits',
     enabled: true,
-    style: 'cyber',
+    style: 'barra',
     accentColor: '#ffd700',
     showPercentage: true,
     showNumbers: true,
@@ -120,7 +135,7 @@ export const DEFAULT_GOALS: CommunityGoalItem[] = [
     target: 10,
     unit: 'raids',
     enabled: true,
-    style: 'minimal',
+    style: 'barra',
     accentColor: '#ff0055',
     showPercentage: true,
     showNumbers: true,
@@ -137,7 +152,7 @@ export const DEFAULT_GOALS: CommunityGoalItem[] = [
     target: 100,
     unit: 'puntos',
     enabled: true,
-    style: 'neon',
+    style: 'barra',
     accentColor: '#00ff88',
     showPercentage: true,
     showNumbers: true,
@@ -153,6 +168,7 @@ export const DEFAULT_GOALS_SETTINGS: GoalsSettings = {
   activeGoalId: 'goal-subs',
   displayMode: 'auto_4_or_slideshow',
   slideshowIntervalSec: 8,
+  position: DEFAULT_GOALS_POSITION,
   announceProgress: true,
   announceMilestones: true,
   announceTtsVoice: 'es-MX-Standard-A',
@@ -247,7 +263,12 @@ export function loadGoalsSettings(): GoalsSettings {
       slideshowIntervalSec: parsed.slideshowIntervalSec || DEFAULT_GOALS_SETTINGS.slideshowIntervalSec,
       announceProgress: parsed.announceProgress !== undefined ? Boolean(parsed.announceProgress) : DEFAULT_GOALS_SETTINGS.announceProgress,
       announceMilestones: parsed.announceMilestones !== undefined ? Boolean(parsed.announceMilestones) : DEFAULT_GOALS_SETTINGS.announceMilestones,
-      goals: Array.isArray(parsed.goals) && parsed.goals.length > 0 ? parsed.goals : DEFAULT_GOALS,
+      position: normalizeGoalsPosition(parsed.position),
+      // Las metas guardadas con un estilo antiguo pasan a Barra con su color
+      goals:
+        Array.isArray(parsed.goals) && parsed.goals.length > 0
+          ? (parsed.goals as CommunityGoalItem[]).map((goal) => migrateGoalItem(goal))
+          : DEFAULT_GOALS,
       activeGoalId: parsed.activeGoalId || DEFAULT_GOALS_SETTINGS.activeGoalId,
     };
   } catch {

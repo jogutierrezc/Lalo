@@ -24,6 +24,7 @@ export const MODULE_STORAGE_KEYS: Partial<Record<ConfigModule, string>> = {
   rewards: 'lalo_stream_rewards_settings',
   bot: 'lalo_twitchio_settings',
   chat: 'lalo_chat_settings',
+  raid: 'lalo_raid_settings',
 };
 
 const PUSH_DELAY_MS = 1200;

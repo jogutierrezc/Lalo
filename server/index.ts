@@ -11,6 +11,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { processTTSRequest } from './ttsHandler';
 import { nodeHandler, type ApiRoute } from './storage/handlers.js';
+import { clipNodeHandler } from './twitch/clips.js';
 
 // .env.local tiene prioridad sobre .env (el primero que define una variable gana)
 dotenv.config({ path: ['.env.local', '.env'] });
@@ -101,6 +102,9 @@ const storageRoutes: ApiRoute[] = ['storage/status', 'storage/test', 'media/uplo
 for (const route of storageRoutes) {
   app.all(`/api/${route}`, nodeHandler(route));
 }
+
+// Cortos de Twitch para el saludo de raid. La misma lógica que api/twitch/clip.ts
+app.all('/api/twitch/clip', clipNodeHandler);
 
 interface TTSRequestBody {
   text?: string;

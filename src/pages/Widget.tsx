@@ -58,6 +58,9 @@ import { ChatSettings, decodeChatSettings, loadChatSettings, normalizeChatSettin
 import { ChatOverlayHandle, ChatOverlayView } from '../components/chat/ChatOverlayView';
 import { ChatDisplayMessage, ChatModerationEvent, DEMO_SEQUENCE, demoMessage } from '../utils/chatFeed';
 import '../styles/chat.css';
+import { RaidSettings, RAID_FRAMES, RaidFrame, decodeRaidSettings, loadRaidSettings, normalizeRaidSettings } from '../types/raid';
+import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
+import '../styles/raid.css';
 
 /** OBS expone window.obsstudio en sus fuentes de navegador. */
 const IN_OBS = typeof window !== 'undefined' && 'obsstudio' in window;
@@ -112,6 +115,16 @@ function chatSettingsForWidget(base: ChatSettings): ChatSettings {
     if (merged[key] !== overrides[key]) Object.assign(merged, { [key]: fromUrl[key] });
   });
   return merged;
+}
+
+/**
+ * Ajustes del saludo de raid para esta fuente. Sin cuenta en la nube llegan
+ * enteros en `rs`; `frame` permite cambiar el marco a mano.
+ */
+function raidSettingsForWidget(base: RaidSettings): RaidSettings {
+  const fromUrl = decodeRaidSettings(getURLParam('rs')) || base;
+  const frame = (getURLParam('frame') || '').toLowerCase();
+  return RAID_FRAMES.some((item) => item.id === frame) ? { ...fromUrl, frame: frame as RaidFrame } : fromUrl;
 }
 
 // Colocación de la alerta en pantalla (horizontal con justify, vertical con items)
@@ -331,6 +344,19 @@ export const Widget: React.FC = () => {
     if (event.type === 'clear') chatRef.current?.clear();
   }, []);
 
+  // Capa «Saludo de raid»: fuente propia (app=raid) o dentro de «Todo en uno»
+  const isRaidOnly = appParam === 'raid';
+  const [raidSettings, setRaidSettings] = useState(() => raidSettingsForWidget(loadRaidSettings()));
+  const showRaid = isRaidOnly || (appParam === 'all' && raidSettings.inAll);
+  const raidRef = useRef<RaidLayerHandle | null>(null);
+  const handleRaid = useCallback((raid: { channel: string; login: string; viewers: number }) => {
+    raidRef.current?.raid(raid.channel, raid.viewers, raid.login);
+  }, []);
+  const handleStaffMessage = useCallback(
+    (message: string, sender: { name: string; role: UserRole }) => raidRef.current?.command(message, sender) ?? false,
+    []
+  );
+
   // demo=1: chat de muestra para colocar la capa en OBS sin esperar al chat real
   const chatDemo = showChat && getURLParam('demo') === '1';
   const voiceCommandRef = useRef(moderation.voiceCommand);
@@ -367,7 +393,12 @@ export const Widget: React.FC = () => {
     onRejected: handleRejected,
     onChatMessage: handleChatMessage,
     onChatModeration: handleChatModeration,
+    onRaid: handleRaid,
+    onStaffMessage: handleStaffMessage,
   });
+
+  // La bienvenida de una raid entra en la misma cola de voz que el chat
+  const speakRaidWelcome = useCallback((text: string) => enqueueManualMessage(text, 'Raid', true), [enqueueManualMessage]);
 
   const [currentMessage, setCurrentMessage] = useState<SanitizedTTSMessage | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -608,7 +639,7 @@ export const Widget: React.FC = () => {
         const isSinging = message.emotion?.tag === 'singing';
         let spokenText: string;
 
-        if (settings.announceSender !== false) {
+        if (settings.announceSender !== false && !message.system) {
           if (isSinging) {
             // Para canciones: anunciar que el usuario "canta" y delimitar con punto
             // para que Fish Audio inicie la prosodia musical limpia desde el inicio del verso
@@ -719,8 +750,8 @@ export const Widget: React.FC = () => {
               .trim();
             // Limpiar etiquetas entre corchetes para que el sintetizador nativo no las lea literalmente
             const speechText = message.cleanText.replace(/\[[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30}\]/g, '').trim() || message.cleanText;
-            const fallbackText = settings.announceSender !== false
-              ? `${cleanUserName} dice: ${speechText}`
+            const fallbackText = settings.announceSender !== false && !message.system
+              ?`${cleanUserName} dice: ${speechText}`
               : speechText;
 
             const utterance = new SpeechSynthesisUtterance(fallbackText);
@@ -1144,6 +1175,9 @@ export const Widget: React.FC = () => {
       if (message.type === 'CHAT_SETTINGS_UPDATE') {
         setChatSettings(normalizeChatSettings(message.settings));
       }
+      if (message.type === 'RAID_SETTINGS_UPDATE') {
+        setRaidSettings(normalizeRaidSettings(message.settings));
+      }
       if (message.type === 'GOALS_SETTINGS_UPDATE') {
         setGoalsSettings(message.settings);
       }
@@ -1498,6 +1532,14 @@ export const Widget: React.FC = () => {
       if (messageQueue.length > 0) clearQueue();
       return;
     }
+    // La fuente que solo muestra el saludo de raid solo dice su bienvenida: el chat lo lee otra fuente
+    if (isRaidOnly) {
+      const foreign = messageQueue.find((m) => !m.system);
+      if (foreign) {
+        removeMessageFromQueue(foreign.id);
+        return;
+      }
+    }
     if (!paused && !isPlaying && !isProcessingRef.current && messageQueue.length > 0) {
       // El siguiente es el primero ya aprobado; con prioridad, antes los canjes y los bits
       const nextMessage = pickNext(messageQueue, { approval, approvedIds, priorityPaid: settings.priorityPaid });
@@ -1506,7 +1548,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, clearQueue]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, clearQueue]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1565,7 +1607,7 @@ export const Widget: React.FC = () => {
       )}
 
       {/* Tarjeta de TTS para OBS en el estilo elegido desde el panel */}
-      {currentMessage && (
+      {currentMessage && !currentMessage.system && (
         <AlertCard
           key={currentMessage.id}
           ref={cardRef}
@@ -1586,6 +1628,11 @@ export const Widget: React.FC = () => {
       {/* Chat en vivo */}
       {showChat && <ChatOverlayView ref={chatRef} settings={chatSettings} />}
 
+      {/* Saludo de raid con corto */}
+      {showRaid && (
+        <RaidLayer ref={raidRef} settings={raidSettings} demo={getURLParam('demo') === '1'} onSpeak={speakRaidWelcome} />
+      )}
+
       {/* Overlay de Metas Comunitarias & Marcadores (Compresión ≤4 en fila y Carrusel 5+ con GSAP) */}
       {isGoalsApp && (
         <div className="pointer-events-none fixed inset-x-0 top-6 z-30 flex justify-center px-4">
@@ -1594,6 +1641,7 @@ export const Widget: React.FC = () => {
             activeGoalId={goalsSettings.activeGoalId}
             displayMode={goalsSettings.displayMode}
             slideshowIntervalSec={goalsSettings.slideshowIntervalSec}
+            position={goalsSettings.position}
             recentProgressGoalId={currentGoalEvent?.goalId}
           />
         </div>

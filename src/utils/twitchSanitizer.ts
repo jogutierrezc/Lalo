@@ -41,6 +41,8 @@ export interface SanitizedTTSMessage {
   trigger?: 'command' | 'reward' | 'bits' | 'chat' | 'highlight' | 'test';
   bits?: number;
   role?: string;
+  /** Frase del sistema (la bienvenida de una raid): se lee tal cual, sin «dice» ni tarjeta. */
+  system?: boolean;
 }
 
 const TRIGGER_PREFIX = '!s ';

@@ -31,6 +31,7 @@ import {
   ControlCommand,
   DEFAULT_MODERATION,
   Moderation,
+  UserRole,
   REASON_QUEUE,
   REASON_RATE,
   classifyTrigger,
@@ -65,6 +66,13 @@ export interface UseTwitchChatOptions {
   onChatMessage?: (message: ChatDisplayMessage) => void;
   /** Mensajes borrados, usuarios expulsados o chat vaciado por la moderación. */
   onChatModeration?: (event: ChatModerationEvent) => void;
+  /** Llega una raid al canal: nombre visible, usuario y cuántas personas trae. */
+  onRaid?: (raid: { channel: string; login: string; viewers: number }) => void;
+  /**
+   * Mensaje del streamer o de un moderador que no es una orden de la voz.
+   * Si devuelve true, el mensaje era un comando de otra capa y no sigue adelante.
+   */
+  onStaffMessage?: (message: string, sender: { name: string; role: UserRole }) => boolean;
 }
 
 export interface UseTwitchChatReturn {
@@ -74,7 +82,7 @@ export interface UseTwitchChatReturn {
   connectionError: string | null;
   removeMessageFromQueue: (id?: string) => SanitizedTTSMessage | null;
   clearQueue: () => void;
-  enqueueManualMessage: (text: string, username?: string) => SanitizedTTSMessage | null;
+  enqueueManualMessage: (text: string, username?: string, system?: boolean) => SanitizedTTSMessage | null;
 }
 
 export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChatReturn {
@@ -91,6 +99,10 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
   onChatMessageRef.current = options.onChatMessage;
   const onChatModerationRef = useRef(options.onChatModeration);
   onChatModerationRef.current = options.onChatModeration;
+  const onRaidRef = useRef(options.onRaid);
+  onRaidRef.current = options.onRaid;
+  const onStaffMessageRef = useRef(options.onStaffMessage);
+  onStaffMessageRef.current = options.onStaffMessage;
   // Momentos en que el modo «todo el chat» aceptó un mensaje, para el tope por minuto
   const chatTimesRef = useRef<number[]>([]);
   const queueLengthRef = useRef(0);
@@ -133,7 +145,8 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
   }, []);
 
   // Encolar mensaje manual (para simulaciones y pruebas desde el dashboard)
-  const enqueueManualMessage = useCallback((text: string, username = 'Streamer'): SanitizedTTSMessage | null => {
+  // Con `system`, la voz lee la frase tal cual, sin anunciar quién la dice y sin tarjeta
+  const enqueueManualMessage = useCallback((text: string, username = 'Streamer', system = false): SanitizedTTSMessage | null => {
     // Si no incluye !s, se lo agregamos automáticamente para permitir pruebas directas
     const formatted = text.trim().startsWith('!s ') ? text : `!s ${text}`;
     const sanitized = sanitizeTwitchMessage(formatted, {
@@ -144,7 +157,7 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
 
     if (sanitized) {
       // Las pruebas del streamer no pasan por las reglas de moderación
-      const test: SanitizedTTSMessage = { ...sanitized, trigger: 'test' };
+      const test: SanitizedTTSMessage = { ...sanitized, trigger: 'test', ...(system ? { system: true } : {}) };
       setMessageQueue((prev) => [...prev, test]);
       return test;
     }
@@ -219,6 +232,11 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
           return false;
         }
         onControlRef.current?.(enrichedControl);
+        return false;
+      }
+
+      // Comandos de moderación de otras capas (saludo de raid: !so, !clip, !cortar)
+      if ((role === 'broadcaster' || role === 'mod') && onStaffMessageRef.current?.(message, { name: displayName, role })) {
         return false;
       }
 
@@ -366,6 +384,22 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       if (!isMountedRef.current) return;
       handleChat(tags, message);
     });
+
+    // Raid entrante. tmi.js la emite también en conexiones anónimas, a partir del aviso
+    // USERNOTICE con msg-id «raid»: raided(channel, username, viewers, tags), donde username es
+    // el nombre visible (msg-param-displayName) y tags['msg-param-login'] el usuario.
+    // Los tipos instalados (@types/tmi.js) solo declaran los tres primeros argumentos.
+    (client as unknown as { on: (event: 'raided', listener: (...args: unknown[]) => void) => void }).on(
+      'raided',
+      (_channel, username, viewers, tags) => {
+        if (!isMountedRef.current) return;
+        const info = (tags && typeof tags === 'object' ? tags : {}) as Record<string, unknown>;
+        const name = typeof username === 'string' && username ? username : String(info['msg-param-login'] || '');
+        const login = String(info['msg-param-login'] || info.login || name).toLowerCase();
+        const count = Number(viewers);
+        if (name) onRaidRef.current?.({ channel: name, login, viewers: Number.isFinite(count) ? count : 0 });
+      }
+    );
 
     // Moderación: lo que se borra en Twitch sale también de la capa de chat
     client.on('messagedeleted', (_channel, _username, _deleted, userstate) => {

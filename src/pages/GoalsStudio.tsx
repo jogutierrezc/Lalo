@@ -5,9 +5,11 @@
  * de la elegida y monitor 16:9 siempre a la vista.
  *
  * - El progreso real se edita en un solo sitio: «Va en» y «Meta».
- * - «Simular» bajo el monitor solo mueve una copia local de las metas: no
- *   cambia lo guardado ni llega a OBS.
- * - «Probar celebración» sí se envía a las fuentes de OBS abiertas.
+ * - Cada meta elige su diseño (Barra, Anillo, Bloques, Cinta, Columna o
+ *   Personalizado); la posición en pantalla es común a todas.
+ * - «Probar» bajo el monitor mueve la meta en el monitor y en las fuentes de
+ *   OBS abiertas, sin cambiar lo guardado. «Reiniciar» lo deshace.
+ * - «Probar celebración» también se envía a las fuentes de OBS abiertas.
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
@@ -17,11 +19,26 @@ import { SuiteNav } from '../components/SuiteNav';
 import { useGoalsSettings } from '../hooks/useGoalsSettings';
 import {
   CommunityGoalItem,
-  GoalStyle,
   GoalType,
   GoalsDisplayMode,
+  GoalsSettings,
+  calculateGoalProgress,
   shouldDisplayAsSlideshow,
 } from '../types/goals';
+import {
+  GOAL_CUSTOM_SHAPES,
+  GOAL_DESIGNS,
+  GOAL_FONTS,
+  GOAL_POSITIONS,
+  GOAL_RADIUS_MAX,
+  GOAL_SIZE_MAX,
+  GOAL_SIZE_MIN,
+  GoalCustom,
+  GoalFontId,
+  GoalStyle,
+  nextMilestoneValue,
+  normalizeGoalCustom,
+} from '../utils/goalDesign';
 import { AlertSoundType } from '../types/alerts';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
 import { postBus } from '../utils/bus';
@@ -53,19 +70,19 @@ const GOALS_TOUR_STEPS: TourStep[] = [
     target: 'goals-mode',
     badge: 'En pantalla',
     title: 'Cómo se reparten',
-    body: 'En fila, por turnos o solo una. En automático, hasta 4 metas van en fila y con 5 o más pasan a carrusel.',
+    body: 'A la vez, por turnos o solo una, y en qué punto de la pantalla. En automático, hasta 4 metas se ven a la vez y con 5 o más pasan a carrusel.',
   },
   {
     target: 'goals-editor',
     badge: 'Editor',
-    title: 'Título, progreso y estilo',
-    body: '«Va en» y «Meta» son el progreso real. Lo que ocurre al completarla y los anuncios de voz están plegados debajo.',
+    title: 'Título, progreso y diseño',
+    body: '«Va en» y «Meta» son el progreso real. Debajo eliges el diseño de la meta. Lo que ocurre al completarla y los anuncios de voz están plegados.',
   },
   {
     target: 'goals-monitor',
     badge: 'Monitor',
-    title: 'Simula y copia la URL',
-    body: '«Simular» mueve la barra solo aquí, sin tocar tus metas. «Copiar URL para OBS» te da la fuente de navegador.',
+    title: 'Prueba y copia la URL',
+    body: '«Probar» mueve la meta aquí y en OBS sin tocar lo guardado. «Copiar URL para OBS» te da la fuente de navegador.',
   },
 ];
 
@@ -76,13 +93,6 @@ const ACCENTS = [
   { color: '#53fc18', name: 'Verde' },
   { color: '#ff2d46', name: 'Rojo' },
   { color: '#ff6b4a', name: 'Coral' },
-];
-
-const STYLES: { id: GoalStyle; name: string }[] = [
-  { id: 'cabina', name: 'Cabina' },
-  { id: 'neon', name: 'Neón' },
-  { id: 'cyber', name: 'Cyber' },
-  { id: 'minimal', name: 'Minimal' },
 ];
 
 const GOAL_TYPES: { id: GoalType; name: string; unit: string }[] = [
@@ -102,9 +112,9 @@ const SOUNDS: { id: AlertSoundType; name: string }[] = [
 ];
 
 const LAYOUTS: { id: GoalsDisplayMode; name: string; hint: string }[] = [
-  { id: 'auto_4_or_slideshow', name: 'Auto', hint: 'Hasta 4 metas van en fila; con 5 o más pasan a carrusel.' },
+  { id: 'auto_4_or_slideshow', name: 'Auto', hint: 'Hasta 4 metas se ven a la vez; con 5 o más pasan a carrusel.' },
   { id: 'slideshow_only', name: 'Carrusel', hint: 'Una meta cada vez, por turnos.' },
-  { id: 'row_only', name: 'En fila', hint: 'Todas a la vez, con un máximo de 4.' },
+  { id: 'row_only', name: 'A la vez', hint: 'Todas a la vez, con un máximo de 4. Al centro van en fila; en un lateral, apiladas.' },
   { id: 'single_active', name: 'Solo una', hint: 'Solo la meta que tengas elegida en la lista.' },
 ];
 
@@ -112,7 +122,24 @@ const CONFETTI_COLORS = ['#9146ff', '#00f5ff', '#ffd700', '#53fc18', '#ff2d46', 
 const DEFAULT_VOLUME = 0.85;
 const fmt = (value: number) => Math.round(value).toLocaleString('es');
 
-/** «Aparición reactiva» se pinta igual que «En fila»: comparten botón. */
+type TestAction = 1 | 5 | 'hito' | 'fin';
+
+/** Avisa a las fuentes de OBS de un valor de prueba, sin voz ni guardado. */
+const sendTestValue = (goal: CommunityGoalItem, value: number) =>
+  postBus({
+    type: 'GOAL_UPDATE',
+    goal: {
+      goalId: goal.id,
+      title: goal.title,
+      current: value,
+      target: goal.target,
+      unit: goal.unit,
+      percent: calculateGoalProgress(value, goal.target),
+      completed: value >= goal.target,
+    },
+  });
+
+/** «Aparición reactiva» se pinta igual que «A la vez»: comparten botón. */
 const layoutOf = (mode: GoalsDisplayMode): GoalsDisplayMode => (mode === 'reactive_progress' ? 'row_only' : mode);
 
 export const GoalsStudio: React.FC = () => {
@@ -128,8 +155,8 @@ export const GoalsStudio: React.FC = () => {
   const [wantsFile, setWantsFile] = useState(false);
   const [vault, setVault] = useState<MediaType | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
-  // Avance simulado por meta: se suma solo en la copia que ve el monitor
-  const [simulated, setSimulated] = useState<Record<string, number>>({});
+  // Valor de prueba por meta: lo ven el monitor y OBS, pero no se guarda
+  const [tested, setTested] = useState<Record<string, number>>({});
   const [recentGoalId, setRecentGoalId] = useState<string | null>(null);
   const [monitorVideo, setMonitorVideo] = useState<string | null>(null);
   const [confettiActive, setConfettiActive] = useState(false);
@@ -214,7 +241,36 @@ export const GoalsStudio: React.FC = () => {
   // ---------- Meta seleccionada ----------
   const hasFile = Boolean(activeGoal.victoryCustomAudioUrl);
   const volume = activeGoal.victoryCustomAudioVolume ?? DEFAULT_VOLUME;
-  const patch = (value: Partial<CommunityGoalItem>) => updateGoalItem(activeGoal.id, value);
+  const patch = (value: Partial<CommunityGoalItem>) => {
+    // Si cambia el progreso real, la prueba de esa meta deja de tener sentido
+    if (('current' in value || 'target' in value) && activeGoal.id in tested) {
+      setTested((prev) => {
+        const next = { ...prev };
+        delete next[activeGoal.id];
+        return next;
+      });
+    }
+    updateGoalItem(activeGoal.id, value);
+  };
+
+  // ---------- Diseño ----------
+  const design = GOAL_DESIGNS.find((entry) => entry.id === activeGoal.style) || GOAL_DESIGNS[0];
+  const custom = normalizeGoalCustom(activeGoal.custom);
+  const patchCustom = (value: Partial<GoalCustom>) => patch({ custom: { ...custom, ...value } });
+  const chooseDesign = (id: GoalStyle) => patch(id === 'custom' ? { style: id, custom } : { style: id });
+  const sameDesignEverywhere = goals.every(
+    (goal) =>
+      goal.style === activeGoal.style &&
+      (goal.style !== 'custom' || JSON.stringify(normalizeGoalCustom(goal.custom)) === JSON.stringify(custom))
+  );
+  const applyDesignToAll = () => {
+    undo.offer(`Todas las metas usan ahora el diseño ${design.name}.`, { goals, activeGoalId: activeGoal.id });
+    updateSettings({
+      goals: goals.map((goal) =>
+        activeGoal.style === 'custom' ? { ...goal, style: activeGoal.style, custom } : { ...goal, style: activeGoal.style }
+      ),
+    });
+  };
 
   const select = (id: string) => {
     setActiveGoalId(id);
@@ -233,7 +289,7 @@ export const GoalsStudio: React.FC = () => {
       target: 50,
       unit: 'subs',
       enabled: true,
-      style: 'cabina',
+      style: 'barra',
       accentColor: '#9146ff',
       showPercentage: true,
       showNumbers: true,
@@ -325,18 +381,42 @@ export const GoalsStudio: React.FC = () => {
     else assignVideo(media.url, media.name, media.format === 'webm');
   };
 
-  // ---------- Simular ----------
-  // La copia que ve el monitor: metas guardadas más el avance simulado
-  const previewGoals = goals.map((goal) =>
-    simulated[goal.id] ? { ...goal, current: goal.current + simulated[goal.id] } : goal
-  );
-  const hasSimulation = Object.keys(simulated).length > 0;
+  // ---------- Probar ----------
+  // La copia que ve el monitor: metas guardadas con su valor de prueba
+  const previewGoals = goals.map((goal) => (goal.id in tested ? { ...goal, current: tested[goal.id] } : goal));
+  const hasTest = Object.keys(tested).length > 0;
 
-  const simulate = (delta: number) => {
-    setSimulated((prev) => ({ ...prev, [activeGoal.id]: (prev[activeGoal.id] || 0) + delta }));
+  const runTest = (action: TestAction) => {
+    const from = tested[activeGoal.id] ?? activeGoal.current;
+    if (from >= activeGoal.target) {
+      say('La meta ya está cumplida. Pulsa «Reiniciar» para repetir la prueba.');
+      return;
+    }
+    const to =
+      action === 'fin'
+        ? activeGoal.target
+        : action === 'hito'
+          ? nextMilestoneValue(from, activeGoal.target)
+          : Math.min(activeGoal.target, from + action);
+    setTested((prev) => ({ ...prev, [activeGoal.id]: to }));
+    sendTestValue(activeGoal, to);
     setRecentGoalId(activeGoal.id);
     if (recentTimer.current) clearTimeout(recentTimer.current);
     recentTimer.current = setTimeout(() => setRecentGoalId(null), 3500);
+  };
+
+  // Vuelve a lo guardado. Si la meta guardada ya está cumplida, la prueba
+  // arranca de cero para poder repetirla.
+  const resetTest = () => {
+    const fromZero = activeGoal.current >= activeGoal.target;
+    setTested(fromZero ? { [activeGoal.id]: 0 } : {});
+    postBus({ type: 'GOALS_SETTINGS_UPDATE', settings: goalsSettings });
+    if (fromZero) sendTestValue(activeGoal, 0);
+    say(
+      fromZero
+        ? 'La meta guardada ya está cumplida: la prueba empieza de cero.'
+        : 'Prueba reiniciada: el monitor y OBS muestran lo guardado.'
+    );
   };
 
   const testCelebration = () => {
@@ -371,6 +451,28 @@ export const GoalsStudio: React.FC = () => {
     });
     say(`Celebración de «${activeGoal.title}» enviada al monitor y a OBS.`);
   };
+
+  // Cada guardado envía a OBS las metas reales; si hay una prueba en marcha,
+  // se repite detrás para que el monitor y OBS sigan mostrando lo mismo.
+  const testedRef = useRef(tested);
+  testedRef.current = tested;
+  const settingsRef = useRef<GoalsSettings>(goalsSettings);
+  settingsRef.current = goalsSettings;
+  useEffect(() => {
+    Object.entries(testedRef.current).forEach(([id, value]) => {
+      const goal = goalsSettings.goals.find((entry) => entry.id === id);
+      if (goal) sendTestValue(goal, value);
+    });
+  }, [goalsSettings]);
+  // Al salir del estudio, OBS vuelve a lo guardado
+  useEffect(
+    () => () => {
+      if (Object.keys(testedRef.current).length > 0) {
+        postBus({ type: 'GOALS_SETTINGS_UPDATE', settings: settingsRef.current });
+      }
+    },
+    []
+  );
 
   // ---------- URL de OBS ----------
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -458,6 +560,20 @@ export const GoalsStudio: React.FC = () => {
                   ))}
                 </div>
               </Field>
+              <Field label="Posición" hint="La Cinta ocupa el borde entero, arriba o abajo.">
+                <div className="cab-pos" role="group" aria-label="Posición de las metas en pantalla">
+                  {GOAL_POSITIONS.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      aria-label={entry.name}
+                      title={entry.name}
+                      aria-pressed={goalsSettings.position === entry.id}
+                      onClick={() => updateSettings({ position: entry.id })}
+                    />
+                  ))}
+                </div>
+              </Field>
               {carouselApplies && (
                 <Field label="Cada meta se queda">
                   <Range
@@ -534,22 +650,126 @@ export const GoalsStudio: React.FC = () => {
               </Field>
             </div>
 
-            <Field label="Estilo" hint="Cambia colores, radio y tipografía de la placa.">
-              <div className="cab-seg" role="group" aria-label="Estilo de la meta">
-                {STYLES.map((style) => (
+            <Field label="Diseño" hint={design.hint}>
+              <div className="mt-designs" role="group" aria-label="Diseño de la meta">
+                {GOAL_DESIGNS.map((entry) => (
                   <button
-                    key={style.id}
+                    key={entry.id}
                     type="button"
-                    aria-pressed={activeGoal.style === style.id}
-                    onClick={() => patch({ style: style.id })}
+                    className="mt-design"
+                    aria-pressed={activeGoal.style === entry.id}
+                    onClick={() => chooseDesign(entry.id)}
                   >
-                    {style.name}
+                    <span
+                      className="mt-glyph"
+                      data-g={entry.id}
+                      aria-hidden="true"
+                      style={{ '--c': activeGoal.accentColor } as React.CSSProperties}
+                    >
+                      <i />
+                      {entry.id === 'custom' && (
+                        <>
+                          <i />
+                          <i />
+                        </>
+                      )}
+                    </span>
+                    {entry.name}
                   </button>
                 ))}
               </div>
+              {goals.length > 1 && !sameDesignEverywhere && (
+                <div>
+                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={applyDesignToAll}>
+                    Usar en todas las metas
+                  </button>
+                </div>
+              )}
             </Field>
 
-            <Field label="Color de la barra">
+            {activeGoal.style === 'custom' && (
+              <div className="grid gap-4 rounded border border-[color:var(--cb-line)] p-3">
+                <Field label="Forma" hint="La Cinta no se personaliza: ocupa el borde entero.">
+                  <div className="cab-seg" role="group" aria-label="Forma del diseño personalizado">
+                    {GOAL_CUSTOM_SHAPES.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        aria-pressed={custom.shape === entry.id}
+                        onClick={() => patchCustom({ shape: entry.id })}
+                      >
+                        {entry.name}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field label="Fondo" htmlFor={`${uid}-bg`}>
+                    <input
+                      id={`${uid}-bg`}
+                      type="color"
+                      className="mt-color"
+                      value={custom.background}
+                      onChange={(e) => patchCustom({ background: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Texto" htmlFor={`${uid}-fg`}>
+                    <input
+                      id={`${uid}-fg`}
+                      type="color"
+                      className="mt-color"
+                      value={custom.text}
+                      onChange={(e) => patchCustom({ text: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Tipografía" htmlFor={`${uid}-font`}>
+                    <select
+                      id={`${uid}-font`}
+                      className="cab-inp"
+                      value={custom.font}
+                      onChange={(e) => patchCustom({ font: e.target.value as GoalFontId })}
+                    >
+                      {GOAL_FONTS.map((font) => (
+                        <option key={font.id} value={font.id}>
+                          {font.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="Tamaño">
+                  <Range
+                    label="Tamaño de la meta"
+                    min={GOAL_SIZE_MIN}
+                    max={GOAL_SIZE_MAX}
+                    step={5}
+                    value={custom.size}
+                    format={(value) => `${value}%`}
+                    onChange={(value) => patchCustom({ size: value })}
+                  />
+                </Field>
+                <Field label="Redondeo">
+                  <Range
+                    label="Redondeo de las esquinas"
+                    min={0}
+                    max={GOAL_RADIUS_MAX}
+                    value={custom.radius}
+                    format={(value) => String(value)}
+                    onChange={(value) => patchCustom({ radius: value })}
+                  />
+                </Field>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Toggle label="Título" checked={custom.showTitle} onChange={(next) => patchCustom({ showTitle: next })} />
+                  <Toggle
+                    label="Meta y unidad"
+                    checked={custom.showTarget}
+                    onChange={(next) => patchCustom({ showTarget: next })}
+                  />
+                </div>
+              </div>
+            )}
+
+            <Field label="Color de avance" hint="El texto que va encima se aclara u oscurece solo para que se lea.">
               <div className="cab-sw">
                 {ACCENTS.map((accent) => (
                   <button
@@ -741,6 +961,7 @@ export const GoalsStudio: React.FC = () => {
                 activeGoalId={activeGoal.id}
                 displayMode={goalsSettings.displayMode}
                 slideshowIntervalSec={goalsSettings.slideshowIntervalSec}
+                position={goalsSettings.position}
                 recentProgressGoalId={recentGoalId}
                 onSelectGoal={select}
                 isStudio={true}
@@ -748,29 +969,28 @@ export const GoalsStudio: React.FC = () => {
             </div>
 
             <Field
-              label="Simular"
-              hint="Los avances simulados solo se ven en este monitor: no cambian tus metas ni llegan a OBS. La celebración sí se envía a las fuentes de OBS abiertas."
+              label="Probar"
+              hint="Las pruebas mueven la meta elegida en este monitor y en las fuentes de OBS abiertas, sin cambiar lo guardado. Los hitos son el 25, 50 y 75 %."
             >
               <div className="flex flex-wrap gap-2">
-                {[1, 5, 25].map((delta) => (
-                  <button
-                    key={delta}
-                    type="button"
-                    className="cab-btn2 cab-btn-sm"
-                    aria-label={`Simular un avance de ${delta}`}
-                    onClick={() => simulate(delta)}
-                  >
-                    +{delta}
-                  </button>
-                ))}
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest(1)}>
+                  Aporte +1
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest(5)}>
+                  Aporte +5
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest('hito')}>
+                  Hasta el siguiente hito
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest('fin')}>
+                  Completar
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={resetTest}>
+                  Reiniciar
+                </button>
                 <button type="button" className="cab-btn2 cab-btn-sm" onClick={testCelebration}>
                   Probar celebración
                 </button>
-                {hasSimulation && (
-                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setSimulated({})}>
-                    Quitar simulación
-                  </button>
-                )}
               </div>
             </Field>
 
@@ -780,8 +1000,8 @@ export const GoalsStudio: React.FC = () => {
             </button>
             <p className="cab-hint" role="status">
               {status ||
-                (hasSimulation
-                  ? 'El monitor muestra un avance simulado.'
+                (hasTest
+                  ? 'El monitor y OBS muestran una prueba. Tus metas guardadas no han cambiado.'
                   : 'El monitor muestra tus metas tal como están guardadas.')}
             </p>
           </section>

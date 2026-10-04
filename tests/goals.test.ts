@@ -182,7 +182,7 @@ describe('Community Goals Module', () => {
         target: 50,
         unit: 'subs',
         enabled: true,
-        style: 'neon',
+        style: 'barra',
         accentColor: '#53fc18',
         showPercentage: true,
         showNumbers: true,
@@ -218,7 +218,65 @@ describe('Community Goals Module', () => {
       expect(loaded.goals[0].title).toBe('Meta de Navidad');
       expect(loaded.goals[0].victoryCustomAudioName).toBe('fanfarria_navidad.mp3');
       expect(loaded.goals[0].victoryCustomAudioVolume).toBe(0.9);
-      expect(loaded.goals[0].style).toBe('neon');
+      expect(loaded.goals[0].style).toBe('barra');
+    });
+
+    it('migra las metas guardadas con un estilo antiguo a Barra y conserva su color', () => {
+      const oldGoals = ['cabina', 'neon', 'cyber', 'minimal'].map((style, i) => ({
+        ...DEFAULT_GOALS[0],
+        id: `goal-old-${i}`,
+        style,
+        accentColor: `#00f${i}ff`,
+        current: 10 + i,
+      }));
+      localStorage.setItem(
+        GOALS_STORAGE_KEY,
+        JSON.stringify({ channel: 'jagc_stream', displayMode: 'row_only', goals: oldGoals })
+      );
+
+      const loaded = loadGoalsSettings();
+
+      expect(loaded.goals).toHaveLength(4);
+      loaded.goals.forEach((goal, i) => {
+        expect(goal.style).toBe('barra');
+        expect(goal.accentColor).toBe(`#00f${i}ff`);
+        expect(goal.current).toBe(10 + i);
+        expect(goal.custom).toBeUndefined();
+      });
+      // Lo guardado antes de existir la posición sale arriba al centro
+      expect(loaded.position).toBe('tc');
+      expect(loaded.displayMode).toBe('row_only');
+    });
+
+    it('guarda y recupera el diseño nuevo, el personalizado y la posición', () => {
+      saveGoalsSettings({
+        ...DEFAULT_GOALS_SETTINGS,
+        position: 'br',
+        goals: [
+          { ...DEFAULT_GOALS[0], style: 'anillo' },
+          {
+            ...DEFAULT_GOALS[1],
+            style: 'custom',
+            custom: {
+              shape: 'columna',
+              background: '#101010',
+              text: '#fafafa',
+              font: 'mono',
+              size: 120,
+              radius: 6,
+              showTitle: false,
+              showTarget: true,
+            },
+          },
+        ],
+      });
+
+      const loaded = loadGoalsSettings();
+
+      expect(loaded.position).toBe('br');
+      expect(loaded.goals[0].style).toBe('anillo');
+      expect(loaded.goals[1].style).toBe('custom');
+      expect(loaded.goals[1].custom).toMatchObject({ shape: 'columna', font: 'mono', size: 120, showTitle: false });
     });
   });
 });

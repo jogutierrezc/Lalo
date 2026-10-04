@@ -8,6 +8,7 @@
  *   - #control: Mesa de control en vivo durante el stream
  *   - #alertas: Estudio de Alertas de Stream (Follow, Sub, Bits, Raid)
  *   - #chat: Estudio de la capa Chat en vivo
+ *   - #raid: Estudio del saludo de raid con corto
  *   - #twitchio / #bot: Estudio de Bot y EventSub (Powered by TwitchIO)
  *   - #cuenta: Mi cuenta del streamer (con la nube)
  *   - #admin, #admin/...: consola del administrador. Quien tiene rol de
@@ -33,6 +34,7 @@ import { GoalsStudio } from './pages/GoalsStudio';
 import { RouletteStudio } from './pages/RouletteStudio';
 import { PollsStudio } from './pages/PollsStudio';
 import { ChatStudio } from './pages/ChatStudio';
+import { RaidStudio } from './pages/RaidStudio';
 import { Access } from './pages/Access';
 import { Bienvenida, bienvenidaHechaAqui } from './pages/Bienvenida';
 import { Account } from './pages/Account';
@@ -59,6 +61,7 @@ export type AppRoute =
   | 'ruleta'
   | 'encuestas'
   | 'chat'
+  | 'raid'
   | 'cuenta'
   | 'admin'
   | 'nube'
@@ -153,6 +156,9 @@ function resolveRoute(): AppRoute {
 
   // Chat en vivo: el chat de Twitch como capa
   if (hash === 'chat' || hash.startsWith('chat?') || hash.startsWith('chat/')) return 'chat';
+
+  // Saludo de raid con corto
+  if (hash === 'raid' || hash === 'raids' || hash.startsWith('raid?') || hash.startsWith('raid/')) return 'raid';
 
   // Cuenta del streamer y portal de administración (solo con la nube configurada)
   if (hash.startsWith('cuenta')) return 'cuenta';
@@ -289,6 +295,8 @@ const Routes: React.FC = () => {
       return <PollsStudio />;
     case 'chat':
       return <ChatStudio />;
+    case 'raid':
+      return <RaidStudio />;
     case 'twitchio':
       return <TwitchIOStudio />;
     case 'tts':

@@ -20,6 +20,7 @@ import { loadGoalsSettings } from '../types/goals';
 import { loadRouletteSettings } from '../types/roulette';
 import { loadPollSettings } from '../types/polls';
 import { loadChatSettings } from '../types/chat';
+import { loadRaidSettings } from '../types/raid';
 
 const CHECK_EVERY_MS = 30000;
 
@@ -43,6 +44,7 @@ function announce(module: ConfigModule): void {
   if (module === 'roulette') postBus({ type: 'ROULETTE_SETTINGS_UPDATE', settings: loadRouletteSettings() });
   if (module === 'polls') postBus({ type: 'POLL_SETTINGS_UPDATE', settings: loadPollSettings() });
   if (module === 'chat') postBus({ type: 'CHAT_SETTINGS_UPDATE', settings: loadChatSettings() });
+  if (module === 'raid') postBus({ type: 'RAID_SETTINGS_UPDATE', settings: loadRaidSettings() });
 }
 
 async function pullBundle(key: string, notify: boolean): Promise<boolean> {

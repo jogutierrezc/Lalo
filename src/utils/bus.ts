@@ -15,6 +15,7 @@ import type { RouletteSettings, RouletteSegment } from '../types/roulette';
 import type { PollSettings, PollOption } from '../types/polls';
 import type { PollStartEvent } from './pollCommands';
 import type { ChatSettings } from '../types/chat';
+import type { RaidSettings } from '../types/raid';
 
 export type { PollStartEvent };
 
@@ -187,6 +188,7 @@ export type BusMessage =
   | { type: 'POLL_STOP'; user?: string }
   | { type: 'POLL_CLEAR' }
   | { type: 'CHAT_SETTINGS_UPDATE'; settings: ChatSettings }
+  | { type: 'RAID_SETTINGS_UPDATE'; settings: RaidSettings }
   | { type: 'ENQUEUE'; text: string; user?: string }
   | { type: 'FORCE_RELOAD' }
   | { type: 'CONTROL'; action: ControlAction | 'remove'; id?: string; user?: string; minutes?: number; sender?: string; senderRole?: string }

@@ -1,0 +1,633 @@
+/* ==========================================================================
+   Capa de metas: cinco diseños que cambian de forma y uno personalizado.
+   Todo se mide en em. La raíz fija el tamaño de letra como una fracción del
+   ancho de la pantalla (1/60), igual en OBS que en el monitor del estudio,
+   así la pieza ocupa la misma proporción en los dos sitios.
+   Tokens: los de .ovl (--p-bg, --p-fg, --p-mut, --p-track, --p-line, --p-r,
+   --p-font), más --c (color de avance) y --c-ink (tinta sobre ese color).
+   ========================================================================== */
+
+.ovl.mt-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  font-size: calc(100vw / 60);
+  user-select: none;
+}
+/* En el estudio la raíz cubre el monitor 16:9. El monitor tiene un 3,5 % de
+   margen interior a cada lado, por eso 100cqw es el 93 % de su ancho. */
+.ovl.mt-root[data-studio] {
+  position: absolute;
+  font-size: max(6px, calc(100cqw / 55.8));
+}
+
+/* ---------- Colocación ---------- */
+.mt-group {
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  display: flex;
+  gap: 0.6em;
+}
+.mt-group[data-pos^='t'] {
+  top: 5%;
+}
+.mt-group[data-pos^='b'] {
+  bottom: 5%;
+}
+/* Si hay una cinta en el mismo borde, el resto de piezas le deja sitio */
+.mt-root[data-cinta='t'] .mt-group[data-pos^='t'] {
+  top: calc(5% + 2.3em);
+}
+.mt-root[data-cinta='b'] .mt-group[data-pos^='b'] {
+  bottom: calc(5% + 2.3em);
+}
+.mt-group[data-flow='fila'] {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.mt-group[data-flow='fila'][data-pos^='b'] {
+  align-items: flex-end;
+}
+/* Piezas de la misma forma en fila: todas con la misma altura */
+.mt-group[data-flow='fila'][data-same] {
+  align-items: stretch;
+}
+.mt-group[data-flow='fila'][data-pos$='l'] {
+  justify-content: flex-start;
+}
+.mt-group[data-flow='fila'][data-pos$='c'] {
+  justify-content: center;
+}
+.mt-group[data-flow='fila'][data-pos$='r'] {
+  justify-content: flex-end;
+}
+.mt-group[data-flow='pila'] {
+  flex-direction: column;
+}
+.mt-group[data-flow='pila'][data-pos$='l'] {
+  align-items: flex-start;
+}
+.mt-group[data-flow='pila'][data-pos$='c'] {
+  align-items: center;
+}
+.mt-group[data-flow='pila'][data-pos$='r'] {
+  align-items: flex-end;
+}
+
+/* Borde que ocupan las cintas: de lado a lado, arriba o abajo */
+.mt-edge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+}
+.mt-edge[data-edge='t'] {
+  top: 0;
+}
+.mt-edge[data-edge='b'] {
+  bottom: 0;
+}
+
+/* ---------- Pieza ---------- */
+.mt-piece {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+.mt-root[data-studio] .mt-piece {
+  pointer-events: auto;
+}
+.mt-piece[role='button'] {
+  cursor: pointer;
+}
+.mt-piece[data-selected] .mt-plate {
+  outline: 2px solid #efe9dc;
+  outline-offset: 2px;
+}
+.mt-piece[data-selected] .mt-cinta {
+  outline-offset: -2px;
+}
+.mt-piece:focus-visible {
+  outline: 2px solid #efe9dc;
+  outline-offset: 3px;
+}
+.mt-plate {
+  position: relative;
+  min-width: 0;
+}
+
+/* ---------- Textos comunes ---------- */
+.mt-ti {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--p-mut);
+  font-stretch: 75%;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.mt-n {
+  display: inline-block;
+  font-stretch: 80%;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.mt-count {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  column-gap: 0.35em;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
+.mt-of {
+  color: var(--p-mut);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.mt-plus {
+  position: absolute;
+  top: -1.6em;
+  right: 0;
+  padding: 0 0.45em;
+  border-radius: 0.15em;
+  background: var(--p-fg);
+  color: var(--p-bg);
+  font-size: 0.9em;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.mt-done {
+  display: inline-block;
+  padding: 0.05em 0.5em;
+  border-radius: 0.15em;
+  background: var(--c);
+  color: var(--c-ink);
+  font-stretch: 75%;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.mt-top {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2em 0.7em;
+}
+.mt-top .mt-ti {
+  flex: 1 1 8em;
+  min-width: 0;
+}
+
+/* Pista y relleno horizontales (Barra y Cinta) */
+.mt-track {
+  position: relative;
+  height: 1em;
+  overflow: hidden;
+  border-radius: calc(var(--p-r) * 0.6);
+  background: var(--p-track);
+}
+.mt-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--c);
+}
+.mt-tip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5em;
+  background: linear-gradient(90deg, transparent, #ffffff);
+  opacity: 0;
+}
+.mt-ticks i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* ---------- 1. Barra ---------- */
+.mt-piece[data-d='barra'] {
+  width: 32em;
+}
+.mt-barra {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: space-between;
+  gap: 0.55em;
+  padding: 0.8em 1em 0.9em;
+}
+.mt-barra .mt-n {
+  font-size: 2em;
+}
+
+/* ---------- 2. Anillo ---------- */
+.mt-anillo {
+  display: flex;
+  align-items: center;
+  gap: 0.9em;
+  padding: 0.7em 1.1em 0.7em 0.7em;
+}
+.mt-ringwrap {
+  position: relative;
+  flex: none;
+  width: 6em;
+  height: 6em;
+}
+.mt-ringwrap svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.mt-ringwrap circle {
+  fill: none;
+  stroke-width: 10;
+}
+.mt-ring-bg {
+  stroke: var(--p-track);
+}
+.mt-ring {
+  stroke: var(--c);
+}
+.mt-pc {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.5em;
+}
+.mt-side {
+  position: relative;
+  display: grid;
+  gap: 0.2em;
+  min-width: 0;
+}
+.mt-anillo .mt-ti {
+  max-width: 14em;
+}
+.mt-anillo .mt-count {
+  justify-content: flex-start;
+  margin-left: 0;
+  font-size: 1.05em;
+}
+/* Tres o cuatro anillos en fila: el texto baja debajo del anillo */
+.mt-piece[data-tight][data-d='anillo'] {
+  flex: 1 1 0;
+  max-width: 14em;
+}
+.mt-piece[data-tight] .mt-anillo {
+  flex-direction: column;
+  padding: 0.7em 0.8em 0.8em;
+  text-align: center;
+}
+.mt-piece[data-tight] .mt-side {
+  justify-items: center;
+  width: 100%;
+}
+.mt-piece[data-tight] .mt-anillo .mt-ti {
+  max-width: 100%;
+}
+.mt-piece[data-tight] .mt-anillo .mt-count {
+  justify-content: center;
+}
+.mt-anillo .mt-count .mt-n {
+  font-size: 1.6em;
+}
+.mt-anillo .mt-of {
+  font-size: 0.85em;
+}
+
+/* ---------- 3. Bloques ---------- */
+.mt-piece[data-d='bloques'] {
+  width: 28em;
+}
+.mt-bloques {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: space-between;
+  gap: 0.6em;
+  padding: 0.8em 1em 0.9em;
+}
+.mt-bloques .mt-n {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 1.7em;
+  font-weight: 700;
+}
+.mt-blocks {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 0.25em;
+}
+.mt-blocks i {
+  height: 1.3em;
+  border-radius: calc(var(--p-r) * 0.5);
+  background: var(--p-track);
+}
+.mt-blocks i[data-on] {
+  background: var(--c);
+}
+
+/* ---------- 4. Cinta ---------- */
+.mt-piece[data-d='cinta'] {
+  flex: 1 1 0;
+}
+.mt-piece[data-d='cinta'] + .mt-piece[data-d='cinta'] .mt-cinta {
+  border-left: 1px solid var(--p-line);
+}
+.mt-cinta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  height: 2.3em;
+  padding: 0 1.2em;
+  overflow: hidden;
+  background: var(--p-bg);
+  color: #ffffff;
+  font-family: var(--p-font);
+}
+.mt-cinta[data-edge='t'] {
+  border-bottom: 1px solid var(--p-line);
+  transform-origin: center top;
+}
+.mt-cinta[data-edge='b'] {
+  border-top: 1px solid var(--p-line);
+  transform-origin: center bottom;
+}
+.mt-cinta .mt-fill {
+  opacity: 0.9;
+}
+.mt-cinta > :not(.mt-fill) {
+  position: relative;
+}
+/* El texto pasa por encima del avance y del fondo: un halo oscuro lo mantiene legible en ambos */
+.mt-cinta .mt-ti,
+.mt-cinta .mt-n,
+.mt-cinta .mt-of {
+  color: #ffffff;
+  text-shadow:
+    0 0 0.15em rgba(0, 0, 0, 0.9),
+    0 0 0.45em rgba(0, 0, 0, 0.75);
+}
+.mt-cinta .mt-ti {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.mt-cinta .mt-n {
+  font-size: 1.3em;
+}
+.mt-cinta-end {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 0.6em;
+  margin-left: auto;
+}
+.mt-cinta .mt-count {
+  flex-wrap: nowrap;
+}
+.mt-cinta .mt-plus {
+  position: static;
+}
+.mt-cinta .mt-done {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+/* Marcas del carrusel pegadas a la cinta */
+.mt-edge .gl-segs {
+  position: absolute;
+  left: 0;
+  right: 0;
+  margin: 0;
+}
+.mt-edge[data-edge='t'] .gl-segs {
+  top: 100%;
+}
+.mt-edge[data-edge='b'] .gl-segs {
+  bottom: 100%;
+}
+
+/* ---------- 5. Columna ---------- */
+.mt-piece[data-d='columna'] {
+  flex: none;
+  width: 7em;
+}
+.mt-columna {
+  display: grid;
+  justify-items: center;
+  gap: 0.5em;
+  padding: 0.7em 0.8em 0.8em;
+  text-align: center;
+}
+.mt-columna .mt-n {
+  font-size: 1.9em;
+}
+/* Siempre dos líneas (meta y unidad) para que las pistas queden a la misma altura */
+.mt-colof {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 2.4em;
+  max-width: 100%;
+  font-size: 0.85em;
+}
+.mt-columna .mt-of {
+  max-width: 100%;
+}
+.mt-columna .mt-unit {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mt-columna .mt-done {
+  padding: 0.05em 0.3em;
+  font-size: 0.8em;
+  letter-spacing: 0.03em;
+}
+.mt-vtrack {
+  position: relative;
+  width: 1.8em;
+  height: 15em;
+  overflow: hidden;
+  border-radius: calc(var(--p-r) * 0.6);
+  background: var(--p-track);
+}
+.mt-vfill {
+  position: absolute;
+  inset: 0;
+  background: var(--c);
+}
+.mt-vtip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5em;
+  background: linear-gradient(0deg, transparent, #ffffff);
+  opacity: 0;
+}
+.mt-columna .mt-ti {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: normal;
+  font-size: 0.8em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* ---------- Carrusel ---------- */
+.mt-slide {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+}
+.mt-ctl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4%;
+  margin: 0;
+  pointer-events: auto;
+}
+.mt-ctl[data-at='t'] {
+  top: 4%;
+  bottom: auto;
+}
+.mt-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+
+/* ==========================================================================
+   Estudio: selector de diseño
+   ========================================================================== */
+.mt-designs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+.mt-design {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--cb-line);
+  border-radius: 4px;
+  background: var(--cb-bg);
+  color: var(--cb-mut);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.14s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.mt-design:active {
+  transform: scale(0.97);
+}
+.mt-design[aria-pressed='true'] {
+  border-color: var(--ui);
+  color: var(--cb-fg);
+  box-shadow: inset 0 0 0 1px var(--ui);
+}
+@media (hover: hover) {
+  .mt-design:hover:not([aria-pressed='true']) {
+    border-color: var(--cb-mut);
+    color: var(--cb-fg);
+  }
+}
+/* Dibujo esquemático de cada forma, con el color de la meta */
+.mt-glyph {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 32px;
+  border-radius: 3px;
+  background: #1b1c1f;
+}
+.mt-glyph i,
+.mt-glyph b {
+  display: block;
+}
+.mt-glyph[data-g='barra'] i {
+  width: 42px;
+  height: 7px;
+  background: linear-gradient(90deg, var(--c) 62%, #3a3c42 62%);
+}
+.mt-glyph[data-g='anillo'] i {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: conic-gradient(var(--c) 62%, #3a3c42 0);
+  -webkit-mask: radial-gradient(circle, transparent 6px, #000 6.5px);
+  mask: radial-gradient(circle, transparent 6px, #000 6.5px);
+}
+.mt-glyph[data-g='bloques'] i {
+  width: 44px;
+  height: 9px;
+  background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px);
+  -webkit-mask: linear-gradient(90deg, #000 62%, rgba(0, 0, 0, 0.25) 62%);
+  mask: linear-gradient(90deg, #000 62%, rgba(0, 0, 0, 0.25) 62%);
+}
+.mt-glyph[data-g='cinta'] {
+  align-items: flex-start;
+}
+.mt-glyph[data-g='cinta'] i {
+  width: 100%;
+  height: 7px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, var(--c) 62%, #3a3c42 62%);
+}
+.mt-glyph[data-g='columna'] i {
+  width: 8px;
+  height: 24px;
+  background: linear-gradient(0deg, var(--c) 62%, #3a3c42 62%);
+}
+.mt-glyph[data-g='custom'] {
+  gap: 4px;
+}
+.mt-glyph[data-g='custom'] i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.mt-glyph[data-g='custom'] i + i {
+  background: #efe9dc;
+}
+.mt-glyph[data-g='custom'] i + i + i {
+  background: #3a3c42;
+}
+/* Dos colores lado a lado en el diseño personalizado */
+.mt-color {
+  width: 100%;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  cursor: pointer;
+}
