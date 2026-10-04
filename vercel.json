@@ -4,13 +4,13 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/media/:action", "destination": "/api/storage?g=media&a=:action" },
+    { "source": "/api/storage/:action", "destination": "/api/storage?g=storage&a=:action" },
+    { "source": "/api/voices/:action", "destination": "/api/voices?g=voices&a=:action" },
+    { "source": "/api/twitch/clip", "destination": "/api/twitch?g=twitch&a=clip" },
+    { "source": "/api/twitch/subscriptions", "destination": "/api/twitch?g=twitch&a=subscriptions" },
+    { "source": "/api/health", "destination": "/api/version?health=1" },
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

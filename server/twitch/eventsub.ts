@@ -28,6 +28,21 @@
  *     y channel.channel_points_custom_reward_redemption.add en
  *     https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/
  *
+ * Cómo probarlo:
+ *   - En local Twitch no puede llegar a esta ruta. Para ver las capas, la página
+ *     «Power-ups» tiene botones que envían eventos de ejemplo por el mismo camino
+ *     de entrega (tabla de eventos y consulta de la capa de OBS).
+ *   - Para probar la ruta en local con la CLI de Twitch (https://dev.twitch.tv/docs/cli/),
+ *     con «npm run server» en marcha y TWITCH_EVENTSUB_SECRET puesto:
+ *       twitch event verify-subscription channel.channel_points_custom_reward_redemption.add \
+ *         -F http://localhost:3001/api/twitch/eventsub -s <el secreto>
+ *       twitch event trigger channel.channel_points_custom_reward_redemption.add \
+ *         -F http://localhost:3001/api/twitch/eventsub -s <el secreto> -t <id de Twitch de tu canal>
+ *     El evento solo se guarda si ese id es el de una cuenta activa de Lalo. Puede
+ *     que la CLI aún no sepa simular channel.bits.use ni los Power-ups personalizados.
+ *   - De verdad solo se prueba desplegado: Twitch exige una dirección https
+ *     pública. Se enciende desde «Power-ups» → «Canal de eventos».
+ *
  * SIN PROBAR contra Twitch ni contra Supabase reales.
  */
 
