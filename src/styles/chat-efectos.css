@@ -1,0 +1,142 @@
+/* ==========================================================================
+   Chat en vivo: mensajes enviados con un Power-up de Twitch.
+
+   - Efecto de mensaje ([data-fx]): el mensaje lleva un fondo que se mueve
+     despacio y un borde de color, distinto para cada efecto de Twitch.
+   - Emote gigante ([data-giant]): el último emote del mensaje sale grande.
+
+   Mismo lenguaje que el resto de la capa: mate, plano y medido en em. Solo se
+   animan fondo, sombra y transformaciones. Con «reducir movimiento» queda el
+   color sin animación. Un mensaje borrado por moderación pierde el efecto.
+   ========================================================================== */
+
+.ch-pu {
+  background: var(--ch-fx-c, var(--ch-acc));
+  color: var(--ch-fx-ink, var(--ch-acc-ink));
+}
+
+.ch-row[data-fx]:not([data-del]) .ch-msg {
+  border-color: var(--ch-fx-c);
+  background-image: var(--ch-fx-bg);
+  background-size: 260% 100%;
+  box-shadow: 0 0 1em -0.25em var(--ch-fx-glow);
+  animation: ch-fx-drift 5s linear infinite alternate, ch-fx-glow 2.4s ease-in-out infinite alternate;
+}
+
+/* Brasas: tonos cálidos que suben y bajan */
+.ch-row[data-fx='simmer'] {
+  --ch-fx-c: #ff7a45;
+  --ch-fx-ink: #1b1c1f;
+  --ch-fx-glow: rgba(255, 122, 69, 0.75);
+  --ch-fx-bg: linear-gradient(100deg, rgba(255, 122, 69, 0.34), rgba(255, 59, 107, 0.14) 35%, rgba(255, 176, 32, 0.34) 70%, rgba(255, 122, 69, 0.14));
+}
+
+/* Arcoíris: el borde y el fondo recorren los colores */
+.ch-row[data-fx='rainbow-eclipse'] {
+  --ch-fx-c: #b68cff;
+  --ch-fx-ink: #1b1c1f;
+  --ch-fx-glow: rgba(182, 140, 255, 0.7);
+  --ch-fx-bg: linear-gradient(
+    100deg,
+    rgba(255, 59, 107, 0.3),
+    rgba(255, 176, 32, 0.3) 20%,
+    rgba(61, 220, 132, 0.3) 40%,
+    rgba(34, 200, 240, 0.3) 60%,
+    rgba(107, 140, 255, 0.3) 80%,
+    rgba(182, 140, 255, 0.3)
+  );
+}
+.ch-row[data-fx='rainbow-eclipse']:not([data-del]) .ch-msg {
+  animation: ch-fx-drift 4s linear infinite alternate, ch-fx-hue 6s linear infinite;
+}
+
+/* Abismo: azules y violetas profundos, lento */
+.ch-row[data-fx='cosmic-abyss'] {
+  --ch-fx-c: #6b8cff;
+  --ch-fx-ink: #ffffff;
+  --ch-fx-glow: rgba(107, 140, 255, 0.7);
+  --ch-fx-bg: linear-gradient(100deg, rgba(40, 30, 110, 0.6), rgba(107, 140, 255, 0.22) 40%, rgba(120, 50, 170, 0.5) 75%, rgba(20, 24, 70, 0.6));
+}
+.ch-row[data-fx='cosmic-abyss']:not([data-del]) .ch-msg {
+  animation-duration: 9s, 3.6s;
+}
+
+/* Un efecto que Lalo aún no conoce: el color de acento de la plantilla */
+.ch-row[data-fx='generic'] {
+  --ch-fx-c: var(--ch-acc);
+  --ch-fx-ink: var(--ch-acc-ink);
+  --ch-fx-glow: color-mix(in srgb, var(--ch-acc) 70%, transparent);
+  --ch-fx-bg: linear-gradient(100deg, color-mix(in srgb, var(--ch-acc) 32%, transparent), transparent 45%, color-mix(in srgb, var(--ch-acc) 32%, transparent));
+}
+
+@keyframes ch-fx-drift {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+@keyframes ch-fx-glow {
+  from {
+    box-shadow: 0 0 0.6em -0.3em var(--ch-fx-glow);
+  }
+  to {
+    box-shadow: 0 0 1.5em -0.15em var(--ch-fx-glow);
+  }
+}
+@keyframes ch-fx-hue {
+  0%,
+  100% {
+    border-color: #ff3b6b;
+  }
+  25% {
+    border-color: #ffb020;
+  }
+  50% {
+    border-color: #3ddc84;
+  }
+  75% {
+    border-color: #6b8cff;
+  }
+}
+
+/* Emote gigante */
+.ch-row[data-giant] {
+  --ch-fx-c: var(--ch-acc);
+}
+.ch-row[data-giant]:not([data-del]) .ch-msg {
+  border-color: var(--ch-acc);
+}
+.ch-em.ch-em-giant {
+  display: block;
+  height: 6.4em;
+  margin: 0.35em 0 0.1em;
+  transform-origin: left bottom;
+  animation: ch-giant-in 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+.chl[data-side='r'] .ch-em.ch-em-giant {
+  margin-left: auto;
+  transform-origin: right bottom;
+}
+.ch-row[data-del] .ch-em-giant {
+  display: none;
+}
+@keyframes ch-giant-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-row[data-fx]:not([data-del]) .ch-msg,
+  .ch-row[data-fx='rainbow-eclipse']:not([data-del]) .ch-msg,
+  .ch-em.ch-em-giant {
+    animation: none;
+  }
+}

@@ -38,7 +38,37 @@ export interface ChatDisplayMessage {
   highlighted: boolean; // «Destacar mi mensaje» con puntos del canal
   emoteOnly: boolean;
   voice: boolean; // la voz lo va a leer
+  /** Mensaje enviado con el Power-up «Efecto de mensaje»: qué efecto, o null. */
+  effect: ChatEffect | null;
+  /** Mensaje enviado con el Power-up «Emote gigante»: el último emote sale grande. */
+  giant: boolean;
   at: number;
+}
+
+/**
+ * Efectos de mensaje de Twitch. Los tres primeros son los ids que Twitch pone en
+ * la etiqueta `animation-id`; `generic` es cualquier otro que añada más adelante.
+ */
+export type ChatEffect = 'simmer' | 'rainbow-eclipse' | 'cosmic-abyss' | 'generic';
+
+/**
+ * Lee de las etiquetas del chat si el mensaje se envió con un Power-up.
+ *
+ * Twitch lo marca en el propio mensaje (PRIVMSG) con `msg-id=animated-message`
+ * y `animation-id=<efecto>`, o con `msg-id=gigantified-emote-message`. Llega
+ * por la conexión anónima del chat, sin ningún permiso, y tmi.js entrega las
+ * etiquetas tal cual. OJO: estas etiquetas no aparecen en la página oficial de
+ * etiquetas de IRC (https://dev.twitch.tv/docs/irc/tags/, revisada el
+ * 2026-10-04); son las que envía Twitch y usan los clientes de chat. Si un día
+ * dejan de llegar, el mensaje se pinta como uno normal.
+ */
+export function readPowerupTags(tags: { 'msg-id'?: unknown; 'animation-id'?: unknown }): { effect: ChatEffect | null; giant: boolean } {
+  const kind = tags['msg-id'];
+  if (kind === 'gigantified-emote-message') return { effect: null, giant: true };
+  if (kind !== 'animated-message') return { effect: null, giant: false };
+  const id = typeof tags['animation-id'] === 'string' ? tags['animation-id'].toLowerCase() : '';
+  const known: ChatEffect[] = ['simmer', 'rainbow-eclipse', 'cosmic-abyss'];
+  return { effect: known.find((item) => item === id) ?? 'generic', giant: false };
 }
 
 /** Lo que hace un moderador y obliga a quitar mensajes de pantalla. */
@@ -55,6 +85,7 @@ export interface FeedTags extends ChatTags {
   'display-name'?: string;
   'first-msg'?: boolean | string | number;
   'tmi-sent-ts'?: string;
+  'animation-id'?: string;
 }
 
 const truthy = (value: unknown) => value === true || value === '1' || value === 1;
@@ -109,6 +140,7 @@ export function toDisplayMessage(
     highlighted: tags['msg-id'] === 'highlighted-message',
     emoteOnly: isEmoteOnly(message, tags),
     voice: extra.voice === true,
+    ...readPowerupTags(tags),
     at: Number.isFinite(sent) && sent > 0 ? sent : extra.now ?? Date.now(),
   };
 }
@@ -131,8 +163,8 @@ export function splitMessage(text: string, emotes: EmoteRange[]): ChatSegment[] 
 export type EmoteFormat = 'default' | 'static';
 
 /** Dirección de la imagen de un emote en el CDN de Twitch. */
-export function emoteUrl(id: string, theme: 'dark' | 'light' = 'dark', format: EmoteFormat = 'default'): string {
-  return `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(id)}/${format}/${theme}/2.0`;
+export function emoteUrl(id: string, theme: 'dark' | 'light' = 'dark', format: EmoteFormat = 'default', scale: '2.0' | '3.0' = '2.0'): string {
+  return `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(id)}/${format}/${theme}/${scale}`;
 }
 
 // ---------- Color del nombre ----------
@@ -182,7 +214,7 @@ export function readableNameColor(color: string | null, username: string, backgr
 
 // ---------- Modo demostración ----------
 
-export type DemoKind = 'normal' | 'command' | 'sub' | 'bits' | 'emotes' | 'first' | 'mod';
+export type DemoKind = 'normal' | 'command' | 'sub' | 'bits' | 'emotes' | 'first' | 'mod' | 'effect' | 'giant';
 
 interface DemoSeed {
   user: string;
@@ -193,6 +225,8 @@ interface DemoSeed {
   first?: boolean;
   highlighted?: boolean;
   emotes?: Record<string, string[]>;
+  effect?: ChatEffect;
+  giant?: boolean;
 }
 
 // Emotes globales de Twitch: Kappa (25), LUL (425618), HeyGuys (30259)
@@ -209,6 +243,13 @@ const DEMO: Record<DemoKind, DemoSeed[]> = {
   emotes: [{ user: 'xx_pro', text: 'Kappa LUL HeyGuys', color: '#ff7a45', emotes: { '25': ['0-4'], '425618': ['6-8'], '30259': ['10-16'] } }],
   first: [{ user: 'ana_k', text: 'primer directo que veo, me quedo', badges: [], first: true }],
   mod: [{ user: 'caro_tv', text: 'recuerden: sin spoilers', color: '#6b8cff', badges: ['mod'] }],
+  // Power-ups: un mensaje con cada efecto y uno con el emote gigante
+  effect: [
+    { user: 'pau_rl', text: 'vamos que se puede', color: '#b68cff', effect: 'rainbow-eclipse' },
+    { user: 'dani_gg', text: 'esto está que arde', color: '#3ddc84', effect: 'simmer' },
+    { user: 'mar_ia', text: 'buenas noches a todos', color: '#ff3b6b', effect: 'cosmic-abyss' },
+  ],
+  giant: [{ user: 'leo_m', text: 'qué jugada LUL', color: '#22c8f0', emotes: { '425618': ['11-13'] }, giant: true }],
 };
 
 let demoCount = 0;
@@ -234,6 +275,8 @@ export function demoMessage(kind: DemoKind, command = '!s', voice = false): Chat
     highlighted: seed.highlighted === true,
     emoteOnly: isEmoteOnly(text, tags),
     voice,
+    effect: seed.effect ?? null,
+    giant: seed.giant === true,
     at: Date.now(),
   };
 }

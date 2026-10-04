@@ -23,6 +23,7 @@ import { inkFor } from '../../utils/appearance';
 import { reduced } from '../../utils/alertMotion';
 import { stripCheermotes } from '../../utils/moderation';
 import { ChatBadge, ChatDisplayMessage, emoteUrl, readableNameColor, splitMessage } from '../../utils/chatFeed';
+import '../../styles/chat-efectos.css';
 import { ChatMotionOptions, ChatSpecial, chatDelete, chatEnter, chatExit, chatShift, killChat, lookOf } from '../../utils/chatMotion';
 
 export interface ChatOverlayHandle {
@@ -82,8 +83,9 @@ function appendWords(parent: HTMLElement, text: string, skipCheermotes: boolean)
   });
 }
 
-function emoteImage(id: string, name: string, theme: 'dark' | 'light'): HTMLImageElement {
-  const img = el('img', 'ch-em');
+function emoteImage(id: string, name: string, theme: 'dark' | 'light', giant = false): HTMLImageElement {
+  const img = el('img', giant ? 'ch-em ch-em-giant' : 'ch-em');
+  const scale = giant ? '3.0' : '2.0';
   let format: 'default' | 'static' = reduced() ? 'static' : 'default';
   img.alt = name;
   img.decoding = 'async';
@@ -92,14 +94,14 @@ function emoteImage(id: string, name: string, theme: 'dark' | 'light'): HTMLImag
     if (format === 'default') {
       // Primero se prueba la imagen fija; si tampoco carga, queda la palabra
       format = 'static';
-      img.src = emoteUrl(id, theme, 'static');
+      img.src = emoteUrl(id, theme, 'static', scale);
       return;
     }
     const word = el('span', 'ch-w');
     word.textContent = name;
     img.replaceWith(word);
   };
-  img.src = emoteUrl(id, theme, format);
+  img.src = emoteUrl(id, theme, format, scale);
   return img;
 }
 
@@ -110,6 +112,9 @@ function buildRow(message: ChatDisplayMessage, settings: ChatSettings): HTMLDivE
   if (message.subscriber || message.highlighted) row.dataset.hl = 'sub';
   if (message.emoteOnly) row.dataset.big = '';
   if (message.voice) row.dataset.voice = '';
+  // Power-ups de Twitch: efecto de mensaje y emote gigante (estilos en chat-efectos.css)
+  if (message.effect) row.dataset.fx = message.effect;
+  if (message.giant) row.dataset.giant = '';
 
   const msg = el('div', 'ch-msg', 'msg');
   const clip = el('span', 'ch-clip');
@@ -127,6 +132,11 @@ function buildRow(message: ChatDisplayMessage, settings: ChatSettings): HTMLDivE
     chip.textContent = 'NUEVO';
     head.appendChild(chip);
   }
+  if (message.effect || message.giant) {
+    const chip = el('span', 'ch-bdg ch-pu');
+    chip.textContent = 'POWER-UP';
+    head.appendChild(chip);
+  }
   if (message.bits > 0) {
     const chip = el('span', 'ch-bits', 'bits');
     chip.dataset.bits = String(message.bits);
@@ -140,8 +150,11 @@ function buildRow(message: ChatDisplayMessage, settings: ChatSettings): HTMLDivE
 
   const tx = el('span', 'ch-tx', 'tx');
   const theme = settings.template === 'burbuja' ? 'light' : 'dark';
-  splitMessage(message.text, message.emotes).forEach((segment) => {
-    if (segment.kind === 'emote') tx.appendChild(emoteImage(segment.id, segment.name, theme));
+  const segments = splitMessage(message.text, message.emotes);
+  // Twitch agranda el último emote del mensaje
+  const giantAt = message.giant ? segments.map((segment) => segment.kind).lastIndexOf('emote') : -1;
+  segments.forEach((segment, index) => {
+    if (segment.kind === 'emote') tx.appendChild(emoteImage(segment.id, segment.name, theme, index === giantAt));
     else appendWords(tx, segment.value, message.bits > 0);
   });
 

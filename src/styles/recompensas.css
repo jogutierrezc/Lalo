@@ -1,0 +1,668 @@
+/* ==========================================================================
+   Recompensas: la capa de OBS, su vista en el monitor del estudio y lo que el
+   editor no hereda de la plantilla común.
+   Mismo lenguaje que las demás capas: mate, plano y medido en em. Cada estilo
+   de placa cambia de forma, no solo de color. El movimiento vive en
+   RewardsLayer.tsx y solo toca transform y opacity.
+   ========================================================================== */
+
+.rwl {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  /* A 1920 de ancho, 1em son 32 px */
+  font-size: calc(100vw / 60);
+  line-height: 1.3;
+}
+/* En el monitor del estudio la capa se mide con el ancho del monitor */
+.rwl[data-studio] {
+  z-index: auto;
+  font-size: calc(100cqw / 60);
+}
+
+/* ---------- Pila de placas ---------- */
+
+.rw-stack {
+  position: absolute;
+  bottom: 6%;
+  left: 3%;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 0.6em;
+  max-width: 94%;
+}
+
+.rw-plate {
+  --c: #9146ff;
+  --c-ink: #ffffff;
+  position: relative;
+  box-sizing: border-box;
+  max-width: 100%;
+  color: #efe9dc;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  /* La entrada la pone el movimiento: sin él, la placa no se ve a medias */
+  opacity: 0;
+}
+.rw-plate[data-still] {
+  opacity: 1;
+}
+.rw-plate *,
+.rw-plate *::before,
+.rw-plate *::after {
+  box-sizing: border-box;
+}
+.rw-stub,
+.rw-disc {
+  display: none;
+}
+.rw-body {
+  display: grid;
+  gap: 0.25em;
+  min-width: 0;
+}
+.rw-tag {
+  justify-self: start;
+  padding: 0.05em 0.5em;
+  border-radius: 0.15em;
+  background: var(--c);
+  color: var(--c-ink);
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 0.8em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.rw-name {
+  font-stretch: 70%;
+  font-weight: 800;
+  font-size: 1.9em;
+  line-height: 1;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.rw-user {
+  color: #a7a295;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.95em;
+  overflow-wrap: anywhere;
+}
+.rw-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: block;
+  height: 0.22em;
+  background: rgba(255, 255, 255, 0.16);
+}
+.rw-bar u {
+  display: block;
+  height: 100%;
+  background: var(--c);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.rw-plate[data-still] .rw-bar u {
+  transform: scaleX(0.6);
+}
+
+/* 1. Cabina: placa mate rectangular */
+.rw-plate[data-s='cabina'] {
+  min-width: 16em;
+  max-width: 26em;
+  padding: 0.7em 0.9em 0.85em;
+  overflow: hidden;
+  border: 1px solid #3a3c42;
+  border-radius: 0.2em;
+  background: #1b1c1f;
+  box-shadow: 0 0.8em 2em -0.6em rgba(0, 0, 0, 0.7);
+}
+
+/* 2. Cinta: franja baja, todo en una línea y con el borde derecho inclinado */
+.rw-plate[data-s='cinta'] {
+  min-width: 18em;
+  max-width: 36em;
+  padding: 0 2.2em 0 0;
+  overflow: hidden;
+  background: #121315;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 1.3em) 100%, 0 100%);
+}
+.rw-plate[data-s='cinta'] .rw-body {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  min-height: 3.1em;
+}
+.rw-plate[data-s='cinta'] .rw-tag {
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  padding: 0 1.5em 0 0.9em;
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.9em) 100%, 0 100%);
+}
+.rw-plate[data-s='cinta'] .rw-name {
+  flex: none;
+  max-width: 14em;
+  font-size: 1.5em;
+}
+.rw-plate[data-s='cinta'] .rw-user {
+  min-width: 0;
+  padding-left: 0.75em;
+  border-left: 0.12em solid var(--c);
+  color: #d9d3c5;
+}
+.rw-plate[data-s='cinta'] .rw-bar {
+  height: 0.16em;
+}
+
+/* 3. Boleto: entrada de papel con muescas y la cantidad en el talón */
+.rw-plate[data-s='boleto'] {
+  --x: 5.6em;
+  display: grid;
+  grid-template-columns: var(--x) minmax(0, 1fr);
+  min-width: 17em;
+  max-width: 27em;
+  overflow: hidden;
+  border-radius: 0.45em;
+  background: #f3ead7;
+  color: #23211c;
+  /* Dos muescas redondas, arriba y abajo, donde se corta el talón */
+  -webkit-mask:
+    radial-gradient(circle 0.55em at var(--x) 0, transparent 97%, #000 100%),
+    radial-gradient(circle 0.55em at var(--x) 100%, transparent 97%, #000 100%);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle 0.55em at var(--x) 0, transparent 97%, #000 100%),
+    radial-gradient(circle 0.55em at var(--x) 100%, transparent 97%, #000 100%);
+  mask-composite: intersect;
+}
+.rw-plate[data-s='boleto'] .rw-stub {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.1em;
+  padding: 0.6em 0.4em;
+  border-right: 0.12em dashed rgba(35, 33, 28, 0.45);
+  background: var(--c);
+  color: var(--c-ink);
+}
+.rw-plate[data-s='boleto'] .rw-stub b {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.5em;
+  font-weight: 700;
+  line-height: 1;
+}
+.rw-plate[data-s='boleto'] .rw-stub i {
+  font-style: normal;
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 0.7em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.rw-plate[data-s='boleto'] .rw-body {
+  padding: 0.65em 1em 0.9em 0.95em;
+}
+.rw-plate[data-s='boleto'] .rw-tag {
+  padding: 0;
+  background: none;
+  color: #6b6557;
+  font-size: 0.72em;
+}
+.rw-plate[data-s='boleto'] .rw-name {
+  font-size: 1.7em;
+}
+.rw-plate[data-s='boleto'] .rw-user {
+  color: #5b564a;
+}
+.rw-plate[data-s='boleto'] .rw-bar {
+  left: var(--x);
+  background: rgba(35, 33, 28, 0.16);
+}
+.rw-plate[data-s='boleto'] .rw-bar u {
+  background: #23211c;
+}
+
+/* 4. Cómic: bocadillo blanco de trazo grueso, un poco girado */
+.rw-plate[data-s='comic'] {
+  min-width: 14em;
+  max-width: 24em;
+  margin: 0 0 0.9em 0.3em;
+  padding: 0.7em 1.1em 0.8em;
+  border: 0.16em solid #1d1a3a;
+  border-radius: 1.1em;
+  background: #ffffff;
+  box-shadow: 0.3em 0.3em 0 #1d1a3a;
+  color: #1d1a3a;
+  font-family: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+  rotate: -1.5deg;
+}
+/* El rabito del bocadillo: un triángulo con trazo y otro blanco encima */
+.rw-plate[data-s='comic']::before,
+.rw-plate[data-s='comic']::after {
+  content: '';
+  position: absolute;
+  bottom: -0.95em;
+  left: 1.6em;
+  border: 0.5em solid transparent;
+  border-top: 0.95em solid #1d1a3a;
+  border-bottom: 0;
+}
+.rw-plate[data-s='comic']::after {
+  bottom: -0.56em;
+  left: 1.82em;
+  border-width: 0.3em;
+  border-top-width: 0.6em;
+  border-top-color: #ffffff;
+}
+.rw-plate[data-s='comic'] .rw-tag {
+  padding: 0.05em 0.6em;
+  border: 0.12em solid #1d1a3a;
+  border-radius: 1em;
+  background: #ffd84a;
+  color: #1d1a3a;
+  font-stretch: 100%;
+  letter-spacing: 0.03em;
+}
+.rw-plate[data-s='comic'] .rw-name {
+  font-stretch: 100%;
+  font-size: 1.7em;
+  text-transform: none;
+}
+.rw-plate[data-s='comic'] .rw-user {
+  color: #5a5682;
+  font-family: inherit;
+}
+.rw-plate[data-s='comic'] .rw-bar {
+  position: relative;
+  height: 0.4em;
+  margin-top: 0.25em;
+  overflow: hidden;
+  border: 0.1em solid #1d1a3a;
+  border-radius: 1em;
+  background: #ffffff;
+}
+
+/* 5. Cristal: píldora translúcida con un disco de sonido */
+.rw-plate[data-s='cristal'] {
+  display: grid;
+  grid-template-columns: 3.3em minmax(0, 1fr);
+  gap: 0.8em;
+  align-items: center;
+  min-width: 15em;
+  max-width: 26em;
+  padding: 0.45em 1.7em 0.45em 0.45em;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 99em;
+  background: rgba(26, 16, 48, 0.68);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  backdrop-filter: blur(10px) saturate(150%);
+  box-shadow: 0 0.8em 2em -0.8em rgba(0, 0, 0, 0.7);
+  color: #f3eeff;
+  font-family: 'Onest', system-ui, sans-serif;
+}
+.rw-plate[data-s='cristal'] .rw-disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.16em;
+  width: 3.3em;
+  height: 3.3em;
+  border-radius: 50%;
+  background: var(--c);
+}
+.rw-plate[data-s='cristal'] .rw-disc i {
+  width: 0.24em;
+  height: 1.5em;
+  border-radius: 1em;
+  background: var(--c-ink);
+  transform: scaleY(0.45);
+  animation: rw-eq 0.9s ease-in-out infinite alternate;
+}
+.rw-plate[data-s='cristal'] .rw-disc i:nth-child(2) {
+  transform: scaleY(1);
+  animation-delay: -0.3s;
+}
+.rw-plate[data-s='cristal'] .rw-disc i:nth-child(3) {
+  transform: scaleY(0.7);
+  animation-delay: -0.6s;
+}
+.rw-plate[data-s='cristal'] .rw-disc i:nth-child(4) {
+  transform: scaleY(0.3);
+  animation-delay: -0.15s;
+}
+@keyframes rw-eq {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.rw-plate[data-s='cristal'] .rw-body {
+  gap: 0.1em;
+}
+.rw-plate[data-s='cristal'] .rw-tag {
+  padding: 0;
+  background: none;
+  color: #c3b6e2;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-size: 0.7em;
+}
+.rw-plate[data-s='cristal'] .rw-name {
+  font-stretch: 100%;
+  font-weight: 700;
+  font-size: 1.35em;
+  line-height: 1.1;
+  text-transform: none;
+}
+.rw-plate[data-s='cristal'] .rw-user {
+  color: #c3b6e2;
+  font-size: 0.85em;
+}
+.rw-plate[data-s='cristal'] .rw-bar {
+  position: relative;
+  height: 0.16em;
+  margin-top: 0.3em;
+  overflow: hidden;
+  border-radius: 1em;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 6. Personalizado: la imagen o el vídeo del creador y los textos en una rejilla 3 × 3 */
+.rw-plate[data-s='custom'] {
+  --w: 22em;
+  --t: #ffffff;
+  width: var(--w);
+  overflow: hidden;
+  color: var(--t);
+}
+.rw-media {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.rw-nomedia {
+  display: grid;
+  place-items: start center;
+  padding-top: 0.5em;
+  aspect-ratio: 16 / 6;
+  border: 0.1em dashed rgba(255, 255, 255, 0.5);
+  border-radius: 0.3em;
+  background: rgba(18, 19, 21, 0.72);
+  color: transparent;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.8em;
+}
+/* El aviso de «sube tu archivo» solo se lee en el estudio, nunca en la emisión */
+.rwl[data-studio] .rw-nomedia,
+.rw-thumb .rw-nomedia {
+  color: #efe9dc;
+}
+.rw-grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  padding: 0.5em 0.8em 0.6em;
+}
+.rw-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1em;
+  min-width: 0;
+  /* Un texto largo puede salirse de su celda hacia el centro, no fuera de la placa */
+  white-space: nowrap;
+}
+.rw-cell[data-col='0'] {
+  grid-column: 1;
+  align-items: flex-start;
+  text-align: left;
+}
+.rw-cell[data-col='1'] {
+  grid-column: 2;
+  align-items: center;
+  text-align: center;
+}
+.rw-cell[data-col='2'] {
+  grid-column: 3;
+  align-items: flex-end;
+  text-align: right;
+}
+.rw-cell[data-row='0'] {
+  grid-row: 1;
+  justify-content: flex-start;
+}
+.rw-cell[data-row='1'] {
+  grid-row: 2;
+  justify-content: center;
+}
+.rw-cell[data-row='2'] {
+  grid-row: 3;
+  justify-content: flex-end;
+}
+.rw-plate[data-s='custom'] .rw-name,
+.rw-plate[data-s='custom'] .rw-user {
+  color: var(--t);
+  text-shadow: 0 0.06em 0.25em rgba(0, 0, 0, 0.75);
+  overflow-wrap: normal;
+}
+.rw-plate[data-s='custom'] .rw-name {
+  font-size: 1.5em;
+}
+
+/* ---------- Vídeo ---------- */
+
+.rw-video {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.rw-video[data-full] {
+  inset: 0;
+}
+.rw-video video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* Recuadro de muestra, para ver la posición sin subir un vídeo */
+.rw-sample {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0.3em;
+  background:
+    radial-gradient(70% 90% at 30% 30%, #5b3fa8, transparent 70%),
+    radial-gradient(60% 70% at 80% 80%, #b0406c, transparent 70%),
+    #15101f;
+  color: #efe9dc;
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.9em;
+  text-align: center;
+}
+.rw-sample i {
+  display: block;
+  width: 0;
+  height: 0;
+  margin: 0 auto 0.4em;
+  border: 0.7em solid transparent;
+  border-right: 0;
+  border-left: 1.1em solid #efe9dc;
+}
+/* Zona permitida de la posición aleatoria: solo en el monitor del estudio */
+.rw-safe {
+  position: absolute;
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rw-plate[data-s='cristal'] .rw-disc i {
+    animation: none;
+  }
+}
+
+/* ---------- Estudio ---------- */
+
+/* El monitor no tiene relleno propio: la capa lo cubre entero, como en OBS */
+.rw-stage {
+  padding: 0;
+}
+.rw-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+}
+.rw-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.rw-inline .cab-inp {
+  width: 104px;
+}
+.rw-result {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--cb-line);
+  border-radius: 3px;
+}
+.rw-warn {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--cb-warn);
+  background: var(--cb-warn-bg);
+  color: var(--cb-fg);
+}
+/* Rejilla de nueve puntos para elegir una posición */
+.rw-nine {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 36px);
+  gap: 4px;
+  justify-self: start;
+  padding: 4px;
+  border: 1px solid var(--cb-line);
+  border-radius: 5px;
+  background: var(--cb-bg);
+}
+.rw-nine button {
+  position: relative;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--cb-surface);
+  cursor: pointer;
+}
+.rw-nine button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 6px;
+  height: 6px;
+  margin: auto;
+  border-radius: 50%;
+  background: var(--cb-mut);
+}
+.rw-nine button[aria-pressed='true'] {
+  background: var(--ui);
+}
+.rw-nine button[aria-pressed='true']::after {
+  background: var(--ui-ink);
+}
+.rw-nine button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+/* Selector de estilo de placa: una miniatura real de cada uno */
+.rw-styles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.rw-style {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.rw-style[aria-pressed='true'] {
+  border-color: var(--ui);
+  box-shadow: inset 0 0 0 1px var(--ui);
+}
+.rw-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 74px;
+  overflow: hidden;
+  border-radius: 2px;
+  background:
+    radial-gradient(60% 80% at 72% 18%, #3b4a8c 0, transparent 60%),
+    linear-gradient(180deg, #141a33, #0a0c18);
+  font-size: 6.5px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.rw-thumb .rw-plate {
+  flex: none;
+  margin: 0;
+}
+.rw-thumb .rw-plate[data-s='custom'] {
+  --w: 20em !important;
+}
+/* Barra de subida de un archivo */
+.rw-progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--cb-bg);
+}
+.rw-progress u {
+  display: block;
+  height: 100%;
+  background: var(--ui);
+  transform-origin: left;
+}
+.rw-log {
+  display: grid;
+  gap: 4px;
+  max-height: 150px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.rw-log li {
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+.rw-log li:first-child {
+  color: var(--cb-fg);
+}

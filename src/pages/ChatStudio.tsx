@@ -70,6 +70,8 @@ const SAMPLES: { kind: DemoKind; label: string }[] = [
   { kind: 'bits', label: 'Con bits' },
   { kind: 'emotes', label: 'Solo emotes' },
   { kind: 'first', label: 'Primer mensaje' },
+  { kind: 'effect', label: 'Con efecto de mensaje' },
+  { kind: 'giant', label: 'Con emote gigante' },
 ];
 
 export const ChatStudio: React.FC = () => {

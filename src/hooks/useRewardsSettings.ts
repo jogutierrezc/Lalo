@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect } from 'react';
 import {
   RewardsSettings,
   loadRewardsSettings,
+  normalizeRewardsSettings,
   saveRewardsSettings,
   CustomRewardItem,
 } from '../types/rewards';
@@ -22,7 +23,7 @@ export function useRewardsSettings() {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'lalo_stream_rewards_settings' && e.newValue) {
         try {
-          setRewardsSettings(JSON.parse(e.newValue));
+          setRewardsSettings(normalizeRewardsSettings(JSON.parse(e.newValue)));
         } catch {
           // ignore
         }

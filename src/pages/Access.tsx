@@ -356,6 +356,21 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
                 </li>
                 <li>
                   <span>
+                    <b>Leer los Bits que se usan en tu canal</b>
+                    <span>
+                      Para saber cuándo alguien anima con Bits o usa un Power-up y cuál. Solo lee: no puede gastar Bits
+                      ni cambiar tus Power-ups.
+                    </span>
+                  </span>
+                </li>
+                <li>
+                  <span>
+                    <b>Leer los canjes de puntos de tu canal</b>
+                    <span>Para lanzar la recompensa aunque el canje no pida texto. Solo lee: no los cumple ni los devuelve.</span>
+                  </span>
+                </li>
+                <li>
+                  <span>
                     <b>Leer tu chat</b>
                     <span>No necesita permiso: el chat es público.</span>
                   </span>
@@ -367,7 +382,10 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
               <ul className="rec-pide" data-tipo="no">
                 <li>
                   <span>
-                    <span>Moderar en tu nombre, cambiar los ajustes de tu directo ni ver tus ingresos.</span>
+                    <span>
+                      Moderar en tu nombre, cambiar los ajustes de tu directo, ni crear, cambiar o devolver Power-ups y
+                      canjes.
+                    </span>
                   </span>
                 </li>
               </ul>

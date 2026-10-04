@@ -60,6 +60,12 @@ export interface CommunityGoalItem {
   victoryScreenShake?: boolean;
   confetti?: boolean;
   autoResetOnComplete?: boolean;
+  /**
+   * Solo metas de bits: sumar los Bits que avisa Twitch por el canal de eventos
+   * (cheers y Power-ups). Sin valor cuenta como encendido. Quien suma es el
+   * servidor (ingest_twitch_event, migración 0012), una vez por aviso.
+   */
+  countBits?: boolean;
 }
 
 export interface GoalsSettings {

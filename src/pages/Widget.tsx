@@ -61,6 +61,13 @@ import '../styles/chat.css';
 import { RaidSettings, RAID_FRAMES, RaidFrame, decodeRaidSettings, loadRaidSettings, normalizeRaidSettings } from '../types/raid';
 import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
 import '../styles/raid.css';
+import type { RewardsLayerHandle } from '../components/recompensas/RewardsLayer';
+import { RewardsWidgetLayer, rewardsSettingsForWidget } from '../components/recompensas/RewardsWidgetLayer';
+import { TwitchEventLayer } from '../components/powerups/TwitchEventLayer';
+import { loadStudioSettings, normalizeStudioSettings, sceneForWidget } from '../types/studio';
+import { SceneData, SceneHandle, SceneView } from '../components/estudio/SceneView';
+import { loadAlertsSettings } from '../types/alerts';
+import { Spot, pickSpot, spotStyle } from '../utils/randomSpot';
 
 /** OBS expone window.obsstudio en sus fuentes de navegador. */
 const IN_OBS = typeof window !== 'undefined' && 'obsstudio' in window;
@@ -197,7 +204,38 @@ const EMPTY_STATS: SessionStats = { read: 0, skipped: 0, rejected: 0, paid: 0, b
 
 const LOG_LIMIT = 30;
 
-const LALOPLAY_DEFAULT_VOICE = '37f9f4eec7624089a49b188d47588f2c';
+/** Con posición aleatoria, la tarjeta de la alerta va dentro de una caja colocada en el punto elegido. */
+const AlertSpot: React.FC<{ spot?: Spot; margin: number; scale: number; children: React.ReactNode }> = ({
+  spot,
+  margin,
+  scale,
+  children,
+}) =>
+  spot ? (
+    <div
+      style={{
+        ...spotStyle(spot, margin),
+        width: `min(calc(clamp(13px, 1.05vw, 22px) * ${scale} * 34), ${100 - margin * 2}%)`,
+      }}
+    >
+      {children}
+    </div>
+  ) : (
+    <>{children}</>
+  );
+
+/** Estilo del vídeo de una alerta en su punto aleatorio; undefined si no le toca. */
+function rewardSpotStyle(spot: Spot | undefined, margin: number, scale: number): React.CSSProperties | undefined {
+  if (!spot) return undefined;
+  const base = spotStyle(spot, margin);
+  return {
+    ...base,
+    transform: `${base.transform} scale(${scale})`,
+    transformOrigin: `${(spot.u * 100).toFixed(2)}% ${(spot.v * 100).toFixed(2)}%`,
+  };
+}
+
+const LALOPLAY_DEFAULT_VOICE ='37f9f4eec7624089a49b188d47588f2c';
 const OLD_PRESET_VOICE = '7f92f8afb8ec43bf81429cc1c9199cb1';
 
 export const Widget: React.FC = () => {
@@ -325,6 +363,26 @@ export const Widget: React.FC = () => {
 
   // Capa «Chat en vivo»: fuente propia (app=chat) o dentro de «Todo en uno»
   const appParam = (getURLParam('app') || '').toLowerCase();
+
+  // Escena de Studio (app=scene): sus capas reciben los mismos avisos que las fuentes sueltas
+  const isScene = appParam === 'scene';
+  const [studioSettings, setStudioSettings] = useState(loadStudioSettings);
+  const scene = useMemo(
+    () => (isScene ? sceneForWidget(studioSettings, getURLParam('scene'), getURLParam('sc')) : null),
+    [isScene, studioSettings]
+  );
+  const sceneRef = useRef<SceneHandle | null>(null);
+  const sceneHas = (type: string) => !!scene && scene.layers.some((layer) => layer.type === type && !layer.hidden);
+  const sceneInfoRef = useRef({ isScene, hasAlert: false });
+  sceneInfoRef.current = { isScene, hasAlert: sceneHas('alert') };
+
+  // Alertas: posición aleatoria en la pantalla, si el streamer la encendió
+  const [alertsSettings, setAlertsSettings] = useState(loadAlertsSettings);
+  const alertsRef = useRef(alertsSettings);
+  alertsRef.current = alertsSettings;
+  const alertSpotsRef = useRef(new Map<string, Spot>());
+  const lastAlertSpotRef = useRef<Spot | null>(null);
+
   const isChatOnly = appParam === 'chat';
   const [chatSettings, setChatSettings] = useState(() => chatSettingsForWidget(loadChatSettings()));
   const showChat = isChatOnly || (appParam === 'all' && chatSettings.inAll);
@@ -337,11 +395,15 @@ export const Widget: React.FC = () => {
     if (filter.hideCommands && message.text.trim().startsWith('!')) return;
     if (filter.hideBots && filter.bots.includes(message.username)) return;
     chatRef.current?.push(message);
+    sceneRef.current?.chat.push(message);
   }, []);
   const handleChatModeration = useCallback((event: ChatModerationEvent) => {
     if (event.type === 'delete') chatRef.current?.remove(event.id);
     if (event.type === 'user') chatRef.current?.removeUser(event.username);
     if (event.type === 'clear') chatRef.current?.clear();
+    if (event.type === 'delete') sceneRef.current?.chat.remove(event.id);
+    if (event.type === 'user') sceneRef.current?.chat.removeUser(event.username);
+    if (event.type === 'clear') sceneRef.current?.chat.clear();
   }, []);
 
   // Capa «Saludo de raid»: fuente propia (app=raid) o dentro de «Todo en uno»
@@ -351,14 +413,36 @@ export const Widget: React.FC = () => {
   const raidRef = useRef<RaidLayerHandle | null>(null);
   const handleRaid = useCallback((raid: { channel: string; login: string; viewers: number }) => {
     raidRef.current?.raid(raid.channel, raid.viewers, raid.login);
+    sceneRef.current?.raid(raid.channel, raid.viewers, raid.login);
   }, []);
   const handleStaffMessage = useCallback(
-    (message: string, sender: { name: string; role: UserRole }) => raidRef.current?.command(message, sender) ?? false,
+    (message: string, sender: { name: string; role: UserRole }) =>
+      (raidRef.current?.command(message, sender) ?? false) || (sceneRef.current?.raidCommand(message, sender) ?? false),
     []
   );
 
+  // Capa «Recompensas»: fuente propia (app=rewards) o dentro de «Todo en uno». Reacciona sola a los
+  // cheers y a los canjes con texto que llegan por la misma conexión del chat
+  const isRewardsOnly = appParam === 'rewards' || appParam === 'recompensas';
+  const [rewardsInAll, setRewardsInAll] = useState(() => rewardsSettingsForWidget().inAll);
+  useEffect(() => {
+    if (appParam !== 'all') return;
+    const timer = setInterval(() => setRewardsInAll(rewardsSettingsForWidget().inAll), 30000);
+    return () => clearInterval(timer);
+  }, [appParam]);
+  const showRewards = isRewardsOnly || (appParam === 'all' && rewardsInAll);
+  const rewardsRef = useRef<RewardsLayerHandle | null>(null);
+  const handleRewardChat = useCallback(
+    (tags: Parameters<RewardsLayerHandle['chat']>[0], message: string, role: UserRole) => {
+      rewardsRef.current?.chat(tags, message, role);
+    },
+    []
+  );
+  // Temporizador del aviso antiguo (REWARD_TRIGGER): uno nuevo no hereda la retirada del anterior
+  const rewardHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // demo=1: chat de muestra para colocar la capa en OBS sin esperar al chat real
-  const chatDemo = showChat && getURLParam('demo') === '1';
+  const chatDemo = (showChat || sceneHas('chat')) && getURLParam('demo') === '1';
   const voiceCommandRef = useRef(moderation.voiceCommand);
   voiceCommandRef.current = moderation.voiceCommand;
   useEffect(() => {
@@ -367,9 +451,16 @@ export const Widget: React.FC = () => {
     const next = () => {
       const kind = DEMO_SEQUENCE[step % DEMO_SEQUENCE.length];
       step += 1;
-      chatRef.current?.push(demoMessage(kind, voiceCommandRef.current, kind === 'command'));
+      const sample = demoMessage(kind, voiceCommandRef.current, kind === 'command');
+      chatRef.current?.push(sample);
+      sceneRef.current?.chat.push(sample);
       // Al final de cada vuelta se borra un mensaje, para ver la moderación
-      if (step % DEMO_SEQUENCE.length === 0) setTimeout(() => chatRef.current?.removeLast(), 900);
+      if (step % DEMO_SEQUENCE.length === 0) {
+        setTimeout(() => {
+          chatRef.current?.removeLast();
+          sceneRef.current?.chat.removeLast();
+        }, 900);
+      }
     };
     const first = [0, 350, 700, 1050, 1400].map((wait) => setTimeout(next, wait));
     const timer = setInterval(next, 1900);
@@ -395,6 +486,7 @@ export const Widget: React.FC = () => {
     onChatModeration: handleChatModeration,
     onRaid: handleRaid,
     onStaffMessage: handleStaffMessage,
+    onChatEvent: handleRewardChat,
   });
 
   // La bienvenida de una raid entra en la misma cola de voz que el chat
@@ -1094,6 +1186,20 @@ export const Widget: React.FC = () => {
       if (message.type === 'ALERT_TRIGGER') {
         const alert = message.alert;
         const mode = alert.audioMode || (alert.customAudioUrl ? 'custom_audio' : 'synth');
+        // En una escena de Studio la alerta sale en su capa; una escena sin capa de alertas no hace nada
+        const inScene = sceneInfoRef.current.isScene;
+        if (inScene && !sceneInfoRef.current.hasAlert) return;
+        if (inScene) sceneRef.current?.alert(alert);
+        // Posición aleatoria (fuentes sueltas): el sitio se elige una vez por alerta
+        let alertSpot: Spot | null = null;
+        if (!inScene && alertsRef.current.randomPosition) {
+          const m = alertsRef.current.randomMargin;
+          const bounds = { zoneW: 1920, zoneH: 1080, itemW: 640, itemH: 220, margin: (1920 * m) / 100 };
+          alertSpot = pickSpot(bounds, lastAlertSpotRef.current);
+          lastAlertSpotRef.current = alertSpot;
+          if (alertSpotsRef.current.size > 40) alertSpotsRef.current.clear();
+          alertSpotsRef.current.set(alert.id, alertSpot);
+        }
 
         // Reproducir audio si el modo incluye sonido sintetizado o clip personalizado
         if (mode === 'synth' || mode === 'custom_audio' || mode === 'both') {
@@ -1117,7 +1223,7 @@ export const Widget: React.FC = () => {
         }
 
         // Si la alerta incluye video transparente, proyectarlo en el overlay
-        if (alert.videoUrl) {
+        if (alert.videoUrl && !inScene) {
           setActiveReward({
             id: alert.id,
             user: alert.user,
@@ -1137,7 +1243,8 @@ export const Widget: React.FC = () => {
 
         // Encolar síntesis de voz (TTS) solo si el modo es 'tts' o 'both'
         if (mode === 'tts' || mode === 'both') {
-          enqueueManualMessage(alert.text, alert.user);
+          const queued = enqueueManualMessage(alert.text, alert.user);
+          if (queued && alertSpot) alertSpotsRef.current.set(queued.id, alertSpot);
         }
       }
       if (message.type === 'REWARD_TRIGGER') {
@@ -1159,7 +1266,8 @@ export const Widget: React.FC = () => {
         }
         setActiveReward(reward);
         const durationSec = reward.duration || 6;
-        setTimeout(() => {
+        if (rewardHideTimerRef.current) clearTimeout(rewardHideTimerRef.current);
+        rewardHideTimerRef.current = setTimeout(() => {
           if (rewardOverlayRef.current) {
             gsap.to(rewardOverlayRef.current, {
               opacity: 0,
@@ -1177,6 +1285,12 @@ export const Widget: React.FC = () => {
       }
       if (message.type === 'RAID_SETTINGS_UPDATE') {
         setRaidSettings(normalizeRaidSettings(message.settings));
+      }
+      if (message.type === 'STUDIO_SETTINGS_UPDATE') {
+        setStudioSettings(normalizeStudioSettings(message.settings));
+      }
+      if (message.type === 'ALERT_SETTINGS_UPDATE') {
+        setAlertsSettings((prev) => ({ ...prev, ...message.settings }));
       }
       if (message.type === 'GOALS_SETTINGS_UPDATE') {
         setGoalsSettings(message.settings);
@@ -1532,6 +1646,19 @@ export const Widget: React.FC = () => {
       if (messageQueue.length > 0) clearQueue();
       return;
     }
+    // La fuente que solo muestra las recompensas tampoco lee el chat
+    if (isRewardsOnly) {
+      if (messageQueue.length > 0) clearQueue();
+      return;
+    }
+    // Una escena de Studio no lee el chat: solo dice la bienvenida de una raid y las alertas de su capa
+    if (isScene) {
+      const foreign = messageQueue.find((m) => !m.system && m.trigger !== 'test');
+      if (foreign) {
+        removeMessageFromQueue(foreign.id);
+        return;
+      }
+    }
     // La fuente que solo muestra el saludo de raid solo dice su bienvenida: el chat lo lee otra fuente
     if (isRaidOnly) {
       const foreign = messageQueue.find((m) => !m.system);
@@ -1548,7 +1675,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, clearQueue]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRewardsOnly, isScene, clearQueue]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1568,6 +1695,13 @@ export const Widget: React.FC = () => {
       }
     };
   }, [stopSpeakingAnimation]);
+
+  // Lo que necesita una escena de Studio para pintar las capas de Lalo
+  const sceneGoalId = currentGoalEvent?.goalId;
+  const sceneData = useMemo<SceneData>(
+    () => ({ chat: chatSettings, raid: raidSettings, goals: goalsSettings, alerts: alertsSettings, goalEventId: sceneGoalId }),
+    [chatSettings, raidSettings, goalsSettings, alertsSettings, sceneGoalId]
+  );
 
   return (
     <div
@@ -1607,7 +1741,8 @@ export const Widget: React.FC = () => {
       )}
 
       {/* Tarjeta de TTS para OBS en el estilo elegido desde el panel */}
-      {currentMessage && !currentMessage.system && (
+      {currentMessage && !currentMessage.system && !isScene && (
+        <AlertSpot spot={alertSpotsRef.current.get(currentMessage.id)} margin={alertsSettings.randomMargin} scale={settings.scale}>
         <AlertCard
           key={currentMessage.id}
           ref={cardRef}
@@ -1623,6 +1758,7 @@ export const Widget: React.FC = () => {
           loading={isAudioLoading}
           fontSize={`calc(clamp(13px, 1.05vw, 22px) * ${settings.scale})`}
         />
+        </AlertSpot>
       )}
 
       {/* Chat en vivo */}
@@ -1631,6 +1767,33 @@ export const Widget: React.FC = () => {
       {/* Saludo de raid con corto */}
       {showRaid && (
         <RaidLayer ref={raidRef} settings={raidSettings} demo={getURLParam('demo') === '1'} onSpeak={speakRaidWelcome} />
+      )}
+
+      {/* Recompensas: sonidos, placas y vídeos por puntos de canal o bits */}
+      {showRewards && <RewardsWidgetLayer ref={rewardsRef} />}
+
+      {/* Canal de eventos de Twitch: Power-ups, Bits para las metas y canjes de puntos sin texto */}
+      <TwitchEventLayer
+        app={appParam}
+        speak={enqueueManualMessage}
+        blockedWords={moderation.blockedWords}
+        blockedUsers={moderation.blockedUsers}
+      />
+
+      {/* Escena de Studio: las capas colocadas en el lienzo de 1920 × 1080 */}
+      {isScene && scene && (
+        <div className="es-screen">
+          <div className="es-frame">
+            <SceneView
+              ref={sceneRef}
+              scene={scene}
+              mode="live"
+              data={sceneData}
+              demo={getURLParam('demo') === '1'}
+              onSpeak={speakRaidWelcome}
+            />
+          </div>
+        </div>
       )}
 
       {/* Overlay de Metas Comunitarias & Marcadores (Compresión ≤4 en fila y Carrusel 5+ con GSAP) */}
@@ -1730,7 +1893,7 @@ export const Widget: React.FC = () => {
             className={`ovl relative flex flex-col items-center gap-3 ${
               activeReward.position === 'fullscreen' ? 'h-full w-full justify-center' : 'max-w-xl'
             }`}
-            style={{
+            style={rewardSpotStyle(alertSpotsRef.current.get(activeReward.id), alertsSettings.randomMargin, activeReward.scale || 1) || {
               transform: `scale(${activeReward.scale || 1})`,
               transformOrigin: activeReward.position === 'bottom-right' ? 'bottom right' : 'center',
             }}

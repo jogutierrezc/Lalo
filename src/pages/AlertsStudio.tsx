@@ -27,6 +27,7 @@ import {
   DEFAULT_BIT_TIERS,
   DEFAULT_SUB_TIERS,
   EventRuleConfig,
+  RANDOM_MARGIN,
   SubTierConfig,
 } from '../types/alerts';
 import { ALERT_POSITIONS, ALERT_STYLES, AlertPosition, inkFor } from '../utils/appearance';
@@ -34,6 +35,7 @@ import { AlertCard } from '../components/AlertCard';
 import { playDemo } from '../utils/alertMotion';
 import { playAlertOrCustomSound } from '../utils/alertsAudio';
 import { postBus } from '../utils/bus';
+import { Spot, pickSpot, spotStyle } from '../utils/randomSpot';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import { inspectAudioFile, MediaItem, MediaType, MAX_AUDIO_DURATION_SECONDS } from '../types/mediaLibrary';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
@@ -176,6 +178,7 @@ export const AlertsStudio: React.FC = () => {
 
   const [selection, setSelection] = useState<Selection>({ kind: 'event', type: 'follow' });
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [monitorSpot, setMonitorSpot] = useState<Spot>({ x: 0, y: 0, u: 0.5, v: 0.5 });
   const [status, setStatus] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [wantsFile, setWantsFile] = useState(false);
@@ -377,6 +380,10 @@ export const AlertsStudio: React.FC = () => {
   }
 
   const fire = (options: FireOptions) => {
+    // Posición aleatoria: el monitor enseña un punto nuevo en cada prueba
+    if (alertsSettings.randomPosition) {
+      setMonitorSpot((last) => pickSpot({ zoneW: 1920, zoneH: 1080, itemW: 640, itemH: 220, margin: 19.2 * alertsSettings.randomMargin }, last));
+    }
     playAlertOrCustomSound(options.customAudioUrl, options.soundType, options.customAudioVolume);
 
     setMonitorVideo(options.videoUrl ? { url: options.videoUrl, blend: options.blendMode } : null);
@@ -982,8 +989,34 @@ export const AlertsStudio: React.FC = () => {
                         />
                       ))}
                     </div>
+                    <Toggle
+                      label="Posición aleatoria"
+                      checked={alertsSettings.randomPosition}
+                      onChange={(randomPosition) => updateAlerts({ randomPosition })}
+                    />
+                    <span className="cab-hint">
+                      {alertsSettings.randomPosition
+                        ? 'Cada alerta sale en un punto distinto de la pantalla, nunca dos veces seguidas en el mismo.'
+                        : 'Apagada, la alerta sale siempre en el punto elegido arriba.'}
+                    </span>
                   </Field>
                   <div className="grid content-start gap-4">
+                    {alertsSettings.randomPosition && (
+                      <Field label="Margen con los bordes" hint="Espacio que la alerta deja libre contra cada borde de la pantalla.">
+                        <div className="cab-range">
+                          <input
+                            type="range"
+                            min={RANDOM_MARGIN.min}
+                            max={RANDOM_MARGIN.max}
+                            step={1}
+                            value={alertsSettings.randomMargin}
+                            aria-label="Margen con los bordes"
+                            onChange={(e) => updateAlerts({ randomMargin: Number(e.target.value) })}
+                          />
+                          <output>{alertsSettings.randomMargin}%</output>
+                        </div>
+                      </Field>
+                    )}
                     <Field label="Tiempo en pantalla">
                       <div className="cab-range">
                         <input
@@ -1033,17 +1066,29 @@ export const AlertsStudio: React.FC = () => {
                   />
                 </div>
               )}
-              <AlertCard
-                ref={cardRef}
-                alertStyle={alertsSettings.alertStyle}
-                position={alertsSettings.position}
-                accent={preview.accent}
-                name={preview.user}
-                text={preview.text}
-                emotionLabel={preview.detail || undefined}
-                stickerSvg={alertsSettings.stickerSvg}
-                fontSize="clamp(8px, 3.1cqw, 16px)"
-              />
+              {/* Con posición aleatoria, la tarjeta va en una caja que cada prueba coloca en otro punto */}
+              <div
+                style={
+                  alertsSettings.randomPosition
+                    ? {
+                        ...spotStyle(monitorSpot, alertsSettings.randomMargin),
+                        width: `min(calc(clamp(8px, 3.1cqw, 16px) * 34), ${100 - alertsSettings.randomMargin * 2}%)`,
+                      }
+                    : { display: 'contents' }
+                }
+              >
+                <AlertCard
+                  ref={cardRef}
+                  alertStyle={alertsSettings.alertStyle}
+                  position={alertsSettings.position}
+                  accent={preview.accent}
+                  name={preview.user}
+                  text={preview.text}
+                  emotionLabel={preview.detail || undefined}
+                  stickerSvg={alertsSettings.stickerSvg}
+                  fontSize="clamp(8px, 3.1cqw, 16px)"
+                />
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2" data-tour="test-trigger">

@@ -73,6 +73,11 @@ export interface UseTwitchChatOptions {
    * Si devuelve true, el mensaje era un comando de otra capa y no sigue adelante.
    */
   onStaffMessage?: (message: string, sender: { name: string; role: UserRole }) => boolean;
+  /**
+   * Cada mensaje con sus etiquetas tal como llegan de Twitch y el rol de quien escribe.
+   * Lo usa la capa «Recompensas» para ver los cheers (bits) y los canjes con texto.
+   */
+  onChatEvent?: (tags: tmi.ChatUserstate, message: string, role: UserRole) => void;
 }
 
 export interface UseTwitchChatReturn {
@@ -103,6 +108,8 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
   onRaidRef.current = options.onRaid;
   const onStaffMessageRef = useRef(options.onStaffMessage);
   onStaffMessageRef.current = options.onStaffMessage;
+  const onChatEventRef = useRef(options.onChatEvent);
+  onChatEventRef.current = options.onChatEvent;
   // Momentos en que el modo «todo el chat» aceptó un mensaje, para el tope por minuto
   const chatTimesRef = useRef<number[]>([]);
   const queueLengthRef = useRef(0);
@@ -206,6 +213,9 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       // tmi.js puede entregar un mismo mensaje por más de un evento
       if (seenIdsRef.current.includes(id)) return;
       seenIdsRef.current = [...seenIdsRef.current.slice(-49), id];
+
+      // Capas que reaccionan a las etiquetas del mensaje (bits, canjes con texto): la misma conexión
+      onChatEventRef.current?.(tags, message, roleFromTags(tags, cleanChannel));
 
       const voice = routeVoice(id, tags, message);
       onChatMessageRef.current?.(toDisplayMessage(tags, message, cleanChannel, { id, voice }));

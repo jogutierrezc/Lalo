@@ -26,6 +26,7 @@ import {
   ExternalLink,
   FileText,
   Gamepad2,
+  Layers,
   LayoutGrid,
   Menu,
   MessagesSquare,
@@ -45,6 +46,7 @@ import { buildSuiteWidgetUrl, WidgetAppType } from '../utils/widgetUrl';
 import { loadSettings } from '../types/settings';
 import { encodeChatSettings, loadChatSettings } from '../types/chat';
 import { encodeRaidSettings, loadRaidSettings } from '../types/raid';
+import { encodeRewardsSettings, loadRewardsSettings } from '../types/rewards';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -63,6 +65,7 @@ export type SuiteApp =
   | 'encuestas'
   | 'chat'
   | 'raid'
+  | 'studio'
   | 'cuenta'
   | 'admin'
   | 'nube';
@@ -84,7 +87,13 @@ interface NavItem {
 
 const NAV: { group: string | null; items: NavItem[] }[] = [
   { group: null, items: [{ app: 'catalogo', label: 'Inicio', href: '#dashboard', icon: LayoutGrid }] },
-  { group: 'En directo', items: [{ app: 'control', label: 'En vivo', href: '#control', icon: Radio }] },
+  {
+    group: 'En directo',
+    items: [
+      { app: 'control', label: 'En vivo', href: '#control', icon: Radio },
+      { app: 'studio', label: 'Studio', href: '#studio', icon: Layers },
+    ],
+  },
   {
     group: 'Capas',
     items: [
@@ -110,6 +119,7 @@ const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
   { mode: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
   { mode: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
   { mode: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
+  { mode: 'rewards', name: 'Recompensas', note: 'Sonidos, placas y vídeos por puntos de canal o bits' },
 ];
 
 const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
@@ -119,6 +129,7 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   encuestas: 'polls',
   chat: 'chat',
   raid: 'raid',
+  recompensas: 'rewards',
   tts: 'tts',
 };
 
@@ -195,7 +206,9 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   const extraFor = (mode: WidgetAppType): Record<string, string> | undefined => {
     if (widgetKeyParam) return widgetKeyParam;
     if (mode === 'chat') return { cs: encodeChatSettings(loadChatSettings()) };
-    if (mode === 'raid' || mode === 'all') return { rs: encodeRaidSettings(loadRaidSettings()) };
+    if (mode === 'rewards') return { rw: encodeRewardsSettings(loadRewardsSettings()) };
+    if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
+    if (mode === 'all') return { rs: encodeRaidSettings(loadRaidSettings()), rw: encodeRewardsSettings(loadRewardsSettings()) };
     return undefined;
   };
 
@@ -440,6 +453,14 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
                     </li>
                   ))}
                 </ul>
+
+                <p className="cab-hint">
+                  ¿Quieres colocar las capas a tu gusto? En{' '}
+                  <a className="studio-link" href="#studio" onClick={() => setObsOpen(false)}>
+                    Studio
+                  </a>{' '}
+                  montas escenas y cada una tiene su propia URL.
+                </p>
 
                 <p className="cab-note">
                   ¿Cambiaste voz, reglas o diseño? «Actualizar OBS» envía los cambios a las fuentes ya pegadas, sin

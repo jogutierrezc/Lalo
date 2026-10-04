@@ -129,7 +129,8 @@ class TwitchError extends Error {
   }
 }
 
-async function appToken(clientId: string, clientSecret: string, deps: Deps, force = false): Promise<string> {
+/** Token de aplicación, guardado en memoria hasta poco antes de caducar. Lo usa también server/twitch/subscriptions.ts. */
+export async function appToken(clientId: string, clientSecret: string, deps: Deps, force = false): Promise<string> {
   const now = deps.now();
   if (!force && token && token.clientId === clientId && token.expiresAt > now + 60_000) return token.value;
 

@@ -67,8 +67,20 @@ export function getPendingCode(): PendingCode | null {
  *   - moderator:read:followers: saber de los seguidores nuevos.
  *   - user:write:chat: enviar mensajes al chat.
  *   - channel:bot: que el bot entre en el chat del canal y escriba como bot.
+ *   - bits:read: saber cuándo se usan Bits (cheers y Power-ups) y leer la lista
+ *     de Power-ups personalizados. Solo lectura.
+ *   - channel:read:redemptions: saber de los canjes de puntos, también de los
+ *     que no piden texto. Solo lectura.
+ * Quien entró antes de que se añadieran los dos últimos tiene que autorizar otra
+ * vez: lo avisa la página «Power-ups».
  */
-export const TWITCH_SCOPES = ['moderator:read:followers', 'user:write:chat', 'channel:bot'] as const;
+export const TWITCH_SCOPES = [
+  'moderator:read:followers',
+  'user:write:chat',
+  'channel:bot',
+  'bits:read',
+  'channel:read:redemptions',
+] as const;
 
 export async function signInWithTwitch(): Promise<void> {
   const { error } = await client().auth.signInWithOAuth({

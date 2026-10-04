@@ -936,6 +936,28 @@ export const GoalsStudio: React.FC = () => {
                 <p className="cab-hint">Vale para todas las metas. Los anuncios usan la voz del navegador.</p>
               </div>
             </details>
+
+            {activeGoal?.type === 'bits' && (
+              <details className="studio-details" open>
+                <summary>Bits de Twitch</summary>
+                <div>
+                  <Toggle
+                    label="Sumar a esta meta los Bits de cheers y Power-ups"
+                    checked={activeGoal.countBits !== false}
+                    onChange={(next) => updateGoalItem(activeGoal.id, { countBits: next })}
+                  />
+                  <p className="cab-hint">
+                    Cuenta todos los Bits que se gastan en tu canal: los cheers y también los Power-ups. Necesita el
+                    canal de eventos de Twitch, que se enciende en{' '}
+                    <a className="studio-link" href="#powerups">
+                      Power-ups
+                    </a>
+                    . Sin él, la meta solo cambia cuando la mueves tú. Si editas esta meta mientras llegan Bits, se
+                    queda el número que hay en esta página.
+                  </p>
+                </div>
+              </details>
+            )}
           </section>
 
           {/* ---------- Monitor ---------- */}

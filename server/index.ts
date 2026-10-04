@@ -13,6 +13,8 @@ import { processTTSRequest } from './ttsHandler';
 import { nodeHandler, type ApiRoute } from './storage/handlers.js';
 import { clipNodeHandler } from './twitch/clips.js';
 import { voicesNodeHandler } from './voices/handlers.js';
+import { eventsubNodeHandler, MAX_BODY_BYTES } from './twitch/eventsub.js';
+import { subscriptionsNodeHandler } from './twitch/subscriptions.js';
 
 // .env.local tiene prioridad sobre .env (el primero que define una variable gana)
 dotenv.config({ path: ['.env.local', '.env'] });
@@ -39,6 +41,10 @@ app.use(
     methods: ['GET', 'POST'],
   })
 );
+
+// Avisos de EventSub de Twitch. Va ANTES de express.json: la firma se comprueba sobre el
+// cuerpo tal como llegó. La misma lógica que api/twitch/eventsub.ts
+app.post('/api/twitch/eventsub', express.raw({ type: () => true, limit: MAX_BODY_BYTES }), eventsubNodeHandler);
 
 app.use(express.json({ limit: '16kb' }));
 
@@ -112,6 +118,10 @@ app.all('/api/voices/delete', voicesNodeHandler('voices/delete'));
 
 // Cortos de Twitch para el saludo de raid. La misma lógica que api/twitch/clip.ts
 app.all('/api/twitch/clip', clipNodeHandler);
+
+// Canal de eventos de Twitch: encender, consultar y apagar las suscripciones del propio canal.
+// La misma lógica que api/twitch/subscriptions.ts
+app.all('/api/twitch/subscriptions', subscriptionsNodeHandler);
 
 interface TTSRequestBody {
   text?: string;
