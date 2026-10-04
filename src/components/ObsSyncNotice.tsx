@@ -95,7 +95,7 @@ export const ObsSyncNotice: React.FC<ObsSyncNoticeProps> = ({ appType, url, onDi
       <div className="obs-aviso-body">
         <p className="obs-aviso-title">OBS actualizado</p>
         <p className="cab-hint">
-          Se enviaron los cambios de {SOURCE_LABEL[appType] || 'las capas'} y la URL quedó copiada.
+          Se enviaron los cambios de {SOURCE_LABEL[appType] || 'las capas'}. Llegan a OBS en unos segundos; la URL quedó copiada por si la necesitas.
         </p>
         <button type="button" className="cab-btn2 cab-btn-sm" onClick={copyAgain}>
           {copied === 'yes' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}

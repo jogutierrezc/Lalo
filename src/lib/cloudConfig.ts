@@ -129,6 +129,33 @@ export function queueCloudPush(module: ConfigModule, data: unknown): void {
   );
 }
 
+/**
+ * Sube ahora mismo todos los módulos guardados en este navegador, sin esperar
+ * al retardo habitual. Lo usa «Actualizar OBS»: al cambiar la fecha de la
+ * configuración, las fuentes de OBS la descargan en su siguiente consulta.
+ * Devuelve cuántos módulos se enviaron, o null si no hay cuenta abierta.
+ */
+export async function pushAllNow(): Promise<number | null> {
+  const profileId = activeProfileId;
+  if (!supabase || !profileId) return null;
+  timers.forEach((timer) => clearTimeout(timer));
+  timers.clear();
+  let sent = 0;
+  for (const [module, key] of Object.entries(MODULE_STORAGE_KEYS) as [ConfigModule, string][]) {
+    let data: unknown;
+    try {
+      const raw = localStorage.getItem(key);
+      data = raw ? JSON.parse(raw) : undefined;
+    } catch {
+      data = undefined;
+    }
+    if (data === undefined) continue;
+    await pushNow(profileId, module, data);
+    sent += 1;
+  }
+  return sent;
+}
+
 // ---------- Bajada al entrar ----------
 
 function readLocal(key: string): unknown {

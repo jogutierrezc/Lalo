@@ -53,7 +53,7 @@ import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
 import { useCloudSession } from '../hooks/useCloudSession';
-import { onCloudSyncMessage } from '../lib/cloudConfig';
+import { onCloudSyncMessage, pushAllNow } from '../lib/cloudConfig';
 
 export type SuiteApp =
   | 'catalogo'
@@ -284,10 +284,21 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
       settings: { ...ttsSettings, channel: channel || ttsSettings.channel },
     });
 
+    // Con cuenta en la nube: se suben los ajustes ahora y las fuentes de OBS, en cualquier equipo,
+    // los descargan en su siguiente consulta (unos diez segundos)
     try {
-      await fetch('/api/obs/reload', { method: 'POST' }).catch(() => fetch('/api/version', { method: 'POST' }));
+      await pushAllNow();
     } catch {
-      // En local o sin red, el bus ya avisó a las fuentes abiertas
+      // El aviso de sincronización del panel ya explica el fallo
+    }
+
+    // Servidor local: señal de recarga para las fuentes de este equipo
+    try {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        await fetch('/api/obs/reload', { method: 'POST' });
+      }
+    } catch {
+      // Sin servidor local, el bus ya avisó a las fuentes abiertas en este navegador
     }
 
     try {

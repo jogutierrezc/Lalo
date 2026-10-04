@@ -5,7 +5,7 @@
  * configuración del streamer con la clave privada `k` de su URL.
  *
  * Al arrancar descarga el paquete completo y lo escribe en localStorage, que es
- * de donde ya leen todas las capas. Después pregunta cada medio minuto solo por
+ * de donde ya leen todas las capas. Después pregunta cada diez segundos solo por
  * la fecha del último cambio (una respuesta mínima, para no gastar salida de
  * datos) y vuelve a descargar el paquete únicamente si cambió.
  */
@@ -23,7 +23,7 @@ import { loadChatSettings } from '../types/chat';
 import { loadRaidSettings } from '../types/raid';
 import { loadStudioSettings } from '../types/studio';
 
-const CHECK_EVERY_MS = 30000;
+const CHECK_EVERY_MS = 10000;
 
 /** Lee `k` de la query o del fragmento (#widget?k=...). */
 export function readWidgetKey(): string | null {

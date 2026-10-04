@@ -55,6 +55,9 @@ import '../styles/chat.css';
 import { RaidSettings, RAID_FRAMES, RaidFrame, decodeRaidSettings, loadRaidSettings, normalizeRaidSettings } from '../types/raid';
 import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
 import '../styles/raid.css';
+import { isCloudEnabled } from '../lib/supabase';
+import { readWidgetKey } from '../lib/widgetCloud';
+import { MODULE_STORAGE_KEYS } from '../lib/cloudConfig';
 import type { RewardsLayerHandle } from '../components/recompensas/RewardsLayer';
 import { RewardsWidgetLayer, rewardsSettingsForWidget } from '../components/recompensas/RewardsWidgetLayer';
 import { TwitchEventLayer } from '../components/powerups/TwitchEventLayer';
@@ -84,7 +87,27 @@ function getURLParam(key: string): string | null {
  * Ajustes que llegan en la URL del widget. El navegador de OBS no comparte
  * localStorage con el panel, así que la URL manda sobre lo guardado.
  */
+/**
+ * true si esta fuente lee sus ajustes de la cuenta (URL con llave y ajustes ya descargados).
+ * En ese caso manda lo guardado en el panel: la voz y las reglas escritas en la URL son de cuando
+ * se copió y, si ganaran, un cambio hecho después en el panel nunca llegaría a OBS.
+ */
+function settingsComeFromCloud(): boolean {
+  if (!isCloudEnabled || !readWidgetKey()) return false;
+  try {
+    return localStorage.getItem(MODULE_STORAGE_KEYS.tts ?? '') !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** La voz que toca: la guardada en la cuenta si la hay; si no, la de la URL. */
+function pickVoice(saved: string | undefined, fromUrl: string | null): string {
+  return (settingsComeFromCloud() ? saved || fromUrl : fromUrl || saved) || '';
+}
+
 function urlOverrides(): Partial<TTSSettings> {
+  if (settingsComeFromCloud()) return {};
   const overrides: Partial<TTSSettings> = { ...appearanceFromParams(getURLParam), ...moderationFromParams(getURLParam) };
   const volume = parseFloat(getURLParam('vol') || '');
   if (Number.isFinite(volume)) overrides.volume = Math.min(1, Math.max(0, volume));
@@ -245,7 +268,7 @@ export const Widget: React.FC = () => {
     const cleanModel = rawModel.toLowerCase().includes('free') ? 's2.1-pro-free' : (rawModel || 's2.1-pro-free');
 
     // Resolver voz: si no se especificó o es la antigua voz de muestra, asignar la voz clonada oficial
-    const rawVoice = (voiceParam || base.referenceId || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
+    const rawVoice = (pickVoice(base.referenceId, voiceParam) || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
     const cleanVoice = (!rawVoice || rawVoice === OLD_PRESET_VOICE || rawVoice === 'default' || rawVoice === 'undefined')
       ? LALOPLAY_DEFAULT_VOICE
       : rawVoice;
@@ -267,7 +290,7 @@ export const Widget: React.FC = () => {
     const handleStorage = () => {
       const updated = loadSettings();
       const voiceParam = getURLParam('voice') || getURLParam('reference_id') || getURLParam('v');
-      const rawVoice = (voiceParam || updated.referenceId || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
+      const rawVoice = (pickVoice(updated.referenceId, voiceParam) || LALOPLAY_DEFAULT_VOICE).trim().replace(/[.,;/\\]+$/, '');
       const cleanVoice = (!rawVoice || rawVoice === OLD_PRESET_VOICE || rawVoice === 'default' || rawVoice === 'undefined')
         ? LALOPLAY_DEFAULT_VOICE
         : rawVoice;
