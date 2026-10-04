@@ -11,6 +11,9 @@
  *   - #raid: Estudio del saludo de raid con corto
  *   - #studio: Studio, el editor de escenas (cada escena, una URL para OBS)
  *   - #powerups: Power-ups de Twitch y canal de eventos (bits, Power-ups y canjes sin texto)
+ *   - #integraciones: galería de servicios conectados (Spotify, Ko-fi, Twitch...)
+ *   - #musica: estudio de la capa «Ahora suena»
+ *   - #kofi: estudio de las alertas y capas fijas de Ko-fi
  *   - #twitchio / #bot: Estudio de Bot y EventSub (Powered by TwitchIO)
  *   - #cuenta: Mi cuenta del streamer (con la nube)
  *   - #admin, #admin/...: consola del administrador. Quien tiene rol de
@@ -39,6 +42,9 @@ import { ChatStudio } from './pages/ChatStudio';
 import { RaidStudio } from './pages/RaidStudio';
 import { Studio } from './pages/Studio';
 import { PowerupsStudio } from './pages/PowerupsStudio';
+import { Integraciones } from './pages/Integraciones';
+import { MusicStudio } from './pages/MusicStudio';
+import { KofiStudio } from './pages/KofiStudio';
 import { Access } from './pages/Access';
 import { Bienvenida, bienvenidaHechaAqui } from './pages/Bienvenida';
 import { Account } from './pages/Account';
@@ -68,6 +74,9 @@ export type AppRoute =
   | 'raid'
   | 'studio'
   | 'powerups'
+  | 'integraciones'
+  | 'musica'
+  | 'kofi'
   | 'cuenta'
   | 'admin'
   | 'nube'
@@ -182,6 +191,11 @@ function resolveRoute(): AppRoute {
   if (hash.startsWith('control') || path.includes('/control')) {
     return 'control';
   }
+
+  // Integraciones: la galería de servicios, la capa «Ahora suena» y Ko-fi
+  if (/^integraciones([?/]|$)/.test(hash)) return 'integraciones';
+  if (/^(musica|ahora-suena)([?/]|$)/.test(hash)) return 'musica';
+  if (/^ko-?fi([?/]|$)/.test(hash)) return 'kofi';
 
   // 9. Fuentes de navegador para OBS Studio
   if (
@@ -313,6 +327,12 @@ const Routes: React.FC = () => {
       return <Studio />;
     case 'powerups':
       return <PowerupsStudio />;
+    case 'integraciones':
+      return <Integraciones />;
+    case 'musica':
+      return <MusicStudio />;
+    case 'kofi':
+      return <KofiStudio />;
     case 'twitchio':
       return <TwitchIOStudio />;
     case 'tts':

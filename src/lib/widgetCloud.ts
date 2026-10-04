@@ -26,6 +26,8 @@ import { loadPollSettings } from '../types/polls';
 import { loadChatSettings } from '../types/chat';
 import { loadRaidSettings } from '../types/raid';
 import { loadStudioSettings } from '../types/studio';
+import { loadMusicSettings } from '../types/music';
+import { loadKofiSettings } from '../types/kofi';
 
 const CHECK_EVERY_MS = 10000;
 /** Sin la función de la fecha, cada cuántas consultas se descarga el paquete entero. */
@@ -69,6 +71,8 @@ function announce(module: ConfigModule): void {
   if (module === 'chat') postBus({ type: 'CHAT_SETTINGS_UPDATE', settings: loadChatSettings() });
   if (module === 'raid') postBus({ type: 'RAID_SETTINGS_UPDATE', settings: loadRaidSettings() });
   if (module === 'studio') postBus({ type: 'STUDIO_SETTINGS_UPDATE', settings: loadStudioSettings() });
+  if (module === 'music') postBus({ type: 'MUSIC_SETTINGS_UPDATE', settings: loadMusicSettings() });
+  if (module === 'kofi') postBus({ type: 'KOFI_SETTINGS_UPDATE', settings: loadKofiSettings() });
 }
 
 async function pullBundle(key: string, notify: boolean): Promise<boolean> {

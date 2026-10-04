@@ -126,13 +126,13 @@ export async function callSubscriptions(action?: 'create' | 'delete'): Promise<S
 // ---------- Eventos ----------
 
 /** Guarda un evento de prueba para las capas de OBS de quien ha entrado. Devuelve null si se guardó, o el motivo. */
-export async function pushTestEvent(kind: 'bits' | 'powerup' | 'points', payload: Record<string, unknown>): Promise<string | null> {
+export async function pushTestEvent(kind: 'bits' | 'powerup' | 'points' | 'kofi', payload: Record<string, unknown>): Promise<string | null> {
   if (!supabase) return 'La nube no está configurada.';
   const { error } = await supabase.rpc('push_test_twitch_event', { p_kind: kind, p_payload: payload });
   if (!error) return null;
   if (error.message.includes('too_many_tests')) return 'Demasiadas pruebas seguidas. Espera un minuto.';
   if (error.message.includes('not_active')) return 'Tu cuenta no está activa.';
-  return 'No se pudo enviar la prueba. Puede faltar la migración 0012 en Supabase.';
+  return 'No se pudo enviar la prueba. Puede faltar aplicar en Supabase la migración 0012 (o la 0013, para Ko-fi).';
 }
 
 export interface WidgetEventRow {

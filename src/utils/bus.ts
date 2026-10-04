@@ -18,6 +18,8 @@ import type { ChatSettings } from '../types/chat';
 import type { RaidSettings } from '../types/raid';
 import type { StudioSettings } from '../types/studio';
 import type { CustomRewardItem } from '../types/rewards';
+import type { MusicSettings } from '../types/music';
+import type { KofiSettings } from '../types/kofi';
 
 export type { PollStartEvent };
 
@@ -200,6 +202,12 @@ export type BusMessage =
   | { type: 'CHAT_SETTINGS_UPDATE'; settings: ChatSettings }
   | { type: 'RAID_SETTINGS_UPDATE'; settings: RaidSettings }
   | { type: 'STUDIO_SETTINGS_UPDATE'; settings: StudioSettings }
+  | { type: 'MUSIC_SETTINGS_UPDATE'; settings: MusicSettings }
+  | { type: 'KOFI_SETTINGS_UPDATE'; settings: KofiSettings }
+  /** Prueba de «Ahora suena» del panel a las fuentes de este navegador: una canción de ejemplo o una orden. */
+  | { type: 'MUSIC_TEST'; action: 'song' | 'pause' | 'resume' | 'stop' | 'show' | 'hide'; sample?: number }
+  /** El panel pide a las capas fijas de Ko-fi que vuelvan a leer lo recaudado. */
+  | { type: 'KOFI_REFRESH' }
   /** Evento de Twitch (bits, Power-up o canje) de prueba, del panel a las fuentes de este navegador. */
   | { type: 'TWITCH_EVENT'; kind: string; payload: unknown }
   | { type: 'ENQUEUE'; text: string; user?: string }

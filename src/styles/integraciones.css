@@ -1,0 +1,280 @@
+/*
+ * src/styles/integraciones.css
+ *
+ * Página «Integraciones» (galería de fichas de servicio con su estado) y piezas
+ * comunes de los estudios «Ahora suena» y «Ko-fi»: selector de diseño, posición
+ * en seis puntos y fondo del monitor. Usa los tokens del panel (.cab).
+ */
+
+.ig {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.ig-lede {
+  max-width: 72ch;
+  color: var(--cb-mut);
+}
+.ic {
+  align-content: start;
+}
+.ic p,
+.ic ul,
+.ic ol {
+  margin: 0;
+}
+.ic-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ic-m {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.ic-h h2 {
+  flex: 1 1 auto;
+  margin: 0;
+}
+.ic-st {
+  padding: 2px 8px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cb-mut);
+  white-space: nowrap;
+}
+.ic-st[data-s='on'] {
+  background: var(--cb-ok-bg);
+  color: var(--cb-ok);
+  border-color: var(--cb-ok);
+}
+.ic-st[data-s='soon'] {
+  color: var(--ui);
+  border-color: var(--ui);
+}
+.ic-st[data-s='warn'] {
+  background: var(--cb-warn-bg);
+  color: var(--cb-warn);
+  border-color: var(--cb-warn);
+}
+.ic-who {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.ic-perm {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed var(--cb-line);
+  border-radius: 3px;
+  font-size: 0.9rem;
+  list-style: none;
+}
+.ic-perm li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+.ic-perm li b {
+  min-width: 2.4em;
+  text-align: center;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0 5px;
+  border: 1px solid var(--cb-line);
+  border-radius: 2px;
+  color: var(--cb-mut);
+}
+.ic-perm li[data-y] b {
+  color: var(--cb-ok);
+  border-color: var(--cb-ok);
+}
+.ic-steps {
+  padding-left: 1.3em;
+  display: grid;
+  gap: 12px;
+  list-style: decimal;
+}
+.ic-steps li > * {
+  margin-top: 6px;
+}
+.ic-addr {
+  display: block;
+  padding: 8px 10px;
+  border: 1px dashed var(--cb-line);
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.ic-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.ic-tag {
+  justify-self: start;
+  padding: 2px 8px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--cb-mut);
+}
+.ic-facts {
+  padding-left: 1.1em;
+  display: grid;
+  gap: 6px;
+  list-style: disc;
+  max-width: 82ch;
+}
+.ic code {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* ---------- Estudios ---------- */
+
+/* Selector de diseño: nombre y una línea de descripción */
+.itg-dz {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 6px;
+}
+.itg-dz button {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  padding: 8px 10px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.14s var(--ease-out);
+}
+.itg-dz button:active {
+  transform: scale(0.97);
+}
+.itg-dz button[aria-pressed='true'] {
+  border-color: var(--ui);
+  box-shadow: inset 0 0 0 1px var(--ui);
+}
+.itg-dz b {
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 76%;
+  font-weight: 800;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.itg-dz span {
+  font-size: 0.78rem;
+  color: var(--cb-mut);
+}
+
+/* Posición en seis puntos */
+.itg-six {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 4px;
+  justify-self: start;
+  width: max-content;
+  padding: 4px;
+  border: 1px solid var(--cb-line);
+  border-radius: 5px;
+  background: var(--cb-bg);
+}
+.itg-six button {
+  position: relative;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--cb-surface);
+  cursor: pointer;
+}
+.itg-six button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cb-mut);
+}
+.itg-six button[aria-pressed='true'] {
+  background: var(--ui);
+}
+.itg-six button[aria-pressed='true']::after {
+  background: var(--ui-ink);
+}
+.itg-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.itg-color {
+  width: 44px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  cursor: pointer;
+}
+.itg-color:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.itg-tests {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.itg-cmd {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-weight: 500;
+}
+
+/* Monitor: las capas se colocan solas, sin el relleno del monitor común */
+.cab-stage.itg-stage {
+  display: block;
+  padding: 0;
+  color: #efe9dc;
+}
+.cab-stage.itg-stage[data-bg='claro'] {
+  background: radial-gradient(50% 70% at 30% 30%, #fff7c9 0, transparent 70%), linear-gradient(160deg, #9fd8ff, #f3f0e2 60%, #c8e89a);
+}
+.cab-stage.itg-stage[data-bg='ruido'] {
+  background: repeating-linear-gradient(115deg, #e23d5b 0 6%, #1a1a22 6% 11%, #f2c14e 11% 15%, #2b6fd6 15% 23%, #f5f5f0 23% 26%);
+}

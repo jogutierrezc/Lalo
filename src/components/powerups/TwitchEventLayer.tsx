@@ -40,7 +40,7 @@ const NOTICE_SECONDS = 5;
 const NOTICE_QUEUE_MAX = 6;
 
 /** Fuentes que pueden hacer algo con un evento. Las demás (chat, raid...) ni preguntan. */
-const LISTENING_APPS = ['', 'tts', 'all', 'rewards', 'recompensas', 'goals', 'scene', 'roulette', 'ruleta', 'wheel'];
+const LISTENING_APPS = ['', 'tts', 'all', 'rewards', 'recompensas', 'goals', 'scene', 'roulette', 'ruleta', 'wheel', 'kofi', 'kofigoal', 'kofirecent'];
 const NOTICE_APPS = ['all', 'rewards', 'recompensas'];
 const VOICE_APPS = ['', 'tts', 'all'];
 
@@ -53,6 +53,10 @@ interface TwitchEventLayerProps {
   blockedUsers: string[];
   /** Cada evento leído, antes de las acciones de «Power-ups». Lo usa la ruleta. */
   onEvent?: (event: TwitchEvent) => void;
+  /** Avisos de Ko-fi (viajan por el mismo canal). Los pinta la capa de Ko-fi. */
+  onKofi?: (payload: unknown, test: boolean) => void;
+  /** Hay una capa de Ko-fi en esta fuente: se pregunta al ritmo rápido aunque el canal de Twitch esté apagado. */
+  fast?: boolean;
 }
 
 interface Notice {
@@ -61,9 +65,9 @@ interface Notice {
   text: string;
 }
 
-export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, blockedWords, blockedUsers, onEvent }) => {
-  const live = useRef({ app, speak, blockedWords, blockedUsers, onEvent });
-  live.current = { app, speak, blockedWords, blockedUsers, onEvent };
+export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, blockedWords, blockedUsers, onEvent, onKofi, fast }) => {
+  const live = useRef({ app, speak, blockedWords, blockedUsers, onEvent, onKofi, fast });
+  live.current = { app, speak, blockedWords, blockedUsers, onEvent, onKofi, fast };
 
   /** Un evento ya leído: primero a quien escucha (la ruleta), luego lo que mande «Power-ups». */
   const handle = useRef<(event: TwitchEvent) => void>(() => {});
@@ -140,6 +144,7 @@ export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, 
     if (!listening) return;
     return listenBus((message) => {
       if (message.type !== 'TWITCH_EVENT') return;
+      if (message.kind === 'kofi') return live.current.onKofi?.(message.payload, true);
       const event = parseTwitchEvent(message.kind, message.payload, true);
       if (event) handle.current(event);
     });
@@ -159,12 +164,13 @@ export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, 
       if (result) {
         result.events.forEach((row) => {
           if (cursor !== null && row.id <= cursor) return;
+          if (row.kind === 'kofi') return live.current.onKofi?.(row.payload, row.test);
           const event = parseTwitchEvent(row.kind, row.payload, row.test);
           if (event) handle.current(event);
         });
         cursor = Math.max(cursor ?? 0, result.cursor);
       }
-      timer = setTimeout(tick, loadPowerupsSettings().channelActive ? POLL_ACTIVE_MS : POLL_IDLE_MS);
+      timer = setTimeout(tick, loadPowerupsSettings().channelActive || live.current.fast ? POLL_ACTIVE_MS : POLL_IDLE_MS);
     };
     tick();
 

@@ -62,6 +62,11 @@ import { setActiveVoice } from '../utils/activeVoice';
 import type { RewardsLayerHandle } from '../components/recompensas/RewardsLayer';
 import { RewardsWidgetLayer, rewardsSettingsForWidget } from '../components/recompensas/RewardsWidgetLayer';
 import { TwitchEventLayer } from '../components/powerups/TwitchEventLayer';
+import { MusicWidgetLayer, MusicWidgetLayerHandle } from '../components/integraciones/MusicWidgetLayer';
+import { KofiWidgetLayer, KofiWidgetLayerHandle } from '../components/integraciones/KofiWidgetLayer';
+import { kofiSettingsForWidget, musicSettingsForWidget, withKofiDesign, withMusicDesign } from '../components/integraciones/widgetSettings';
+import { normalizeMusicSettings } from '../types/music';
+import { normalizeKofiSettings } from '../types/kofi';
 import type { TwitchEvent } from '../utils/twitchEvents';
 import { loadStudioSettings, normalizeStudioSettings, sceneForWidget } from '../types/studio';
 import { SceneData, SceneHandle, SceneView } from '../components/estudio/SceneView';
@@ -393,9 +398,31 @@ export const Widget: React.FC = () => {
     (message: string, sender: { name: string; role: UserRole }) =>
       (raidRef.current?.command(message, sender) ?? false) ||
       (sceneRef.current?.raidCommand(message, sender) ?? false) ||
-      (rouletteRef.current?.command(message, sender) ?? false),
+      (rouletteRef.current?.command(message, sender) ?? false) ||
+      (musicRef.current?.command(message, sender) ?? false),
     []
   );
+
+  // Integraciones. «Ahora suena»: fuente propia (app=music) o dentro de «Todo en uno». La muestran y
+  // la ocultan el streamer y sus moderadores con un comando
+  const appParamRef = useRef(appParam);
+  const [musicSettings, setMusicSettings] = useState(() => musicSettingsForWidget(getURLParam));
+  const showMusic = appParam === 'music' || (appParam === 'all' && musicSettings.inAll);
+  const musicRef = useRef<MusicWidgetLayerHandle | null>(null);
+  // Ko-fi: alertas (app=kofi), meta (app=kofigoal) y últimos apoyos (app=kofirecent); en «Todo en uno»,
+  // las piezas que el streamer tenga encendidas
+  const isKofiAlerts = appParam === 'kofi';
+  const [kofiSettings, setKofiSettings] = useState(() => kofiSettingsForWidget(getURLParam, appParam));
+  const kofiInAll = appParam === 'all' && kofiSettings.inAll;
+  const kofiGoalOn = appParam === 'kofigoal' || (kofiInAll && kofiSettings.goal.on);
+  const kofiRecentOn = appParam === 'kofirecent' || (kofiInAll && kofiSettings.recent.on);
+  const kofiAlertsOn = isKofiAlerts || kofiInAll;
+  const kofiParts = useMemo(() => ({ alerts: kofiAlertsOn, goal: kofiGoalOn, recent: kofiRecentOn }), [kofiAlertsOn, kofiGoalOn, kofiRecentOn]);
+  const showKofi = kofiAlertsOn || kofiGoalOn || kofiRecentOn;
+  const kofiRef = useRef<KofiWidgetLayerHandle | null>(null);
+  const handleKofiEvent = useCallback((payload: unknown, test: boolean) => kofiRef.current?.event(payload, test), []);
+  // Estas fuentes no hablan: la voz sale por «Voz del chat», «Todo en uno» o «Alertas de Ko-fi»
+  const isQuietIntegration = appParam === 'music' || appParam === 'kofigoal' || appParam === 'kofirecent';
 
   // Capa «Recompensas»: fuente propia (app=rewards) o dentro de «Todo en uno». Reacciona sola a los
   // cheers y a los canjes con texto que llegan por la misma conexión del chat
@@ -471,6 +498,8 @@ export const Widget: React.FC = () => {
   // Lo que dice la ruleta también: una sola voz, la de «Voz del chat», y una frase detrás de otra
   const speakRoulette = useCallback((text: string) => enqueueManualMessage(text, 'Ruleta', true), [enqueueManualMessage]);
   const handleTwitchEvent = useCallback((event: TwitchEvent) => rouletteRef.current?.event(event), []);
+  // El mensaje de un apoyo de Ko-fi, cuando el streamer quiere que se lea
+  const speakKofi = useCallback((text: string) => void enqueueManualMessage(text, 'Ko-fi', true), [enqueueManualMessage]);
 
   // Sonido antes de la voz: se carga por adelantado y se recuerda cuándo habló la voz por última vez
   const preSoundRef = useRef<ReturnType<typeof createPreSoundPlayer> | null>(null);
@@ -1254,6 +1283,12 @@ export const Widget: React.FC = () => {
       if (message.type === 'RAID_SETTINGS_UPDATE') {
         setRaidSettings(normalizeRaidSettings(message.settings));
       }
+      if (message.type === 'MUSIC_SETTINGS_UPDATE') {
+        setMusicSettings(withMusicDesign(normalizeMusicSettings(message.settings), getURLParam));
+      }
+      if (message.type === 'KOFI_SETTINGS_UPDATE') {
+        setKofiSettings(withKofiDesign(normalizeKofiSettings(message.settings), getURLParam, appParamRef.current));
+      }
       if (message.type === 'STUDIO_SETTINGS_UPDATE') {
         setStudioSettings(normalizeStudioSettings(message.settings));
       }
@@ -1576,7 +1611,7 @@ export const Widget: React.FC = () => {
       return;
     }
     // La fuente que solo muestra las recompensas tampoco lee el chat
-    if (isRewardsOnly) {
+    if (isRewardsOnly || isQuietIntegration) {
       if (messageQueue.length > 0) clearQueue();
       return;
     }
@@ -1589,7 +1624,7 @@ export const Widget: React.FC = () => {
       }
     }
     // Las fuentes del saludo de raid y de la ruleta solo dicen lo suyo: el chat lo lee otra fuente
-    if (isRaidOnly || isRouletteApp) {
+    if (isRaidOnly || isRouletteApp || isKofiAlerts) {
       const foreign = messageQueue.find((m) => !m.system);
       if (foreign) {
         removeMessageFromQueue(foreign.id);
@@ -1604,7 +1639,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue, isQuietIntegration, isKofiAlerts]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1708,7 +1743,24 @@ export const Widget: React.FC = () => {
         blockedWords={moderation.blockedWords}
         blockedUsers={moderation.blockedUsers}
         onEvent={handleTwitchEvent}
+        onKofi={handleKofiEvent}
+        fast={showKofi}
       />
+
+      {/* «Ahora suena»: la canción que escucha el streamer */}
+      {showMusic && <MusicWidgetLayer ref={musicRef} settings={musicSettings} demo={getURLParam('demo') === '1' && appParam !== 'all'} />}
+
+      {/* Ko-fi: alertas, meta y últimos apoyos */}
+      {showKofi && (
+        <KofiWidgetLayer
+          ref={kofiRef}
+          settings={kofiSettings}
+          parts={kofiParts}
+          demo={getURLParam('demo') === '1' && appParam !== 'all'}
+          blockedWords={moderation.blockedWords}
+          speak={speakKofi}
+        />
+      )}
 
       {/* Escena de Studio: las capas colocadas en el lienzo de 1920 × 1080 */}
       {isScene && scene && (

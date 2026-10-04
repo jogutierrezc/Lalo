@@ -9,6 +9,9 @@
     { "source": "/api/voices/:action", "destination": "/api/voices?g=voices&a=:action" },
     { "source": "/api/twitch/clip", "destination": "/api/twitch?g=twitch&a=clip" },
     { "source": "/api/twitch/subscriptions", "destination": "/api/twitch?g=twitch&a=subscriptions" },
+    { "source": "/api/spotify/:action", "destination": "/api/integraciones?g=spotify&a=:action" },
+    { "source": "/api/kofi/:id", "destination": "/api/integraciones?g=kofi&a=hook&id=:id" },
+    { "source": "/api/integrations/:action", "destination": "/api/integraciones?g=integrations&a=:action" },
     { "source": "/api/health", "destination": "/api/version?health=1" },
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }

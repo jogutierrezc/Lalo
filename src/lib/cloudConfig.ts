@@ -27,6 +27,8 @@ export const MODULE_STORAGE_KEYS: Partial<Record<ConfigModule, string>> = {
   raid: 'lalo_raid_settings',
   studio: 'lalo_studio_settings',
   powerups: 'lalo_powerups_settings',
+  music: 'lalo_music_settings',
+  kofi: 'lalo_kofi_settings',
 };
 
 const PUSH_DELAY_MS = 1200;
@@ -104,7 +106,12 @@ async function pushNow(profileId: string, module: ConfigModule, data: unknown): 
     .from('configs')
     .upsert({ profile_id: profileId, module, data: value }, { onConflict: 'profile_id,module' });
   if (error) {
-    tell(`No se pudo guardar «${module}» en la nube: ${error.message}`);
+    // 23514: la base aún no conoce este módulo (falta aplicar la migración que lo añade)
+    tell(
+      error.code === '23514'
+        ? `«${module}» se guarda solo en este navegador: a la base de datos le falta la última migración para guardarlo en la nube.`
+        : `No se pudo guardar «${module}» en la nube: ${error.message}`
+    );
     return;
   }
   tell(

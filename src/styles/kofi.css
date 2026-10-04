@@ -1,0 +1,202 @@
+/*
+ * src/styles/kofi.css
+ *
+ * Capas de Ko-fi: las seis alertas aprobadas (Recibo, Rótulo, Sello, Burbuja,
+ * Cinta y Cartel) y las capas fijas (meta: Barra y Depósito; últimos apoyos:
+ * Lista y Cinta). Todo en em sobre .itg-ov (ver ahora-suena.css).
+ *
+ * El tipo de aviso se distingue por la etiqueta: rellena en donaciones, con
+ * borde en membresías y clara en tienda y comisión.
+ */
+
+.ka {
+  position: relative;
+  isolation: isolate;
+  visibility: hidden;
+  max-width: 94cqw;
+  min-width: 0;
+  color: #f2ede2;
+  font-family: var(--body);
+  line-height: 1.2;
+  --ac: #ff9a6b;
+}
+.ka[data-big] { font-size: 1.22em; }
+.ka-bg,
+.kbg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: rgba(13, 14, 16, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.25em;
+}
+.ka[data-big] .ka-bg { border-color: var(--ac); box-shadow: inset 0 0 0 0.14em var(--ac); }
+.ka-tag {
+  justify-self: start;
+  padding: 0.12em 0.55em;
+  border-radius: 0.15em;
+  background: var(--ac);
+  color: #121315;
+  font-family: var(--cond);
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 0.78em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ka[data-ev='mem'] .ka-tag,
+.ka[data-ev='ren'] .ka-tag { background: transparent; color: var(--ac); box-shadow: inset 0 0 0 1px var(--ac); }
+.ka[data-ev='shop'] .ka-tag,
+.ka[data-ev='com'] .ka-tag { background: #f2ede2; }
+.ka-amt { font-family: var(--mono); font-weight: 700; font-size: 1.6em; white-space: nowrap; }
+.ka-amt b { font-weight: 700; }
+.ka-amt span { font-size: 0.5em; font-weight: 500; color: #d2cdc1; }
+.ka-name { font-family: var(--cond); font-stretch: 76%; font-weight: 800; font-size: 1.5em; line-height: 1.08; overflow-wrap: anywhere; }
+.ka-tier { font-size: 0.85em; font-weight: 650; color: var(--ac); }
+.ka-msg {
+  font-size: 0.95em;
+  color: #d2cdc1;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+/* Sitio de la marca. Sin el archivo oficial, un recuadro punteado con el nombre */
+.ka-mark,
+.kmark {
+  flex: none;
+  justify-self: start;
+  display: grid;
+  place-items: center;
+  min-width: 4.6em;
+  height: 1.8em;
+  padding: 0 0.5em;
+  border: 1px dashed rgba(255, 255, 255, 0.65);
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: 0.72em;
+  color: #f2ede2;
+}
+.kmark { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.ka-mark[data-file],
+.kmark[data-file] { padding: 0; border: 0; }
+.ka-mark img,
+.kmark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.ka-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 0.2em; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.ka-bar u { display: block; height: 100%; background: var(--ac); transform-origin: left; }
+.ka.no-amt .ka-amt,
+.ka.no-msg .ka-msg { display: none; }
+
+/* 1 Recibo */
+.ka[data-k='recibo'] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5em; width: 15em; padding: 1em 0.9em 1.5em; color: #17181b; }
+[data-k='recibo'] .ka-bg {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background:
+    conic-gradient(from -45deg at 50% 100%, transparent 90deg, #f2ede2 0) 0 100% / 0.8em 0.4em repeat-x,
+    linear-gradient(#f2ede2, #f2ede2) 0 0 / 100% calc(100% - 0.39em) no-repeat;
+}
+[data-k='recibo'] .ka-tag { background: #17181b; color: #f2ede2; box-shadow: none; }
+[data-k='recibo'] .ka-amt { font-size: 2.1em; padding-bottom: 0.25em; border-bottom: 1px dashed #17181b; }
+[data-k='recibo'] .ka-amt span,
+[data-k='recibo'] .ka-msg { color: #3b3d44; }
+[data-k='recibo'] .ka-tier { color: #17181b; text-decoration: underline; text-decoration-color: var(--ac); text-decoration-thickness: 0.18em; }
+[data-k='recibo'] .ka-mark { border-color: #17181b; color: #17181b; }
+[data-k='recibo'] .ka-bar { top: 0; bottom: auto; height: 0.3em; background: #17181b; }
+
+/* 2 Rótulo */
+.ka[data-k='rotulo'] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.2em 1em; width: 44em; padding: 0.7em 1em 0.85em 0; }
+[data-k='rotulo'] .ka-bg { border-radius: 0; border-width: 1px 0; }
+[data-k='rotulo'] .ka-tag { grid-column: 1; grid-row: 1 / 4; align-self: stretch; display: grid; place-items: center; border-radius: 0; padding: 0 0.9em; font-size: 0.9em; margin-block: -0.78em -0.94em; }
+[data-k='rotulo'] .ka-name { grid-column: 2; grid-row: 1; font-size: 1.9em; }
+[data-k='rotulo'] .ka-tier { grid-column: 2; grid-row: 2; }
+[data-k='rotulo'] .ka-msg { grid-column: 2; grid-row: 3; -webkit-line-clamp: 2; line-clamp: 2; }
+[data-k='rotulo'] .ka-amt { grid-column: 3; grid-row: 1 / 3; font-size: 2.1em; }
+[data-k='rotulo'] .ka-mark { grid-column: 3; grid-row: 3; justify-self: end; }
+
+/* 3 Sello */
+.ka[data-k='sello'] { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: 0.4em; width: 15.5em; padding: 1.2em 1.1em; }
+[data-k='sello'] .ka-bg { border: 0.22em solid var(--ac); outline: 1px solid var(--ac); outline-offset: -0.55em; box-shadow: none; }
+[data-k='sello'] .ka-tag { justify-self: center; }
+[data-k='sello'] .ka-amt { font-size: 2.6em; }
+[data-k='sello'] .ka-name { font-size: 1.3em; }
+[data-k='sello'] .ka-mark { justify-self: center; }
+
+/* 4 Burbuja */
+.ka[data-k='burbuja'] { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.4em 0.8em; width: 24em; padding: 0.8em 1em 1.1em; margin-bottom: 0.8em; }
+[data-k='burbuja'] .ka-bg { border-radius: 0.9em 0.9em 0.9em 0; }
+[data-k='burbuja'] .ka-bg::after { content: ''; position: absolute; left: -1px; top: 100%; border: 0.45em solid transparent; border-top-color: rgba(13, 14, 16, 0.95); border-left-color: rgba(13, 14, 16, 0.95); }
+[data-k='burbuja'] .ka-tag { grid-column: 1; grid-row: 1; }
+[data-k='burbuja'] .ka-mark { grid-column: 2; grid-row: 1; justify-self: end; }
+[data-k='burbuja'] .ka-name { grid-column: 1; grid-row: 2; font-size: 1.15em; }
+[data-k='burbuja'] .ka-amt { grid-column: 2; grid-row: 2; font-size: 1.2em; }
+[data-k='burbuja'] .ka-tier { grid-column: 1 / -1; grid-row: 3; }
+[data-k='burbuja'] .ka-msg { grid-column: 1 / -1; grid-row: 4; font-size: 1.3em; line-height: 1.25; color: #f2ede2; -webkit-line-clamp: 4; line-clamp: 4; }
+[data-k='burbuja'] .ka-bar { left: 1em; right: 1em; bottom: 0.35em; }
+
+/* 5 Cinta */
+.ka[data-k='cinta'] { display: flex; align-items: center; gap: 0.9em; width: 56em; padding: 0.5em 0.9em 0.62em; overflow: hidden; }
+[data-k='cinta'] .ka-bg { border-radius: 2px; }
+[data-k='cinta'] .ka-tag { flex: none; }
+[data-k='cinta'] .ka-name { flex: 0 1 auto; min-width: 0; font-size: 1.2em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-k='cinta'] .ka-amt { font-size: 1.1em; }
+[data-k='cinta'] .ka-tier { flex: none; white-space: nowrap; }
+[data-k='cinta'] .ka-msg { display: block; flex: 1 1 0; min-width: 0; white-space: nowrap; }
+[data-k='cinta'] .ka-msg span { display: inline-block; will-change: transform; }
+[data-k='cinta'] .ka-msg.ell { text-overflow: ellipsis; }
+[data-k='cinta'] .ka-msg.ell span { display: inline; }
+[data-k='cinta'] .ka-bar { height: 0.14em; }
+
+/* 6 Cartel */
+.ka[data-k='cartel'] { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: 0.5em; width: 40em; padding: 1.5em 2em 1.8em; }
+[data-k='cartel'] .ka-bg { border-radius: 0; border-width: 0.3em 0; border-color: var(--ac); box-shadow: none; }
+[data-k='cartel'] .ka-tag,
+[data-k='cartel'] .ka-mark { justify-self: center; }
+[data-k='cartel'] .ka-amt { font-size: 4em; line-height: 1; }
+[data-k='cartel'] .ka-name { font-size: 2.3em; }
+[data-k='cartel'] .ka-tier { font-size: 1.1em; }
+[data-k='cartel'] .ka-msg { font-size: 1.15em; max-width: 30em; }
+[data-k='cartel'] .ka-bar { display: none; }
+
+/* ---------- Capas fijas ---------- */
+.kg,
+.kr {
+  position: absolute;
+  isolation: isolate;
+  color: #f2ede2;
+  font-family: var(--body);
+  line-height: 1.2;
+  --ac: #ff9a6b;
+}
+.kg { left: 3%; top: 5%; }
+.kg-t { font-family: var(--cond); font-stretch: 76%; font-weight: 800; font-size: 1.25em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kg-n { font-family: var(--mono); font-size: 0.9em; white-space: nowrap; }
+.kg-bar { background: rgba(255, 255, 255, 0.16); overflow: hidden; border-radius: 2px; }
+.kg-bar u { display: block; width: 100%; height: 100%; background: var(--ac); transform-origin: left bottom; transform: scale(0, 1); }
+.kg-f { display: flex; gap: 0.8em; align-items: center; justify-content: space-between; }
+.kg-f b { font-family: var(--mono); font-weight: 700; color: var(--ac); }
+.kg-plus { position: absolute; right: 0; bottom: 100%; margin-bottom: 0.3em; padding: 0.1em 0.5em; border-radius: 2px; background: var(--ac); color: #121315; font-family: var(--mono); font-weight: 700; font-size: 0.9em; opacity: 0; }
+.kg[data-l='barra'] { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 0.45em 1em; width: 27em; padding: 0.7em 0.9em 0.8em; }
+[data-l='barra'] .kg-bar { grid-column: 1 / -1; height: 0.7em; }
+[data-l='barra'] .kg-f { grid-column: 1 / -1; }
+.kg[data-l='deposito'] { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.4em 0.9em; width: 15em; padding: 0.8em; top: auto; bottom: 16%; }
+[data-l='deposito'] .kg-bar { grid-column: 1; grid-row: 1 / 4; width: 2.6em; height: 11em; }
+[data-l='deposito'] .kg-t { grid-column: 2; white-space: normal; align-self: start; }
+[data-l='deposito'] .kg-n { grid-column: 2; align-self: end; white-space: normal; }
+[data-l='deposito'] .kg-f { grid-column: 2; flex-direction: column; align-items: flex-start; gap: 0.4em; align-self: end; }
+[data-l='deposito'] .kg-f b { font-size: 1.6em; }
+
+.kr-h { display: flex; gap: 0.8em; align-items: center; justify-content: space-between; font-family: var(--cond); font-stretch: 75%; font-weight: 800; font-size: 0.8em; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ac); white-space: nowrap; }
+.kr ul { display: grid; gap: 0.3em; overflow: hidden; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.kr li { display: flex; gap: 0.8em; align-items: center; justify-content: space-between; height: 1.6em; white-space: nowrap; }
+.kr li b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
+.kr li span { font-family: var(--mono); font-size: 0.82em; color: #d2cdc1; }
+.kr[data-l='lista'] { right: 3%; top: 5%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5em; width: 18em; padding: 0.7em 0.85em 0.8em; }
+.kr[data-l='cinta'] { left: 3%; right: 3%; bottom: 5%; display: flex; align-items: center; gap: 1.2em; padding: 0.4em 0.85em; }
+.kr[data-l='cinta'] ul { display: flex; flex: 1 1 0; gap: 1.8em; }
+.kr[data-l='cinta'] li { flex: none; gap: 0.5em; }
+.kr[data-l='cinta'] .kr-h { order: 0; gap: 0.8em; }

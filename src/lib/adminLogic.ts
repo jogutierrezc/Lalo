@@ -11,7 +11,7 @@ import type { InviteCodeRow, InviteRedemptionRow, ProfileUsageRow } from './clou
 
 // ---------- Secciones ----------
 
-export type AdminSection = 'resumen' | 'codigos' | 'limites' | 'almacenamiento' | 'voces' | 'streamers' | 'acceso';
+export type AdminSection = 'resumen' | 'codigos' | 'limites' | 'almacenamiento' | 'voces' | 'streamers' | 'integraciones' | 'acceso';
 
 export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'resumen', label: 'Resumen' },
@@ -20,6 +20,7 @@ export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'almacenamiento', label: 'Almacenamiento' },
   { id: 'voces', label: 'Voces' },
   { id: 'streamers', label: 'Streamers' },
+  { id: 'integraciones', label: 'Integraciones' },
   { id: 'acceso', label: 'Mi acceso' },
 ];
 

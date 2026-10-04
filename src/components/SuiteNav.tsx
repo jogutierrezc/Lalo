@@ -20,6 +20,7 @@ import {
   Bot,
   Check,
   Clapperboard,
+  Coffee,
   CloudOff,
   Coins,
   Copy,
@@ -31,8 +32,10 @@ import {
   Menu,
   MessagesSquare,
   Mic,
+  Music,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
   Radio,
   RefreshCw,
   Swords,
@@ -49,6 +52,8 @@ import { encodeChatSettings, loadChatSettings } from '../types/chat';
 import { encodeRaidSettings, loadRaidSettings } from '../types/raid';
 import { encodeRewardsSettings, loadRewardsSettings } from '../types/rewards';
 import { encodeRouletteSettings, loadRouletteSettings } from '../types/roulette';
+import { encodeMusicSettings, loadMusicSettings } from '../types/music';
+import { encodeKofiSettings, loadKofiSettings } from '../types/kofi';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -69,6 +74,9 @@ export type SuiteApp =
   | 'raid'
   | 'studio'
   | 'powerups'
+  | 'integraciones'
+  | 'musica'
+  | 'kofi'
   | 'cuenta'
   | 'admin'
   | 'nube';
@@ -112,6 +120,14 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
     ],
   },
   { group: 'Chat', items: [{ app: 'twitchio', label: 'Bot', href: '#twitchio', icon: Bot }] },
+  {
+    group: 'Integraciones',
+    items: [
+      { app: 'integraciones', label: 'Integraciones', href: '#integraciones', icon: Plug },
+      { app: 'musica', label: 'Ahora suena', href: '#musica', icon: Music },
+      { app: 'kofi', label: 'Ko-fi', href: '#kofi', icon: Coffee },
+    ],
+  },
 ];
 
 const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
@@ -124,6 +140,10 @@ const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
   { mode: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
   { mode: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
   { mode: 'rewards', name: 'Recompensas', note: 'Sonidos, placas y vídeos por puntos de canal o bits' },
+  { mode: 'music', name: 'Ahora suena', note: 'La canción que estás escuchando' },
+  { mode: 'kofi', name: 'Alertas de Ko-fi', note: 'Donaciones, membresías, pedidos y comisiones' },
+  { mode: 'kofigoal', name: 'Meta de Ko-fi', note: 'Lo recaudado, en barra o en depósito' },
+  { mode: 'kofirecent', name: 'Últimos apoyos de Ko-fi', note: 'Lista corta de quien te apoyó' },
 ];
 
 const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
@@ -135,6 +155,8 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   raid: 'raid',
   recompensas: 'rewards',
   powerups: 'rewards',
+  musica: 'music',
+  kofi: 'kofi',
   tts: 'tts',
 };
 
@@ -214,12 +236,16 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
     if (mode === 'rewards') return { rw: encodeRewardsSettings(loadRewardsSettings()) };
     if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
     if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
+    if (mode === 'music') return { ms: encodeMusicSettings(loadMusicSettings()) };
+    if (mode === 'kofi' || mode === 'kofigoal' || mode === 'kofirecent') return { kf: encodeKofiSettings(loadKofiSettings()) };
     if (mode === 'all') {
       return {
         cs: encodeChatSettings(loadChatSettings()),
         rs: encodeRaidSettings(loadRaidSettings()),
         rw: encodeRewardsSettings(loadRewardsSettings()),
         rl: encodeRouletteSettings(loadRouletteSettings()),
+        ms: encodeMusicSettings(loadMusicSettings()),
+        kf: encodeKofiSettings(loadKofiSettings()),
       };
     }
     return {};

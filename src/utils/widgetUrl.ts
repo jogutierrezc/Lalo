@@ -9,7 +9,8 @@
  *   - «Voz del chat» y «Todo en uno»: todo (voz, sonido, apariencia y reglas).
  *   - «Alertas»: la voz y la apariencia, porque la alerta sale en la misma tarjeta.
  *   - Ruleta, raid, batallas, metas y escenas: solo la voz con la que hablan.
- *   - Chat y recompensas: nada de la voz, no hablan.
+ *   - Alertas de Ko-fi: solo la voz, que lee el mensaje del apoyo si el streamer quiere.
+ *   - Chat, recompensas, «Ahora suena» y las capas fijas de Ko-fi: nada de la voz, no hablan.
  */
 
 import { DEFAULT_SETTINGS, type TTSSettings } from '../types/settings';
@@ -66,10 +67,24 @@ export function buildWidgetUrl(origin: string, settings: TTSSettings): string {
   return `${origin}/#widget?${query.toString()}${encodedTail(settings, true)}`;
 }
 
-export type WidgetAppType = 'tts' | 'alerts' | 'roulette' | 'goals' | 'polls' | 'chat' | 'raid' | 'rewards' | 'scene' | 'all';
+export type WidgetAppType =
+  | 'tts'
+  | 'alerts'
+  | 'roulette'
+  | 'goals'
+  | 'polls'
+  | 'chat'
+  | 'raid'
+  | 'rewards'
+  | 'scene'
+  | 'music'
+  | 'kofi'
+  | 'kofigoal'
+  | 'kofirecent'
+  | 'all';
 
 /** Fuentes que hablan con la voz del chat pero no leen el chat. */
-const VOICE_ONLY_APPS: WidgetAppType[] = ['roulette', 'raid', 'polls', 'goals', 'scene'];
+const VOICE_ONLY_APPS: WidgetAppType[] = ['roulette', 'raid', 'polls', 'goals', 'scene', 'kofi'];
 
 /**
  * Construye la URL completa y parametrizada para cualquier herramienta de Lalo Stream Suite en OBS Studio.

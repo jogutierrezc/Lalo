@@ -15,6 +15,7 @@ import { clipNodeHandler } from './twitch/clips.js';
 import { voicesNodeHandler } from './voices/handlers.js';
 import { eventsubNodeHandler, MAX_BODY_BYTES } from './twitch/eventsub.js';
 import { subscriptionsNodeHandler } from './twitch/subscriptions.js';
+import { integrationNodeHandler } from './integrations/handlers.js';
 
 // .env.local tiene prioridad sobre .env (el primero que define una variable gana)
 dotenv.config({ path: ['.env.local', '.env'] });
@@ -122,6 +123,14 @@ app.all('/api/twitch/clip', clipNodeHandler);
 // Canal de eventos de Twitch: encender, consultar y apagar las suscripciones del propio canal.
 // La misma lógica que api/twitch/subscriptions.ts
 app.all('/api/twitch/subscriptions', subscriptionsNodeHandler);
+
+// Integraciones (Spotify y Ko-fi). La misma lógica que api/integraciones.ts.
+// El webhook de Ko-fi llega como formulario: por eso esa ruta lee también ese formato
+app.all('/api/spotify/:action', (req, res) => integrationNodeHandler('spotify', req.params.action, req, res));
+app.all('/api/kofi/:id', express.urlencoded({ extended: false, limit: '32kb' }), (req, res) =>
+  integrationNodeHandler('kofi', req.params.id, req, res)
+);
+app.all('/api/integrations/:action', (req, res) => integrationNodeHandler('integrations', req.params.action, req, res));
 
 interface TTSRequestBody {
   text?: string;

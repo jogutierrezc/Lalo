@@ -95,6 +95,9 @@ export default defineConfig({
       '/api/media': `http://localhost:${process.env.PORT || 3001}`,
       '/api/twitch': `http://localhost:${process.env.PORT || 3001}`,
       '/api/voices': `http://localhost:${process.env.PORT || 3001}`,
+      '/api/spotify': `http://localhost:${process.env.PORT || 3001}`,
+      '/api/kofi': `http://localhost:${process.env.PORT || 3001}`,
+      '/api/integrations': `http://localhost:${process.env.PORT || 3001}`,
     },
     watch: {
       ignored: ['**/*.mp3', '**/*.wav', '**/dist/**', '**/.git/**', '**/test_*'],

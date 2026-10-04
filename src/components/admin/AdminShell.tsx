@@ -3,7 +3,7 @@
  *
  * Consola del administrador: su propio menú lateral y su propia cabecera. El
  * administrador no emite, así que aquí no hay módulos de directo, ni canal, ni
- * fuentes de OBS: solo códigos, límites, almacenamiento, voces, cuentas y su acceso.
+ * fuentes de OBS: solo códigos, límites, almacenamiento, voces, cuentas, integraciones y su acceso.
  *
  * La sección se elige por la dirección (#admin, #admin/codigos...). Cualquier
  * otra dirección lleva al Resumen. El menú marca con un número las secciones
@@ -15,7 +15,7 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Gauge, HardDrive, KeyRound, LayoutGrid, Menu, Mic, PanelLeftClose, PanelLeftOpen, Ticket, Users, X } from 'lucide-react';
+import { FileText, Gauge, HardDrive, KeyRound, LayoutGrid, Menu, Mic, PanelLeftClose, PanelLeftOpen, Plug, Ticket, Users, X } from 'lucide-react';
 import { ThemeSwitch } from '../ThemeSwitch';
 import { useCloudSession } from '../../hooks/useCloudSession';
 import {
@@ -36,6 +36,7 @@ import { AlmacenamientoSection } from '../../pages/admin/AlmacenamientoSection';
 import { StreamersSection } from '../../pages/admin/StreamersSection';
 import { VocesSection } from '../../pages/admin/VocesSection';
 import { AccesoSection } from '../../pages/admin/AccesoSection';
+import { IntegracionesSection } from '../../pages/admin/IntegracionesSection';
 import '../../styles/admin.css';
 
 const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> = {
@@ -45,6 +46,7 @@ const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> =
   almacenamiento: HardDrive,
   voces: Mic,
   streamers: Users,
+  integraciones: Plug,
   acceso: KeyRound,
 };
 
@@ -253,6 +255,7 @@ export const AdminShell: React.FC = () => {
           {section === 'almacenamiento' && <AlmacenamientoSection data={data} />}
           {section === 'voces' && <VocesSection data={data} />}
           {section === 'streamers' && <StreamersSection data={data} ownId={profile?.id ?? null} />}
+          {section === 'integraciones' && <IntegracionesSection data={data} />}
           {section === 'acceso' && <AccesoSection />}
         </main>
       </div>
