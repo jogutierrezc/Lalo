@@ -1,0 +1,57 @@
+/* ==========================================================================
+   Aviso «OBS actualizado»: una placa del panel, sin brillos ni adornos
+   ========================================================================== */
+
+.obs-aviso {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  width: min(380px, calc(100vw - 32px));
+  padding: 14px 12px 16px 14px;
+  overflow: hidden;
+  border: 1px solid var(--cb-line);
+  border-radius: 4px;
+  background: var(--cb-panel);
+  color: var(--cb-fg);
+  box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.55);
+}
+.obs-aviso-ok {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 3px;
+  background: var(--cb-ok-bg);
+  color: var(--cb-ok);
+}
+.obs-aviso-body {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  min-width: 0;
+}
+.obs-aviso-body p {
+  margin: 0;
+}
+.obs-aviso-title {
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+.obs-aviso-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--cb-ok);
+  transform-origin: left;
+}
