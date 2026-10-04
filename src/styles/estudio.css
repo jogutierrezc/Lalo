@@ -1,0 +1,597 @@
+/* ==========================================================================
+   Studio: escenas y su editor.
+   1) La escena (.es-*): la pinta SceneView igual en el editor y en OBS. Las
+      capas van en porcentajes de 1920 × 1080 y todo lo demás en em; en el
+      lienzo 1em son 32 px (1/60 del ancho).
+   2) Las capas de Lalo dentro de una caja: la caja pasa a ser su «pantalla» y
+      su tamaño de letra sale del ancho de la caja.
+   3) El editor (.st-*), en el lenguaje Cabina del panel.
+   ========================================================================== */
+
+/* ---------- 1. Escena ---------- */
+
+/* En OBS: pantalla completa y transparente, con el lienzo 16:9 centrado */
+.es-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+.es-frame {
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+}
+.es-cv {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  color: #efe9dc;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-size: calc(100cqw / 60);
+  line-height: 1.2;
+}
+.es-box {
+  position: absolute;
+  container-type: size;
+}
+.es-in,
+.es-el,
+.es-lalo,
+.es-zone {
+  position: absolute;
+  inset: 0;
+}
+.es-cv p {
+  margin: 0;
+}
+
+/* Texto */
+.es-text {
+  display: flex;
+  align-items: center;
+}
+.es-text p {
+  width: 100%;
+  line-height: 1.05;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.es-text[data-font='archivo'] p {
+  font-stretch: 75%;
+}
+.es-text[data-leg='shadow'] p {
+  text-shadow: 0 0.06em 0.22em rgba(0, 0, 0, 0.8);
+}
+.es-text[data-leg='outline'] p {
+  text-shadow:
+    0.05em 0 #0c0b12,
+    -0.05em 0 #0c0b12,
+    0 0.05em #0c0b12,
+    0 -0.05em #0c0b12,
+    0.035em 0.035em #0c0b12,
+    -0.035em 0.035em #0c0b12,
+    0.035em -0.035em #0c0b12,
+    -0.035em -0.035em #0c0b12;
+}
+
+/* Marco de cámara */
+.es-cam span {
+  position: absolute;
+  bottom: 0.4em;
+  left: 0.4em;
+  max-width: calc(100% - 0.8em);
+  padding: 0.1em 0.5em;
+  overflow: hidden;
+  border-radius: 0.2em;
+  color: #fff;
+  font-stretch: 75%;
+  font-weight: 800;
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Temporizador: la letra se ajusta a la caja */
+.es-timer {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  font-size: min(62cqh, calc(100cqw / (var(--es-n, 5) * 0.68)));
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+.es-timer[data-plate] {
+  border: 1px solid #3a3c42;
+  border-radius: 4cqh;
+  background: #1b1c1f;
+}
+.es-timer[data-words] {
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 75%;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+/* Imagen o vídeo */
+.es-media {
+  width: 100%;
+  height: 100%;
+}
+.es-empty {
+  display: grid;
+  place-items: center;
+  padding: 0.4em;
+  border: 1px dashed rgba(255, 255, 255, 0.5);
+  background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.08) 0 10px, transparent 10px 20px);
+  font-family: 'Onest', system-ui, sans-serif;
+  font-size: 0.6em;
+  text-align: center;
+}
+
+/* ---------- 2. Capas de Lalo dentro de una caja ---------- */
+
+/* Aviso: toda la caja o, con posición aleatoria, un punto dentro de la zona */
+.es-spot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  container-type: size;
+}
+.es-spot .al {
+  width: 100%;
+  pointer-events: none;
+}
+.es-cv[data-mode='edit'] .es-zone[data-on] {
+  outline: 2px dashed #ff4fa3;
+  outline-offset: -2px;
+  background: rgba(255, 79, 163, 0.08);
+}
+.es-cv[data-mode='edit'] .es-zone[data-on]::before {
+  content: 'Zona aleatoria';
+  position: absolute;
+  top: 0.3em;
+  left: 0.4em;
+  color: #ff9ccb;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.5em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* Chat: la columna ocupa la caja entera */
+.es-cv .es-box .chl {
+  font-size: calc(100cqw / var(--ch-wn, 24) * var(--ch-size));
+}
+.es-cv .es-box .chl .ch-list,
+.es-cv .es-box .chl[data-side='r'] .ch-list {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+}
+
+/* Metas: una barra llena el ancho de la caja */
+.es-cv .es-box .ovl.mt-root {
+  position: absolute;
+  overflow: visible;
+  font-size: calc(100cqw / 32);
+}
+.es-cv .es-box .mt-root .mt-group {
+  right: 0;
+  left: 0;
+}
+.es-cv .es-box .mt-root .mt-group[data-pos^='t'] {
+  top: 0;
+}
+.es-cv .es-box .mt-root .mt-group[data-pos^='b'] {
+  bottom: 0;
+}
+.es-cv .es-box .mt-root[data-cinta='t'] .mt-group[data-pos^='t'] {
+  top: 2.3em;
+}
+.es-cv .es-box .mt-root[data-cinta='b'] .mt-group[data-pos^='b'] {
+  bottom: 2.3em;
+}
+
+/* Saludo de raid: la placa con corto llena el ancho de la caja */
+.es-cv .es-box .rdl {
+  font-size: calc(100cqw / 42);
+}
+.es-cv .es-box .rdl .rd {
+  top: 0;
+  bottom: 0;
+  align-items: center;
+}
+.es-cv .es-box .rdl .rd-card {
+  max-width: 100%;
+}
+
+/* ---------- 3. Editor ---------- */
+
+.st-ed {
+  --st-sel: #3ddcff;
+  --st-guide: #ff4fa3;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--cb-line);
+  border-radius: 5px;
+  background: var(--cb-panel);
+}
+.st-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cb-line);
+}
+.st-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.st-body {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr) 290px;
+}
+.st-left,
+.st-right {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+  padding: 12px;
+}
+.st-left {
+  border-right: 1px solid var(--cb-line);
+}
+.st-right {
+  border-left: 1px solid var(--cb-line);
+}
+.st-mid {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+  padding: 12px;
+  background: var(--cb-bg);
+}
+@media (max-width: 1240px) {
+  .st-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .st-left,
+  .st-right {
+    border: 0;
+    border-top: 1px solid var(--cb-line);
+  }
+  .st-mid {
+    order: -1;
+  }
+}
+.st-grp {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.st-g2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.st-fld {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.st-fld > label,
+.st-fld > span {
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+
+/* Controles compactos del editor */
+.cab .st-inp {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 0.875rem;
+}
+.cab textarea.st-inp {
+  height: auto;
+  min-height: 58px;
+  padding: 6px 8px;
+}
+.cab .st-color {
+  width: 100%;
+  height: 32px;
+  padding: 2px;
+}
+.cab .st-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.cab .st-btn[aria-pressed='true'] {
+  border-color: var(--cb-fg);
+  background: var(--cb-fg);
+  color: var(--cb-panel);
+}
+.cab .st-btn svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+.cab .st-danger {
+  border-color: var(--cb-bad);
+  color: var(--cb-bad);
+}
+.st-ed .cab-seg button {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 0.8125rem;
+}
+.st-ed .cab-range output {
+  min-width: 6ch;
+  font-size: 0.8125rem;
+}
+
+/* Paleta «Añadir» */
+.st-pal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.st-pal button {
+  min-height: 30px;
+  padding: 0 7px;
+  overflow: hidden;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.st-pal button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.st-pal button small {
+  display: block;
+  color: var(--cb-mut);
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+.st-pal button:has(small) {
+  min-height: 40px;
+}
+
+/* Lista de capas */
+.st-layers {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.st-ly {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, auto);
+  gap: 1px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: var(--cb-surface);
+}
+.st-ly[data-sel] {
+  border-color: var(--st-sel);
+}
+.st-ly > button {
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: var(--cb-mut);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.st-ly > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.st-ly .st-nm {
+  padding: 0 8px;
+  overflow: hidden;
+  color: var(--cb-fg);
+  font-weight: 650;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.st-ly[data-hid] .st-nm {
+  color: var(--cb-mut);
+  text-decoration: line-through;
+}
+.st-ly .st-ic {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  padding: 0;
+}
+.st-ly .st-ic svg {
+  width: 14px;
+  height: 14px;
+}
+.st-ly .st-ic[aria-pressed='true'] {
+  color: var(--cb-fg);
+}
+
+/* Lienzo */
+.st-scroll {
+  max-width: 100%;
+  max-height: 78vh;
+  overflow: auto;
+}
+.st-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  container-type: inline-size;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  background:
+    radial-gradient(60% 80% at 72% 18%, #3b4a8c 0, transparent 60%),
+    radial-gradient(42% 52% at 18% 74%, #7a2f5a 0, transparent 65%),
+    linear-gradient(180deg, #141a33, #0a0c18);
+}
+.st-stage[data-bg='check'] {
+  background: repeating-conic-gradient(#2a2c31 0 25%, #1c1d21 0 50%) 0 0 / 24px 24px;
+}
+.st-stage[data-bg='green'] {
+  background: #00b140;
+}
+.st-stage[data-bg='image'] {
+  background-color: #0a0c18;
+  background-position: center;
+  background-size: cover;
+}
+.st-stage:focus-visible {
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+}
+.st-grid,
+.st-hits {
+  position: absolute;
+  inset: 0;
+}
+.st-grid {
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+}
+.st-safe {
+  position: absolute;
+  inset: 5%;
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+.st-hits {
+  z-index: 2;
+}
+.st-hit {
+  position: absolute;
+  cursor: move;
+}
+.st-hit[data-lock] {
+  pointer-events: none;
+}
+.st-hit[data-sel] {
+  outline: 1.5px solid var(--st-sel);
+}
+.st-hd {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin: -6px 0 0 -6px;
+  border: 1.5px solid var(--st-sel);
+  border-radius: 2px;
+  background: #0a0c18;
+}
+.st-hd[data-h='nw'] { top: 0; left: 0; cursor: nwse-resize; }
+.st-hd[data-h='n'] { top: 0; left: 50%; cursor: ns-resize; }
+.st-hd[data-h='ne'] { top: 0; left: 100%; cursor: nesw-resize; }
+.st-hd[data-h='e'] { top: 50%; left: 100%; cursor: ew-resize; }
+.st-hd[data-h='se'] { top: 100%; left: 100%; cursor: nwse-resize; }
+.st-hd[data-h='s'] { top: 100%; left: 50%; cursor: ns-resize; }
+.st-hd[data-h='sw'] { top: 100%; left: 0; cursor: nesw-resize; }
+.st-hd[data-h='w'] { top: 50%; left: 0; cursor: ew-resize; }
+.st-gd {
+  position: absolute;
+  z-index: 3;
+  background: var(--st-guide);
+  pointer-events: none;
+}
+.st-gd[data-d='v'] {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+.st-gd[data-d='h'] {
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+.st-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  justify-content: space-between;
+  color: var(--cb-mut);
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.75rem;
+}
+.st-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+.st-tools > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+.st-empty {
+  padding: 14px;
+  border: 1px dashed var(--cb-line);
+  border-radius: 3px;
+  color: var(--cb-mut);
+  font-size: 0.875rem;
+}
+.st-url {
+  max-height: 4.6em;
+  overflow: auto;
+  font-size: 0.72rem;
+}
+.st-ed .cab-icon {
+  width: 32px;
+  height: 32px;
+  border-color: var(--cb-line);
+}
+.st-ed .cab-icon svg {
+  width: 17px;
+  height: 17px;
+}
+.st-ed .cab-icon:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

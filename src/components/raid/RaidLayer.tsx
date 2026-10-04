@@ -58,6 +58,8 @@ interface RaidLayerProps {
   onSpeak?: (text: string) => void;
   /** Lo que va pasando, en palabras, para el estudio. */
   onStatus?: (message: string) => void;
+  /** Un saludo está a punto de pintarse. Studio lo usa para elegir su sitio dentro de la zona. */
+  onShow?: () => void;
 }
 
 const LOOKUP_TIMEOUT_MS = 8000;
@@ -68,7 +70,7 @@ const TAG: Record<Greeting['kind'], string> = { raid: 'Raid', so: 'Saludo', clip
 const X = 'expo.out';
 
 export const RaidLayer = forwardRef<RaidLayerHandle, RaidLayerProps>(
-  ({ settings, isStudio = false, demo = false, onSpeak, onStatus }, ref) => {
+  ({ settings, isStudio = false, demo = false, onSpeak, onStatus, onShow }, ref) => {
     const [current, setCurrent] = useState<Greeting | null>(null);
 
     const settingsRef = useRef(settings);
@@ -77,6 +79,8 @@ export const RaidLayer = forwardRef<RaidLayerHandle, RaidLayerProps>(
     onSpeakRef.current = onSpeak;
     const onStatusRef = useRef(onStatus);
     onStatusRef.current = onStatus;
+    const onShowRef = useRef(onShow);
+    onShowRef.current = onShow;
     const studioRef = useRef(isStudio);
     studioRef.current = isStudio;
 
@@ -189,6 +193,7 @@ export const RaidLayer = forwardRef<RaidLayerHandle, RaidLayerProps>(
             pump();
             return;
           }
+          onShowRef.current?.();
           setCurrent(greeting);
         });
       };

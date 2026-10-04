@@ -26,6 +26,7 @@ import {
   ExternalLink,
   FileText,
   Gamepad2,
+  Layers,
   LayoutGrid,
   Menu,
   MessagesSquare,
@@ -63,6 +64,7 @@ export type SuiteApp =
   | 'encuestas'
   | 'chat'
   | 'raid'
+  | 'studio'
   | 'cuenta'
   | 'admin'
   | 'nube';
@@ -84,7 +86,13 @@ interface NavItem {
 
 const NAV: { group: string | null; items: NavItem[] }[] = [
   { group: null, items: [{ app: 'catalogo', label: 'Inicio', href: '#dashboard', icon: LayoutGrid }] },
-  { group: 'En directo', items: [{ app: 'control', label: 'En vivo', href: '#control', icon: Radio }] },
+  {
+    group: 'En directo',
+    items: [
+      { app: 'control', label: 'En vivo', href: '#control', icon: Radio },
+      { app: 'studio', label: 'Studio', href: '#studio', icon: Layers },
+    ],
+  },
   {
     group: 'Capas',
     items: [
@@ -440,6 +448,14 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
                     </li>
                   ))}
                 </ul>
+
+                <p className="cab-hint">
+                  ¿Quieres colocar las capas a tu gusto? En{' '}
+                  <a className="studio-link" href="#studio" onClick={() => setObsOpen(false)}>
+                    Studio
+                  </a>{' '}
+                  montas escenas y cada una tiene su propia URL.
+                </p>
 
                 <p className="cab-note">
                   ¿Cambiaste voz, reglas o diseño? «Actualizar OBS» envía los cambios a las fuentes ya pegadas, sin

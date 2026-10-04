@@ -206,6 +206,10 @@ export interface StreamAlertsSettings {
   soundVolume: number; // 0 a 1
   soundType: AlertSoundType;
   stickerSvg: string;
+  /** Cada alerta sale en un punto distinto de la pantalla. Apagado, sale en `position`. */
+  randomPosition: boolean;
+  /** Margen libre contra los bordes de la pantalla, en porcentaje (con posición aleatoria). */
+  randomMargin: number;
   events: {
     follow: EventRuleConfig;
     sub: EventRuleConfig;
@@ -226,6 +230,8 @@ export const DEFAULT_ALERTS_SETTINGS: StreamAlertsSettings = {
   soundVolume: 0.8,
   soundType: 'synth-bell',
   stickerSvg: DEFAULT_APPEARANCE.stickerSvg,
+  randomPosition: false,
+  randomMargin: 6,
   events: {
     follow: {
       enabled: true,
@@ -273,6 +279,15 @@ export const DEFAULT_ALERTS_SETTINGS: StreamAlertsSettings = {
 
 export const ALERTS_STORAGE_KEY = 'lalo_alerts_settings';
 
+export const RANDOM_MARGIN = { min: 0, max: 20 } as const;
+
+/** Margen de la posición aleatoria dentro de sus límites; lo que no vale queda en el valor por defecto. */
+export function clampRandomMargin(value: unknown): number {
+  const n = typeof value === 'number' ? value : parseFloat(String(value));
+  if (!Number.isFinite(n)) return DEFAULT_ALERTS_SETTINGS.randomMargin;
+  return Math.round(Math.min(RANDOM_MARGIN.max, Math.max(RANDOM_MARGIN.min, n)));
+}
+
 export function loadAlertsSettings(): StreamAlertsSettings {
   try {
     const raw = localStorage.getItem(ALERTS_STORAGE_KEY);
@@ -282,6 +297,8 @@ export function loadAlertsSettings(): StreamAlertsSettings {
     return {
       ...DEFAULT_ALERTS_SETTINGS,
       ...parsed,
+      randomPosition: parsed.randomPosition === true,
+      randomMargin: clampRandomMargin(parsed.randomMargin),
       events: {
         follow: {
           ...DEFAULT_ALERTS_SETTINGS.events.follow,
