@@ -14,6 +14,7 @@ import type { GoalsSettings } from '../types/goals';
 import type { RouletteSettings, RouletteSegment } from '../types/roulette';
 import type { PollSettings, PollOption } from '../types/polls';
 import type { PollStartEvent } from './pollCommands';
+import type { ChatSettings } from '../types/chat';
 
 export type { PollStartEvent };
 
@@ -185,6 +186,7 @@ export type BusMessage =
   | { type: 'POLL_START'; poll: PollStartEvent }
   | { type: 'POLL_STOP'; user?: string }
   | { type: 'POLL_CLEAR' }
+  | { type: 'CHAT_SETTINGS_UPDATE'; settings: ChatSettings }
   | { type: 'ENQUEUE'; text: string; user?: string }
   | { type: 'FORCE_RELOAD' }
   | { type: 'CONTROL'; action: ControlAction | 'remove'; id?: string; user?: string; minutes?: number; sender?: string; senderRole?: string }

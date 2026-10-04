@@ -54,6 +54,10 @@ import {
   announceModPollStarted,
   announceModPollStopped,
 } from '../utils/pollsAudio';
+import { ChatSettings, decodeChatSettings, loadChatSettings, normalizeChatSettings } from '../types/chat';
+import { ChatOverlayHandle, ChatOverlayView } from '../components/chat/ChatOverlayView';
+import { ChatDisplayMessage, ChatModerationEvent, DEMO_SEQUENCE, demoMessage } from '../utils/chatFeed';
+import '../styles/chat.css';
 
 /** OBS expone window.obsstudio en sus fuentes de navegador. */
 const IN_OBS = typeof window !== 'undefined' && 'obsstudio' in window;
@@ -82,6 +86,32 @@ function urlOverrides(): Partial<TTSSettings> {
   const speed = parseFloat(getURLParam('speed') || '');
   if (Number.isFinite(speed)) overrides.speed = Math.min(1.5, Math.max(0.75, speed));
   return overrides;
+}
+
+/**
+ * Ajustes del chat para esta fuente. Sin cuenta en la nube llegan enteros en
+ * `cs`; `tpl`, `side`, `motion` y `energy` permiten cambiar uno suelto a mano.
+ */
+function chatSettingsForWidget(base: ChatSettings): ChatSettings {
+  const fromUrl = decodeChatSettings(getURLParam('cs')) || base;
+  const overrides: Record<string, string> = {};
+  const map: [string, string][] = [
+    ['tpl', 'template'],
+    ['side', 'side'],
+    ['motion', 'motion'],
+    ['energy', 'energy'],
+  ];
+  map.forEach(([param, key]) => {
+    const value = getURLParam(param);
+    if (value) overrides[key] = value.toLowerCase();
+  });
+  if (!Object.keys(overrides).length) return fromUrl;
+  const merged = normalizeChatSettings({ ...fromUrl, ...overrides });
+  // Un valor que no existe no cambia nada: se queda el que había
+  (Object.keys(overrides) as (keyof ChatSettings)[]).forEach((key) => {
+    if (merged[key] !== overrides[key]) Object.assign(merged, { [key]: fromUrl[key] });
+  });
+  return merged;
 }
 
 // Colocación de la alerta en pantalla (horizontal con justify, vertical con items)
@@ -280,6 +310,49 @@ export const Widget: React.FC = () => {
   );
   const handleControl = useCallback((command: ControlCommand) => controlRef.current(command), []);
 
+  // Capa «Chat en vivo»: fuente propia (app=chat) o dentro de «Todo en uno»
+  const appParam = (getURLParam('app') || '').toLowerCase();
+  const isChatOnly = appParam === 'chat';
+  const [chatSettings, setChatSettings] = useState(() => chatSettingsForWidget(loadChatSettings()));
+  const showChat = isChatOnly || (appParam === 'all' && chatSettings.inAll);
+  const chatRef = useRef<ChatOverlayHandle | null>(null);
+  const chatFilterRef = useRef({ hideCommands: false, hideBots: true, bots: moderation.ignoredBots });
+  chatFilterRef.current = { hideCommands: chatSettings.hideCommands, hideBots: chatSettings.hideBots, bots: moderation.ignoredBots };
+
+  const handleChatMessage = useCallback((message: ChatDisplayMessage) => {
+    const filter = chatFilterRef.current;
+    if (filter.hideCommands && message.text.trim().startsWith('!')) return;
+    if (filter.hideBots && filter.bots.includes(message.username)) return;
+    chatRef.current?.push(message);
+  }, []);
+  const handleChatModeration = useCallback((event: ChatModerationEvent) => {
+    if (event.type === 'delete') chatRef.current?.remove(event.id);
+    if (event.type === 'user') chatRef.current?.removeUser(event.username);
+    if (event.type === 'clear') chatRef.current?.clear();
+  }, []);
+
+  // demo=1: chat de muestra para colocar la capa en OBS sin esperar al chat real
+  const chatDemo = showChat && getURLParam('demo') === '1';
+  const voiceCommandRef = useRef(moderation.voiceCommand);
+  voiceCommandRef.current = moderation.voiceCommand;
+  useEffect(() => {
+    if (!chatDemo) return;
+    let step = 0;
+    const next = () => {
+      const kind = DEMO_SEQUENCE[step % DEMO_SEQUENCE.length];
+      step += 1;
+      chatRef.current?.push(demoMessage(kind, voiceCommandRef.current, kind === 'command'));
+      // Al final de cada vuelta se borra un mensaje, para ver la moderación
+      if (step % DEMO_SEQUENCE.length === 0) setTimeout(() => chatRef.current?.removeLast(), 900);
+    };
+    const first = [0, 350, 700, 1050, 1400].map((wait) => setTimeout(next, wait));
+    const timer = setInterval(next, 1900);
+    return () => {
+      first.forEach(clearTimeout);
+      clearInterval(timer);
+    };
+  }, [chatDemo]);
+
   const {
     messageQueue,
     isConnected,
@@ -292,6 +365,8 @@ export const Widget: React.FC = () => {
     moderation,
     onControl: handleControl,
     onRejected: handleRejected,
+    onChatMessage: handleChatMessage,
+    onChatModeration: handleChatModeration,
   });
 
   const [currentMessage, setCurrentMessage] = useState<SanitizedTTSMessage | null>(null);
@@ -1066,6 +1141,9 @@ export const Widget: React.FC = () => {
           }
         }, durationSec * 1000);
       }
+      if (message.type === 'CHAT_SETTINGS_UPDATE') {
+        setChatSettings(normalizeChatSettings(message.settings));
+      }
       if (message.type === 'GOALS_SETTINGS_UPDATE') {
         setGoalsSettings(message.settings);
       }
@@ -1415,6 +1493,11 @@ export const Widget: React.FC = () => {
   // Bucle FIFO estricto: Observa la cola y desencadena la siguiente tarjeta cuando isPlaying es falso.
   // En pausa, el mensaje que suena termina y la cola espera.
   useEffect(() => {
+    // La fuente que solo muestra el chat no habla: la voz sale por «Voz del chat» o «Todo en uno»
+    if (isChatOnly) {
+      if (messageQueue.length > 0) clearQueue();
+      return;
+    }
     if (!paused && !isPlaying && !isProcessingRef.current && messageQueue.length > 0) {
       // El siguiente es el primero ya aprobado; con prioridad, antes los canjes y los bits
       const nextMessage = pickNext(messageQueue, { approval, approvedIds, priorityPaid: settings.priorityPaid });
@@ -1423,7 +1506,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, clearQueue]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1499,6 +1582,9 @@ export const Widget: React.FC = () => {
           fontSize={`calc(clamp(13px, 1.05vw, 22px) * ${settings.scale})`}
         />
       )}
+
+      {/* Chat en vivo */}
+      {showChat && <ChatOverlayView ref={chatRef} settings={chatSettings} />}
 
       {/* Overlay de Metas Comunitarias & Marcadores (Compresión ≤4 en fila y Carrusel 5+ con GSAP) */}
       {isGoalsApp && (

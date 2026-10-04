@@ -67,6 +67,10 @@ describe('moderation — Reglas del streamer', () => {
       textOnly: false,
       modNotificationAudio: true,
       modNotificationVoice: true,
+      voiceMode: 'command',
+      voiceCommand: '!s',
+      allPerMinute: 6,
+      ignoredBots: DEFAULT_MODERATION.ignoredBots,
     });
   });
 
@@ -201,6 +205,10 @@ describe('moderation — Reglas del streamer', () => {
       textOnly: true,
       blockedWords: ['frase fea', 'ñu'],
       blockedUsers: ['troll_1'],
+      voiceMode: 'all',
+      voiceCommand: '!di',
+      allPerMinute: 12,
+      ignoredBots: ['mi_bot', 'nightbot'],
     });
     const params = new URLSearchParams({ ...moderationToQuery(rules), block: encodeBlockLists(rules) });
     expect(moderationFromParams((k) => params.get(k))).toEqual(rules);

@@ -1,0 +1,408 @@
+/* ==========================================================================
+   Chat en vivo: la capa de OBS y su vista en el monitor del estudio.
+   Mismo lenguaje que las demás capas: mate, plano y medido en em. Cada
+   plantilla solo cambia tokens y un par de reglas; el movimiento vive en
+   src/utils/chatMotion.ts.
+   ========================================================================== */
+
+.chl {
+  --ch-font: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --ch-size: 1;
+  --ch-bg: #1b1c1f;
+  --ch-bga: 0.92;
+  --ch-fg: #efe9dc;
+  --ch-r: 0.2em;
+  --ch-line: #3a3c42;
+  --ch-gap: 0.4em;
+  --ch-w: 24em;
+  --ch-acc: #9146ff;
+  --ch-acc-ink: #ffffff;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  color: var(--ch-fg);
+  font-family: var(--ch-font);
+  font-size: calc(clamp(13px, 1.3vw, 30px) * var(--ch-size));
+  line-height: 1.25;
+}
+/* En el monitor del estudio la capa se mide con el ancho del monitor */
+.chl[data-studio] {
+  font-size: calc(clamp(8px, 1.9cqw, 13px) * var(--ch-size));
+}
+
+/* La columna crece hacia arriba: lo que no cabe sale por el borde superior */
+.ch-list {
+  position: absolute;
+  bottom: 4%;
+  left: 2.5%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--ch-gap);
+  width: var(--ch-w);
+  max-width: 95%;
+  height: 92%;
+}
+.chl[data-side='r'] .ch-list {
+  right: 2.5%;
+  left: auto;
+}
+
+.ch-row {
+  display: flex;
+  flex: none;
+  min-width: 0;
+}
+.chl[data-side='r'] .ch-row {
+  justify-content: flex-end;
+}
+
+.ch-msg {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.45em 0.7em 0.5em;
+  border: 1px solid var(--ch-line);
+  border-radius: var(--ch-r);
+  background: var(--ch-bg);
+  background: color-mix(in srgb, var(--ch-bg) calc(var(--ch-bga) * 100%), transparent);
+  overflow-wrap: anywhere;
+  transform-origin: left bottom;
+}
+.chl[data-side='r'] .ch-msg {
+  transform-origin: right bottom;
+}
+
+/* Piezas que solo se ven durante una transición */
+.ch-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.ch-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--ch-acc);
+  opacity: 0;
+}
+.ch-row[data-bits] .ch-flash {
+  background: #ffffff;
+}
+.ch-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.38), transparent);
+  opacity: 0;
+}
+.ch-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0.25em;
+  background: var(--ch-acc);
+  opacity: 0;
+  transform-origin: center bottom;
+}
+.chl[data-side='r'] .ch-bar {
+  right: 0;
+  left: auto;
+}
+.ch-cur {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0.55em;
+  height: 1.2em;
+  background: currentColor;
+  opacity: 0;
+}
+.ch-line {
+  display: none;
+  position: absolute;
+  right: 0.2em;
+  bottom: -0.05em;
+  left: 0.2em;
+  height: 0.14em;
+  border-radius: 99px;
+  background: var(--ch-acc);
+  transform-origin: left center;
+}
+.chl[data-side='r'] .ch-line {
+  transform-origin: right center;
+}
+
+/* Contenido */
+.ch-head {
+  display: inline-block;
+  margin-right: 0.4em;
+}
+.ch-who {
+  font-weight: 800;
+}
+.ch-bdg,
+.ch-bits {
+  display: inline-block;
+  margin-right: 0.35em;
+  padding: 0 0.35em;
+  border-radius: 0.2em;
+  background: var(--ch-acc);
+  color: var(--ch-acc-ink);
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-size: 0.68em;
+  font-stretch: 80%;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  vertical-align: 0.12em;
+}
+.ch-bits {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-stretch: 100%;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.chl[data-badges='0'] .ch-bdg {
+  display: none;
+}
+.ch-w {
+  display: inline-block;
+  max-width: 100%;
+}
+.ch-em {
+  display: inline-block;
+  width: auto;
+  height: 1.6em;
+  margin: -0.2em 0.08em;
+  vertical-align: middle;
+}
+
+/* Marca de «la voz lo lee» */
+.ch-spk {
+  display: none;
+  position: absolute;
+  top: -0.7em;
+  right: -0.5em;
+  padding: 0.1em 0.5em;
+  border-radius: 99px;
+  background: #efe9dc;
+  color: #1b1c1f;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-size: 0.6em;
+  font-stretch: 80%;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-shadow: none;
+}
+.chl[data-side='r'] .ch-spk {
+  right: auto;
+  left: -0.5em;
+}
+.chl[data-voice-mark] .ch-row[data-voice]:not([data-del]) .ch-spk {
+  display: block;
+}
+
+/* Destacados */
+.chl[data-hl-subs] .ch-row[data-hl='sub'] .ch-msg {
+  border-color: var(--ch-acc);
+}
+.chl[data-hl-subs] .ch-row[data-hl='sub'] .ch-bar {
+  opacity: 1;
+}
+.chl[data-hl-bits] .ch-row[data-bits]:not([data-del]) .ch-msg {
+  border-color: transparent;
+  background: var(--ch-acc);
+  color: var(--ch-acc-ink);
+}
+.chl[data-hl-bits] .ch-row[data-bits]:not([data-del]) .ch-who {
+  color: var(--ch-acc-ink) !important;
+}
+.chl[data-hl-bits] .ch-row[data-bits]:not([data-del]) .ch-bdg,
+.chl[data-hl-bits] .ch-row[data-bits]:not([data-del]) .ch-bits {
+  background: var(--ch-acc-ink);
+  color: var(--ch-acc);
+}
+.chl[data-big-emotes] .ch-row[data-big] .ch-em {
+  height: 3.2em;
+  margin: 0.1em 0.12em;
+}
+.chl[data-big-emotes] .ch-row[data-big] .ch-head {
+  display: block;
+}
+
+/* Borrado por moderación */
+.ch-row[data-del] .ch-msg {
+  border-style: dashed;
+}
+.ch-row[data-del] .ch-w {
+  font-style: italic;
+  text-decoration: line-through;
+  opacity: 0.62;
+}
+.ch-row[data-del] .ch-bar,
+.ch-row[data-del] .ch-line,
+.ch-row[data-del] .ch-bits {
+  display: none;
+}
+
+/* ---------- Plantillas ---------- */
+
+/* Cabina (y la personalizada, que parte de ella) */
+.chl[data-tpl='cabina'] .ch-who,
+.chl[data-tpl='custom'] .ch-who {
+  font-size: 0.86em;
+  font-stretch: 75%;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.chl[data-tpl='cabina'] .ch-tx {
+  font-family: 'Onest', system-ui, sans-serif;
+  font-weight: 600;
+}
+.chl[data-tpl='cabina'] .ch-msg,
+.chl[data-tpl='custom'] .ch-msg {
+  box-shadow: 0 0.5em 1.4em -0.6em rgba(0, 0, 0, 0.6);
+}
+
+/* Burbuja */
+.chl[data-tpl='burbuja'] {
+  --ch-font: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+  --ch-bg: #ffffff;
+  --ch-bga: 1;
+  --ch-fg: #1d1a3a;
+  --ch-r: 1.1em;
+  --ch-line: #1d1a3a;
+  --ch-gap: 0.55em;
+}
+.chl[data-tpl='burbuja'] .ch-msg {
+  padding: 0.45em 0.85em 0.5em;
+  border-width: 0.14em;
+  border-bottom-left-radius: 0.2em;
+  box-shadow: 0 0.3em 0.8em -0.3em rgba(29, 26, 58, 0.6);
+  font-weight: 600;
+}
+.chl[data-tpl='burbuja'][data-side='r'] .ch-msg {
+  border-bottom-right-radius: 0.2em;
+  border-bottom-left-radius: 1.1em;
+}
+.chl[data-tpl='burbuja'] .ch-bar {
+  display: none;
+}
+.chl[data-tpl='burbuja'][data-hl-subs] .ch-row[data-hl='sub'] .ch-msg {
+  box-shadow:
+    0 0 0 0.14em var(--ch-acc),
+    0 0.3em 0.8em -0.3em rgba(29, 26, 58, 0.6);
+}
+
+/* Subtítulo */
+.chl[data-tpl='subtitulo'] {
+  --ch-font: 'Onest', system-ui, sans-serif;
+  --ch-bga: 0;
+  --ch-line: transparent;
+  --ch-fg: #ffffff;
+  --ch-gap: 0.15em;
+}
+.chl[data-tpl='subtitulo'] .ch-msg {
+  padding: 0.1em 0.2em;
+  background: transparent;
+  font-size: 1.1em;
+  font-weight: 800;
+  text-shadow:
+    0.06em 0 #0c0b12,
+    -0.06em 0 #0c0b12,
+    0 0.06em #0c0b12,
+    0 -0.06em #0c0b12,
+    0.06em 0.06em #0c0b12,
+    -0.06em -0.06em #0c0b12,
+    0.06em -0.06em #0c0b12,
+    -0.06em 0.06em #0c0b12,
+    0 0.14em 0.5em rgba(0, 0, 0, 0.6);
+}
+.chl[data-tpl='subtitulo'][data-tpl] .ch-row[data-id] .ch-msg {
+  border-color: transparent;
+}
+.chl[data-tpl='subtitulo'] .ch-bar {
+  display: none;
+}
+.chl[data-tpl='subtitulo'][data-hl-subs] .ch-row[data-hl='sub'] .ch-line {
+  display: block;
+}
+.chl[data-tpl='subtitulo'][data-hl-bits] .ch-row[data-bits]:not([data-del]) .ch-msg {
+  padding: 0.15em 0.5em;
+  border-radius: 0.3em;
+  text-shadow: none;
+}
+.chl[data-tpl='subtitulo'] .ch-bdg,
+.chl[data-tpl='subtitulo'] .ch-bits {
+  text-shadow: none;
+}
+
+/* Cristal */
+.chl[data-tpl='cristal'] {
+  --ch-font: 'Onest', system-ui, sans-serif;
+  --ch-bg: #1a1030;
+  --ch-bga: 0.62;
+  --ch-fg: #f3eeff;
+  --ch-r: 0.7em;
+  --ch-line: rgba(255, 255, 255, 0.18);
+}
+.chl[data-tpl='cristal'] .ch-msg {
+  background: rgba(26, 16, 48, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  -webkit-backdrop-filter: blur(10px) saturate(150%);
+  backdrop-filter: blur(10px) saturate(150%);
+}
+
+/* Terminal */
+.chl[data-tpl='terminal'] {
+  --ch-font: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --ch-bg: #06090c;
+  --ch-bga: 0.9;
+  --ch-fg: #c8f7d4;
+  --ch-r: 0;
+  --ch-line: #1e3a2a;
+  --ch-gap: 0;
+  --ch-acc: #3ddc84;
+  --ch-acc-ink: #06090c;
+}
+.chl[data-tpl='terminal'] .ch-msg {
+  width: 100%;
+  border-width: 0 0 1px;
+  font-size: 0.92em;
+}
+.chl[data-tpl='terminal'] .ch-who::after {
+  content: ' >';
+}
+.chl[data-tpl='terminal'] .ch-bdg,
+.chl[data-tpl='terminal'] .ch-bits {
+  font-family: inherit;
+  font-stretch: 100%;
+  letter-spacing: 0;
+}
+
+/* Con «reducir movimiento» los emotes animados se piden como imagen fija (lo hace el código) */
+
+/* ---------- Estudio ---------- */
+
+/* Botones para simular mensajes bajo el monitor */
+.chat-sim {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+}
+.chat-color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

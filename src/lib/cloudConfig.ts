@@ -23,6 +23,7 @@ export const MODULE_STORAGE_KEYS: Partial<Record<ConfigModule, string>> = {
   polls: 'lalo_polls_settings_v1',
   rewards: 'lalo_stream_rewards_settings',
   bot: 'lalo_twitchio_settings',
+  chat: 'lalo_chat_settings',
 };
 
 const PUSH_DELAY_MS = 1200;

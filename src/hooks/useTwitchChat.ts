@@ -13,6 +13,15 @@
  * OBS recarga o desmonta browser sources con frecuencia.
  * Este hook desconecta explícitamente el cliente tmi.js, desvincula todos
  * los listeners y cancela timers pendientes en la función de limpieza de useEffect.
+ *
+ * Además de la cola de voz, la misma conexión alimenta la capa «Chat en vivo»:
+ * cada mensaje se entrega a onChatMessage y lo que borra la moderación, a
+ * onChatModeration. Eventos de tmi.js usados (documentados en
+ * https://github.com/tmijs/docs/blob/gh-pages/_posts/v1.4.2/2019-03-03-Events.md):
+ *   message(channel, userstate, message, self), cheer(channel, userstate, message),
+ *   messagedeleted(channel, username, deletedMessage, userstate['target-msg-id']),
+ *   timeout(channel, username, reason, duration, userstate),
+ *   ban(channel, username, reason, userstate) y clearchat(channel).
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -22,13 +31,16 @@ import {
   ControlCommand,
   DEFAULT_MODERATION,
   Moderation,
+  REASON_QUEUE,
+  REASON_RATE,
   classifyTrigger,
   evaluateMessage,
   parseControl,
   roleFromTags,
-  stripCheermotes,
   truncateText,
+  voiceText,
 } from '../utils/moderation';
+import { ChatDisplayMessage, ChatModerationEvent, toDisplayMessage } from '../utils/chatFeed';
 import { postBus } from '../utils/bus';
 import { parseVoteCommand, loadPollSettings } from '../types/polls';
 import { parsePollCommand } from '../utils/pollCommands';
@@ -49,6 +61,10 @@ export interface UseTwitchChatOptions {
   moderation?: Moderation;
   onControl?: (command: ControlCommand) => void;
   onRejected?: (message: RejectedMessage) => void;
+  /** Cada mensaje del chat, para la capa «Chat en vivo». */
+  onChatMessage?: (message: ChatDisplayMessage) => void;
+  /** Mensajes borrados, usuarios expulsados o chat vaciado por la moderación. */
+  onChatModeration?: (event: ChatModerationEvent) => void;
 }
 
 export interface UseTwitchChatReturn {
@@ -71,6 +87,12 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
   onControlRef.current = options.onControl;
   const onRejectedRef = useRef(options.onRejected);
   onRejectedRef.current = options.onRejected;
+  const onChatMessageRef = useRef(options.onChatMessage);
+  onChatMessageRef.current = options.onChatMessage;
+  const onChatModerationRef = useRef(options.onChatModeration);
+  onChatModerationRef.current = options.onChatModeration;
+  // Momentos en que el modo «todo el chat» aceptó un mensaje, para el tope por minuto
+  const chatTimesRef = useRef<number[]>([]);
   const queueLengthRef = useRef(0);
   const lastAcceptedRef = useRef<Map<string, number>>(new Map());
   const seenIdsRef = useRef<string[]>([]);
@@ -165,13 +187,19 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       console.log(`[Twitch TMI] Desconectado del canal: #${cleanChannel}`);
     });
 
-    // Procesa un mensaje del chat: órdenes de control, disparador, sanitización y reglas
+    // Entrada de cada mensaje: lo pasa por la voz y lo entrega a la capa de chat
     const handleChat = (tags: tmi.ChatUserstate, message: string) => {
       const id = tags.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
       // tmi.js puede entregar un mismo mensaje por más de un evento
       if (seenIdsRef.current.includes(id)) return;
       seenIdsRef.current = [...seenIdsRef.current.slice(-49), id];
 
+      const voice = routeVoice(id, tags, message);
+      onChatMessageRef.current?.(toDisplayMessage(tags, message, cleanChannel, { id, voice }));
+    };
+
+    // Órdenes de control, disparador, sanitización y reglas. Devuelve true si la voz va a leer el mensaje
+    const routeVoice = (id: string, tags: tmi.ChatUserstate, message: string): boolean => {
       const moderation = moderationRef.current;
       const username = (tags.username || 'viewer').toLowerCase();
       const displayName = tags['display-name'] || tags.username || 'viewer';
@@ -188,10 +216,10 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
         if (control.action === 'reload') {
           console.log('[Twitch Chat] Comando de recarga remota recibido. Actualizando overlay...');
           window.location.reload();
-          return;
+          return false;
         }
         onControlRef.current?.(enrichedControl);
-        return;
+        return false;
       }
 
       // Comandos de moderación para Encuestas y Batallas (!poll, !encuesta, !batalla, !versus)
@@ -233,7 +261,7 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
             user: title,
           });
         }
-        return;
+        return false;
       }
 
       // Votos en tiempo real para Batallas & Encuestas (1, 2, a, b, !voto 1, !voto 2, !1, !2, etc.)
@@ -287,11 +315,10 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       }
 
       const trigger = classifyTrigger(moderation, message, tags, role);
-      if (!trigger) return;
+      if (!trigger) return false;
 
-      // Canjes y bits no llevan el prefijo !s: se añade para reutilizar la sanitización
-      const body = tags.bits ? stripCheermotes(message) : message;
-      const sanitized = sanitizeTwitchMessage(/^!s\s/i.test(body.trim()) ? body : `!s ${body}`, {
+      // El texto a leer va sin el comando de voz; la sanitización espera el prefijo !s
+      const sanitized = sanitizeTwitchMessage(`!s ${voiceText(moderation, message, tags)}`, {
         id,
         username,
         displayName,
@@ -299,10 +326,11 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
         channel: cleanChannel,
         timestamp: tags['tmi-sent-ts'] ? Number(tags['tmi-sent-ts']) : Date.now(),
       });
-      if (!sanitized) return;
+      if (!sanitized) return false;
 
       const text = truncateText(sanitized.cleanText, moderation.maxLength);
       const now = Date.now();
+      chatTimesRef.current = chatTimesRef.current.filter((at) => now - at < 60000);
       const verdict = evaluateMessage(moderation, {
         username,
         role,
@@ -311,17 +339,22 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
         now,
         lastAccepted: lastAcceptedRef.current,
         queueLength: queueLengthRef.current,
+        chatLastMinute: chatTimesRef.current.length,
       });
 
       if (!verdict.ok) {
-        onRejectedRef.current?.({ id, user: displayName, username, text, reason: verdict.reason, at: now });
-        return;
+        // Leyendo todo el chat, lo que no cabe se descarta en silencio: no llena el registro
+        const quiet = trigger === 'chat' && (verdict.reason === REASON_RATE || verdict.reason === REASON_QUEUE);
+        if (!quiet) onRejectedRef.current?.({ id, user: displayName, username, text, reason: verdict.reason, at: now });
+        return false;
       }
 
+      if (trigger === 'chat') chatTimesRef.current.push(now);
       lastAcceptedRef.current.set(username, now);
       queueLengthRef.current += 1;
       const bits = Number(tags.bits) || undefined;
       setMessageQueue((prev) => [...prev, { ...sanitized, cleanText: text, trigger, bits, role }]);
+      return true;
     };
 
     // Mensajes normales (incluye los canjes de puntos con texto) y cheers con bits
@@ -332,6 +365,20 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
     client.on('cheer', (_channel, tags, message) => {
       if (!isMountedRef.current) return;
       handleChat(tags, message);
+    });
+
+    // Moderación: lo que se borra en Twitch sale también de la capa de chat
+    client.on('messagedeleted', (_channel, _username, _deleted, userstate) => {
+      const target = userstate?.['target-msg-id'];
+      if (isMountedRef.current && target) onChatModerationRef.current?.({ type: 'delete', id: target });
+    });
+    const dropUser = (_channel: string, username: string) => {
+      if (isMountedRef.current && username) onChatModerationRef.current?.({ type: 'user', username: username.toLowerCase() });
+    };
+    client.on('timeout', dropUser);
+    client.on('ban', dropUser);
+    client.on('clearchat', () => {
+      if (isMountedRef.current) onChatModerationRef.current?.({ type: 'clear' });
     });
 
     // Iniciar conexión

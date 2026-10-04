@@ -26,6 +26,7 @@ import {
   Gamepad2,
   LayoutGrid,
   Menu,
+  MessagesSquare,
   Mic,
   PanelLeftClose,
   PanelLeftOpen,
@@ -40,6 +41,7 @@ import {
 import { ThemeSwitch } from './ThemeSwitch';
 import { buildSuiteWidgetUrl, WidgetAppType } from '../utils/widgetUrl';
 import { loadSettings } from '../types/settings';
+import { encodeChatSettings, loadChatSettings } from '../types/chat';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -56,6 +58,7 @@ export type SuiteApp =
   | 'metas'
   | 'ruleta'
   | 'encuestas'
+  | 'chat'
   | 'cuenta'
   | 'admin'
   | 'nube';
@@ -87,6 +90,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { app: 'metas', label: 'Metas', href: '#metas', icon: Target },
       { app: 'ruleta', label: 'Ruleta', href: '#ruleta', icon: Gamepad2 },
       { app: 'encuestas', label: 'Batallas', href: '#encuestas', icon: Swords },
+      { app: 'chat', label: 'Chat', href: '#chat', icon: MessagesSquare },
     ],
   },
   { group: 'Chat', items: [{ app: 'twitchio', label: 'Bot', href: '#twitchio', icon: Bot }] },
@@ -99,6 +103,7 @@ const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
   { mode: 'goals', name: 'Metas', note: 'Barras de progreso' },
   { mode: 'roulette', name: 'Ruleta', note: 'Rueda de castigos y retos' },
   { mode: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
+  { mode: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
 ];
 
 const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
@@ -106,6 +111,7 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   alertas: 'alerts',
   metas: 'goals',
   encuestas: 'polls',
+  chat: 'chat',
   tts: 'tts',
 };
 
@@ -177,9 +183,13 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   useEffect(() => onCloudSyncMessage(setSyncMessage), []);
   const current = nav.flatMap((section) => section.items).find((item) => item.app === currentApp);
 
+  // Sin cuenta en la nube, los ajustes del chat viajan en la URL: OBS no comparte almacenamiento con el panel
+  const extraFor = (mode: WidgetAppType) =>
+    mode === 'chat' && !widgetKeyParam ? { cs: encodeChatSettings(loadChatSettings()) } : widgetKeyParam;
+
   const getWidgetUrl = (mode: WidgetAppType) => {
     const ttsSettings = loadSettings();
-    return buildSuiteWidgetUrl(baseUrl, mode, channel || ttsSettings.channel, ttsSettings, widgetKeyParam);
+    return buildSuiteWidgetUrl(baseUrl, mode, channel || ttsSettings.channel, ttsSettings, extraFor(mode));
   };
 
   // La página deja sitio a la barra lateral a través de clases en <body>
@@ -229,7 +239,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
 
     const ttsSettings = loadSettings();
     const targetApp: WidgetAppType = SYNC_TARGET[currentApp] || 'all';
-    const activeUrl = buildSuiteWidgetUrl(baseUrl, targetApp, channel || ttsSettings.channel, ttsSettings, widgetKeyParam);
+    const activeUrl = buildSuiteWidgetUrl(baseUrl, targetApp, channel || ttsSettings.channel, ttsSettings, extraFor(targetApp));
 
     postBus({ type: 'FORCE_RELOAD' });
     postBus({

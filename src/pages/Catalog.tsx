@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { BellRing, Bot, Check, Coins, Copy, Gamepad2, Mic, Play, Swords, Target } from 'lucide-react';
+import { BellRing, Bot, Check, Coins, Copy, Gamepad2, MessagesSquare, Mic, Play, Swords, Target } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { Field } from '../components/studio/StudioKit';
 import { useSettings } from '../hooks/useSettings';
@@ -25,6 +25,7 @@ import { loadRewardsSettings } from '../types/rewards';
 import { loadGoalsSettings } from '../types/goals';
 import { loadRouletteSettings } from '../types/roulette';
 import { loadTwitchIOSettings } from '../types/twitchio';
+import { encodeChatSettings, loadChatSettings } from '../types/chat';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { ToolId, toolStatusFrom } from '../components/inicio/toolStatus';
 import { PrimerosPasos } from '../components/recorrido/PrimerosPasos';
@@ -200,6 +201,13 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    id: 'chat',
+    name: 'Chat',
+    text: 'El chat de tu canal en pantalla, con plantillas, destacados y moderación visible.',
+    href: '#chat',
+    icon: MessagesSquare,
+  },
+  {
     id: 'twitchio',
     name: 'Bot',
     text: 'Comandos del chat con respuestas automáticas.',
@@ -215,6 +223,7 @@ const SOURCES: { app: WidgetAppType; name: string; note: string; recommended?: b
   { app: 'goals', name: 'Metas', note: 'Barras de progreso' },
   { app: 'roulette', name: 'Ruleta', note: 'Rueda de retos y castigos' },
   { app: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
+  { app: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
 ];
 
 /** Lee lo guardado de cada herramienta para decir cuánto hay activo. */
@@ -283,7 +292,11 @@ export const Catalog: React.FC = () => {
       source.app,
       channel,
       loadSettings(),
-      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
+      cloud.profile?.status === 'active'
+        ? { k: cloud.profile.widget_key }
+        : source.app === 'chat'
+          ? { cs: encodeChatSettings(loadChatSettings()) }
+          : undefined
     );
     try {
       if (!navigator.clipboard) throw new Error('Portapapeles no disponible');

@@ -6,7 +6,7 @@
  * estado y la fila no muestra etiqueta.
  */
 
-export type ToolId = 'tts' | 'alertas' | 'recompensas' | 'metas' | 'ruleta' | 'encuestas' | 'twitchio';
+export type ToolId = 'tts' | 'alertas' | 'recompensas' | 'metas' | 'ruleta' | 'encuestas' | 'chat' | 'twitchio';
 
 export interface ToolStatus {
   text: string;

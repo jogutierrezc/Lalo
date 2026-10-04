@@ -38,7 +38,7 @@ export interface SanitizedTTSMessage {
   userColor: string;
   timestamp: number;
   emotion?: EmotionInfo | null;
-  trigger?: 'command' | 'reward' | 'bits' | 'test';
+  trigger?: 'command' | 'reward' | 'bits' | 'chat' | 'highlight' | 'test';
   bits?: number;
   role?: string;
 }
