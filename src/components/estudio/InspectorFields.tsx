@@ -154,7 +154,7 @@ const TIMER_ZERO: { id: TimerAtZero; name: string }[] = [
 ];
 
 /** Capas cuya caja de Studio registra una prueba (ver components/estudio/boxes/). */
-const TESTABLE: StudioLayer['type'][] = ['pet', 'game', 'music', 'kofi', 'kofigoal', 'kofirecent', 'reward', 'powerup', 'roulette', 'poll'];
+const TESTABLE: StudioLayer['type'][] = ['pet', 'game', 'music', 'kofi', 'kofigoal', 'kofirecent', 'reward', 'powerup', 'roulette', 'poll', 'tournament'];
 
 const MEDIA_KINDS: { id: MediaProps['kind']; name: string }[] = [
   { id: 'image', name: 'Imagen (también GIF o WebP animado)' },

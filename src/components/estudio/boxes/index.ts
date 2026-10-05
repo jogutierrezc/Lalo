@@ -8,6 +8,7 @@
 import { FASE1_BOXES } from './fase1';
 import { FASE2_BOXES } from './fase2';
 import { FASE3_BOXES } from './fase3';
+import { TORNEO_BOXES } from './torneo';
 import type { BoxMap } from './types';
 
-export const PHASE_BOXES: BoxMap = { ...FASE1_BOXES, ...FASE2_BOXES, ...FASE3_BOXES };
+export const PHASE_BOXES: BoxMap = { ...FASE1_BOXES, ...FASE2_BOXES, ...FASE3_BOXES, ...TORNEO_BOXES };

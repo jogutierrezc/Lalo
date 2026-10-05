@@ -36,6 +36,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PawPrint,
+  Medal,
   Plug,
   Radio,
   RefreshCw,
@@ -58,6 +59,8 @@ import { encodeMusicSettings, loadMusicSettings } from '../types/music';
 import { encodeKofiSettings, loadKofiSettings } from '../types/kofi';
 import { encodePetsSettings, loadPetsSettings } from '../types/pets';
 import { encodeGameSettings, loadGameSettings } from '../types/game';
+import { encodeTournamentSettings, loadTournamentSettings } from '../types/tournament';
+import { tournamentStore } from '../lib/tournamentStore';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -79,6 +82,7 @@ export type SuiteApp =
   | 'studio'
   | 'powerups'
   | 'mascotas'
+  | 'torneos'
   | 'integraciones'
   | 'musica'
   | 'kofi'
@@ -119,6 +123,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { app: 'recompensas', label: 'Recompensas', href: '#recompensas', icon: Coins },
       { app: 'powerups', label: 'Power-ups', href: '#powerups', icon: Zap },
       { app: 'mascotas', label: 'Mascotas', href: '#mascotas', icon: PawPrint },
+      { app: 'torneos', label: 'Torneos', href: '#torneos', icon: Medal },
       { app: 'metas', label: 'Metas', href: '#metas', icon: Target },
       { app: 'ruleta', label: 'Ruleta', href: '#ruleta', icon: Gamepad2 },
       { app: 'encuestas', label: 'Batallas', href: '#encuestas', icon: Swords },
@@ -154,6 +159,7 @@ const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
   { mode: 'kofigoal', name: 'Meta de Ko-fi', note: 'Lo recaudado, en barra o en depósito' },
   { mode: 'kofirecent', name: 'Últimos apoyos de Ko-fi', note: 'Lista corta de quien te apoyó' },
   { mode: 'game', name: 'Alertas de juego', note: 'Victorias, rango y jugadas de tu cuenta de Riot' },
+  { mode: 'tournament', name: 'Torneo', note: 'La llave, la tabla y el campeón de tu torneo' },
 ];
 
 const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
@@ -169,6 +175,7 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   musica: 'music',
   kofi: 'kofi',
   juego: 'game',
+  torneos: 'tournament',
   tts: 'tts',
 };
 
@@ -251,6 +258,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
     if (mode === 'music') return { ms: encodeMusicSettings(loadMusicSettings()) };
     if (mode === 'pets') return { ps: encodePetsSettings(loadPetsSettings()) };
     if (mode === 'game') return { gs: encodeGameSettings(loadGameSettings()) };
+    if (mode === 'tournament') return { ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()) };
     if (mode === 'kofi' || mode === 'kofigoal' || mode === 'kofirecent') return { kf: encodeKofiSettings(loadKofiSettings()) };
     if (mode === 'all') {
       return {
@@ -262,6 +270,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
         kf: encodeKofiSettings(loadKofiSettings()),
         ps: encodePetsSettings(loadPetsSettings()),
         gs: encodeGameSettings(loadGameSettings()),
+        ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()),
       };
     }
     return {};

@@ -22,6 +22,7 @@ import type { MusicSettings } from '../types/music';
 import type { KofiSettings } from '../types/kofi';
 import type { PetTriggerId, PetsSettings } from '../types/pets';
 import type { GameAlertId, GameSettings } from '../types/game';
+import type { TournamentSettings, TournamentState } from '../types/tournament';
 
 export type { PollStartEvent };
 
@@ -212,6 +213,11 @@ export type BusMessage =
   | { type: 'GAME_SETTINGS_UPDATE'; settings: GameSettings }
   /** Prueba de «Alertas de juego» del panel a las fuentes de este navegador: una alerta con datos de ejemplo. */
   | { type: 'GAME_TEST'; alert: GameAlertId }
+  | { type: 'TOURNAMENT_SETTINGS_UPDATE'; settings: TournamentSettings }
+  /** Estado vivo de «Torneos» (equipos, resultados, pantalla): lo envía quien lo cambia a las demás pestañas y fuentes de este navegador. */
+  | { type: 'TOURNAMENT_STATE_UPDATE'; state: TournamentState }
+  /** Prueba de «Torneos» del panel a las fuentes de este navegador: repiten la entrada de su pantalla y, con `say`, la frase del narrador. */
+  | { type: 'TOURNAMENT_TEST'; say: boolean }
   /** Prueba de «Ahora suena» del panel a las fuentes de este navegador: una canción de ejemplo o una orden. */
   | { type: 'MUSIC_TEST'; action: 'song' | 'pause' | 'resume' | 'stop' | 'show' | 'hide'; sample?: number }
   /** El panel pide a las capas fijas de Ko-fi que vuelvan a leer lo recaudado. */

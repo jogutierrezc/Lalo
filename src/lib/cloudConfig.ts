@@ -31,6 +31,8 @@ export const MODULE_STORAGE_KEYS: Partial<Record<ConfigModule, string>> = {
   kofi: 'lalo_kofi_settings',
   pets: 'lalo_pets_settings',
   game: 'lalo_game_settings',
+  // Lleva dentro una copia del estado vivo del torneo (ver types/tournament.ts)
+  tournament: 'lalo_tournament_settings',
 };
 
 const PUSH_DELAY_MS = 1200;

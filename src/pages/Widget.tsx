@@ -57,6 +57,9 @@ import '../styles/raid.css';
 import { PetsSettings, decodePetsSettings, loadPetsSettings, normalizePetsSettings } from '../types/pets';
 import { PetLayer, PetLayerHandle, PetVoiceEvent } from '../components/mascotas/PetLayer';
 import { SAMPLE_CUES } from '../utils/petsLogic';
+import { TournamentLiveLayer, TournamentLiveHandle } from '../components/torneo/TournamentLayer';
+import { TournamentSettings, decodeTournamentSettings, decodeTournamentState, loadTournamentSettings, normalizeTournamentSettings } from '../types/tournament';
+import '../styles/torneo.css';
 import { parseStaffVoice, staffVoiceText, unprefixed } from '../utils/staffVoice';
 import '../styles/mascotas.css';
 import { GameSettings, decodeGameSettings, loadGameSettings, normalizeGameSettings } from '../types/game';
@@ -150,6 +153,11 @@ function petsSettingsForWidget(base: PetsSettings): PetsSettings {
 /** Ajustes de «Alertas de juego»: los de la cuenta si llegaron; si no, los de la URL (`gs`) o los de este navegador. */
 function gameSettingsForWidget(base: GameSettings): GameSettings {
   return (cloudDelivered('game') ? null : decodeGameSettings(getURLParam('gs'))) || base;
+}
+
+/** Ajustes del torneo: los de la cuenta si llegaron; si no, los de la URL (`ts`) o los de este navegador. */
+function tournamentSettingsForWidget(base: TournamentSettings): TournamentSettings {
+  return (cloudDelivered('tournament') ? null : decodeTournamentSettings(getURLParam('ts'))) || base;
 }
 
 // Colocación de la alerta en pantalla (horizontal con justify, vertical con items)
@@ -412,6 +420,13 @@ export const Widget: React.FC = () => {
   const isGameOnly = appParam === 'game';
   const [gameSettings, setGameSettings] = useState(() => gameSettingsForWidget(loadGameSettings()));
   const showGame = isGameOnly || (appParam === 'all' && gameSettings.inAll);
+  // Torneo: fuente propia (app=tournament) o dentro de «Todo en uno». No lee el chat: narra lo suyo y
+  // atiende los comandos del streamer y sus moderadores. El estado de reserva viene en la misma URL
+  const isTournamentOnly = appParam === 'tournament';
+  const [tournamentSettings, setTournamentSettings] = useState(() => tournamentSettingsForWidget(loadTournamentSettings()));
+  const [tournamentFallback] = useState(() => decodeTournamentState(getURLParam('ts')));
+  const showTournament = isTournamentOnly || (appParam === 'all' && tournamentSettings.inAll);
+  const tournamentRef = useRef<TournamentLiveHandle | null>(null);
   const gameVoiceRef = useRef({ game: gameSettings, pets: petsSettings, showPets });
   gameVoiceRef.current = { game: gameSettings, pets: petsSettings, showPets };
   const handleRaid = useCallback((raid: { channel: string; login: string; viewers: number }) => {
@@ -437,6 +452,7 @@ export const Widget: React.FC = () => {
       (sceneRef.current?.raidCommand(text, sender) ?? false) ||
       (rouletteRef.current?.command(text, sender) ?? false) ||
       (musicRef.current?.command(text, sender) ?? false) ||
+      (tournamentRef.current?.command(text, sender) ?? false) ||
       (sceneRef.current?.signal({ kind: 'staff', message: text, sender }) ?? false);
     const taken = variants.find(byLayer) ?? variants.find((text) => staffVoiceRef.current(text));
     // Quien lo escribió ve en el directo que su comando llegó
@@ -601,6 +617,11 @@ export const Widget: React.FC = () => {
     [enqueueManualMessage]
   );
   // El mensaje de un apoyo de Ko-fi, cuando el streamer quiere que se lea
+  // El narrador del torneo: una frase del sistema, con su voz y la emoción como etiqueta al principio
+  const speakTournament = useCallback(
+    (text: string, options: { voiceId?: string }) => void enqueueManualMessage(text, 'Torneo', true, options),
+    [enqueueManualMessage]
+  );
   const speakKofi = useCallback((text: string) => void enqueueManualMessage(text, 'Ko-fi', true), [enqueueManualMessage]);
 
   // Sonido antes de la voz: se carga por adelantado y se recuerda cuándo habló la voz por última vez
@@ -1417,6 +1438,12 @@ export const Widget: React.FC = () => {
       if (message.type === 'GAME_SETTINGS_UPDATE') {
         setGameSettings(normalizeGameSettings(message.settings));
       }
+      if (message.type === 'TOURNAMENT_SETTINGS_UPDATE') {
+        setTournamentSettings(normalizeTournamentSettings(message.settings));
+      }
+      if (message.type === 'TOURNAMENT_TEST') {
+        tournamentRef.current?.test(message.say);
+      }
       if (message.type === 'PETS_TEST') {
         petsRef.current?.test(SAMPLE_CUES[message.trigger]);
       }
@@ -1764,7 +1791,7 @@ export const Widget: React.FC = () => {
       }
     }
     // Las fuentes del saludo de raid y de la ruleta solo dicen lo suyo: el chat lo lee otra fuente
-    if (isRaidOnly || isRouletteApp || isKofiAlerts || isPetsOnly || isGameOnly) {
+    if (isRaidOnly || isRouletteApp || isKofiAlerts || isPetsOnly || isGameOnly || isTournamentOnly) {
       const foreign = messageQueue.find((m) => !m.system);
       if (foreign) {
         removeMessageFromQueue(foreign.id);
@@ -1779,7 +1806,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue, isQuietIntegration, isKofiAlerts, isPetsOnly, isGameOnly]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue, isQuietIntegration, isKofiAlerts, isPetsOnly, isGameOnly, isTournamentOnly]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1889,6 +1916,17 @@ export const Widget: React.FC = () => {
 
       {/* Alertas de juego: la placa «Grieta» con lo que pasa en la cuenta de Riot del streamer */}
       {showGame && <GameWidgetLayer settings={gameSettings} demo={getURLParam('demo') === '1' && appParam !== 'all'} onAnnounce={announceGame} />}
+
+      {/* Torneo: la llave, la tabla y el campeón; lo manejan el panel y los comandos de moderación */}
+      {showTournament && (
+        <TournamentLiveLayer
+          ref={tournamentRef}
+          settings={tournamentSettings}
+          demo={getURLParam('demo') === '1' && appParam !== 'all'}
+          speak={speakTournament}
+          fallbackState={tournamentFallback}
+        />
+      )}
 
       {/* Recompensas: sonidos, placas y vídeos por puntos de canal o bits */}
       {showRewards && <RewardsWidgetLayer ref={rewardsRef} />}

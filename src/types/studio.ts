@@ -39,7 +39,9 @@ export type LaloLayerType =
   | 'powerup'
   // Fase 3
   | 'roulette'
-  | 'poll';
+  | 'poll'
+  // Torneos
+  | 'tournament';
 export type BasicLayerType = 'text' | 'shape' | 'cam' | 'timer' | 'image';
 export type LayerType = LaloLayerType | BasicLayerType;
 export type AnimId = 'none' | 'fade' | 'up' | 'side' | 'wipe' | 'pop';
@@ -68,6 +70,7 @@ export const LAYER_TYPES: LayerTypeInfo[] = [
   { id: 'powerup', name: 'Aviso de Power-up', w: 620, h: 110, page: { href: '#powerups', label: 'Power-ups' } },
   { id: 'roulette', name: 'Ruleta', w: 900, h: 520, page: { href: '#ruleta', label: 'Ruleta' } },
   { id: 'poll', name: 'Batalla', w: 1100, h: 300, page: { href: '#encuestas', label: 'Batallas' } },
+  { id: 'tournament', name: 'Torneo', w: 1920, h: 1080, page: { href: '#torneos', label: 'Torneos' } },
   { id: 'cam', name: 'Marco de cámara', w: 520, h: 300 },
   { id: 'text', name: 'Texto', w: 560, h: 110 },
   { id: 'shape', name: 'Forma', w: 400, h: 160 },
