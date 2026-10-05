@@ -54,6 +54,10 @@ import '../styles/chat.css';
 import { RaidSettings, RAID_FRAMES, RaidFrame, decodeRaidSettings, loadRaidSettings, normalizeRaidSettings } from '../types/raid';
 import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
 import '../styles/raid.css';
+import { PetsSettings, decodePetsSettings, loadPetsSettings, normalizePetsSettings } from '../types/pets';
+import { PetLayer, PetLayerHandle } from '../components/mascotas/PetLayer';
+import { SAMPLE_CUES } from '../utils/petsLogic';
+import '../styles/mascotas.css';
 import { cloudDelivered } from '../lib/widgetCloud';
 import { resolveWidgetSettings } from '../utils/widgetSettings';
 import { shouldPlayPreSound } from '../utils/preSound';
@@ -132,6 +136,11 @@ function raidSettingsForWidget(base: RaidSettings): RaidSettings {
   const fromUrl = (cloudDelivered('raid') ? null : decodeRaidSettings(getURLParam('rs'))) || base;
   const frame = (getURLParam('frame') || '').toLowerCase();
   return RAID_FRAMES.some((item) => item.id === frame) ? { ...fromUrl, frame: frame as RaidFrame } : fromUrl;
+}
+
+/** Ajustes de la mascota: los de la cuenta si llegaron; si no, los de la URL (`ps`) o los de este navegador. */
+function petsSettingsForWidget(base: PetsSettings): PetsSettings {
+  return (cloudDelivered('pets') ? null : decodePetsSettings(getURLParam('ps'))) || base;
 }
 
 // Colocación de la alerta en pantalla (horizontal con justify, vertical con items)
@@ -385,9 +394,15 @@ export const Widget: React.FC = () => {
   const [raidSettings, setRaidSettings] = useState(() => raidSettingsForWidget(loadRaidSettings()));
   const showRaid = isRaidOnly || (appParam === 'all' && raidSettings.inAll);
   const raidRef = useRef<RaidLayerHandle | null>(null);
+  // Mascota: fuente propia (app=pets) o dentro de «Todo en uno». Habla por la misma cola de voz
+  const isPetsOnly = appParam === 'pets';
+  const [petsSettings, setPetsSettings] = useState(() => petsSettingsForWidget(loadPetsSettings()));
+  const showPets = isPetsOnly || (appParam === 'all' && petsSettings.inAll);
+  const petsRef = useRef<PetLayerHandle | null>(null);
   const handleRaid = useCallback((raid: { channel: string; login: string; viewers: number }) => {
     raidRef.current?.raid(raid.channel, raid.viewers, raid.login);
     sceneRef.current?.raid(raid.channel, raid.viewers, raid.login);
+    petsRef.current?.raid(raid.channel, raid.viewers);
   }, []);
   // Ruleta: fuente propia (app=roulette) o dentro de «Todo en uno». La giran los puntos del canal o
   // los bits; el streamer y sus moderadores la abren y la cierran con un comando
@@ -439,6 +454,7 @@ export const Widget: React.FC = () => {
     (tags: Parameters<RewardsLayerHandle['chat']>[0], message: string, role: UserRole) => {
       rewardsRef.current?.chat(tags, message, role);
       rouletteRef.current?.chat(tags, role);
+      petsRef.current?.chat(tags, message);
     },
     []
   );
@@ -497,7 +513,15 @@ export const Widget: React.FC = () => {
   const speakRaidWelcome = useCallback((text: string) => enqueueManualMessage(text, 'Raid', true), [enqueueManualMessage]);
   // Lo que dice la ruleta también: una sola voz, la de «Voz del chat», y una frase detrás de otra
   const speakRoulette = useCallback((text: string) => enqueueManualMessage(text, 'Ruleta', true), [enqueueManualMessage]);
-  const handleTwitchEvent = useCallback((event: TwitchEvent) => rouletteRef.current?.event(event), []);
+  const handleTwitchEvent = useCallback((event: TwitchEvent) => {
+    rouletteRef.current?.event(event);
+    petsRef.current?.event(event);
+  }, []);
+  // Lo que dice la mascota, con su voz si tiene una; devuelve el id para saber cuándo suena su frase
+  const speakPet = useCallback(
+    (text: string, options: { voiceId?: string; front?: boolean }) => enqueueManualMessage(text, 'Mascota', true, options)?.id ?? null,
+    [enqueueManualMessage]
+  );
   // El mensaje de un apoyo de Ko-fi, cuando el streamer quiere que se lea
   const speakKofi = useCallback((text: string) => void enqueueManualMessage(text, 'Ko-fi', true), [enqueueManualMessage]);
 
@@ -706,6 +730,7 @@ export const Widget: React.FC = () => {
         if (watchdogTimer) clearTimeout(watchdogTimer);
         lastSpokenAtRef.current = Date.now();
         ownSoundIdsRef.current.delete(message.id);
+        petsRef.current?.voice({ id: message.id, phase: 'end' });
         if (skipped) {
           // Saltado por el streamer: cortar la voz y el sonido previo ya
           preSoundRef.current?.stop();
@@ -738,6 +763,7 @@ export const Widget: React.FC = () => {
         const seconds = Math.min(20, Math.max(3, message.cleanText.length * 0.065));
         setIsAudioLoading(false);
         startSpeakingAnimation(message.cleanText.length, seconds);
+        petsRef.current?.voice({ id: message.id, phase: 'start', seconds });
         watchdogTimer = setTimeout(() => finalizePlayback(), seconds * 1000);
         return;
       }
@@ -799,7 +825,7 @@ export const Widget: React.FC = () => {
           },
           body: JSON.stringify({
             text: spokenText,
-            reference_id: settings.referenceId || undefined,
+            reference_id: message.voiceId || settings.referenceId || undefined,
             model: settings.model || 's2.1-pro-free',
           }),
         });
@@ -828,6 +854,8 @@ export const Widget: React.FC = () => {
           setIsAudioLoading(false);
           setAutoplayBlocked(false);
           startSpeakingAnimation(message.cleanText.length, audio.duration / (audio.playbackRate || 1));
+          // La mascota mueve la boca con el volumen de este mismo audio
+          petsRef.current?.voice({ id: message.id, phase: 'start', seconds: audio.duration / (audio.playbackRate || 1), audio, blob });
         };
 
         audio.onended = () => {
@@ -911,6 +939,7 @@ export const Widget: React.FC = () => {
             utterance.onstart = () => {
               setIsAudioLoading(false);
               startSpeakingAnimation(message.cleanText.length);
+              petsRef.current?.voice({ id: message.id, phase: 'start' });
             };
             utterance.onend = finishSpeech;
             utterance.onerror = finishSpeech;
@@ -1283,6 +1312,12 @@ export const Widget: React.FC = () => {
       if (message.type === 'RAID_SETTINGS_UPDATE') {
         setRaidSettings(normalizeRaidSettings(message.settings));
       }
+      if (message.type === 'PETS_SETTINGS_UPDATE') {
+        setPetsSettings(normalizePetsSettings(message.settings));
+      }
+      if (message.type === 'PETS_TEST') {
+        petsRef.current?.test(SAMPLE_CUES[message.trigger]);
+      }
       if (message.type === 'MUSIC_SETTINGS_UPDATE') {
         setMusicSettings(withMusicDesign(normalizeMusicSettings(message.settings), getURLParam));
       }
@@ -1624,7 +1659,7 @@ export const Widget: React.FC = () => {
       }
     }
     // Las fuentes del saludo de raid y de la ruleta solo dicen lo suyo: el chat lo lee otra fuente
-    if (isRaidOnly || isRouletteApp || isKofiAlerts) {
+    if (isRaidOnly || isRouletteApp || isKofiAlerts || isPetsOnly) {
       const foreign = messageQueue.find((m) => !m.system);
       if (foreign) {
         removeMessageFromQueue(foreign.id);
@@ -1639,7 +1674,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue, isQuietIntegration, isKofiAlerts]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue, isQuietIntegration, isKofiAlerts, isPetsOnly]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1731,6 +1766,20 @@ export const Widget: React.FC = () => {
       {/* Saludo de raid con corto */}
       {showRaid && (
         <RaidLayer ref={raidRef} settings={raidSettings} demo={getURLParam('demo') === '1'} onSpeak={speakRaidWelcome} />
+      )}
+
+      {/* Mascota: reacciona con voz a canjes, bits, Power-ups, llamadas en el chat y raids */}
+      {showPets && (
+        <PetLayer
+          ref={petsRef}
+          settings={petsSettings}
+          demo={getURLParam('demo') === '1' && appParam !== 'all'}
+          speak={speakPet}
+          queueLength={messageQueue.length}
+          blockedWords={moderation.blockedWords}
+          blockedUsers={moderation.blockedUsers}
+          ignoredBots={moderation.ignoredBots}
+        />
       )}
 
       {/* Recompensas: sonidos, placas y vídeos por puntos de canal o bits */}

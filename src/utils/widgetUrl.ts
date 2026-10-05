@@ -10,6 +10,7 @@
  *   - «Alertas»: la voz y la apariencia, porque la alerta sale en la misma tarjeta.
  *   - Ruleta, raid, batallas, metas y escenas: solo la voz con la que hablan.
  *   - Alertas de Ko-fi: solo la voz, que lee el mensaje del apoyo si el streamer quiere.
+ *   - Mascota: solo la voz, la de reserva cuando la mascota no tiene una propia.
  *   - Chat, recompensas, «Ahora suena» y las capas fijas de Ko-fi: nada de la voz, no hablan.
  */
 
@@ -81,10 +82,11 @@ export type WidgetAppType =
   | 'kofi'
   | 'kofigoal'
   | 'kofirecent'
+  | 'pets'
   | 'all';
 
 /** Fuentes que hablan con la voz del chat pero no leen el chat. */
-const VOICE_ONLY_APPS: WidgetAppType[] = ['roulette', 'raid', 'polls', 'goals', 'scene', 'kofi'];
+const VOICE_ONLY_APPS: WidgetAppType[] = ['roulette', 'raid', 'polls', 'goals', 'scene', 'kofi', 'pets'];
 
 /**
  * Construye la URL completa y parametrizada para cualquier herramienta de Lalo Stream Suite en OBS Studio.

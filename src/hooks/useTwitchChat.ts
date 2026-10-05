@@ -86,7 +86,12 @@ export interface UseTwitchChatReturn {
   connectionError: string | null;
   removeMessageFromQueue: (id?: string) => SanitizedTTSMessage | null;
   clearQueue: () => void;
-  enqueueManualMessage: (text: string, username?: string, system?: boolean) => SanitizedTTSMessage | null;
+  enqueueManualMessage: (
+    text: string,
+    username?: string,
+    system?: boolean,
+    options?: { voiceId?: string; front?: boolean }
+  ) => SanitizedTTSMessage | null;
 }
 
 export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChatReturn {
@@ -151,8 +156,14 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
   }, []);
 
   // Encolar mensaje manual (para simulaciones y pruebas desde el dashboard)
-  // Con `system`, la voz lee la frase tal cual, sin anunciar quién la dice y sin tarjeta
-  const enqueueManualMessage = useCallback((text: string, username = 'Streamer', system = false): SanitizedTTSMessage | null => {
+  // Con `system`, la voz lee la frase tal cual, sin anunciar quién la dice y sin tarjeta.
+  // `voiceId` cambia la voz solo para esta frase y `front` la pone delante de las que esperan
+  const enqueueManualMessage = useCallback((
+    text: string,
+    username = 'Streamer',
+    system = false,
+    options: { voiceId?: string; front?: boolean } = {}
+  ): SanitizedTTSMessage | null => {
     // Si no incluye !s, se lo agregamos automáticamente para permitir pruebas directas
     const formatted = text.trim().startsWith('!s ') ? text : `!s ${text}`;
     const sanitized = sanitizeTwitchMessage(formatted, {
@@ -163,8 +174,13 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
 
     if (sanitized) {
       // Las pruebas del streamer no pasan por las reglas de moderación
-      const test: SanitizedTTSMessage = { ...sanitized, trigger: 'test', ...(system ? { system: true } : {}) };
-      setMessageQueue((prev) => [...prev, test]);
+      const test: SanitizedTTSMessage = {
+        ...sanitized,
+        trigger: 'test',
+        ...(system ? { system: true } : {}),
+        ...(options.voiceId ? { voiceId: options.voiceId } : {}),
+      };
+      setMessageQueue((prev) => (options.front ? [test, ...prev] : [...prev, test]));
       return test;
     }
     return null;

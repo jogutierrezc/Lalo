@@ -35,6 +35,7 @@ import {
   Music,
   PanelLeftClose,
   PanelLeftOpen,
+  PawPrint,
   Plug,
   Radio,
   RefreshCw,
@@ -54,6 +55,7 @@ import { encodeRewardsSettings, loadRewardsSettings } from '../types/rewards';
 import { encodeRouletteSettings, loadRouletteSettings } from '../types/roulette';
 import { encodeMusicSettings, loadMusicSettings } from '../types/music';
 import { encodeKofiSettings, loadKofiSettings } from '../types/kofi';
+import { encodePetsSettings, loadPetsSettings } from '../types/pets';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -74,6 +76,7 @@ export type SuiteApp =
   | 'raid'
   | 'studio'
   | 'powerups'
+  | 'mascotas'
   | 'integraciones'
   | 'musica'
   | 'kofi'
@@ -112,6 +115,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { app: 'alertas', label: 'Alertas', href: '#alertas', icon: BellRing },
       { app: 'recompensas', label: 'Recompensas', href: '#recompensas', icon: Coins },
       { app: 'powerups', label: 'Power-ups', href: '#powerups', icon: Zap },
+      { app: 'mascotas', label: 'Mascotas', href: '#mascotas', icon: PawPrint },
       { app: 'metas', label: 'Metas', href: '#metas', icon: Target },
       { app: 'ruleta', label: 'Ruleta', href: '#ruleta', icon: Gamepad2 },
       { app: 'encuestas', label: 'Batallas', href: '#encuestas', icon: Swords },
@@ -140,6 +144,7 @@ const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
   { mode: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
   { mode: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
   { mode: 'rewards', name: 'Recompensas', note: 'Sonidos, placas y vídeos por puntos de canal o bits' },
+  { mode: 'pets', name: 'Mascota', note: 'Tu personaje reacciona con voz a canjes, bits y al chat' },
   { mode: 'music', name: 'Ahora suena', note: 'La canción que estás escuchando' },
   { mode: 'kofi', name: 'Alertas de Ko-fi', note: 'Donaciones, membresías, pedidos y comisiones' },
   { mode: 'kofigoal', name: 'Meta de Ko-fi', note: 'Lo recaudado, en barra o en depósito' },
@@ -155,6 +160,7 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   raid: 'raid',
   recompensas: 'rewards',
   powerups: 'rewards',
+  mascotas: 'pets',
   musica: 'music',
   kofi: 'kofi',
   tts: 'tts',
@@ -237,6 +243,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
     if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
     if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
     if (mode === 'music') return { ms: encodeMusicSettings(loadMusicSettings()) };
+    if (mode === 'pets') return { ps: encodePetsSettings(loadPetsSettings()) };
     if (mode === 'kofi' || mode === 'kofigoal' || mode === 'kofirecent') return { kf: encodeKofiSettings(loadKofiSettings()) };
     if (mode === 'all') {
       return {
@@ -246,6 +253,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
         rl: encodeRouletteSettings(loadRouletteSettings()),
         ms: encodeMusicSettings(loadMusicSettings()),
         kf: encodeKofiSettings(loadKofiSettings()),
+        ps: encodePetsSettings(loadPetsSettings()),
       };
     }
     return {};

@@ -40,7 +40,7 @@ const NOTICE_SECONDS = 5;
 const NOTICE_QUEUE_MAX = 6;
 
 /** Fuentes que pueden hacer algo con un evento. Las demás (chat, raid...) ni preguntan. */
-const LISTENING_APPS = ['', 'tts', 'all', 'rewards', 'recompensas', 'goals', 'scene', 'roulette', 'ruleta', 'wheel', 'kofi', 'kofigoal', 'kofirecent'];
+const LISTENING_APPS = ['', 'tts', 'all', 'rewards', 'recompensas', 'goals', 'scene', 'roulette', 'ruleta', 'wheel', 'kofi', 'kofigoal', 'kofirecent', 'pets'];
 const NOTICE_APPS = ['all', 'rewards', 'recompensas'];
 const VOICE_APPS = ['', 'tts', 'all'];
 

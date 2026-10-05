@@ -43,6 +43,8 @@ export interface SanitizedTTSMessage {
   role?: string;
   /** Frase del sistema (la bienvenida de una raid): se lee tal cual, sin «dice» ni tarjeta. */
   system?: boolean;
+  /** Voz con la que se lee este mensaje en vez de la elegida en «Voz del chat» (la mascota). */
+  voiceId?: string;
 }
 
 const TRIGGER_PREFIX = '!s ';
