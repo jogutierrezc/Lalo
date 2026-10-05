@@ -67,6 +67,7 @@ function memoryStore() {
     },
     remove: async (profileId, provider) => void rows.delete(id(profileId, provider)),
     count: async (provider) => [...rows.values()].filter((row) => row.provider === provider && row.secret_enc).length,
+    countLinked: async (provider) => [...rows.values()].filter((row) => row.provider === provider).length,
     config: async (_profileId, module) => state.configs[module] ?? null,
     ingestKofi: async (event) => {
       if (state.failIngest) throw new Error('caída');

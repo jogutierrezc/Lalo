@@ -41,6 +41,7 @@ import {
   RefreshCw,
   Swords,
   Target,
+  Trophy,
   Tv,
   UserRound,
   X,
@@ -56,6 +57,7 @@ import { encodeRouletteSettings, loadRouletteSettings } from '../types/roulette'
 import { encodeMusicSettings, loadMusicSettings } from '../types/music';
 import { encodeKofiSettings, loadKofiSettings } from '../types/kofi';
 import { encodePetsSettings, loadPetsSettings } from '../types/pets';
+import { encodeGameSettings, loadGameSettings } from '../types/game';
 import { listenBus, postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
 import { ObsSyncNotice } from './ObsSyncNotice';
@@ -80,6 +82,7 @@ export type SuiteApp =
   | 'integraciones'
   | 'musica'
   | 'kofi'
+  | 'juego'
   | 'cuenta'
   | 'admin'
   | 'nube';
@@ -130,6 +133,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { app: 'integraciones', label: 'Integraciones', href: '#integraciones', icon: Plug },
       { app: 'musica', label: 'Ahora suena', href: '#musica', icon: Music },
       { app: 'kofi', label: 'Ko-fi', href: '#kofi', icon: Coffee },
+      { app: 'juego', label: 'Alertas de juego', href: '#juego', icon: Trophy },
     ],
   },
 ];
@@ -149,6 +153,7 @@ const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
   { mode: 'kofi', name: 'Alertas de Ko-fi', note: 'Donaciones, membresías, pedidos y comisiones' },
   { mode: 'kofigoal', name: 'Meta de Ko-fi', note: 'Lo recaudado, en barra o en depósito' },
   { mode: 'kofirecent', name: 'Últimos apoyos de Ko-fi', note: 'Lista corta de quien te apoyó' },
+  { mode: 'game', name: 'Alertas de juego', note: 'Victorias, rango y jugadas de tu cuenta de Riot' },
 ];
 
 const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
@@ -163,6 +168,7 @@ const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
   mascotas: 'pets',
   musica: 'music',
   kofi: 'kofi',
+  juego: 'game',
   tts: 'tts',
 };
 
@@ -244,6 +250,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
     if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
     if (mode === 'music') return { ms: encodeMusicSettings(loadMusicSettings()) };
     if (mode === 'pets') return { ps: encodePetsSettings(loadPetsSettings()) };
+    if (mode === 'game') return { gs: encodeGameSettings(loadGameSettings()) };
     if (mode === 'kofi' || mode === 'kofigoal' || mode === 'kofirecent') return { kf: encodeKofiSettings(loadKofiSettings()) };
     if (mode === 'all') {
       return {
@@ -254,6 +261,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
         ms: encodeMusicSettings(loadMusicSettings()),
         kf: encodeKofiSettings(loadKofiSettings()),
         ps: encodePetsSettings(loadPetsSettings()),
+        gs: encodeGameSettings(loadGameSettings()),
       };
     }
     return {};

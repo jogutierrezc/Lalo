@@ -61,7 +61,8 @@ const URL_REGEX = /(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.(com|org|net|io
 const LAUGHTER_SPAM_REGEX = /(ja|je|ji|jo|ju|ha|he|hi|ho|hu|js|ks){4,}/gi;
 
 // Expresión regular para cualquier caracter individual repetido más de 2 veces con flag Unicode
-const CHAR_SPAM_REGEX = /(.)\1{2,}/gu;
+// Las cifras quedan fuera: «1000 bits» o «152000 puntos» no son spam y la voz debe leerlas enteras
+const CHAR_SPAM_REGEX = /([^\d])\1{2,}/gu;
 
 /**
  * Sanitiza y extrae el texto para TTS desde un mensaje bruto de Twitch.

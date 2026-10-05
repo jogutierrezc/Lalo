@@ -58,6 +58,9 @@ import { PetsSettings, decodePetsSettings, loadPetsSettings, normalizePetsSettin
 import { PetLayer, PetLayerHandle } from '../components/mascotas/PetLayer';
 import { SAMPLE_CUES } from '../utils/petsLogic';
 import '../styles/mascotas.css';
+import { GameSettings, decodeGameSettings, loadGameSettings, normalizeGameSettings } from '../types/game';
+import { GameWidgetLayer } from '../components/juego/GameWidgetLayer';
+import '../styles/juego.css';
 import { cloudDelivered } from '../lib/widgetCloud';
 import { resolveWidgetSettings } from '../utils/widgetSettings';
 import { shouldPlayPreSound } from '../utils/preSound';
@@ -141,6 +144,11 @@ function raidSettingsForWidget(base: RaidSettings): RaidSettings {
 /** Ajustes de la mascota: los de la cuenta si llegaron; si no, los de la URL (`ps`) o los de este navegador. */
 function petsSettingsForWidget(base: PetsSettings): PetsSettings {
   return (cloudDelivered('pets') ? null : decodePetsSettings(getURLParam('ps'))) || base;
+}
+
+/** Ajustes de «Alertas de juego»: los de la cuenta si llegaron; si no, los de la URL (`gs`) o los de este navegador. */
+function gameSettingsForWidget(base: GameSettings): GameSettings {
+  return (cloudDelivered('game') ? null : decodeGameSettings(getURLParam('gs'))) || base;
 }
 
 // Colocación de la alerta en pantalla (horizontal con justify, vertical con items)
@@ -399,6 +407,12 @@ export const Widget: React.FC = () => {
   const [petsSettings, setPetsSettings] = useState(() => petsSettingsForWidget(loadPetsSettings()));
   const showPets = isPetsOnly || (appParam === 'all' && petsSettings.inAll);
   const petsRef = useRef<PetLayerHandle | null>(null);
+  // Alertas de juego (Riot): fuente propia (app=game) o dentro de «Todo en uno». No lee el chat: solo anuncia lo suyo
+  const isGameOnly = appParam === 'game';
+  const [gameSettings, setGameSettings] = useState(() => gameSettingsForWidget(loadGameSettings()));
+  const showGame = isGameOnly || (appParam === 'all' && gameSettings.inAll);
+  const gameVoiceRef = useRef({ game: gameSettings, pets: petsSettings, showPets });
+  gameVoiceRef.current = { game: gameSettings, pets: petsSettings, showPets };
   const handleRaid = useCallback((raid: { channel: string; login: string; viewers: number }) => {
     raidRef.current?.raid(raid.channel, raid.viewers, raid.login);
     sceneRef.current?.raid(raid.channel, raid.viewers, raid.login);
@@ -520,6 +534,18 @@ export const Widget: React.FC = () => {
   // Lo que dice la mascota, con su voz si tiene una; devuelve el id para saber cuándo suena su frase
   const speakPet = useCallback(
     (text: string, options: { voiceId?: string; front?: boolean }) => enqueueManualMessage(text, 'Mascota', true, options)?.id ?? null,
+    [enqueueManualMessage]
+  );
+  // Una alerta de juego: la dice la mascota si está montada en esta fuente y la acepta; si no, la voz.
+  // La emoción va como etiqueta al inicio del texto y la frase se lee tal cual, sin tarjeta
+  const announceGame = useCallback(
+    (text: string) => {
+      const { game, pets, showPets: petsHere } = gameVoiceRef.current;
+      if (game.announcer === 'nadie') return;
+      if (game.announcer === 'mascota' && petsHere && petsRef.current?.say(text)) return;
+      const voiceId = game.voiceSource === 'pet' ? pets.voiceId : game.voiceSource === 'catalogue' ? game.voiceId : '';
+      enqueueManualMessage(text, 'Juego', true, voiceId ? { voiceId } : {});
+    },
     [enqueueManualMessage]
   );
   // El mensaje de un apoyo de Ko-fi, cuando el streamer quiere que se lea
@@ -1315,6 +1341,9 @@ export const Widget: React.FC = () => {
       if (message.type === 'PETS_SETTINGS_UPDATE') {
         setPetsSettings(normalizePetsSettings(message.settings));
       }
+      if (message.type === 'GAME_SETTINGS_UPDATE') {
+        setGameSettings(normalizeGameSettings(message.settings));
+      }
       if (message.type === 'PETS_TEST') {
         petsRef.current?.test(SAMPLE_CUES[message.trigger]);
       }
@@ -1659,7 +1688,7 @@ export const Widget: React.FC = () => {
       }
     }
     // Las fuentes del saludo de raid y de la ruleta solo dicen lo suyo: el chat lo lee otra fuente
-    if (isRaidOnly || isRouletteApp || isKofiAlerts || isPetsOnly) {
+    if (isRaidOnly || isRouletteApp || isKofiAlerts || isPetsOnly || isGameOnly) {
       const foreign = messageQueue.find((m) => !m.system);
       if (foreign) {
         removeMessageFromQueue(foreign.id);
@@ -1674,7 +1703,7 @@ export const Widget: React.FC = () => {
         playAudioForMessage(nextMessage);
       }
     }
-  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue, isQuietIntegration, isKofiAlerts, isPetsOnly]);
+  }, [paused, isPlaying, messageQueue, removeMessageFromQueue, playAudioForMessage, approval, approvedIds, settings.priorityPaid, isChatOnly, isRaidOnly, isRouletteApp, isRewardsOnly, isScene, clearQueue, isQuietIntegration, isKofiAlerts, isPetsOnly, isGameOnly]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1781,6 +1810,9 @@ export const Widget: React.FC = () => {
           ignoredBots={moderation.ignoredBots}
         />
       )}
+
+      {/* Alertas de juego: la placa «Grieta» con lo que pasa en la cuenta de Riot del streamer */}
+      {showGame && <GameWidgetLayer settings={gameSettings} demo={getURLParam('demo') === '1' && appParam !== 'all'} onAnnounce={announceGame} />}
 
       {/* Recompensas: sonidos, placas y vídeos por puntos de canal o bits */}
       {showRewards && <RewardsWidgetLayer ref={rewardsRef} />}

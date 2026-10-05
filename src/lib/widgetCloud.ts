@@ -29,6 +29,7 @@ import { loadStudioSettings } from '../types/studio';
 import { loadMusicSettings } from '../types/music';
 import { loadKofiSettings } from '../types/kofi';
 import { loadPetsSettings } from '../types/pets';
+import { loadGameSettings } from '../types/game';
 
 const CHECK_EVERY_MS = 10000;
 /** Sin la función de la fecha, cada cuántas consultas se descarga el paquete entero. */
@@ -75,6 +76,7 @@ function announce(module: ConfigModule): void {
   if (module === 'music') postBus({ type: 'MUSIC_SETTINGS_UPDATE', settings: loadMusicSettings() });
   if (module === 'kofi') postBus({ type: 'KOFI_SETTINGS_UPDATE', settings: loadKofiSettings() });
   if (module === 'pets') postBus({ type: 'PETS_SETTINGS_UPDATE', settings: loadPetsSettings() });
+  if (module === 'game') postBus({ type: 'GAME_SETTINGS_UPDATE', settings: loadGameSettings() });
 }
 
 async function pullBundle(key: string, notify: boolean): Promise<boolean> {

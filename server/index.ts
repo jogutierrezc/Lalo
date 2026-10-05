@@ -130,6 +130,7 @@ app.all('/api/spotify/:action', (req, res) => integrationNodeHandler('spotify', 
 app.all('/api/kofi/:id', express.urlencoded({ extended: false, limit: '32kb' }), (req, res) =>
   integrationNodeHandler('kofi', req.params.id, req, res)
 );
+app.all('/api/riot/:action', (req, res) => integrationNodeHandler('riot', req.params.action, req, res));
 app.all('/api/integrations/:action', (req, res) => integrationNodeHandler('integrations', req.params.action, req, res));
 
 interface TTSRequestBody {

@@ -21,6 +21,7 @@ import type { CustomRewardItem } from '../types/rewards';
 import type { MusicSettings } from '../types/music';
 import type { KofiSettings } from '../types/kofi';
 import type { PetTriggerId, PetsSettings } from '../types/pets';
+import type { GameAlertId, GameSettings } from '../types/game';
 
 export type { PollStartEvent };
 
@@ -208,6 +209,9 @@ export type BusMessage =
   | { type: 'PETS_SETTINGS_UPDATE'; settings: PetsSettings }
   /** Prueba de «Mascotas» del panel a las fuentes de este navegador: una reacción con datos de ejemplo. */
   | { type: 'PETS_TEST'; trigger: PetTriggerId }
+  | { type: 'GAME_SETTINGS_UPDATE'; settings: GameSettings }
+  /** Prueba de «Alertas de juego» del panel a las fuentes de este navegador: una alerta con datos de ejemplo. */
+  | { type: 'GAME_TEST'; alert: GameAlertId }
   /** Prueba de «Ahora suena» del panel a las fuentes de este navegador: una canción de ejemplo o una orden. */
   | { type: 'MUSIC_TEST'; action: 'song' | 'pause' | 'resume' | 'stop' | 'show' | 'hide'; sample?: number }
   /** El panel pide a las capas fijas de Ko-fi que vuelvan a leer lo recaudado. */

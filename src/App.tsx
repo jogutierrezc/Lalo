@@ -12,6 +12,7 @@
  *   - #studio: Studio, el editor de escenas (cada escena, una URL para OBS)
  *   - #powerups: Power-ups de Twitch y canal de eventos (bits, Power-ups y canjes sin texto)
  *   - #mascotas: Mascotas, el personaje que reacciona con voz a canjes, bits y al chat
+ *   - #juego: Alertas de juego, la placa con lo que pasa en la cuenta de Riot del streamer
  *   - #integraciones: galería de servicios conectados (Spotify, Ko-fi, Twitch...)
  *   - #musica: estudio de la capa «Ahora suena»
  *   - #kofi: estudio de las alertas y capas fijas de Ko-fi
@@ -44,6 +45,7 @@ import { RaidStudio } from './pages/RaidStudio';
 import { Studio } from './pages/Studio';
 import { PowerupsStudio } from './pages/PowerupsStudio';
 import { PetsStudio } from './pages/PetsStudio';
+import { GameStudio } from './pages/GameStudio';
 import { Integraciones } from './pages/Integraciones';
 import { MusicStudio } from './pages/MusicStudio';
 import { KofiStudio } from './pages/KofiStudio';
@@ -77,6 +79,7 @@ export type AppRoute =
   | 'studio'
   | 'powerups'
   | 'mascotas'
+  | 'juego'
   | 'integraciones'
   | 'musica'
   | 'kofi'
@@ -186,6 +189,8 @@ function resolveRoute(): AppRoute {
 
   // Mascotas: el personaje que reacciona con voz
   if (/^(mascotas?|pets)([?/]|$)/.test(hash)) return 'mascotas';
+  // Alertas de juego: la integración con Riot Games
+  if (/^(juego|riot)([?/]|$)/.test(hash)) return 'juego';
 
   // Cuenta del streamer y portal de administración (solo con la nube configurada)
   if (hash.startsWith('cuenta')) return 'cuenta';
@@ -335,6 +340,8 @@ const Routes: React.FC = () => {
       return <PowerupsStudio />;
     case 'mascotas':
       return <PetsStudio />;
+    case 'juego':
+      return <GameStudio />;
     case 'integraciones':
       return <Integraciones />;
     case 'musica':

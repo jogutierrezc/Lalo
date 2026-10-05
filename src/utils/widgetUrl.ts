@@ -83,10 +83,11 @@ export type WidgetAppType =
   | 'kofigoal'
   | 'kofirecent'
   | 'pets'
+  | 'game'
   | 'all';
 
 /** Fuentes que hablan con la voz del chat pero no leen el chat. */
-const VOICE_ONLY_APPS: WidgetAppType[] = ['roulette', 'raid', 'polls', 'goals', 'scene', 'kofi', 'pets'];
+const VOICE_ONLY_APPS: WidgetAppType[] = ['roulette', 'raid', 'polls', 'goals', 'scene', 'kofi', 'pets', 'game'];
 
 /**
  * Construye la URL completa y parametrizada para cualquier herramienta de Lalo Stream Suite en OBS Studio.

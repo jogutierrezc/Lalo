@@ -97,6 +97,7 @@ export default defineConfig({
       '/api/voices': `http://localhost:${process.env.PORT || 3001}`,
       '/api/spotify': `http://localhost:${process.env.PORT || 3001}`,
       '/api/kofi': `http://localhost:${process.env.PORT || 3001}`,
+      '/api/riot': `http://localhost:${process.env.PORT || 3001}`,
       '/api/integrations': `http://localhost:${process.env.PORT || 3001}`,
     },
     watch: {

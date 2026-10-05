@@ -1,0 +1,235 @@
+/* ==========================================================================
+   Alertas de juego · diseño «Grieta»
+   Placa tallada con esquinas en chaflán y filete de color. La capa (.gjl) se
+   mide en em: a 1920 px de ancho, 1 em son 48 px por el tamaño elegido (--gj-k).
+   --gj-c es el color de la alerta. Formas y tipografías propias de Lalo: aquí no
+   hay logos, fuentes ni imágenes de ningún juego. Al final, lo poco que la
+   página del panel añade al lenguaje Cabina (.cab-*).
+   ========================================================================== */
+
+.gjl {
+  --gj-k: 1;
+  --gj-c: #ffd166;
+  --gj-navy: #0c1524;
+  --gj-cream: #f1e7cf;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 4%;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  font-size: calc(100vw / 40 * var(--gj-k));
+  line-height: 1.2;
+}
+/* En el monitor del estudio la capa se mide con el ancho del monitor */
+.gjl[data-studio] {
+  font-size: calc(100cqw / 40 * var(--gj-k));
+}
+.gjl[data-pos^='t'] {
+  align-items: flex-start;
+}
+.gjl[data-pos^='b'] {
+  align-items: flex-end;
+}
+.gjl[data-pos$='l'] {
+  justify-content: flex-start;
+}
+.gjl[data-pos$='c'] {
+  justify-content: center;
+}
+.gjl[data-pos$='r'] {
+  justify-content: flex-end;
+}
+
+.gj {
+  --gj-cut: polygon(
+    0.9em 0,
+    calc(100% - 0.9em) 0,
+    100% 0.9em,
+    100% calc(100% - 0.9em),
+    calc(100% - 0.9em) 100%,
+    0.9em 100%,
+    0 calc(100% - 0.9em),
+    0 0.9em
+  );
+  position: relative;
+  min-width: 15em;
+  max-width: min(26em, 100%);
+  padding: 0.1em;
+  background: var(--gj-c);
+  clip-path: var(--gj-cut);
+  text-align: center;
+}
+.gj p {
+  margin: 0;
+}
+.gj-in {
+  position: relative;
+  overflow: hidden;
+  padding: 1.25em 1.8em 1em;
+  background: var(--gj-navy);
+  color: var(--gj-cream);
+  clip-path: var(--gj-cut);
+}
+.gj-gem {
+  position: absolute;
+  top: 0.38em;
+  left: 50%;
+  width: 0.6em;
+  height: 0.6em;
+  margin-left: -0.3em;
+  background: var(--gj-c);
+  transform: rotate(45deg);
+}
+.gj-tag {
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.62em;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gj-c);
+}
+.gj-title {
+  margin-top: 0.1em;
+  font-family: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  font-weight: 700;
+  font-size: 1.75em;
+  letter-spacing: 0.05em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+/* El título va partido en letras, sin romper las palabras */
+.gj-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+.gj-ch {
+  display: inline-block;
+}
+.gj-rule {
+  width: 70%;
+  height: 1px;
+  margin: 0.5em auto;
+  background: var(--gj-c);
+}
+.gj-sub {
+  font-family: 'Onest', system-ui, -apple-system, sans-serif;
+  font-size: 0.72em;
+  color: color-mix(in srgb, var(--gj-cream) 76%, transparent);
+}
+.gj-stats {
+  display: flex;
+  justify-content: center;
+  gap: 1.1em;
+  margin-top: 0.6em;
+}
+.gj-stats div {
+  display: grid;
+  gap: 0.05em;
+}
+.gj-stats b {
+  font-family: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  font-size: 1.05em;
+  font-variant-numeric: tabular-nums;
+}
+.gj-stats span {
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 75%;
+  font-size: 0.55em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gj-c);
+}
+.gj-sh {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--gj-c) 30%, transparent), transparent);
+  transform: translateX(-140%);
+}
+
+/* ---------- Página del panel ---------- */
+
+.gj-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border-bottom: 1px solid var(--cb-line);
+}
+.gj-tabs button {
+  min-height: 40px;
+  margin-bottom: -1px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--cb-mut);
+  font: inherit;
+  font-stretch: 78%;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.gj-tabs button[aria-selected='true'] {
+  border-bottom-color: var(--ui, var(--cb-fg));
+  color: var(--cb-fg);
+}
+.gj-als {
+  display: grid;
+  gap: 6px;
+}
+.gj-al {
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+}
+.gj-al-h {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+}
+.gj-al-h b {
+  display: block;
+  font-weight: 600;
+}
+.gj-al-a {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.gj-al-b {
+  display: grid;
+  gap: 18px;
+  padding: 14px 12px;
+  border-top: 1px solid var(--cb-line);
+}
+.gj-grp {
+  margin-top: 6px;
+}
+.gj-color {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.gj-color input[type='color'] {
+  width: 56px;
+  height: 40px;
+  padding: 3px;
+}
+@media (max-width: 560px) {
+  .gj-al-h {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .gj-al-a {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}

@@ -14,12 +14,12 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export type Env = Record<string, string | undefined>;
-export type Provider = 'spotify' | 'kofi';
+export type Provider = 'spotify' | 'kofi' | 'riot';
 
 export interface AccountRow {
   profile_id: string;
   provider: Provider;
-  /** Cifrado: refresh token de Spotify o clave de verificación de Ko-fi. */
+  /** Cifrado: refresh token de Spotify o clave de verificación de Ko-fi. Riot no guarda ningún secreto por streamer. */
   secret_enc: string | null;
   /** Ko-fi: huella de la dirección personal (para buscar) y la dirección cifrada (para enseñársela a su dueño). */
   hook_hash: string | null;
@@ -32,6 +32,8 @@ export interface AccountRow {
   last_error_at: string | null;
   goal_raised: number;
   recent: unknown;
+  /** Riot (migración 0015): servidor, PUUID y Riot ID del streamer. */
+  meta?: unknown;
 }
 
 export interface KofiIngest {
@@ -50,6 +52,8 @@ export interface Store {
   upsert(profileId: string, provider: Provider, patch: Partial<AccountRow>): Promise<void>;
   remove(profileId: string, provider: Provider): Promise<void>;
   count(provider: Provider): Promise<number>;
+  /** Cuentas vinculadas de un servicio que no guarda secreto (Riot): cuenta las filas, sin mirar secret_enc. */
+  countLinked(provider: Provider): Promise<number>;
   /** Ajustes sincronizados de un módulo del streamer, o null. */
   config(profileId: string, module: string): Promise<unknown>;
   ingestKofi(event: KofiIngest): Promise<'ok' | 'duplicate'>;
@@ -107,6 +111,11 @@ export function supabaseStore(db: SupabaseClient): Store {
     },
     async count(provider) {
       const { count, error } = await db.from(TABLE).select('profile_id', { count: 'exact', head: true }).eq('provider', provider).not('secret_enc', 'is', null);
+      check(error);
+      return count ?? 0;
+    },
+    async countLinked(provider) {
+      const { count, error } = await db.from(TABLE).select('profile_id', { count: 'exact', head: true }).eq('provider', provider);
       check(error);
       return count ?? 0;
     },

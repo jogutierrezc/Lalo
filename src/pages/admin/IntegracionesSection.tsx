@@ -109,6 +109,18 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
           )}
         </ServiceCard>
 
+        <ServiceCard mark="RG" name="Riot Games" status={status ? (status.riotConfigured ? 'Activa' : 'Sin clave') : pending} tone={status ? (status.riotConfigured ? 'on' : 'warn') : undefined} adminOnly>
+          <p>Lee el rango y las partidas de League of Legends de cada streamer para «Alertas de juego». La clave vive en el servidor y no se muestra aquí.</p>
+          <p className="cab-hint">
+            {status
+              ? status.riotConfigured
+                ? 'El servidor tiene la clave (RIOT_API_KEY). Esta ficha no hace una llamada de prueba: la clave de desarrollo de Riot caduca cada 24 horas.'
+                : 'Falta RIOT_API_KEY en el servidor: nadie puede vincular su Riot ID.'
+              : 'Sin datos del servidor.'}
+            {status && status.riotLinked !== null && ` Cuentas vinculadas: ${status.riotLinked}.`} Necesita la migración 0015 en Supabase.
+          </p>
+        </ServiceCard>
+
         <ServiceCard mark="FA" name="Fish Audio" status={status ? (status.fishConfigured ? 'Activa' : 'Sin clave') : pending} tone={status ? (status.fishConfigured ? 'on' : 'warn') : undefined} adminOnly>
           <p>Servicio de voces. La clave vive en el servidor y no se muestra aquí.</p>
           <p className="cab-hint">

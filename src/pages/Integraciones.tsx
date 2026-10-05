@@ -2,8 +2,8 @@
  * src/pages/Integraciones.tsx
  *
  * Página «Integraciones»: una ficha por servicio, con su estado (conectado, sin
- * conectar, próximamente o no disponible). Spotify y Ko-fi se conectan aquí de
- * verdad; Twitch enseña la cuenta con la que se entró y los permisos concedidos.
+ * conectar, próximamente o no disponible). Spotify, Ko-fi y Riot Games se
+ * conectan aquí de verdad; Twitch enseña la cuenta con la que se entró y los permisos concedidos.
  *
  * Las fichas de estado del servidor (Fish Audio, Cloudflare R2 y la
  * configuración de Spotify y Ko-fi) son solo para el administrador y viven en
@@ -13,6 +13,7 @@
 import React, { useEffect, useState } from 'react';
 import { SuiteNav } from '../components/SuiteNav';
 import { KofiCard } from '../components/integraciones/KofiCard';
+import { RiotCard } from '../components/integraciones/RiotCard';
 import { ServiceCard } from '../components/integraciones/ServiceCard';
 import { SpotifyCard } from '../components/integraciones/SpotifyCard';
 import { useCloudSession } from '../hooks/useCloudSession';
@@ -126,12 +127,13 @@ export const Integraciones: React.FC = () => {
 
         <p className="ig-lede">
           Conecta cuentas de otros servicios. Cada ficha dice con qué cuenta está conectada, qué puede leer Lalo y cómo desconectarla. Las capas que
-          usan estos servicios se ajustan en «Ahora suena» y «Ko-fi».
+          usan estos servicios se ajustan en «Ahora suena», «Ko-fi» y «Alertas de juego».
         </p>
 
         <div className="ig">
           <SpotifyCard />
           <KofiCard />
+          <RiotCard />
           <TwitchCard />
 
           <ServiceCard mark="LF" name="Last.fm" status="Próximamente" tone="soon">
@@ -176,6 +178,15 @@ export const Integraciones: React.FC = () => {
             <li>
               <b>Privacidad en Ko-fi:</b> si el apoyo no es público, sale como «Alguien», sin mensaje, y la voz no lo lee. El correo y la dirección de
               envío que manda Ko-fi no se guardan ni se muestran nunca.
+            </li>
+            <li>
+              <b>Riot Games:</b> escribes tu Riot ID y eliges tu servidor; no hay contraseña ni inicio de sesión de Riot. El servidor de Lalo guarda tu
+              Riot ID, tu servidor y el identificador que Riot da a esa cuenta, y con su propia clave pregunta por tu rango, tu partida en curso, tu
+              última partida y tu maestría. De cada partida solo se leen tus datos, nunca los de rivales o compañeros.
+            </li>
+            <li>
+              <b>Retraso en Riot:</b> Riot no avisa de los cambios y publica el resultado al terminar la partida. La capa pregunta cada medio minuto,
+              así que una alerta puede tardar entre uno y dos minutos. Las partidas y el rango no se guardan en la base de datos de Lalo.
             </li>
           </ul>
         </section>

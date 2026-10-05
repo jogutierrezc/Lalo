@@ -30,6 +30,7 @@ export const MODULE_STORAGE_KEYS: Partial<Record<ConfigModule, string>> = {
   music: 'lalo_music_settings',
   kofi: 'lalo_kofi_settings',
   pets: 'lalo_pets_settings',
+  game: 'lalo_game_settings',
 };
 
 const PUSH_DELAY_MS = 1200;

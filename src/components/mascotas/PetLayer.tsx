@@ -22,6 +22,7 @@ import gsap from 'gsap';
 import { resolveMediaUrl } from '../../lib/mediaRef';
 import type { PetsSettings, PetTriggerId } from '../../types/pets';
 import { reduced } from '../../utils/alertMotion';
+import { stripEmotionTags } from '../../utils/emotionMapper';
 import { findBlockedWord, normalizeUser } from '../../utils/moderation';
 import { ENVELOPE_FPS, PetCue, SAMPLE_CUES, callsPet, cueFromEvent, envelopeAt, planCue, quietDue, speakSeconds, volumeEnvelope } from '../../utils/petsLogic';
 import type { TwitchEvent } from '../../utils/twitchEvents';
@@ -48,6 +49,12 @@ export interface PetLayerHandle {
   test: (cue: PetCue) => void;
   /** Reproduce la entrada o el efecto, para elegirlos en el estudio. */
   preview: (what: 'enter' | 'fx') => void;
+  /**
+   * Dice una frase tal cual (una alerta de juego): no mira activadores ni esperas, pero sí respeta su
+   * turno y el tope de la cola. La voz recibe el texto entero, con su etiqueta de emoción; el bocadillo
+   * la enseña sin ella. Devuelve false si no la aceptó (mascota apagada o cola llena).
+   */
+  say: (text: string) => boolean;
 }
 
 interface PetLayerProps {
@@ -124,6 +131,7 @@ export const PetLayer = forwardRef<PetLayerHandle, PetLayerProps>(
     // El motor vive en una referencia: sus funciones leen siempre los ajustes vigentes
     const engine = useRef<{
       accept: (cue: PetCue) => void;
+      direct: (text: string) => boolean;
       voice: (event: PetVoiceEvent) => void;
       preview: (what: 'enter' | 'fx') => void;
       enter: () => void;
@@ -350,8 +358,10 @@ export const PetLayer = forwardRef<PetLayerHandle, PetLayerProps>(
         const active = activeRef.current;
         if (!active || active.token !== token) return;
         clearTimers();
-        const length = seconds && Number.isFinite(seconds) && seconds > 0 ? seconds : speakSeconds(active.text);
-        setSaid({ id: token, text: active.text, seconds: length });
+        // Las etiquetas de emoción son para la voz: ni se enseñan ni cuentan para la duración estimada
+        const shown = stripEmotionTags(active.text);
+        const length = seconds && Number.isFinite(seconds) && seconds > 0 ? seconds : speakSeconds(shown);
+        setSaid({ id: token, text: shown, seconds: length });
         startMouth(audio, blob);
         // En el estudio nadie avisa del final; en OBS es una red por si el aviso no llega
         later(() => end(token), active.voiceId ? length + 20 : length);
@@ -417,6 +427,19 @@ export const PetLayer = forwardRef<PetLayerHandle, PetLayerProps>(
         pump();
       };
 
+      const direct = (text: string): boolean => {
+        const line = text.trim();
+        if (!line || !S().enabled) return false;
+        if (queueRef.current.length >= QUEUE_MAX) {
+          say('La mascota ya tiene varias reacciones esperando: esta se descarta.');
+          return false;
+        }
+        queueRef.current.push(line);
+        say(`${S().name} dice: «${stripEmotionTags(line)}»`);
+        pump();
+        return true;
+      };
+
       const voice = (event: PetVoiceEvent) => {
         const active = activeRef.current;
         if (!active || active.voiceId !== event.id) return;
@@ -451,7 +474,7 @@ export const PetLayer = forwardRef<PetLayerHandle, PetLayerProps>(
         activeRef.current = null;
       };
 
-      engine.current = { accept, voice, preview, enter, exit, setIdle, stop };
+      engine.current = { accept, direct, voice, preview, enter, exit, setIdle, stop };
     }
 
     useImperativeHandle(
@@ -479,6 +502,7 @@ export const PetLayer = forwardRef<PetLayerHandle, PetLayerProps>(
         voice: (event) => engine.current?.voice(event),
         test: (cue) => engine.current?.accept({ ...cue, test: true }),
         preview: (what) => engine.current?.preview(what),
+        say: (text) => engine.current?.direct(text) ?? false,
       }),
       []
     );

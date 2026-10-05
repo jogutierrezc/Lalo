@@ -231,6 +231,17 @@ export function normalizeTextForFishAudio(text: string): string {
 }
 
 /**
+ * Quita las etiquetas entre corchetes: lo que se enseña en pantalla (el bocadillo
+ * de la mascota) o se mide para estimar cuánto dura la frase no las lleva.
+ *
+ * Ejemplo: "[excited] Victoria con Ahri." -> "Victoria con Ahri."
+ */
+export function stripEmotionTags(text: string): string {
+  if (!text || !text.includes('[') || !text.includes(']')) return text;
+  return text.replace(BRACKET_TAG_REGEX, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
  * Lista de emociones predeterminadas para mostrar en el Streamer Dashboard
  */
 export const AVAILABLE_EMOTIONS = EMOTION_DEFINITIONS.map((e) => ({

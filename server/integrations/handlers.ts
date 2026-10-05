@@ -6,11 +6,14 @@
  *
  *   /api/spotify/<acción>         ver spotifyRoutes.ts
  *   /api/kofi/<acción o id>       ver kofi.ts (un id largo es el webhook)
+ *   /api/riot/<acción>            ver riotRoutes.ts
  *   /api/integrations/status      (solo administrador) qué le falta al servidor
  */
 
 import { defaultDeps, fail, failureOf, isFail, type Deps, type IntegrationRequest, type IntegrationResult } from './http.js';
 import { KOFI_ACTIONS, handleKofiHook, handleKofiPanel, kofiMissing, publicBase, type KofiAction } from './kofi.js';
+import { readRiotKey } from './riot.js';
+import { RIOT_ACTIONS, handleRiot, type RiotAction } from './riotRoutes.js';
 import { readSpotifyConfig, redirectUri } from './spotify.js';
 import { SPOTIFY_ACTIONS, SPOTIFY_SEATS, handleSpotify, type SpotifyAction } from './spotifyRoutes.js';
 import { missingSupabase, type Env } from './store.js';
@@ -26,6 +29,7 @@ async function adminStatus(req: IntegrationRequest, env: Env, deps: Deps): Promi
     const database = missingSupabase(env);
     let seats: number | null = null;
     let migration: 'ok' | 'missing' | 'unknown' = 'unknown';
+    let riotLinked: number | null = null;
     if (store) {
       try {
         seats = await store.count('spotify');
@@ -33,6 +37,8 @@ async function adminStatus(req: IntegrationRequest, env: Env, deps: Deps): Promi
       } catch (err) {
         migration = failureOf(err, 'integrations/status').body.code === 'migration_missing' ? 'missing' : 'unknown';
       }
+      // Riot no guarda secreto por streamer: sus cuentas se cuentan por filas
+      riotLinked = await store.countLinked('riot').catch(() => null);
     }
     return {
       status: 200,
@@ -42,6 +48,7 @@ async function adminStatus(req: IntegrationRequest, env: Env, deps: Deps): Promi
         fish: { configured: Boolean((env.FISH_AUDIO_API_KEY ?? '').trim()) },
         spotify: { missing: readSpotifyConfig(env).missing, redirectUri: redirectUri(env), seats, seatsMax: SPOTIFY_SEATS },
         kofi: { missing: kofiMissing(env), base: publicBase(env) },
+        riot: { configured: Boolean(readRiotKey(env)), linked: riotLinked },
       },
     };
   } catch (err) {
@@ -63,6 +70,7 @@ export async function handleIntegration(
     if (KOFI_ACTIONS.includes(part as KofiAction)) return handleKofiPanel(part as KofiAction, req, env, deps);
     return handleKofiHook(part, req, env, deps);
   }
+  if (group === 'riot' && RIOT_ACTIONS.includes(part as RiotAction)) return handleRiot(part as RiotAction, req, env, deps);
   if (group === 'integrations' && part === 'status') return adminStatus(req, env, deps);
   return fail(404, 'not_found', 'Ruta no encontrada.');
 }

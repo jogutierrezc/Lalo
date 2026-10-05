@@ -2,7 +2,7 @@
  * src/lib/cloudTypes.ts
  *
  * Tipos de las tablas y RPCs de Supabase. Escritos a mano: deben coincidir con
- * supabase/migrations (0001 a 0014). Las fechas llegan como texto ISO.
+ * supabase/migrations (0001 a 0015). Las fechas llegan como texto ISO.
  */
 
 export type ProfileRole = 'streamer' | 'admin';
@@ -11,7 +11,7 @@ export type MediaKind = 'image' | 'video' | 'audio';
 
 export const CONFIG_MODULES = [
   'tts', 'alerts', 'goals', 'roulette', 'polls', 'rewards', 'bot', 'marathon', 'focus', 'raid', 'chat', 'studio',
-  'powerups', 'music', 'kofi', 'pets',
+  'powerups', 'music', 'kofi', 'pets', 'game',
 ] as const;
 export type ConfigModule = (typeof CONFIG_MODULES)[number];
 

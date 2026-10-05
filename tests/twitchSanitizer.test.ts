@@ -72,4 +72,17 @@ describe('twitchSanitizer — Trigger !s y Reglas de Sanitización', () => {
     expect(result?.emotion?.label).toBe('Susurro');
     expect(result?.emotion?.emoji).toBe('🤫');
   });
+
+  it('no recorta las cifras: «1000 bits» o «152000 puntos» no son spam', () => {
+    expect(sanitizeTwitchMessage('!s Gracias por los 1000 bits')?.cleanText).toBe('Gracias por los 1000 bits');
+    expect(sanitizeTwitchMessage('!s Maestría con 152000 puntos, 111 a 0')?.cleanText).toBe('Maestría con 152000 puntos, 111 a 0');
+    // Las letras y los signos repetidos se siguen recortando
+    expect(sanitizeTwitchMessage('!s siiiiiii 1000!!!!!')?.cleanText).toBe('sii 1000!!');
+  });
+
+  it('una frase del sistema con etiqueta de emoción conserva la etiqueta al inicio', () => {
+    const result = sanitizeTwitchMessage('!s [excited] Victoria con Ahri. 9, 2, 11.');
+    expect(result?.cleanText).toBe('[excited] Victoria con Ahri. 9, 2, 11.');
+    expect(result?.emotion?.tag).toBe('excited');
+  });
 });

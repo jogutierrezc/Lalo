@@ -11,6 +11,7 @@
     { "source": "/api/twitch/subscriptions", "destination": "/api/twitch?g=twitch&a=subscriptions" },
     { "source": "/api/spotify/:action", "destination": "/api/integraciones?g=spotify&a=:action" },
     { "source": "/api/kofi/:id", "destination": "/api/integraciones?g=kofi&a=hook&id=:id" },
+    { "source": "/api/riot/:action", "destination": "/api/integraciones?g=riot&a=:action" },
     { "source": "/api/integrations/:action", "destination": "/api/integraciones?g=integrations&a=:action" },
     { "source": "/api/health", "destination": "/api/version?health=1" },
     { "source": "/api/(.*)", "destination": "/api/$1" },

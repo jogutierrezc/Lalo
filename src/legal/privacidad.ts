@@ -39,6 +39,7 @@ export const PRIVACIDAD: DocumentoLegal = {
           '**Clave privada de tus fuentes de OBS**: va dentro de las direcciones que pegas en OBS. Quien la tenga puede ver tus capas, no cambiarlas. Puedes generar una nueva en Mi cuenta.',
           '**Configuración de los módulos**: lo que ajustas en voz del chat, alertas, metas, ruleta, batallas, recompensas, bot y chat. Incluye las listas de palabras y de usuarios bloqueados que escribas, que pueden contener nombres de usuario de tus espectadores.',
           '**Archivos que subes**: imágenes, vídeos y sonidos, con su nombre, tipo, tamaño y fecha.',
+          '**Cuenta de Riot Games**, solo si la vinculas en Integraciones para usar «Alertas de juego»: el Riot ID que escribes (nombre y etiqueta), el servidor que eliges y el identificador que Riot asigna a esa cuenta. No te pedimos tu contraseña de Riot ni iniciamos sesión en tu nombre. Con esos datos nuestro servidor consulta a Riot tu rango, si estás en partida, el resultado de tu última partida y tu maestría de campeones, para mostrar las alertas en tus capas; de cada partida solo leemos tus propios datos, no los de las demás personas que jugaron. Esas consultas no se guardan en nuestra base de datos: pasan por la memoria del servidor durante menos de un minuto y por el navegador de tu fuente de OBS.',
           '**Códigos**: qué código de invitación canjeaste y cuándo. De los códigos de recuperación se guarda una huella, no el código.'
         ),
         h3('De quien administra la Plataforma'),
@@ -101,6 +102,7 @@ export const PRIVACIDAD: DocumentoLegal = {
           '**Vercel**: alojamiento de la app y de sus funciones de servidor.',
           '**Twitch**: inicio de sesión y chat. Twitch trata tus datos y los de tus espectadores según sus propias condiciones.',
           '**Fish Audio**: síntesis de voz. Recibe el texto que se va a leer y el identificador de la voz elegida.',
+          '**Riot Games**: si vinculas tu cuenta de Riot, nuestro servidor le envía tu Riot ID y el identificador de tu cuenta para consultar tus datos de juego. Riot trata esos datos según sus propias condiciones. Lalo Stream Suite no está respaldada por Riot Games.',
           '**Google Fonts**: sirve las tipografías de la app; al cargarlas, tu navegador se conecta con sus servidores.'
         ),
         p(
@@ -124,6 +126,7 @@ export const PRIVACIDAD: DocumentoLegal = {
         ul(
           'Los datos de tu cuenta, tu configuración y tus archivos se conservan mientras tu cuenta exista.',
           'Un archivo que borras en Mi cuenta se elimina del almacenamiento en ese momento.',
+          'Los datos de tu cuenta de Riot (Riot ID, servidor e identificador) se borran de nuestra base de datos cuando pulsas «Desvincular» en Integraciones.',
           'Si pides cerrar tu cuenta, borramos tus datos, salvo lo que debamos conservar por obligación legal o para atender reclamaciones, como el registro de aceptación de estos documentos.',
           'El texto que se envía para generar voz no se guarda en nuestra base de datos. Los proveedores pueden conservar registros técnicos durante los plazos que fijen sus propias políticas.'
         ),

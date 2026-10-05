@@ -5,15 +5,16 @@
  * (server/integrations/). Las del panel van con la sesión de Supabase; las de
  * las capas de OBS, con la clave privada de widget.
  *
- * El navegador nunca recibe un permiso de Spotify ni la clave de verificación
- * de Ko-fi: solo estados, la dirección personal del webhook (a su dueño) y los
- * datos que pinta la capa.
+ * El navegador nunca recibe un permiso de Spotify, la clave de verificación de
+ * Ko-fi ni la clave de Riot: solo estados, la dirección personal del webhook (a
+ * su dueño) y los datos que pinta la capa.
  *
- * SIN PROBAR contra Spotify, Ko-fi ni Supabase reales.
+ * SIN PROBAR contra Spotify, Ko-fi, Riot ni Supabase reales.
  */
 
 import { supabase } from './supabase';
 import { readKofiRecent, type KofiRecent } from '../../server/integrations/kofiRules';
+import { parseSnapshot, type GameSnapshot } from '../utils/gameAlerts';
 import { parseNowResponse, type NowResponse } from '../utils/musicRules';
 
 export type ApiOutcome<T> = { ok: true; data: T } | { ok: false; code: string; message: string; missing: string[] };
@@ -163,6 +164,59 @@ export async function fetchKofiState(key: string): Promise<{ raised: number; rec
   return { raised: Number.isFinite(raised) ? raised : 0, recent: readKofiRecent(body.recent) };
 }
 
+// ---------- Riot Games ----------
+
+export interface RiotStatus {
+  configured: boolean;
+  missing: string[];
+  /** Servidores de League of Legends entre los que elegir. */
+  platforms: { id: string; name: string }[];
+  state: 'none' | 'linked';
+  riotId: string;
+  platform: string;
+  linkedAt: string | null;
+}
+
+function toRiotStatus(d: Record<string, unknown>): RiotStatus {
+  const platforms = (Array.isArray(d.platforms) ? d.platforms : [])
+    .filter((item): item is { id: string; name: string } => Boolean(item) && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string' && typeof (item as { name?: unknown }).name === 'string')
+    .map((item) => ({ id: item.id, name: item.name }));
+  return {
+    configured: d.configured === true,
+    missing: strings(d.missing),
+    platforms,
+    state: d.state === 'linked' ? 'linked' : 'none',
+    riotId: typeof d.riotId === 'string' ? d.riotId : '',
+    platform: typeof d.platform === 'string' ? d.platform : '',
+    linkedAt: typeof d.linkedAt === 'string' ? d.linkedAt : null,
+  };
+}
+
+export async function riotStatus(): Promise<ApiOutcome<RiotStatus>> {
+  const result = await call('/api/riot/status', 'GET');
+  return result.ok ? { ok: true, data: toRiotStatus(result.data) } : result;
+}
+
+/** Vincula un Riot ID («nombre#etiqueta») de ese servidor a la cuenta de Lalo de quien llama. */
+export async function riotLink(riotId: string, platform: string): Promise<ApiOutcome<RiotStatus>> {
+  const result = await call('/api/riot/link', 'POST', { riotId, platform });
+  return result.ok ? { ok: true, data: toRiotStatus(result.data) } : result;
+}
+
+export const riotUnlink = () => call('/api/riot/unlink', 'POST');
+
+/** La foto de la cuenta de Riot, para la capa de OBS. No lanza: un fallo de red devuelve estado `error`. */
+export async function fetchRiotState(key: string): Promise<GameSnapshot> {
+  try {
+    const res = await fetch(`/api/riot/state?k=${encodeURIComponent(key)}`, { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+    const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!res.ok) return parseSnapshot({ status: typeof body?.code === 'string' ? body.code : 'error' });
+    return parseSnapshot(body);
+  } catch {
+    return parseSnapshot(null);
+  }
+}
+
 // ---------- Administrador ----------
 
 export interface IntegrationsServerStatus {
@@ -175,6 +229,10 @@ export interface IntegrationsServerStatus {
   seatsMax: number;
   kofiMissing: string[];
   kofiBase: string;
+  /** El servidor tiene RIOT_API_KEY. Nunca llega su valor. */
+  riotConfigured: boolean;
+  /** Cuentas de Riot vinculadas, o null si no se pudo contar. */
+  riotLinked: number | null;
 }
 
 export async function integrationsServerStatus(): Promise<ApiOutcome<IntegrationsServerStatus>> {
@@ -184,6 +242,7 @@ export async function integrationsServerStatus(): Promise<ApiOutcome<Integration
   const obj = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' ? (value as Record<string, unknown>) : {});
   const spotify = obj(d.spotify);
   const kofi = obj(d.kofi);
+  const riot = obj(d.riot);
   return {
     ok: true,
     data: {
@@ -196,6 +255,8 @@ export async function integrationsServerStatus(): Promise<ApiOutcome<Integration
       seatsMax: typeof spotify.seatsMax === 'number' ? spotify.seatsMax : 5,
       kofiMissing: strings(kofi.missing),
       kofiBase: typeof kofi.base === 'string' ? kofi.base : '',
+      riotConfigured: riot.configured === true,
+      riotLinked: typeof riot.linked === 'number' ? riot.linked : null,
     },
   };
 }
