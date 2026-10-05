@@ -18,43 +18,16 @@ import { AlertCard } from '../AlertCard';
 import { ChatOverlayHandle, ChatOverlayView } from '../chat/ChatOverlayView';
 import { GoalsOverlayView } from '../goals/GoalsOverlayView';
 import { RaidLayer, RaidLayerHandle } from '../raid/RaidLayer';
-import type { ChatSettings } from '../../types/chat';
-import type { GoalsSettings } from '../../types/goals';
-import type { RaidSettings } from '../../types/raid';
-import type { StreamAlertsSettings } from '../../types/alerts';
 import type { StudioLayer } from '../../types/studio';
+import { typeInfo } from '../../types/studio';
 import type { StreamAlertEvent } from '../../utils/bus';
 import { MotionOptions, playDemo, playEnter, playExit } from '../../utils/alertMotion';
 import { demoMessage } from '../../utils/chatFeed';
 import { Spot, pickSpot, spotAt } from '../../utils/randomSpot';
-import type { SceneMode } from './SceneElements';
+import { PHASE_BOXES } from './boxes';
+import type { BoxProps } from './boxes/types';
 
-/** Ajustes de cada módulo de Lalo que necesita una escena para pintarse. */
-export interface SceneData {
-  chat: ChatSettings;
-  raid: RaidSettings;
-  goals: GoalsSettings;
-  alerts: StreamAlertsSettings;
-  /** Meta que acaba de recibir progreso (el carrusel salta a ella). */
-  goalEventId?: string | null;
-}
-
-/** Por dónde llegan los avisos a cada capa montada. */
-export interface SceneRegistry {
-  chat: Map<string, ChatOverlayHandle>;
-  raid: Map<string, RaidLayerHandle>;
-  alert: Map<string, (alert: StreamAlertEvent) => void>;
-  test: Map<string, () => void>;
-}
-
-interface BoxProps {
-  layer: StudioLayer;
-  mode: SceneMode;
-  data: SceneData;
-  registry: SceneRegistry;
-  demo?: boolean;
-  onSpeak?: (text: string) => void;
-}
+export type { BoxProps, SceneData, SceneRegistry, SceneServices, SceneSignal } from './boxes/types';
 
 // ---------- Zona de posición aleatoria ----------
 
@@ -363,7 +336,12 @@ export const LaloBox: React.FC<BoxProps> = (props) => {
       return <AlertBox {...props} />;
     case 'raid':
       return <RaidBox {...props} />;
-    default:
-      return null;
+    default: {
+      // Las demás capas viven en boxes/ (una fase por archivo)
+      const Box = PHASE_BOXES[props.layer.type as keyof typeof PHASE_BOXES];
+      if (Box) return <Box {...props} />;
+      // Capa que aún no tiene caja: en el editor se dice; en OBS no se pinta nada
+      return props.mode === 'edit' ? <div className="es-el es-empty">{typeInfo(props.layer.type).name}: disponible pronto</div> : null;
+    }
   }
 };

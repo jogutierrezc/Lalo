@@ -41,12 +41,14 @@ interface MusicOverlayProps {
   onVisible?: (visible: boolean) => void;
   /** La capa se retiró sola al pasar los segundos. */
   onTimeout?: () => void;
+  /** Muestra quieta (editor de Studio): el reloj no avanza y ni el disco, ni el medidor ni el título se mueven. */
+  still?: boolean;
 }
 
 /** Una orden en directo de hace más de esto ya no se obedece (por ejemplo, al abrir la fuente). */
 const LIVE_MAX_AGE_MS = 30_000;
 
-export const MusicOverlay = forwardRef<MusicOverlayHandle, MusicOverlayProps>(({ settings, onVisible, onTimeout }, ref) => {
+export const MusicOverlay = forwardRef<MusicOverlayHandle, MusicOverlayProps>(({ settings, onVisible, onTimeout, still = false }, ref) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const posRef = useRef<HTMLDivElement | null>(null);
   const parts = useRef<(MusicParts & { ts: HTMLElement; an: HTMLElement; ex: HTMLElement; pu: HTMLElement; time: HTMLElement; img: HTMLImageElement; sample: HTMLElement; eq: HTMLElement[]; discFace: HTMLElement }) | null>(null);
@@ -59,12 +61,12 @@ export const MusicOverlay = forwardRef<MusicOverlayHandle, MusicOverlayProps>(({
   const spinTw = useRef<gsap.core.Tween | null>(null);
   const eqTw = useRef<gsap.core.Tween | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const live = useRef({ settings, onVisible, onTimeout });
-  live.current = { settings, onVisible, onTimeout };
+  const live = useRef({ settings, onVisible, onTimeout, still });
+  live.current = { settings, onVisible, onTimeout, still };
 
   const progressNow = () => {
     const t = track.current;
-    const elapsed = state.current.playing ? performance.now() - clock.current.at : 0;
+    const elapsed = state.current.playing && !live.current.still ? performance.now() - clock.current.at : 0;
     const value = clock.current.base + elapsed;
     return t && t.durationMs ? Math.min(t.durationMs, value) : value;
   };
@@ -88,7 +90,7 @@ export const MusicOverlay = forwardRef<MusicOverlayHandle, MusicOverlayProps>(({
     if (live.current.settings.design === 'portada') return;
     const over = e.t.scrollWidth - e.t.clientWidth;
     if (over <= 2) return;
-    if (reduced()) {
+    if (reduced() || live.current.still) {
       e.t.classList.add('ell');
       return;
     }
@@ -139,7 +141,7 @@ export const MusicOverlay = forwardRef<MusicOverlayHandle, MusicOverlayProps>(({
 
   const motion = () => {
     const s = state.current;
-    const on = s.vis && s.playing && s.music;
+    const on = !live.current.still && s.vis && s.playing && s.music;
     const design = live.current.settings.design;
     if (spinTw.current) on && design === 'disco' ? spinTw.current.play() : spinTw.current.pause();
     if (eqTw.current) on && design === 'linea' ? eqTw.current.play() : eqTw.current.pause();

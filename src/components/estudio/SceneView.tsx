@@ -22,12 +22,12 @@ import { STAGE_H, STAGE_W, StudioLayer, StudioScene, isLaloLayer } from '../../t
 import type { StreamAlertEvent } from '../../utils/bus';
 import { killLayer, layerEnter, layerExit } from '../../utils/studioMotion';
 import { BasicElement, SceneMode } from './SceneElements';
-import { LaloBox, SceneData, SceneRegistry } from './LaloBoxes';
+import { LaloBox, SceneData, SceneRegistry, SceneServices, SceneSignal } from './LaloBoxes';
 import '../../styles/chat.css';
 import '../../styles/raid.css';
 import '../../styles/estudio.css';
 
-export type { SceneData } from './LaloBoxes';
+export type { SceneData, SceneServices, SceneSignal } from './LaloBoxes';
 
 export interface SceneHandle {
   /** Reparte los mensajes del chat entre las capas de chat de la escena. */
@@ -38,6 +38,11 @@ export interface SceneHandle {
   raidCommand: RaidLayerHandle['command'];
   /** Llega una alerta: la muestran las capas de alerta de la escena. */
   alert: (alert: StreamAlertEvent) => void;
+  /**
+   * Reparte una señal (evento de Twitch, chat, Ko-fi, voz, bus...) a las cajas de las fases.
+   * Devuelve true si alguna la consumió (un comando de moderación que era suyo).
+   */
+  signal: (signal: SceneSignal) => boolean;
   /** Prueba de una capa: en la zona aleatoria, la muestra salta a otro sitio. */
   test: (layerId: string) => void;
   /** Repite la entrada o la salida de una capa, o la entrada de todas. */
@@ -53,6 +58,8 @@ interface SceneViewProps {
   demo?: boolean;
   /** La voz del streamer lee la bienvenida de una raid. */
   onSpeak?: (text: string) => void;
+  /** Lo que el widget presta a las capas en OBS (cola de voz, bloqueos). En el editor no se pasa. */
+  services?: SceneServices;
 }
 
 type Player = (kind: 'enter' | 'exit', withDelay: boolean) => void;
@@ -66,9 +73,10 @@ interface ShellProps {
   players: Map<string, Player>;
   demo?: boolean;
   onSpeak?: (text: string) => void;
+  services?: SceneServices;
 }
 
-const LayerShell = memo(function LayerShell({ layer, z, mode, data, registry, players, demo, onSpeak }: ShellProps) {
+const LayerShell = memo(function LayerShell({ layer, z, mode, data, registry, players, demo, onSpeak, services }: ShellProps) {
   const innerRef = useRef<HTMLDivElement | null>(null);
   const [gone, setGone] = useState(layer.hidden);
   const firstRef = useRef(true);
@@ -147,7 +155,7 @@ const LayerShell = memo(function LayerShell({ layer, z, mode, data, registry, pl
     <div className="es-box" data-type={layer.type} style={style}>
       <div ref={innerRef} className="es-in">
         {gone && layer.hidden ? null : isLaloLayer(layer.type) ? (
-          <LaloBox layer={layer} mode={mode} data={data} registry={registry} demo={demo} onSpeak={onSpeak} />
+          <LaloBox layer={layer} mode={mode} data={data} registry={registry} demo={demo} onSpeak={onSpeak} services={services} />
         ) : (
           <BasicElement layer={layer} mode={mode} />
         )}
@@ -156,8 +164,8 @@ const LayerShell = memo(function LayerShell({ layer, z, mode, data, registry, pl
   );
 });
 
-export const SceneView = forwardRef<SceneHandle, SceneViewProps>(({ scene, mode, data, demo, onSpeak }, ref) => {
-  const registry = useMemo<SceneRegistry>(() => ({ chat: new Map(), raid: new Map(), alert: new Map(), test: new Map() }), []);
+export const SceneView = forwardRef<SceneHandle, SceneViewProps>(({ scene, mode, data, demo, onSpeak, services }, ref) => {
+  const registry = useMemo<SceneRegistry>(() => ({ chat: new Map(), raid: new Map(), alert: new Map(), test: new Map(), sinks: new Map() }), []);
   const players = useMemo(() => new Map<string, Player>(), []);
 
   useImperativeHandle(
@@ -175,6 +183,18 @@ export const SceneView = forwardRef<SceneHandle, SceneViewProps>(({ scene, mode,
       raidCommand: (message, sender) =>
         Array.from(registry.raid.values()).map((raid) => raid.command(message, sender)).some(Boolean),
       alert: (alert) => registry.alert.forEach((fire) => fire(alert)),
+      // Todas las cajas la reciben; el fallo de una no deja sin aviso a las demás
+      signal: (signal) =>
+        Array.from(registry.sinks.values())
+          .map((sink) => {
+            try {
+              return sink(signal) === true;
+            } catch (err) {
+              console.error('[Studio] una capa falló al recibir un aviso:', err);
+              return false;
+            }
+          })
+          .some(Boolean),
       test: (layerId) => registry.test.get(layerId)?.(),
       play: (layerId, kind) => players.get(layerId)?.(kind, false),
       playAll: () => players.forEach((play) => play('enter', true)),
@@ -196,6 +216,7 @@ export const SceneView = forwardRef<SceneHandle, SceneViewProps>(({ scene, mode,
           players={players}
           demo={demo}
           onSpeak={onSpeak}
+          services={services}
         />
       ))}
     </div>

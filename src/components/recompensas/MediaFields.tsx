@@ -162,7 +162,7 @@ export const VideoFields: React.FC<MediaFieldsProps> = ({ reward, cloudOn, patch
       </Field>
 
       <div className="rw-two">
-        <Field label="Posición" hint={random ? 'Cada vez cae en un sitio distinto.' : full ? 'Ocupa toda la pantalla.' : `Fija: ${ZONE_NAMES[Math.max(0, cell)]}.`}>
+        <Field label="Posición" hint={random ? 'Cada vez cae en un sitio distinto.' : full ? 'Ocupa toda la pantalla. En una escena de Studio, toda su caja.' : `Fija: ${ZONE_NAMES[Math.max(0, cell)]}.`}>
           <NineGrid
             label="Posición fija del vídeo"
             value={random || full ? null : Math.max(0, cell)}

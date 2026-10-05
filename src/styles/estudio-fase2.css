@@ -1,0 +1,137 @@
+/* ==========================================================================
+   Studio, fase 2: las capas de Ko-fi, Recompensa y Aviso de Power-up dentro de
+   su caja (components/estudio/boxes/fase2.tsx). Sigue a la sección 2 de
+   estudio.css: la caja (.es-box, con container-type: size) pasa a ser la
+   «pantalla» de la capa y su tamaño de letra sale de la caja.
+
+   Aquí no cambia el aspecto de ninguna capa: solo dónde se coloca y con qué
+   tamaño. Donde la pieza tiene una proporción fija, la letra sale del lado que
+   antes se agote (ancho o alto), para que quepa entera sin deformarse.
+   No hay movimiento en esta hoja: lo ponen las capas con GSAP.
+   ========================================================================== */
+
+/* Rótulos que solo ve quien edita la escena, nunca la emisión */
+.es-cv[data-mode='edit'] .es-lalo[data-sample]::before,
+.es-cv[data-mode='edit'] .es-lalo[data-kind='reward']::before {
+  position: absolute;
+  top: 0.3em;
+  left: 0.4em;
+  z-index: 1;
+  color: #d2cdc1;
+  font-stretch: 75%;
+  font-weight: 700;
+  font-size: 0.5em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ---------- Alerta de Ko-fi ---------- */
+
+/* Ancho y alto de cada diseño en em, con el margen de una donación grande (un 22 % más) */
+.es-cv .es-box .es-lalo[data-kind='kofi'] {
+  --kf-w: 18.6;
+  --kf-h: 19;
+}
+.es-cv .es-box .es-lalo[data-kind='kofi'][data-design='rotulo'] {
+  --kf-w: 54;
+  --kf-h: 9;
+}
+.es-cv .es-box .es-lalo[data-kind='kofi'][data-design='sello'] {
+  --kf-w: 20;
+  --kf-h: 22;
+}
+.es-cv .es-box .es-lalo[data-kind='kofi'][data-design='burbuja'] {
+  --kf-w: 30;
+  --kf-h: 16.5;
+}
+.es-cv .es-box .es-lalo[data-kind='kofi'][data-design='cinta'] {
+  --kf-w: 69;
+  --kf-h: 3.6;
+}
+.es-cv .es-box .es-lalo[data-kind='kofi'][data-design='cartel'] {
+  --kf-w: 49.5;
+  --kf-h: 25;
+}
+.es-cv .es-box .es-lalo[data-kind='kofi'] .itg-ov {
+  font-size: min(calc(100cqw / var(--kf-w)), calc(100cqh / var(--kf-h)));
+}
+/* La alerta va centrada en la caja: la esquina y el tamaño del módulo no cuentan aquí */
+.es-cv .es-box .es-lalo[data-kind='kofi'] .pos {
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  transform: none;
+  font-size: 100% !important;
+}
+.es-cv .es-box .es-lalo[data-kind='kofi'] .ka {
+  max-width: 100cqw;
+}
+
+/* ---------- Meta de Ko-fi ---------- */
+
+/* La placa se apoya en el borde de abajo; encima queda sitio para el «+cantidad» de cada apoyo */
+.es-cv .es-box .es-lalo[data-kind='kofigoal'] .itg-ov {
+  font-size: min(calc(100cqw / 27), calc(100cqh / 8));
+}
+.es-cv .es-box .es-lalo[data-kind='kofigoal'] .kg {
+  inset: auto 0 0;
+  width: auto;
+}
+.es-cv .es-box .es-lalo[data-kind='kofigoal'][data-layout='deposito'] .itg-ov {
+  font-size: min(calc(100cqw / 15), calc(100cqh / 14.7));
+}
+.es-cv .es-box .es-lalo[data-kind='kofigoal'][data-layout='deposito'] .kg {
+  width: 15em;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+/* ---------- Últimos apoyos de Ko-fi ---------- */
+
+.es-cv .es-box .es-lalo[data-kind='kofirecent'] .itg-ov {
+  font-size: min(calc(100cqw / 18), calc(100cqh / 11.4));
+}
+.es-cv .es-box .es-lalo[data-kind='kofirecent'] .kr {
+  inset: auto 0 0;
+  width: auto;
+}
+.es-cv .es-box .es-lalo[data-kind='kofirecent'][data-layout='cinta'] .itg-ov {
+  font-size: min(calc(100cqw / 48), calc(100cqh / 3.4));
+}
+
+.es-cv[data-mode='edit'] .es-lalo[data-sample]::before {
+  content: 'Datos de ejemplo';
+}
+
+/* ---------- Recompensa ---------- */
+
+/* La caja es toda la pantalla de la capa: las placas salen de su esquina de abajo y los vídeos,
+   también los de «pantalla completa», se ajustan a ella. Lo que se sale, se recorta */
+.es-cv .es-box .rwl {
+  z-index: auto;
+  font-size: calc(100cqw / 28);
+}
+.es-cv .es-box .rwl .rw-stack {
+  bottom: 0;
+  left: 0;
+  max-width: 100%;
+}
+.es-cv[data-mode='edit'] .es-lalo[data-kind='reward'] {
+  outline: 1px dashed rgba(239, 233, 220, 0.45);
+  outline-offset: -1px;
+}
+.es-cv[data-mode='edit'] .es-lalo[data-kind='reward']::before {
+  content: 'Placas y vídeos se quedan dentro de esta caja';
+}
+
+/* ---------- Aviso de Power-up ---------- */
+
+.es-cv .es-box .es-lalo[data-kind='powerup'] .ovl {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: min(calc(100cqw / 28), calc(100cqh / 4.2));
+}

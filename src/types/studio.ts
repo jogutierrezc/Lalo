@@ -22,7 +22,24 @@ export const MAX_SCENES = 12;
 export const MAX_LAYERS = 40;
 export const STUDIO_VERSION = 1;
 
-export type LaloLayerType = 'alert' | 'goal' | 'chat' | 'raid';
+export type LaloLayerType =
+  | 'alert'
+  | 'goal'
+  | 'chat'
+  | 'raid'
+  // Fase 1 de «todas las capas en Studio»
+  | 'pet'
+  | 'game'
+  | 'music'
+  // Fase 2
+  | 'kofi'
+  | 'kofigoal'
+  | 'kofirecent'
+  | 'reward'
+  | 'powerup'
+  // Fase 3
+  | 'roulette'
+  | 'poll';
 export type BasicLayerType = 'text' | 'shape' | 'cam' | 'timer' | 'image';
 export type LayerType = LaloLayerType | BasicLayerType;
 export type AnimId = 'none' | 'fade' | 'up' | 'side' | 'wipe' | 'pop';
@@ -41,6 +58,16 @@ export const LAYER_TYPES: LayerTypeInfo[] = [
   { id: 'goal', name: 'Meta', w: 640, h: 120, page: { href: '#metas', label: 'Metas' } },
   { id: 'chat', name: 'Chat', w: 480, h: 360, page: { href: '#chat', label: 'Chat' } },
   { id: 'raid', name: 'Saludo de raid', w: 760, h: 210, page: { href: '#raid', label: 'Raids' } },
+  { id: 'pet', name: 'Mascota', w: 760, h: 480, page: { href: '#mascotas', label: 'Mascotas' } },
+  { id: 'game', name: 'Alerta de juego', w: 700, h: 300, page: { href: '#juego', label: 'Alertas de juego' } },
+  { id: 'music', name: 'Ahora suena', w: 560, h: 120, page: { href: '#musica', label: 'Ahora suena' } },
+  { id: 'kofi', name: 'Alerta de Ko-fi', w: 500, h: 510, page: { href: '#kofi', label: 'Ko-fi' } },
+  { id: 'kofigoal', name: 'Meta de Ko-fi', w: 560, h: 166, page: { href: '#kofi', label: 'Ko-fi' } },
+  { id: 'kofirecent', name: 'Últimos apoyos de Ko-fi', w: 420, h: 266, page: { href: '#kofi', label: 'Ko-fi' } },
+  { id: 'reward', name: 'Recompensa', w: 720, h: 405, page: { href: '#recompensas', label: 'Recompensas' } },
+  { id: 'powerup', name: 'Aviso de Power-up', w: 620, h: 110, page: { href: '#powerups', label: 'Power-ups' } },
+  { id: 'roulette', name: 'Ruleta', w: 900, h: 520, page: { href: '#ruleta', label: 'Ruleta' } },
+  { id: 'poll', name: 'Batalla', w: 1100, h: 300, page: { href: '#encuestas', label: 'Batallas' } },
   { id: 'cam', name: 'Marco de cámara', w: 520, h: 300 },
   { id: 'text', name: 'Texto', w: 560, h: 110 },
   { id: 'shape', name: 'Forma', w: 400, h: 160 },
@@ -198,7 +225,8 @@ export const DEFAULT_RANDOM: Record<'alert' | 'raid', RandomProps> = {
 };
 
 export const typeInfo = (type: LayerType): LayerTypeInfo => LAYER_TYPES.find((item) => item.id === type) || LAYER_TYPES[0];
-export const isLaloLayer = (type: LayerType): type is LaloLayerType => ['alert', 'goal', 'chat', 'raid'].includes(type);
+/** Capa de Lalo: la que tiene su propia página de ajustes en el panel. */
+export const isLaloLayer = (type: LayerType): type is LaloLayerType => Boolean(typeInfo(type).page);
 export const hasRandom = (type: LayerType): type is 'alert' | 'raid' => type === 'alert' || type === 'raid';
 
 /** Identificador corto. `random` se puede inyectar en las pruebas. */

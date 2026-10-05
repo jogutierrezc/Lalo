@@ -55,7 +55,7 @@ import { RaidSettings, RAID_FRAMES, RaidFrame, decodeRaidSettings, loadRaidSetti
 import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
 import '../styles/raid.css';
 import { PetsSettings, decodePetsSettings, loadPetsSettings, normalizePetsSettings } from '../types/pets';
-import { PetLayer, PetLayerHandle } from '../components/mascotas/PetLayer';
+import { PetLayer, PetLayerHandle, PetVoiceEvent } from '../components/mascotas/PetLayer';
 import { SAMPLE_CUES } from '../utils/petsLogic';
 import '../styles/mascotas.css';
 import { GameSettings, decodeGameSettings, loadGameSettings, normalizeGameSettings } from '../types/game';
@@ -76,7 +76,7 @@ import { normalizeMusicSettings } from '../types/music';
 import { normalizeKofiSettings } from '../types/kofi';
 import type { TwitchEvent } from '../utils/twitchEvents';
 import { loadStudioSettings, normalizeStudioSettings, sceneForWidget } from '../types/studio';
-import { SceneData, SceneHandle, SceneView } from '../components/estudio/SceneView';
+import { SceneData, SceneHandle, SceneServices, SceneView } from '../components/estudio/SceneView';
 import { loadAlertsSettings } from '../types/alerts';
 import { Spot, pickSpot, spotStyle } from '../utils/randomSpot';
 
@@ -364,8 +364,8 @@ export const Widget: React.FC = () => {
   );
   const sceneRef = useRef<SceneHandle | null>(null);
   const sceneHas = (type: string) => !!scene && scene.layers.some((layer) => layer.type === type && !layer.hidden);
-  const sceneInfoRef = useRef({ isScene, hasAlert: false });
-  sceneInfoRef.current = { isScene, hasAlert: sceneHas('alert') };
+  const sceneInfoRef = useRef({ isScene, hasAlert: false, hasPoll: false, hasReward: false });
+  sceneInfoRef.current = { isScene, hasAlert: sceneHas('alert'), hasPoll: sceneHas('poll'), hasReward: sceneHas('reward') };
 
   // Alertas: posición aleatoria en la pantalla, si el streamer la encendió
   const [alertsSettings, setAlertsSettings] = useState(loadAlertsSettings);
@@ -416,6 +416,7 @@ export const Widget: React.FC = () => {
   const handleRaid = useCallback((raid: { channel: string; login: string; viewers: number }) => {
     raidRef.current?.raid(raid.channel, raid.viewers, raid.login);
     sceneRef.current?.raid(raid.channel, raid.viewers, raid.login);
+    sceneRef.current?.signal({ kind: 'raid', channel: raid.channel, viewers: raid.viewers, login: raid.login });
     petsRef.current?.raid(raid.channel, raid.viewers);
   }, []);
   // Ruleta: fuente propia (app=roulette) o dentro de «Todo en uno». La giran los puntos del canal o
@@ -428,7 +429,8 @@ export const Widget: React.FC = () => {
       (raidRef.current?.command(message, sender) ?? false) ||
       (sceneRef.current?.raidCommand(message, sender) ?? false) ||
       (rouletteRef.current?.command(message, sender) ?? false) ||
-      (musicRef.current?.command(message, sender) ?? false),
+      (musicRef.current?.command(message, sender) ?? false) ||
+      (sceneRef.current?.signal({ kind: 'staff', message, sender }) ?? false),
     []
   );
 
@@ -449,7 +451,10 @@ export const Widget: React.FC = () => {
   const kofiParts = useMemo(() => ({ alerts: kofiAlertsOn, goal: kofiGoalOn, recent: kofiRecentOn }), [kofiAlertsOn, kofiGoalOn, kofiRecentOn]);
   const showKofi = kofiAlertsOn || kofiGoalOn || kofiRecentOn;
   const kofiRef = useRef<KofiWidgetLayerHandle | null>(null);
-  const handleKofiEvent = useCallback((payload: unknown, test: boolean) => kofiRef.current?.event(payload, test), []);
+  const handleKofiEvent = useCallback((payload: unknown, test: boolean) => {
+    kofiRef.current?.event(payload, test);
+    sceneRef.current?.signal({ kind: 'kofi', payload, test });
+  }, []);
   // Estas fuentes no hablan: la voz sale por «Voz del chat», «Todo en uno» o «Alertas de Ko-fi»
   const isQuietIntegration = appParam === 'music' || appParam === 'kofigoal' || appParam === 'kofirecent';
 
@@ -469,6 +474,7 @@ export const Widget: React.FC = () => {
       rewardsRef.current?.chat(tags, message, role);
       rouletteRef.current?.chat(tags, role);
       petsRef.current?.chat(tags, message);
+      sceneRef.current?.signal({ kind: 'chat', tags, message, role });
     },
     []
   );
@@ -530,7 +536,26 @@ export const Widget: React.FC = () => {
   const handleTwitchEvent = useCallback((event: TwitchEvent) => {
     rouletteRef.current?.event(event);
     petsRef.current?.event(event);
+    sceneRef.current?.signal({ kind: 'twitch', event });
   }, []);
+  // Una frase de la cola de voz empieza o termina: lo saben la mascota y las capas de la escena
+  const tapVoice = useCallback((event: PetVoiceEvent) => {
+    petsRef.current?.voice(event);
+    sceneRef.current?.signal({ kind: 'voice', event });
+  }, []);
+  // Lo que el widget presta a las capas de una escena de Studio
+  const queueLengthRef = useRef(0);
+  queueLengthRef.current = messageQueue.length;
+  const sceneServices = useMemo<SceneServices>(
+    () => ({
+      speak: (text, username, system, options) => enqueueManualMessage(text, username, system, options)?.id ?? null,
+      queueLength: () => queueLengthRef.current,
+      blockedWords: moderation.blockedWords,
+      blockedUsers: moderation.blockedUsers,
+      ignoredBots: moderation.ignoredBots,
+    }),
+    [enqueueManualMessage, moderation.blockedWords, moderation.blockedUsers, moderation.ignoredBots]
+  );
   // Lo que dice la mascota, con su voz si tiene una; devuelve el id para saber cuándo suena su frase
   const speakPet = useCallback(
     (text: string, options: { voiceId?: string; front?: boolean }) => enqueueManualMessage(text, 'Mascota', true, options)?.id ?? null,
@@ -756,7 +781,7 @@ export const Widget: React.FC = () => {
         if (watchdogTimer) clearTimeout(watchdogTimer);
         lastSpokenAtRef.current = Date.now();
         ownSoundIdsRef.current.delete(message.id);
-        petsRef.current?.voice({ id: message.id, phase: 'end' });
+        tapVoice({ id: message.id, phase: 'end' });
         if (skipped) {
           // Saltado por el streamer: cortar la voz y el sonido previo ya
           preSoundRef.current?.stop();
@@ -789,7 +814,7 @@ export const Widget: React.FC = () => {
         const seconds = Math.min(20, Math.max(3, message.cleanText.length * 0.065));
         setIsAudioLoading(false);
         startSpeakingAnimation(message.cleanText.length, seconds);
-        petsRef.current?.voice({ id: message.id, phase: 'start', seconds });
+        tapVoice({ id: message.id, phase: 'start', seconds });
         watchdogTimer = setTimeout(() => finalizePlayback(), seconds * 1000);
         return;
       }
@@ -881,7 +906,7 @@ export const Widget: React.FC = () => {
           setAutoplayBlocked(false);
           startSpeakingAnimation(message.cleanText.length, audio.duration / (audio.playbackRate || 1));
           // La mascota mueve la boca con el volumen de este mismo audio
-          petsRef.current?.voice({ id: message.id, phase: 'start', seconds: audio.duration / (audio.playbackRate || 1), audio, blob });
+          tapVoice({ id: message.id, phase: 'start', seconds: audio.duration / (audio.playbackRate || 1), audio, blob });
         };
 
         audio.onended = () => {
@@ -965,7 +990,7 @@ export const Widget: React.FC = () => {
             utterance.onstart = () => {
               setIsAudioLoading(false);
               startSpeakingAnimation(message.cleanText.length);
-              petsRef.current?.voice({ id: message.id, phase: 'start' });
+              tapVoice({ id: message.id, phase: 'start' });
             };
             utterance.onend = finishSpeech;
             utterance.onerror = finishSpeech;
@@ -1217,6 +1242,8 @@ export const Widget: React.FC = () => {
 
   useEffect(() => {
     const stop = listenBus((message: BusMessage) => {
+      // Las capas de una escena de Studio ven también lo que pasa por el bus (ajustes, pruebas, giros, votos)
+      sceneRef.current?.signal({ kind: 'bus', message });
       if (message.type === 'CONTROL') {
         controlRef.current({
           action: message.action,
@@ -1302,6 +1329,8 @@ export const Widget: React.FC = () => {
       if (message.type === 'REWARD_TRIGGER') {
         const reward = message.reward;
         playAlertOrCustomSound(reward.customAudioUrl, reward.soundType || 'arcade-chime', reward.customAudioVolume ?? 0.85);
+        // Una escena de Studio con capa «Recompensa» pinta el aviso dentro de su caja (en silencio: ya sonó aquí)
+        if (sceneInfoRef.current.hasReward) return;
         if (reward.screenShake && containerRef.current) {
           gsap.fromTo(
             containerRef.current,
@@ -1429,6 +1458,9 @@ export const Widget: React.FC = () => {
           }, (cel.duration || 6) * 1000);
         }
       }
+      // Una escena de Studio con capa «Batalla» la lleva esa capa: aquí no cuenta, no suena y no habla.
+      // Sin esa capa, la escena sigue mostrando la batalla con la barra de siempre
+      if (sceneInfoRef.current.hasPoll && message.type.startsWith('POLL_')) return;
       if (message.type === 'POLL_SETTINGS_UPDATE') {
         setPollSettings(message.settings);
       }
@@ -1854,6 +1886,7 @@ export const Widget: React.FC = () => {
               data={sceneData}
               demo={getURLParam('demo') === '1'}
               onSpeak={speakRaidWelcome}
+              services={sceneServices}
             />
           </div>
         </div>
@@ -1877,7 +1910,7 @@ export const Widget: React.FC = () => {
       {showRoulette && <RouletteLayer ref={rouletteRef} speak={speakRoulette} demo={getURLParam('demo') === '1'} />}
 
       {/* Overlay de Batallas & Encuestas en OBS */}
-      {(isPollsApp || (activePollState && (activePollState.isActive || Boolean(activePollState.winner)))) && (
+      {!sceneHas('poll') && (isPollsApp || (activePollState && (activePollState.isActive || Boolean(activePollState.winner)))) && (
         <div
           ref={pollsContainerRef}
           className="pointer-events-none fixed inset-x-0 bottom-8 z-40 flex items-center justify-center p-6"

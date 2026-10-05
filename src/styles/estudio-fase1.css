@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Studio · fase 1: Mascota, Alerta de juego y Ahora suena dentro de una caja.
+   Continúa la sección «2.» de estudio.css: la caja (.es-box, con
+   container-type: size) pasa a ser la «pantalla» de la capa y su tamaño de
+   letra sale del ancho y del alto de la caja, para que la pieza quepa entera.
+   Aquí no cambia el aspecto de ninguna capa: solo dónde se ancla y cuánto mide.
+   ========================================================================== */
+
+/* ---------- Mascota ----------
+   A 760 × 480 (el tamaño con el que nace la caja) 1 em son 40 px, como en la
+   fuente suelta: 19 em de ancho para personaje y bocadillo, 12 de alto para el
+   personaje más grande con su salto. --pt-w sigue en em, así que se mide contra
+   la caja. Lo que la caja recorta lo decide petClip() (fase1Logic.ts). */
+.es-cv .es-box .ptl {
+  overflow: visible;
+  font-size: min(calc(100cqw / 19), calc(100cqh / 12));
+}
+/* La esquina elegida en Mascotas es ahora la esquina de la caja */
+.es-cv .es-box .ptl .pt {
+  max-width: 100%;
+}
+.es-cv .es-box .ptl .pt[data-pos$='l'] {
+  left: 0;
+}
+.es-cv .es-box .ptl .pt[data-pos$='r'] {
+  right: 0;
+}
+/* Un personaje propio muy alto no se sale por arriba */
+.es-cv .es-box .ptl .pt-img {
+  max-height: 92cqh;
+}
+
+/* ---------- Alerta de juego ----------
+   La placa «Grieta» se centra en la caja: ni la posición ni el tamaño de sus
+   ajustes mandan aquí. Mide hasta 26 em de ancho y unos 11 de alto con un
+   título de dos líneas. */
+.es-cv .es-box .gjl {
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: visible;
+  font-size: min(calc(100cqw / 26.5), calc(100cqh / 11.4));
+}
+
+/* ---------- Ahora suena ----------
+   --f1-w y --f1-h son el ancho y el alto del diseño elegido, en em de la pieza
+   (musicFit() en fase1Logic.ts). La pieza se centra en vertical y se arrima al
+   lado de la caja que mira al borde del lienzo más cercano. */
+.es-cv .es-box .es-lalo[data-kind='music'] .itg-screen {
+  position: absolute;
+  z-index: auto;
+  overflow: visible;
+}
+.es-cv .es-box .es-lalo[data-kind='music'] .itg-ov {
+  font-size: min(calc(100cqw / var(--f1-w, 25)), calc(100cqh / var(--f1-h, 4.9)));
+}
+.es-cv .es-box .es-lalo[data-kind='music'] .itg-ov .pos {
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  transform: none;
+}
+.es-cv .es-box .es-lalo[data-kind='music'] .itg-ov .pos[data-p$='l'] {
+  justify-content: flex-start;
+}
+.es-cv .es-box .es-lalo[data-kind='music'] .itg-ov .pos[data-p$='r'] {
+  justify-content: flex-end;
+}
+.es-cv .es-box .es-lalo[data-kind='music'] .np,
+.es-cv .es-box .es-lalo[data-kind='music'] .np[data-k='linea'] {
+  max-width: 100cqw;
+}

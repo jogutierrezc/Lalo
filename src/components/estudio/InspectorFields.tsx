@@ -153,6 +153,9 @@ const TIMER_ZERO: { id: TimerAtZero; name: string }[] = [
   { id: 'hide', name: 'Desaparece' },
 ];
 
+/** Capas cuya caja de Studio registra una prueba (ver components/estudio/boxes/). */
+const TESTABLE: StudioLayer['type'][] = ['pet', 'game', 'music', 'kofi', 'kofigoal', 'kofirecent', 'reward', 'powerup', 'roulette', 'poll'];
+
 const MEDIA_KINDS: { id: MediaProps['kind']; name: string }[] = [
   { id: 'image', name: 'Imagen (también GIF o WebP animado)' },
   { id: 'video', name: 'Vídeo' },
@@ -419,6 +422,21 @@ export const TypeFields: React.FC<TypeFieldsProps> = ({ layer, onChange, onDone,
         ) : (
           <p className="cab-hint">Apagado, el aviso sale siempre en la caja de la capa.</p>
         )}
+      </div>
+    );
+  }
+
+  // Capas de Lalo que llegaron con las fases (mascota, juego, música, Ko-fi, recompensa, ruleta...):
+  // su caja registra una prueba que repite su entrada o enseña otra muestra
+  if (TESTABLE.includes(layer.type)) {
+    return (
+      <div className="st-grp">
+        <span className="cab-label">Prueba</span>
+        <button type="button" className="cab-btn2 st-btn" onClick={onTest}>
+          <Shuffle />
+          Probar
+        </button>
+        <p className="cab-hint">Repite la muestra en el lienzo. Lo que dice o hace la capa en directo se ajusta en su página.</p>
       </div>
     );
   }

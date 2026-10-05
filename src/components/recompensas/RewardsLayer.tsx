@@ -122,7 +122,7 @@ let serial = 0;
 const nextId = () => `rw-${Date.now()}-${(serial += 1)}`;
 
 /** Recompensa de ejemplo para las muestras fijas. */
-function sampleRequest(plate: PlateStyleId | null, video: RewardVideoPosition | null): RewardRequest {
+export function sampleRequest(plate: PlateStyleId | null, video: RewardVideoPosition | null): RewardRequest {
   return {
     reward: normalizeReward({
       id: 'muestra',

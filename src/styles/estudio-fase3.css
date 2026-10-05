@@ -1,0 +1,48 @@
+/* ==========================================================================
+   Studio, fase 3: la Ruleta y la Batalla dentro de la caja de una escena.
+   Sigue a la sección «2.» de estudio.css: la caja (.es-box) es la «pantalla»
+   de la capa y su letra sale del ancho y del alto de la caja, así que nada se
+   mide con la ventana ni se ancla a ella.
+   ========================================================================== */
+
+/* ---------- Ruleta ---------- */
+
+/* La capa llena la caja y centra la rueda; el resultado se despliega a su lado, dentro */
+.es-cv .es-box .rl-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.es-cv .es-box .rl-box-in {
+  flex: none;
+  width: 100%;
+}
+/* El conjunto mide 50em de ancho (rueda apartada y resultado) y 27em de alto (rueda y
+   etiqueta). Los divisores dejan un margen para la sombra y para la sacudida */
+.es-cv .es-box .ovl.rl {
+  font-size: min(calc(100cqw / 52), calc(100cqh / 30));
+}
+
+/* ---------- Batalla ---------- */
+
+/* La barra llena el ancho de la caja y queda centrada en su alto */
+.es-cv .es-box .f3-poll {
+  display: flex;
+  align-items: center;
+}
+.es-cv .es-box .f3-poll-in {
+  flex: none;
+  width: 100%;
+}
+/* La placa mide 44em de ancho y unos 11,6em de alto */
+.es-cv .es-box .f3-poll .ovl {
+  font-size: min(calc(100cqw / 44), calc(100cqh / 12));
+}
+/* La pregunta va en una línea: si no cabe se corta, y la placa no crece fuera de la caja */
+.es-cv .es-box .f3-poll .bt-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

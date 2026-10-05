@@ -75,6 +75,8 @@ interface RouletteLayerProps {
   speak: (text: string) => unknown;
   /** demo=1: la rueda se ve aunque esté cerrada, para colocar la fuente en OBS. */
   demo?: boolean;
+  /** Dentro de una caja de Studio: la ruleta llena su caja en vez de la pantalla. */
+  boxed?: boolean;
   onLog?: (message: string) => void;
 }
 
@@ -135,7 +137,7 @@ function saveOverride(override: ActivityOverride): void {
 let serial = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now()}-${(serial += 1)}`;
 
-export const RouletteLayer = forwardRef<RouletteLayerHandle, RouletteLayerProps>(({ speak, demo = false, onLog }, ref) => {
+export const RouletteLayer = forwardRef<RouletteLayerHandle, RouletteLayerProps>(({ speak, demo = false, boxed = false, onLog }, ref) => {
   const [settings, setSettings] = useState<RouletteSettings>(rouletteSettingsForWidget);
   const [override, setOverride] = useState<ActivityOverride | null>(loadOverride);
   const [leader, setLeader] = useState(false);
@@ -154,6 +156,8 @@ export const RouletteLayer = forwardRef<RouletteLayerHandle, RouletteLayerProps>
   onLogRef.current = onLog;
   const demoRef = useRef(demo);
   demoRef.current = demo;
+  const boxedRef = useRef(boxed);
+  boxedRef.current = boxed;
 
   const boxRef = useRef<HTMLDivElement | null>(null);
   const queueRef = useRef<Waiting[]>([]);
@@ -237,8 +241,9 @@ export const RouletteLayer = forwardRef<RouletteLayerHandle, RouletteLayerProps>
       if (spin.screenShake && boxRef.current && !reduced()) {
         gsap.fromTo(
           boxRef.current,
-          { x: -16, y: 12, rotate: -1.2 },
-          { x: 0, y: 0, rotate: 0, duration: 0.8, ease: 'elastic.out(1.2, 0.18)', clearProps: 'transform' }
+          // En una caja la sacudida se mide con la caja, para no salirse de ella
+          boxedRef.current ? { xPercent: -1.2, yPercent: 1.4, rotate: -0.6 } : { x: -16, y: 12, rotate: -1.2 },
+          { x: 0, y: 0, xPercent: 0, yPercent: 0, rotate: 0, duration: 0.8, ease: 'elastic.out(1.2, 0.18)', clearProps: 'transform' }
         );
       }
       say(`Salió «${winner.text}» para ${user}.`);
@@ -452,8 +457,8 @@ export const RouletteLayer = forwardRef<RouletteLayerHandle, RouletteLayerProps>
   if (!visible) return null;
 
   return (
-    <div ref={boxRef} className="pointer-events-none fixed inset-0 z-40 flex flex-col items-center justify-center p-6">
-      <div className="pointer-events-auto w-full">
+    <div ref={boxRef} className={boxed ? 'rl-box' : 'pointer-events-none fixed inset-0 z-40 flex flex-col items-center justify-center p-6'}>
+      <div className={boxed ? 'rl-box-in' : 'pointer-events-auto w-full'}>
         <RouletteOverlayView
           // Solo suena la rueda de la fuente que lleva el mando
           settings={leader ? settings : { ...settings, soundEnabled: false }}

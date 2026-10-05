@@ -13,7 +13,7 @@ import type { ZMove } from '../../utils/studioScenes';
 
 /** Tipos que aún no se pueden añadir, con el motivo en pocas palabras. */
 export const SOON: Partial<Record<LayerType, string>> = {
-  image: 'disponible pronto',
+  // Cada capa sale de esta lista cuando su caja de Studio está hecha (components/estudio/boxes/)
 };
 
 interface SidePanelProps {

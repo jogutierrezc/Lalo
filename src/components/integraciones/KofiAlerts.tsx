@@ -29,8 +29,10 @@ export interface KofiAlertItem {
   tier: string;
   /** Vacío si es privado o lo retuvo el filtro. */
   message: string;
-  /** Segundos en pantalla. */
+  /** Segundos en pantalla. `Infinity`: se queda hasta que otra la sustituya (muestra del editor de escenas). */
   hold: number;
+  /** Aparece ya colocada, sin animación de entrada. */
+  still?: boolean;
   /** Se llama cuando la alerta empieza a verse: ahí suena y habla. */
   onShow?: () => void;
 }
@@ -204,22 +206,24 @@ export const KofiAlerts = forwardRef<KofiAlertsHandle, { settings: KofiSettings 
     a.ms.textContent = item.message;
     a.msg.hidden = !item.message;
     visible.current = true;
-    if (reduced()) gsap.set(a.ka, { autoAlpha: 1, rotation: s.design === 'sello' ? -4 : 0 });
+    // Sin tiempo no hay cuenta atrás ni nada que la retire: la línea se queda entera
+    const timed = Number.isFinite(item.hold);
+    if (reduced() || item.still) gsap.set(a.ka, { autoAlpha: 1, rotation: s.design === 'sello' ? -4 : 0 });
     else {
       tl.current = gsap.timeline();
       MOTION[s.design].in(tl.current, a);
-      barTw.current = gsap.fromTo(a.bu, { scaleX: 1 }, { scaleX: 0, duration: item.hold, ease: 'none' });
     }
+    if (timed && !reduced() && !item.still) barTw.current = gsap.fromTo(a.bu, { scaleX: 1 }, { scaleX: 0, duration: item.hold, ease: 'none' });
     // En «Cinta» el mensaje largo se desliza una vez mientras dura la alerta
     if (s.design === 'cinta' && item.message && s.showMessage) {
       const over = a.msg.scrollWidth - a.msg.clientWidth;
       if (over > 2) {
-        if (reduced()) a.msg.classList.add('ell');
+        if (reduced() || !timed) a.msg.classList.add('ell');
         else marqueeTw.current = gsap.to(a.ms, { x: -over, duration: Math.max(2, item.hold - 2.4), ease: 'sine.inOut', delay: 1.2 });
       }
     }
     item.onShow?.();
-    holdTimer.current = setTimeout(() => hide(next.current), item.hold * 1000);
+    if (timed) holdTimer.current = setTimeout(() => hide(next.current), item.hold * 1000);
   };
 
   const next = useRef<() => void>(() => {});

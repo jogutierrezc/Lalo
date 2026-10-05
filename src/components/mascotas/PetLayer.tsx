@@ -79,8 +79,8 @@ interface PetLayerProps {
   demo?: boolean;
   /** Pone la frase en la cola de voz. Devuelve el id del mensaje, o null si no entró. */
   speak?: (text: string, options: { voiceId?: string; front?: boolean }) => string | null;
-  /** Mensajes que esperan en la cola de voz. */
-  queueLength?: number;
+  /** Mensajes que esperan en la cola de voz: el número, o una función que lo lee en el momento (caja de Studio). */
+  queueLength?: number | (() => number);
   blockedWords?: string[];
   blockedUsers?: string[];
   ignoredBots?: string[];
@@ -518,7 +518,8 @@ export const PetLayer = forwardRef<PetLayerHandle, PetLayerProps>(
           say(WHY[plan.why]);
           return;
         }
-        if (!cue.test && s.turn === 'calla' && live.current.queueLength > 0) {
+        const waiting = typeof live.current.queueLength === 'function' ? live.current.queueLength() : live.current.queueLength;
+        if (!cue.test && s.turn === 'calla' && waiting > 0) {
           say('Hay mensajes esperando en la cola de voz: la mascota calla.');
           return;
         }
