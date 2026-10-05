@@ -65,18 +65,109 @@
   max-height: 14em;
   object-fit: contain;
 }
-/* Con imagen de hablar, las dos están cargadas y solo se ve una */
-.pt-img[data-s='talk'] {
+/* Personaje propio: todas sus imágenes están cargadas y solo se ve una */
+.pt-img[data-s='talk'],
+.pt-img[data-s^='emo-'] {
   position: absolute;
   inset: 0;
   height: 100%;
   visibility: hidden;
 }
-.pt-fig[data-talk] .pt-img[data-s='talk'] {
+.pt-fig[data-talk]:not([data-emo]) .pt-img[data-s='talk'] {
   visibility: visible;
 }
-.pt-fig[data-talk] .pt-img[data-s='idle']:not(:only-child) {
+.pt-fig[data-talk]:not([data-emo]) .pt-img[data-s='idle']:not(:only-child) {
   visibility: hidden;
+}
+/* La capa solo pone data-emo si hay imagen para esa emoción */
+.pt-fig[data-emo] .pt-img[data-s='idle'] {
+  visibility: hidden;
+}
+.pt-fig[data-emo='feliz'] .pt-img[data-s='emo-feliz'],
+.pt-fig[data-emo='emocionado'] .pt-img[data-s='emo-emocionado'],
+.pt-fig[data-emo='triste'] .pt-img[data-s='emo-triste'],
+.pt-fig[data-emo='enojado'] .pt-img[data-s='emo-enojado'],
+.pt-fig[data-emo='sorprendido'] .pt-img[data-s='emo-sorprendido'] {
+  visibility: visible;
+}
+
+/* ---------- Personajes de Lalo: tinta gruesa, color plano, una sombra y una luz ---------- */
+.pt-svg {
+  --pt-c: #ffb347;
+  --pt-ink: #1d1a3a;
+  --pt-paper: #ffffff;
+  --pt-blush: #ff8fa3;
+  --pt-screen: #151d38;
+  --pt-glow: #7df9ff;
+  display: block;
+  overflow: visible;
+}
+.pt-svg .o {
+  stroke: var(--pt-ink);
+  stroke-width: 5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.pt-svg .b {
+  fill: var(--pt-c);
+}
+.pt-svg .bs {
+  fill: color-mix(in srgb, var(--pt-c) 74%, var(--pt-ink));
+}
+.pt-svg .bl {
+  fill: color-mix(in srgb, var(--pt-c) 45%, var(--pt-paper));
+}
+.pt-svg .k {
+  fill: var(--pt-ink);
+}
+.pt-svg .w {
+  fill: var(--pt-paper);
+}
+.pt-svg .blush {
+  fill: var(--pt-blush);
+  opacity: 0.75;
+}
+.pt-svg .scr {
+  fill: var(--pt-screen);
+}
+.pt-svg .gl {
+  fill: var(--pt-glow);
+}
+.pt-svg .gls {
+  fill: none;
+  stroke: var(--pt-glow);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pt-svg .ln {
+  fill: none;
+  stroke: var(--pt-ink);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.pt-svg .t-o,
+.pt-svg .t-b,
+.pt-svg .t-s {
+  fill: none;
+  stroke-linecap: round;
+}
+.pt-svg .t-o {
+  stroke: var(--pt-ink);
+  stroke-width: 18;
+}
+.pt-svg .t-b {
+  stroke: var(--pt-c);
+  stroke-width: 8;
+}
+.pt-svg .t-s {
+  stroke: color-mix(in srgb, var(--pt-c) 74%, var(--pt-ink));
+  stroke-width: 8;
+}
+.pt-svg .sh {
+  fill: var(--pt-ink);
+  opacity: 0.28;
 }
 
 /* ---------- Texto ---------- */
@@ -251,6 +342,26 @@
 /* En la galería solo se ve la imagen de reposo */
 .pt-gal .pt-img[data-s='talk'] {
   display: none;
+}
+
+.pt-emo {
+  display: grid;
+  gap: 14px;
+}
+.pt-emo summary {
+  display: inline-flex;
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+}
+.pt-emo summary::-webkit-details-marker {
+  display: none;
+}
+.pt-emo[open] summary {
+  margin-bottom: 12px;
+}
+.pt-emo[open] > * + * {
+  margin-top: 12px;
 }
 
 .pt-sw {

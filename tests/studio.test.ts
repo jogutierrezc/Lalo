@@ -132,6 +132,15 @@ describe('studio: modelo', () => {
     expect([layer.opacity, layer.hidden, layer.locked, layer.enter, layer.x, layer.y]).toEqual([60, true, true, 'pop', 10, 20]);
   });
 
+  it('una capa de imagen o vídeo recuerda el archivo subido solo si tiene dirección', () => {
+    const media = { url: 'https://cdn.lalo.test/intro.webm', kind: 'video', name: 'intro.webm', mediaId: 'abc-123', loop: false, muted: false };
+    expect(normalizeLayer({ type: 'image', media })?.media).toEqual({ ...media, fit: 'contain' });
+    // Sin dirección válida no queda ni el nombre ni el archivo
+    const empty = normalizeLayer({ type: 'image', media: { ...media, url: 'data:video/webm;base64,AAAA' } })?.media;
+    expect(empty).toMatchObject({ url: '', name: '', mediaId: '' });
+    expect(normalizeLayer({ type: 'image', media: { ...media, mediaId: '../otro' } })?.media?.mediaId).toBe('');
+  });
+
   it('solo acepta direcciones http(s) para imagen y vídeo', () => {
     expect(cleanMediaUrl('https://cdn.lalo.test/a b.png')).toBe('');
     expect(cleanMediaUrl('javascript:alert(1)')).toBe('');

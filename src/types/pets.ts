@@ -13,7 +13,9 @@
 import { queueCloudPush } from '../lib/cloudConfig';
 import { decodeBase64Url, encodeBase64Url } from '../utils/appearance';
 
-export type PetKind = 'chispa' | 'bit' | 'miso' | 'custom';
+export type PetKind = 'chispa' | 'eco' | 'bit' | 'miso' | 'axo' | 'custom';
+/** Cara que pone la mascota mientras habla, según la emoción de la frase. */
+export type PetEmotion = 'neutral' | 'feliz' | 'emocionado' | 'triste' | 'enojado' | 'sorprendido';
 export type PetPos = 'bl' | 'br' | 'tl' | 'tr';
 export type PetStay = 'always' | 'talk';
 export type PetEnter = 'asoma' | 'salta' | 'desliza' | 'aparece';
@@ -26,13 +28,24 @@ export type PetReply = 'frases' | 'ia';
 export type PetBrain = 'frases' | 'ia';
 export type PetProvider = 'gemini' | 'openai' | 'anthropic';
 
-/** Personajes de Lalo. Son figuras de muestra: el arte final se dibuja aparte. */
-export const PET_KINDS: { id: Exclude<PetKind, 'custom'>; name: string }[] = [
-  { id: 'chispa', name: 'Chispa' },
-  { id: 'bit', name: 'Bit' },
-  { id: 'miso', name: 'Miso' },
+/** Personajes de Lalo, con el color con el que se presentan. El dibujo vive en components/mascotas/petArt.ts. */
+export const PET_KINDS: { id: Exclude<PetKind, 'custom'>; name: string; color: string; about: string }[] = [
+  { id: 'chispa', name: 'Chispa', color: '#ffb347', about: 'Una llamita con mucha energía' },
+  { id: 'eco', name: 'Eco', color: '#6cc7ff', about: 'Un bocadillo con patas: la voz del chat' },
+  { id: 'bit', name: 'Bit', color: '#7fe6a9', about: 'Un robot con cara de monitor' },
+  { id: 'miso', name: 'Miso', color: '#b995ff', about: 'Un gato con cascos de streamer' },
+  { id: 'axo', name: 'Axo', color: '#ff9fb0', about: 'Un ajolote tranquilo y sonriente' },
 ];
-export const PET_COLORS = ['#ffb347', '#7fe6a9', '#b995ff', '#ff8a80', '#6cc7ff'] as const;
+export const PET_COLORS = ['#ffb347', '#7fe6a9', '#b995ff', '#ff9fb0', '#6cc7ff', '#f4f1ea'] as const;
+
+/** Emociones con cara propia y la etiqueta de la voz que las despierta. `neutral` es la cara de siempre. */
+export const PET_EMOTIONS: { id: Exclude<PetEmotion, 'neutral'>; name: string; tag: string }[] = [
+  { id: 'feliz', name: 'Feliz', tag: '[feliz]' },
+  { id: 'emocionado', name: 'Emocionado', tag: '[emocionado]' },
+  { id: 'triste', name: 'Triste', tag: '[triste]' },
+  { id: 'enojado', name: 'Enojado', tag: '[enojado]' },
+  { id: 'sorprendido', name: 'Sorprendido', tag: '[sorprendido]' },
+];
 
 export const PET_POSITIONS: { id: PetPos; name: string }[] = [
   { id: 'bl', name: 'Abajo izq.' },
@@ -105,6 +118,8 @@ export interface PetsSettings {
   /** Personaje propio: imagen en reposo y, opcional, hablando (puede ser un GIF). */
   idleImage: PetImage | null;
   talkImage: PetImage | null;
+  /** Personaje propio: una imagen por emoción, todas opcionales. Sin ella se usa la de reposo o la de hablar. */
+  emotionImages: Partial<Record<Exclude<PetEmotion, 'neutral'>, PetImage>>;
   name: string;
   /** Voz del catálogo con la que habla. Vacío: la misma que la Voz del chat. */
   voiceId: string;
@@ -157,11 +172,11 @@ export const DEFAULT_PET_PERSONALITY =
   'Eres {nombre}, la mascota del canal. Hablas con cariño, celebras todo y animas al chat. Frases cortas, sin palabrotas.';
 
 export const DEFAULT_PET_TRIGGERS: Record<PetTriggerId, PetTrigger> = {
-  points: { on: true, reply: 'frases', cooldownSec: 10, lines: ['¡{user} canjeó {canje}! Así me gusta.', 'Atención, chat: {user} gastó {costo} puntos en {canje}.'] },
-  bits: { on: true, reply: 'frases', cooldownSec: 10, lines: ['¡{bits} bits de {user}! Me brillan los ojos.', '{user} acaba de soltar {bits} bits. Gracias, de verdad.'] },
-  powerup: { on: true, reply: 'frases', cooldownSec: 10, lines: ['{user} activó {canje}. ¡Que empiece el caos!'] },
-  mention: { on: true, reply: 'frases', cooldownSec: 20, lines: ['Aquí estoy, {user}. ¿Qué necesitas?', 'Me han llamado. Hola, {user}.'] },
-  raid: { on: true, reply: 'frases', cooldownSec: 0, lines: ['¡Llega {user} con {personas} personas! Pasen, pasen, hay sitio.'] },
+  points: { on: true, reply: 'frases', cooldownSec: 10, lines: ['[feliz] ¡{user} canjeó {canje}! Así me gusta.', 'Atención, chat: {user} gastó {costo} puntos en {canje}.'] },
+  bits: { on: true, reply: 'frases', cooldownSec: 10, lines: ['[emocionado] ¡{bits} bits de {user}! Me brillan los ojos.', '[feliz] {user} acaba de soltar {bits} bits. Gracias, de verdad.'] },
+  powerup: { on: true, reply: 'frases', cooldownSec: 10, lines: ['[emocionado] {user} activó {canje}. ¡Que empiece el caos!'] },
+  mention: { on: true, reply: 'frases', cooldownSec: 20, lines: ['Aquí estoy, {user}. ¿Qué necesitas?', '[sorprendido] Me han llamado. Hola, {user}.'] },
+  raid: { on: true, reply: 'frases', cooldownSec: 0, lines: ['[emocionado] ¡Llega {user} con {personas} personas! Pasen, pasen, hay sitio.'] },
   quiet: { on: false, reply: 'frases', cooldownSec: 300, lines: ['¿Hola? ¿Sigue alguien por ahí?', 'Qué silencio. Yo puedo esperar, tengo todo el directo.'] },
 };
 
@@ -172,6 +187,7 @@ export const DEFAULT_PETS_SETTINGS: PetsSettings = {
   color: PET_COLORS[0],
   idleImage: null,
   talkImage: null,
+  emotionImages: {},
   name: 'Chispa',
   voiceId: '',
   pos: 'bl',
@@ -250,6 +266,14 @@ export function normalizePetsSettings(raw: unknown): PetsSettings {
   });
   const idleImage = normalizeImage(src.idleImage);
   const kind = src.kind === 'custom' ? 'custom' : oneOf(src.kind, PET_KINDS, d.kind);
+  const rawEmotions = isObject(src.emotionImages) ? src.emotionImages : {};
+  const emotionImages: PetsSettings['emotionImages'] = {};
+  if (idleImage) {
+    PET_EMOTIONS.forEach(({ id }) => {
+      const image = normalizeImage(rawEmotions[id]);
+      if (image) emotionImages[id] = image;
+    });
+  }
   return {
     enabled: bool(src.enabled, d.enabled),
     inAll: bool(src.inAll, d.inAll),
@@ -258,6 +282,7 @@ export function normalizePetsSettings(raw: unknown): PetsSettings {
     color: typeof src.color === 'string' && /^#[0-9a-f]{6}$/i.test(src.color) ? src.color.toLowerCase() : d.color,
     idleImage,
     talkImage: idleImage ? normalizeImage(src.talkImage) : null,
+    emotionImages,
     name: text(src.name, PET_LIMITS.name) || d.name,
     voiceId: typeof src.voiceId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(src.voiceId) ? src.voiceId : '',
     pos: oneOf(src.pos, PET_POSITIONS, d.pos),
@@ -311,8 +336,9 @@ export function savePetsSettings(settings: PetsSettings): void {
 export function encodePetsSettings(settings: PetsSettings): string {
   const travels = (image: PetImage | null) => (image && !/^(data:|blob:)/i.test(image.url) ? image : null);
   const idleImage = travels(settings.idleImage);
+  const emotionImages = Object.fromEntries(Object.entries(settings.emotionImages).filter(([, image]) => idleImage && travels(image ?? null)));
   return encodeBase64Url(
-    JSON.stringify({ ...settings, idleImage, talkImage: idleImage ? travels(settings.talkImage) : null })
+    JSON.stringify({ ...settings, idleImage, talkImage: idleImage ? travels(settings.talkImage) : null, emotionImages })
   );
 }
 

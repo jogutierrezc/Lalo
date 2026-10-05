@@ -27,6 +27,7 @@ import { releaseMedia, resolveMediaUrl } from '../lib/mediaRef';
 import {
   PET_BUBBLES,
   PET_COLORS,
+  PET_EMOTIONS,
   PET_ENTERS,
   PET_FXS,
   PET_IDLES,
@@ -36,6 +37,7 @@ import {
   PET_STAYS,
   PET_TRIGGERS,
   PET_TURNS,
+  PetEmotion,
   PetImage,
   PetTriggerId,
   encodePetsSettings,
@@ -134,9 +136,16 @@ export const PetsStudio: React.FC = () => {
     }
     // Sin imagen de reposo no hay personaje propio: se vuelve a uno de Lalo
     if (settings.talkImage?.mediaId) release(settings.talkImage.mediaId);
-    updateSettings({ idleImage: null, talkImage: null, kind: settings.kind === 'custom' ? 'chispa' : settings.kind });
+    Object.values(settings.emotionImages).forEach((image) => image?.mediaId && release(image.mediaId));
+    updateSettings({ idleImage: null, talkImage: null, emotionImages: {}, kind: settings.kind === 'custom' ? 'chispa' : settings.kind });
   };
   const setTalkImage = (next: MediaValue | null) => updateSettings({ talkImage: next?.url ? toImage(next) : null });
+  const setEmotionImage = (emotion: Exclude<PetEmotion, 'neutral'>, next: MediaValue | null) => {
+    const images = { ...settings.emotionImages };
+    if (next?.url) images[emotion] = toImage(next);
+    else delete images[emotion];
+    updateSettings({ emotionImages: images });
+  };
 
   // ---------- URL de OBS ----------
   const copyUrl = (withDemo: boolean) => {
@@ -203,13 +212,15 @@ export const PetsStudio: React.FC = () => {
                             key={item.id}
                             type="button"
                             aria-pressed={settings.kind === item.id}
+                            title={item.about}
                             onClick={() => {
-                              // El nombre sigue al personaje mientras sea el de serie
-                              const stock = PET_KINDS.some((kind) => kind.name === settings.name);
-                              updateSettings({ kind: item.id, ...(stock ? { name: item.name } : {}) });
+                              // El nombre y el color siguen al personaje mientras sean los de serie
+                              const stockName = PET_KINDS.some((kind) => kind.name === settings.name);
+                              const stockColor = PET_KINDS.some((kind) => kind.color === clean.color);
+                              updateSettings({ kind: item.id, ...(stockName ? { name: item.name } : {}), ...(stockColor ? { color: item.color } : {}) });
                             }}
                           >
-                            <PetFigure kind={item.id} color={clean.color} />
+                            <PetFigure kind={item.id} color={settings.kind === item.id ? clean.color : item.color} />
                             {item.name}
                           </button>
                         ))}
@@ -220,7 +231,10 @@ export const PetsStudio: React.FC = () => {
                           </button>
                         )}
                       </div>
-                      <span className="cab-hint">Son figuras de muestra, con ojos y boca animados. El arte final de la galería se dibuja aparte.</span>
+                      <span className="cab-hint">
+                        {PET_KINDS.find((item) => item.id === settings.kind)?.about ?? 'Tu propio personaje'}. Parpadean, mueven la boca con la voz y
+                        cambian de cara con la emoción de la frase.
+                      </span>
                     </div>
                     <div className="cab-field">
                       <span className="cab-label" id={`${uid}-color`}>
@@ -238,7 +252,7 @@ export const PetsStudio: React.FC = () => {
                           />
                         ))}
                       </div>
-                      <span className="cab-hint">Tiñe a los personajes de Lalo, las chispas y la etiqueta del rótulo.</span>
+                      <span className="cab-hint">Tiñe al personaje de Lalo, las chispas y la etiqueta del rótulo. La sombra y la luz se ajustan solas.</span>
                     </div>
                   </section>
 
@@ -271,6 +285,28 @@ export const PetsStudio: React.FC = () => {
                           onRelease={release}
                         />
                       </Field>
+                    )}
+                    {settings.idleImage && (
+                      <details className="pt-emo">
+                        <summary className="cab-btn2 cab-btn-sm">Una imagen por emoción (opcional)</summary>
+                        <p className="cab-hint">
+                          Si una frase lleva una emoción y tu personaje tiene imagen para ella, se enseña mientras habla. Sin imagen se usan la de reposo y
+                          la de hablar.
+                        </p>
+                        {PET_EMOTIONS.map((item) => (
+                          <Field key={item.id} label={item.name}>
+                            <MediaField
+                              id={`${uid}-emo-${item.id}`}
+                              accept={IMAGE_TYPES}
+                              value={toValue(settings.emotionImages[item.id] ?? null)}
+                              cloudOn={cloudOn}
+                              emptyHint={`Sin imagen para ${item.name.toLowerCase()}.`}
+                              onChange={(next) => setEmotionImage(item.id, next)}
+                              onRelease={release}
+                            />
+                          </Field>
+                        ))}
+                      </details>
                     )}
                   </section>
 
@@ -353,7 +389,7 @@ export const PetsStudio: React.FC = () => {
                                 <Field
                                   label="Frases"
                                   htmlFor={`${uid}-lines-${item.id}`}
-                                  hint={`Una por línea; la mascota elige una al azar.${item.vars ? ` Variables: ${item.vars} {nombre}` : ''}`}
+                                  hint={`Una por línea; la mascota elige una al azar. Con [feliz], [triste], [emocionado], [enojado] o [sorprendido] al principio, cambia la voz y la cara.${item.vars ? ` Variables: ${item.vars} {nombre}` : ''}`}
                                 >
                                   <textarea
                                     id={`${uid}-lines-${item.id}`}
@@ -535,6 +571,23 @@ export const PetsStudio: React.FC = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="cab-field">
+              <span className="cab-label">Cara según la emoción</span>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => layerRef.current?.emotion('neutral')}>
+                  Neutral
+                </button>
+                {PET_EMOTIONS.map((item) => (
+                  <button key={item.id} type="button" className="cab-btn2 cab-btn-sm" onClick={() => layerRef.current?.emotion(item.id)}>
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+              <span className="cab-hint">
+                Empieza una frase con {PET_EMOTIONS.map((item) => item.tag).join(', ')} y la mascota la dice con esa voz y esa cara.
+              </span>
             </div>
 
             <div className="flex flex-wrap gap-2">

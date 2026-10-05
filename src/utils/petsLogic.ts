@@ -7,8 +7,33 @@
  */
 
 import { BUILTIN_POWERUPS } from '../types/powerups';
-import type { PetTriggerId, PetsSettings } from '../types/pets';
+import type { PetEmotion, PetTriggerId, PetsSettings } from '../types/pets';
+import { extractPrimaryEmotion } from './emotionMapper';
 import type { TwitchEvent } from './twitchEvents';
+
+// ---------- Emoción de la frase ----------
+
+/** Etiqueta de la voz (la canónica, en inglés) → cara de la mascota. Las que no están aquí dejan la cara neutral. */
+const EMOTION_OF_TAG: Record<string, PetEmotion> = {
+  happy: 'feliz',
+  laughing: 'feliz',
+  singing: 'feliz',
+  excited: 'emocionado',
+  shouting: 'emocionado',
+  sad: 'triste',
+  crying: 'triste',
+  sigh: 'triste',
+  angry: 'enojado',
+  surprised: 'sorprendido',
+  scared: 'sorprendido',
+  nervous: 'sorprendido',
+};
+
+/** Cara que le toca a una frase según su etiqueta de emoción ([feliz], [excited]...). Sin etiqueta, neutral. */
+export function petEmotionOf(text: string): PetEmotion {
+  const tag = extractPrimaryEmotion(text)?.tag ?? '';
+  return EMOTION_OF_TAG[tag] ?? 'neutral';
+}
 
 export type CueValues = Partial<Record<'user' | 'canje' | 'costo' | 'bits' | 'mensaje' | 'personas', string | number>>;
 

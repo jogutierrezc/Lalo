@@ -107,6 +107,10 @@ export interface MediaProps {
   fit: 'contain' | 'cover';
   loop: boolean;
   muted: boolean;
+  /** Nombre del archivo subido, para enseñarlo en el inspector. Vacío si es una dirección pegada. */
+  name: string;
+  /** Archivo del almacén de la cuenta, para liberarlo al cambiarlo o quitarlo. */
+  mediaId: string;
 }
 
 /** Posición aleatoria: la caja de la capa es la zona y esto, el tamaño del aviso. */
@@ -187,7 +191,7 @@ export const DEFAULT_TIMER: TimerProps = {
   color: '#efe9dc',
   plate: true,
 };
-export const DEFAULT_MEDIA: MediaProps = { url: '', kind: 'image', fit: 'contain', loop: true, muted: true };
+export const DEFAULT_MEDIA: MediaProps = { url: '', kind: 'image', fit: 'contain', loop: true, muted: true, name: '', mediaId: '' };
 export const DEFAULT_RANDOM: Record<'alert' | 'raid', RandomProps> = {
   alert: { enabled: false, w: 620, h: 150 },
   raid: { enabled: false, w: 760, h: 210 },
@@ -417,6 +421,9 @@ export function normalizeLayer(raw: unknown): StudioLayer | null {
       fit: oneOf(m.fit, ['contain', 'cover'] as const, DEFAULT_MEDIA.fit),
       loop: bool(m.loop, DEFAULT_MEDIA.loop),
       muted: bool(m.muted, DEFAULT_MEDIA.muted),
+      // Sin dirección no hay archivo del que acordarse
+      name: url ? str(m.name, 120, '') : '',
+      mediaId: url && typeof m.mediaId === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(m.mediaId) ? m.mediaId : '',
     };
   }
   if (hasRandom(kind)) {

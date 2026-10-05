@@ -2,8 +2,8 @@
  * src/components/estudio/InspectorFields.tsx
  *
  * Campos del inspector de Studio y los ajustes propios de cada tipo de capa:
- * texto, forma, marco de cámara, temporizador y la posición aleatoria de
- * alertas y saludo de raid.
+ * texto, forma, marco de cámara, temporizador, imagen o vídeo y la posición
+ * aleatoria de alertas y saludo de raid.
  *
  * Cada campo avisa con una etiqueta de qué está cambiando: mientras se escribe
  * un número o se arrastra un color, todo cuenta como un solo paso de deshacer.
@@ -12,9 +12,16 @@
 import React, { useId, useState } from 'react';
 import { Shuffle } from 'lucide-react';
 import { Range, Toggle } from '../studio/StudioKit';
+import { MediaField, MediaValue } from '../recompensas/MediaField';
+import { useCloudSession } from '../../hooks/useCloudSession';
+import { releaseMedia } from '../../lib/mediaRef';
 import { CHAT_FONTS, ChatFont } from '../../types/chat';
 import {
   DEFAULT_CAM,
+  DEFAULT_MEDIA,
+  MediaProps,
+  cleanMediaUrl,
+  mediaKindOf,
   DEFAULT_RANDOM,
   DEFAULT_SHAPE,
   DEFAULT_TEXT,
@@ -146,6 +153,117 @@ const TIMER_ZERO: { id: TimerAtZero; name: string }[] = [
   { id: 'hide', name: 'Desaparece' },
 ];
 
+const MEDIA_KINDS: { id: MediaProps['kind']; name: string }[] = [
+  { id: 'image', name: 'Imagen (también GIF o WebP animado)' },
+  { id: 'video', name: 'Vídeo' },
+];
+const MEDIA_FITS: { id: MediaProps['fit']; name: string }[] = [
+  { id: 'contain', name: 'Entera, sin recortar' },
+  { id: 'cover', name: 'Rellena la caja, recortando' },
+];
+const MEDIA_TYPES = 'image/png,image/gif,image/webp,image/svg+xml,video/webm,video/mp4';
+
+/**
+ * Imagen o vídeo de una escena. El archivo tiene que estar en una dirección
+ * pública para que OBS lo cargue: con cuenta se sube al almacén; sin ella, o si
+ * ya está en otro sitio, se pega su dirección.
+ */
+const MediaFields: React.FC<{ layer: StudioLayer; onChange: LayerChange; onDone: () => void }> = ({ layer, onChange, onDone }) => {
+  const uid = useId();
+  const cloud = useCloudSession();
+  const cloudOn = cloud.enabled && cloud.profile?.status === 'active';
+  const m = layer.media || DEFAULT_MEDIA;
+  const [draft, setDraft] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const set = (patch: Partial<MediaProps>, tag?: string) => onChange({ media: { ...m, ...patch } }, tag);
+
+  const fromUpload = (next: MediaValue | null, mime?: string) => {
+    setNote(null);
+    if (!next) {
+      set({ url: '', name: '', mediaId: '' });
+      return;
+    }
+    const url = cleanMediaUrl(next.url);
+    if (!url) {
+      // El almacén no respondió y el archivo se quedó en este navegador: OBS no podría cargarlo
+      setNote('El archivo no llegó a la nube, así que OBS no podría cargarlo. Prueba otra vez o pega la dirección de un archivo ya publicado.');
+      return;
+    }
+    set({ url, name: next.name ?? '', mediaId: next.mediaId ?? '', kind: mime?.startsWith('video/') ? 'video' : mime ? 'image' : mediaKindOf(url) });
+  };
+
+  const fromAddress = () => {
+    if (draft === null) return;
+    const typed = draft.trim();
+    setDraft(null);
+    if (typed === m.url) return;
+    const url = cleanMediaUrl(typed);
+    if (typed && !url) {
+      setNote('Esa dirección no vale: tiene que empezar por https:// y no llevar espacios.');
+      return;
+    }
+    setNote(null);
+    // Una dirección pegada sustituye al archivo subido, que deja de usarse aquí
+    if (m.mediaId) void releaseMedia(m.mediaId);
+    set({ url, name: '', mediaId: '', kind: mediaKindOf(url) });
+    onDone();
+  };
+
+  return (
+    <div className="st-grp">
+      <span className="cab-label">Imagen o vídeo</span>
+      {cloudOn ? (
+        <MediaField
+          id={`${uid}-file`}
+          accept={MEDIA_TYPES}
+          value={{ url: m.url || undefined, name: m.name || (m.url ? 'archivo enlazado' : undefined), mediaId: m.mediaId || undefined }}
+          cloudOn
+          emptyHint="Sube un PNG, GIF, WebP, SVG, WebM o MP4."
+          onChange={fromUpload}
+          onRelease={(mediaId) => void releaseMedia(mediaId)}
+        />
+      ) : (
+        <p className="cab-hint">Con una cuenta en la nube puedes subir el archivo desde aquí. Sin ella, pega la dirección de un archivo ya publicado.</p>
+      )}
+      <div className="st-fld">
+        <label htmlFor={`${uid}-url`}>{cloudOn ? 'O pega una dirección' : 'Dirección del archivo'}</label>
+        <input
+          id={`${uid}-url`}
+          className="cab-inp st-inp"
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          autoComplete="off"
+          placeholder="https://..."
+          maxLength={600}
+          value={draft ?? (m.mediaId ? '' : m.url)}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={fromAddress}
+          onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+        />
+      </div>
+      {note && (
+        <p className="cab-error" role="alert">
+          {note}
+        </p>
+      )}
+      <SelectField label="Qué es" value={m.kind} options={MEDIA_KINDS} onChange={(kind) => set({ kind })} />
+      <SelectField label="Cómo encaja" value={m.fit} options={MEDIA_FITS} onChange={(fit) => set({ fit })} />
+      {m.kind === 'video' && (
+        <>
+          <Toggle label="Repetir sin parar" checked={m.loop} onChange={(loop) => set({ loop })} />
+          <Toggle label="Sin sonido" checked={m.muted} onChange={(muted) => set({ muted })} />
+        </>
+      )}
+      <p className="cab-hint">
+        {m.kind === 'video'
+          ? 'El vídeo arranca solo cuando OBS carga la escena; aquí se ve siempre sin sonido. Para fondo transparente usa WebM con canal alfa.'
+          : 'Un GIF o un WebP animado se mueven solos, también en OBS. Con fondo transparente se integran mejor sobre el directo.'}
+      </p>
+    </div>
+  );
+};
+
 interface TypeFieldsProps {
   layer: StudioLayer;
   onChange: LayerChange;
@@ -273,6 +391,8 @@ export const TypeFields: React.FC<TypeFieldsProps> = ({ layer, onChange, onDone,
       </div>
     );
   }
+
+  if (layer.type === 'image') return <MediaFields layer={layer} onChange={onChange} onDone={onDone} />;
 
   if (hasRandom(layer.type)) {
     const r = layer.random || DEFAULT_RANDOM[layer.type];

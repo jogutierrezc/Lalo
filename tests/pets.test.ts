@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_PETS_SETTINGS,
   DEFAULT_PET_COMMAND,
+  PET_EMOTIONS,
+  PET_KINDS,
   PET_LIMITS,
+  type PetEmotion,
   decodePetsSettings,
   encodePetsSettings,
   normalizePetCommand,
@@ -16,12 +19,14 @@ import {
   cueFromEvent,
   envelopeAt,
   fillLine,
+  petEmotionOf,
   pickLine,
   planCue,
   quietDue,
   speakSeconds,
   volumeEnvelope,
 } from '../src/utils/petsLogic';
+import { petFaceMarkup, petMarkup } from '../src/components/mascotas/petArt';
 import { parseTwitchEvent } from '../src/utils/twitchEvents';
 import { CONFIG_MODULES } from '../src/lib/cloudTypes';
 import { MODULE_STORAGE_KEYS } from '../src/lib/cloudConfig';
@@ -174,7 +179,8 @@ describe('qué dice ante un activador', () => {
 
   it('lee una frase escrita con los datos del evento', () => {
     const plan = planCue({ trigger: 'points', values: { user: 'pau', canje: 'Hidrátate', costo: 300 } }, settings(), { now: 1000, random });
-    expect(plan).toEqual({ ok: true, text: '¡pau canjeó Hidrátate! Así me gusta.' });
+    // La etiqueta de emoción viaja con la frase: es para la voz y para la cara
+    expect(plan).toEqual({ ok: true, text: '[feliz] ¡pau canjeó Hidrátate! Así me gusta.' });
   });
 
   it('calla si está apagada, si el activador está apagado o en espera', () => {
@@ -238,6 +244,79 @@ describe('eventos del canal de Twitch', () => {
     // Un Power-up personalizado llega además como gasto de Bits: ese aviso no cuenta dos veces
     const spend = parseTwitchEvent('bits', { user: 'Dani', type: 'custom_power_up', bits: 50 })!;
     expect(cueFromEvent(spend, DEFAULT_PETS_SETTINGS)).toBeNull();
+  });
+});
+
+describe('personajes y emociones', () => {
+  const kinds = PET_KINDS.map((item) => item.id);
+  const emotions: PetEmotion[] = ['neutral', ...PET_EMOTIONS.map((item) => item.id)];
+
+  it('hay cinco personajes de Lalo y los tres primeros conservan su nombre', () => {
+    expect(kinds).toEqual(['chispa', 'eco', 'bit', 'miso', 'axo']);
+    kinds.forEach((kind) => expect(normalizePetsSettings({ kind }).kind).toBe(kind));
+  });
+
+  it('cada personaje tiene ojos y boca en todas las emociones, y nada que se ejecute', () => {
+    for (const kind of kinds) {
+      const faces = new Set<string>();
+      for (const emotion of emotions) {
+        const svg = petMarkup(kind, emotion);
+        expect(svg).toContain('data-p="face"');
+        expect(svg).toContain('class="pt-e"');
+        expect(svg).toContain('class="pt-m"');
+        expect(svg).not.toMatch(/<script|on\w+=|javascript:|NaN|undefined/i);
+        faces.add(petFaceMarkup(kind, emotion));
+      }
+      // Seis caras distintas
+      expect(faces.size).toBe(emotions.length);
+    }
+  });
+
+  it('la etiqueta de la frase decide la cara, en español o en inglés', () => {
+    expect(petEmotionOf('[feliz] ¡Gracias!')).toBe('feliz');
+    expect(petEmotionOf('[happy] ¡Gracias!')).toBe('feliz');
+    expect(petEmotionOf('[excited] Victoria')).toBe('emocionado');
+    expect(petEmotionOf('[triste] Derrota')).toBe('triste');
+    expect(petEmotionOf('[enojado] Otra vez')).toBe('enojado');
+    expect(petEmotionOf('[sorprendido] ¿Quién llama?')).toBe('sorprendido');
+  });
+
+  it('sin etiqueta, o con una sin cara propia, la cara es la neutral', () => {
+    expect(petEmotionOf('Hola, chat')).toBe('neutral');
+    expect(petEmotionOf('[susurro] no hagáis ruido')).toBe('neutral');
+    expect(petEmotionOf('[no existe] hola')).toBe('neutral');
+    expect(petEmotionOf('')).toBe('neutral');
+  });
+
+  it('todas las frases de serie llevan una emoción que la mascota sabe poner, o ninguna', () => {
+    Object.values(DEFAULT_PETS_SETTINGS.triggers).forEach((trigger) => {
+      trigger.lines.forEach((line) => {
+        if (line.includes('[')) expect(petEmotionOf(line)).not.toBe('neutral');
+      });
+    });
+  });
+
+  it('las imágenes por emoción solo valen con personaje propio y con direcciones de imagen', () => {
+    const image = { url: 'https://cdn.example/feliz.png', name: 'feliz.png', mediaId: 'm2' };
+    expect(normalizePetsSettings({ emotionImages: { feliz: image } }).emotionImages).toEqual({});
+    const own = normalizePetsSettings({
+      kind: 'custom',
+      idleImage: { url: 'https://cdn.example/a.png', name: 'a.png' },
+      emotionImages: { feliz: image, triste: { url: 'javascript:alert(1)' }, aburrido: image },
+    });
+    expect(own.emotionImages).toEqual({ feliz: image });
+  });
+
+  it('las imágenes por emoción guardadas solo en este navegador no viajan por la URL', () => {
+    const own = settings({
+      kind: 'custom',
+      idleImage: { url: 'https://cdn.example/a.png', name: 'a.png', mediaId: 'm1' },
+      emotionImages: {
+        feliz: { url: 'https://cdn.example/feliz.png', name: 'feliz.png', mediaId: 'm2' },
+        triste: { url: 'data:image/png;base64,AAAA', name: 'triste.png', mediaId: '' },
+      },
+    });
+    expect(Object.keys(decodePetsSettings(encodePetsSettings(own))?.emotionImages ?? {})).toEqual(['feliz']);
   });
 });
 
