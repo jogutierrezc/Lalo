@@ -229,8 +229,13 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       if (seenIdsRef.current.includes(id)) return;
       seenIdsRef.current = [...seenIdsRef.current.slice(-49), id];
 
-      // Capas que reaccionan a las etiquetas del mensaje (bits, canjes con texto): la misma conexión
-      onChatEventRef.current?.(tags, message, roleFromTags(tags, cleanChannel));
+      // Capas que reaccionan a las etiquetas del mensaje (bits, canjes con texto): la misma conexión.
+      // Si una capa falla con un mensaje, los comandos de moderación y la voz siguen su camino
+      try {
+        onChatEventRef.current?.(tags, message, roleFromTags(tags, cleanChannel));
+      } catch (err) {
+        console.error('[Twitch Chat] una capa falló al recibir un mensaje:', err);
+      }
 
       const voice = routeVoice(id, tags, message);
       onChatMessageRef.current?.(toDisplayMessage(tags, message, cleanChannel, { id, voice }));
@@ -261,8 +266,15 @@ export function useTwitchChat(options: UseTwitchChatOptions = {}): UseTwitchChat
       }
 
       // Comandos de moderación de otras capas (saludo de raid: !so, !clip, !cortar; ruleta: abrirla y cerrarla)
-      if ((role === 'broadcaster' || role === 'mod') && onStaffMessageRef.current?.(message, { name: displayName, role })) {
-        return false;
+      if (role === 'broadcaster' || role === 'mod') {
+        let taken = false;
+        try {
+          taken = onStaffMessageRef.current?.(message, { name: displayName, role }) ?? false;
+        } catch (err) {
+          // Una capa que falla no se lleva por delante las batallas ni la voz
+          console.error('[Twitch Chat] una capa falló al atender un comando:', err);
+        }
+        if (taken) return false;
       }
 
       // Comandos de moderación para Encuestas y Batallas (!poll, !encuesta, !batalla, !versus)

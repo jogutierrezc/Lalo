@@ -424,15 +424,19 @@ export const Widget: React.FC = () => {
   const isRouletteApp = appParam === 'roulette' || appParam === 'ruleta' || appParam === 'wheel';
   const showRoulette = isRouletteApp || appParam === 'all';
   const rouletteRef = useRef<RouletteLayerHandle | null>(null);
-  const handleStaffMessage = useCallback(
-    (message: string, sender: { name: string; role: UserRole }) =>
+  // Confirmación en pantalla de un comando que atendió una capa (se asigna más abajo, con el aviso de moderación)
+  const staffNoticeRef = useRef<(sender: string, message: string) => void>(() => {});
+  const handleStaffMessage = useCallback((message: string, sender: { name: string; role: UserRole }) => {
+    const taken =
       (raidRef.current?.command(message, sender) ?? false) ||
       (sceneRef.current?.raidCommand(message, sender) ?? false) ||
       (rouletteRef.current?.command(message, sender) ?? false) ||
       (musicRef.current?.command(message, sender) ?? false) ||
-      (sceneRef.current?.signal({ kind: 'staff', message, sender }) ?? false),
-    []
-  );
+      (sceneRef.current?.signal({ kind: 'staff', message, sender }) ?? false);
+    // Quien lo escribió ve en el directo que su comando llegó
+    if (taken) staffNoticeRef.current(sender.name, message);
+    return taken;
+  }, []);
 
   // Integraciones. «Ahora suena»: fuente propia (app=music) o dentro de «Todo en uno». La muestran y
   // la ocultan el streamer y sus moderadores con un comando
@@ -593,12 +597,17 @@ export const Widget: React.FC = () => {
 
   // Notificación de acciones de moderadores en pantalla
   const [modNotice, setModNotice] = useState<{
-    action: ControlAction | 'remove';
+    /** `command`: comando de otra capa (saludo de raid, ruleta, música); `user` lleva el comando. */
+    action: ControlAction | 'remove' | 'command';
     sender: string;
     user?: string;
     timestamp: number;
   } | null>(null);
   const modNoticeRef = useRef<HTMLDivElement | null>(null);
+  staffNoticeRef.current = (sender, message) => {
+    if (moderation.modNotificationAudio !== false) playModerationChime(settings.volume);
+    setModNotice({ action: 'command', sender, user: message.trim().split(/\s+/)[0].slice(0, 24), timestamp: Date.now() });
+  };
 
   // Referencias defensivas y de animación GSAP
   const isProcessingRef = useRef<boolean>(false);
@@ -1942,7 +1951,9 @@ export const Widget: React.FC = () => {
             <span className="nt-text">
               {modNotice.action in ACTION_DESCRIPTIONS
                 ? ACTION_DESCRIPTIONS[modNotice.action as ControlAction](modNotice.sender, modNotice.user)
-                : `${modNotice.action} por ${modNotice.sender}`}
+                : modNotice.action === 'command'
+                  ? `${modNotice.sender} usó ${modNotice.user || 'un comando'}`
+                  : `${modNotice.action} por ${modNotice.sender}`}
             </span>
           </div>
         </div>
