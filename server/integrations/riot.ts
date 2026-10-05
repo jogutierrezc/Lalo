@@ -417,7 +417,8 @@ async function readSnapshot(profileId: string, key: string, deps: ReadDeps): Pro
         return keep(account.kind === 'forbidden' ? 'key_invalid' : 'error');
       }
       meta = { ...meta, puuid: account.puuid, gameName: account.gameName, tagLine: account.tagLine };
-      await deps.store.upsert(profileId, 'riot', { meta, account_name: `${meta.gameName}#${meta.tagLine}` });
+      // Lo demás que guarda `meta` (la política aceptada y su fecha) se conserva
+      await deps.store.upsert(profileId, 'riot', { meta: { ...(isObject(row.meta) ? row.meta : {}), ...meta }, account_name: `${meta.gameName}#${meta.tagLine}` });
       continue;
     }
 

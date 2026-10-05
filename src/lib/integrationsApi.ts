@@ -175,6 +175,10 @@ export interface RiotStatus {
   riotId: string;
   platform: string;
   linkedAt: string | null;
+  /** Versión de la política de uso que aceptó esta cuenta al vincular. Vacío: ninguna. */
+  policy: string;
+  /** Versión vigente de la política, según el servidor. */
+  policyCurrent: string;
 }
 
 function toRiotStatus(d: Record<string, unknown>): RiotStatus {
@@ -189,6 +193,8 @@ function toRiotStatus(d: Record<string, unknown>): RiotStatus {
     riotId: typeof d.riotId === 'string' ? d.riotId : '',
     platform: typeof d.platform === 'string' ? d.platform : '',
     linkedAt: typeof d.linkedAt === 'string' ? d.linkedAt : null,
+    policy: typeof d.policy === 'string' ? d.policy : '',
+    policyCurrent: typeof d.policyCurrent === 'string' ? d.policyCurrent : '',
   };
 }
 
@@ -197,9 +203,18 @@ export async function riotStatus(): Promise<ApiOutcome<RiotStatus>> {
   return result.ok ? { ok: true, data: toRiotStatus(result.data) } : result;
 }
 
-/** Vincula un Riot ID («nombre#etiqueta») de ese servidor a la cuenta de Lalo de quien llama. */
-export async function riotLink(riotId: string, platform: string): Promise<ApiOutcome<RiotStatus>> {
-  const result = await call('/api/riot/link', 'POST', { riotId, platform });
+/**
+ * Vincula un Riot ID («nombre#etiqueta») de ese servidor a la cuenta de Lalo de quien llama.
+ * `policy` es la versión de la política de uso que el streamer acaba de aceptar en la ficha.
+ */
+export async function riotLink(riotId: string, platform: string, policy: string): Promise<ApiOutcome<RiotStatus>> {
+  const result = await call('/api/riot/link', 'POST', { riotId, platform, policy });
+  return result.ok ? { ok: true, data: toRiotStatus(result.data) } : result;
+}
+
+/** Acepta la versión nueva de la política con la cuenta ya vinculada. */
+export async function riotAcceptPolicy(policy: string): Promise<ApiOutcome<RiotStatus>> {
+  const result = await call('/api/riot/accept', 'POST', { policy });
   return result.ok ? { ok: true, data: toRiotStatus(result.data) } : result;
 }
 

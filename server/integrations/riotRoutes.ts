@@ -4,7 +4,12 @@
  * Rutas de Riot Games («Alertas de juego», League of Legends):
  *
  *   GET  /api/riot/status     (sesión) si el servidor tiene clave y qué cuenta está vinculada
- *   POST /api/riot/link       (sesión) vincula un Riot ID: { riotId: "nombre#etiqueta", platform: "la1" }
+ *   POST /api/riot/link       (sesión) vincula un Riot ID: { riotId: "nombre#etiqueta", platform: "la1", policy: "1.0" }
+ *   POST /api/riot/accept     (sesión) acepta la versión nueva de la política con la cuenta ya vinculada: { policy }
+ *
+ * La política de uso de la integración (src/legal/riot.ts) solo se pide aquí,
+ * al vincular: no forma parte de la aceptación general de Lalo. `policy` tiene
+ * que ser la versión vigente; se guarda con su fecha junto a la cuenta.
  *   POST /api/riot/unlink     (sesión) borra lo guardado
  *   GET  /api/riot/state?k=   (clave privada de widget) la foto de la cuenta, para la capa de OBS
  *
@@ -30,10 +35,18 @@ import {
   snapshotForProfile,
   type RiotSnapshot,
 } from './riot.js';
+import { RIOT_POLICY_VERSION } from './riotPolicy.js';
 import { MigrationMissingError, createLimiter, type Env } from './store.js';
 
-export type RiotAction = 'status' | 'link' | 'unlink' | 'state';
-export const RIOT_ACTIONS: RiotAction[] = ['status', 'link', 'unlink', 'state'];
+export type RiotAction = 'status' | 'link' | 'accept' | 'unlink' | 'state';
+export const RIOT_ACTIONS: RiotAction[] = ['status', 'link', 'accept', 'unlink', 'state'];
+
+const NO_POLICY = 'Para vincular tu cuenta hay que aceptar la política de uso de la integración con Riot Games.';
+/** Versión de la política que aceptó la cuenta, tal como quedó guardada. Vacío: ninguna. */
+const acceptedPolicy = (meta: unknown): string => {
+  const value = meta && typeof meta === 'object' ? (meta as Record<string, unknown>).policy : '';
+  return typeof value === 'string' && /^\d+(\.\d+)*$/.test(value) ? value : '';
+};
 
 // Una capa pregunta cada 30 s; con varias fuentes abiertas caben de sobra
 const stateLimiter = createLimiter(30);
@@ -72,7 +85,7 @@ function migrationFail(err: unknown): IntegrationResult | null {
 
 export async function handleRiot(action: RiotAction, req: IntegrationRequest, env: Env, deps: Deps): Promise<IntegrationResult> {
   const method = req.method.toUpperCase();
-  const wanted = action === 'link' || action === 'unlink' ? 'POST' : 'GET';
+  const wanted = action === 'link' || action === 'unlink' || action === 'accept' ? 'POST' : 'GET';
   if (method !== wanted) return fail(405, 'method', `Esta ruta solo admite ${wanted}.`);
 
   const key = readRiotKey(env);
@@ -106,7 +119,10 @@ export async function handleRiot(action: RiotAction, req: IntegrationRequest, en
 
     if (action === 'status') {
       if (!key || !store) {
-        return { status: 200, body: { configured: false, missing: [...(key ? [] : ['RIOT_API_KEY']), ...(noDb ? (noDb.body.missing as string[]) : [])], platforms } };
+        return {
+          status: 200,
+          body: { configured: false, missing: [...(key ? [] : ['RIOT_API_KEY']), ...(noDb ? (noDb.body.missing as string[]) : [])], platforms, policyCurrent: RIOT_POLICY_VERSION },
+        };
       }
       const row = await store.get(caller.id, 'riot');
       const meta = readRiotMeta(row?.meta);
@@ -120,11 +136,40 @@ export async function handleRiot(action: RiotAction, req: IntegrationRequest, en
           riotId: meta ? `${meta.gameName}#${meta.tagLine}` : '',
           platform: meta?.platform ?? '',
           linkedAt: meta ? (row?.connected_at ?? null) : null,
+          policy: meta ? acceptedPolicy(row?.meta) : '',
+          policyCurrent: RIOT_POLICY_VERSION,
         },
       };
     }
 
     if (!store) return noDb ?? fail(503, 'not_configured', 'Al servidor le falta configuración.');
+
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
+    // Solo vale aceptar la versión vigente: una vieja o inventada no cuenta
+    const accepts = body.policy === RIOT_POLICY_VERSION;
+
+    // La política cambió y la cuenta ya estaba vinculada: se apunta la versión nueva sin volver a preguntar a Riot
+    if (action === 'accept') {
+      if (!accepts) return fail(400, 'policy', NO_POLICY);
+      const row = await store.get(caller.id, 'riot');
+      const meta = readRiotMeta(row?.meta);
+      if (!row || !meta) return fail(409, 'not_linked', 'No hay ninguna cuenta de Riot vinculada.');
+      await store.upsert(caller.id, 'riot', { meta: { ...meta, policy: RIOT_POLICY_VERSION, policyAt: new Date(deps.now()).toISOString() } });
+      return {
+        status: 200,
+        body: {
+          configured: Boolean(key),
+          missing: key ? [] : ['RIOT_API_KEY'],
+          platforms,
+          state: 'linked',
+          riotId: `${meta.gameName}#${meta.tagLine}`,
+          platform: meta.platform,
+          linkedAt: row.connected_at ?? null,
+          policy: RIOT_POLICY_VERSION,
+          policyCurrent: RIOT_POLICY_VERSION,
+        },
+      };
+    }
 
     if (action === 'unlink') {
       await store.remove(caller.id, 'riot');
@@ -134,11 +179,12 @@ export async function handleRiot(action: RiotAction, req: IntegrationRequest, en
 
     // link
     if (!key) return fail(503, 'not_configured', 'Al servidor le falta la clave de Riot.', { missing: ['RIOT_API_KEY'] });
-    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
     const id = parseRiotId(body.riotId);
     if (!id) return fail(400, 'bad_riot_id', 'Escribe tu Riot ID completo, con la etiqueta: nombre#etiqueta.');
     const platform = platformOf(body.platform);
     if (!platform) return fail(400, 'bad_platform', 'Elige tu servidor de la lista.');
+    // Sin aceptar la política no se pregunta nada a Riot ni se guarda nada
+    if (!accepts) return fail(400, 'policy', NO_POLICY);
     // Antes de preguntar a Riot se comprueba que la tabla existe
     await store.get(caller.id, 'riot');
 
@@ -157,10 +203,30 @@ export async function handleRiot(action: RiotAction, req: IntegrationRequest, en
       connected_at: new Date(deps.now()).toISOString(),
       last_error: null,
       last_error_at: null,
-      meta: { platform: platform.id, puuid: account.puuid, gameName: account.gameName, tagLine: account.tagLine },
+      meta: {
+        platform: platform.id,
+        puuid: account.puuid,
+        gameName: account.gameName,
+        tagLine: account.tagLine,
+        policy: RIOT_POLICY_VERSION,
+        policyAt: new Date(deps.now()).toISOString(),
+      },
     });
     forgetRiotProfile(caller.id);
-    return { status: 200, body: { configured: true, missing: [], platforms, state: 'linked', riotId, platform: platform.id, linkedAt: new Date(deps.now()).toISOString() } };
+    return {
+      status: 200,
+      body: {
+        configured: true,
+        missing: [],
+        platforms,
+        state: 'linked',
+        riotId,
+        platform: platform.id,
+        linkedAt: new Date(deps.now()).toISOString(),
+        policy: RIOT_POLICY_VERSION,
+        policyCurrent: RIOT_POLICY_VERSION,
+      },
+    };
   } catch (err) {
     return migrationFail(err) ?? failureOf(err, `riot/${action}`);
   }

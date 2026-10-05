@@ -170,6 +170,7 @@ export const Legal: React.FC = () => {
               Versión {doc.version}
               {ESTADO_LEGAL === 'borrador' ? ' · borrador' : ''} · Actualizado el {fechaLarga(doc.updatedAt)} · {DATOS_LEGALES.operador}
             </p>
+            {doc.alUsar && <p className="cab-note">{doc.alUsar}</p>}
             {secciones.map((seccion) => (
               <section key={seccion.id} id={`lg-${seccion.id}`} tabIndex={-1} aria-label={seccion.titulo ?? undefined}>
                 {seccion.titulo && <h2>{seccion.titulo}</h2>}

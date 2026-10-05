@@ -14,7 +14,9 @@
 
 import React, { useCallback, useEffect, useId, useState } from 'react';
 import { useCloudSession } from '../../hooks/useCloudSession';
-import { riotLink, riotStatus, riotUnlink, type RiotStatus } from '../../lib/integrationsApi';
+import { riotAcceptPolicy, riotLink, riotStatus, riotUnlink, type RiotStatus } from '../../lib/integrationsApi';
+import { RIOT_POLICY_VERSION } from '../../../server/integrations/riotPolicy';
+import { compararVersiones, hrefLegal } from '../../legal/logica';
 import { ServiceCard } from './ServiceCard';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; status: RiotStatus } | { kind: 'problem'; code: string; message: string; missing: string[] };
@@ -35,6 +37,8 @@ export const RiotCard: React.FC = () => {
   const [platform, setPlatform] = useState(DEFAULT_PLATFORM);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  // La política de uso se acepta aquí, al vincular: no entra en la aceptación general de Lalo
+  const [accepted, setAccepted] = useState(false);
 
   const refresh = useCallback(async () => {
     const result = await riotStatus();
@@ -55,8 +59,12 @@ export const RiotCard: React.FC = () => {
       setMessage('Escribe tu Riot ID completo, con la etiqueta: nombre#etiqueta.');
       return;
     }
+    if (!accepted) {
+      setMessage('Para vincular tu cuenta, marca que aceptas la política de uso de la integración.');
+      return;
+    }
     setBusy(true);
-    const result = await riotLink(riotId, platform);
+    const result = await riotLink(riotId, platform, RIOT_POLICY_VERSION);
     setBusy(false);
     if (!result.ok) {
       setMessage(`${result.message}${result.missing.length ? ` Falta: ${result.missing.join(', ')}.` : ''}`);
@@ -64,7 +72,22 @@ export const RiotCard: React.FC = () => {
     }
     setLoad({ kind: 'ready', status: result.data });
     setRiotId('');
+    setAccepted(false);
     setMessage('Cuenta vinculada. Las alertas empiezan a salir con lo que pase a partir de ahora.');
+  };
+
+  // La política cambió con la cuenta ya vinculada: se acepta la versión nueva sin volver a vincular
+  const policyOutdated = Boolean(linked && status && (!status.policy || compararVersiones(status.policy, RIOT_POLICY_VERSION) < 0));
+  const acceptNew = async () => {
+    setBusy(true);
+    const result = await riotAcceptPolicy(RIOT_POLICY_VERSION);
+    setBusy(false);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+    setLoad({ kind: 'ready', status: result.data });
+    setMessage('Política aceptada.');
   };
 
   const unlink = async () => {
@@ -171,8 +194,18 @@ export const RiotCard: React.FC = () => {
               <span>Pedir tu contraseña de Riot ni entrar en tu cuenta</span>
             </li>
           </ul>
+          <label className="flex items-start gap-[10px]" htmlFor={`${uid}-policy`}>
+            <input id={`${uid}-policy`} type="checkbox" className="cab-tog" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
+            <span>
+              He leído y acepto la{' '}
+              <a className="studio-link" href={hrefLegal('riot')} target="_blank" rel="noreferrer">
+                política de uso de la integración con Riot Games
+              </a>
+              . Solo se pide aquí, a quien vincula su cuenta.
+            </span>
+          </label>
           <div className="ic-row">
-            <button type="submit" className="cab-btn cab-btn-sm" disabled={busy || !riotId.trim()}>
+            <button type="submit" className="cab-btn cab-btn-sm" disabled={busy || !riotId.trim() || !accepted}>
               {busy ? 'Buscando la cuenta' : 'Vincular'}
             </button>
           </div>
@@ -198,6 +231,30 @@ export const RiotCard: React.FC = () => {
               <span>Ver datos de tus rivales ni de tus compañeros de partida</span>
             </li>
           </ul>
+          {policyOutdated ? (
+            <div className="cab-note" role="status">
+              <p>
+                La{' '}
+                <a className="studio-link" href={hrefLegal('riot')} target="_blank" rel="noreferrer">
+                  política de uso de la integración
+                </a>{' '}
+                cambió desde que vinculaste tu cuenta. Las alertas siguen funcionando; léela y acéptala cuando puedas.
+              </p>
+              <div className="ic-row">
+                <button type="button" className="cab-btn cab-btn-sm" disabled={busy} onClick={acceptNew}>
+                  Aceptar la versión {RIOT_POLICY_VERSION}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="cab-hint">
+              Aceptaste la{' '}
+              <a className="studio-link" href={hrefLegal('riot')} target="_blank" rel="noreferrer">
+                política de uso de la integración
+              </a>{' '}
+              (versión {status.policy}).
+            </p>
+          )}
           <p className="cab-hint">
             Lalo guarda en su servidor tu Riot ID, tu servidor y el identificador que Riot da a esa cuenta. Al desvincular se borran. Las alertas no llegan
             al instante: Riot informa al terminar la partida y la capa pregunta cada medio minuto.

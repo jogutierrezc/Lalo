@@ -15,7 +15,7 @@
 
 import type { DatosLegales } from './datos';
 
-export const DOC_IDS = ['terminos', 'voces', 'contenido', 'retirada', 'privacidad', 'paises'] as const;
+export const DOC_IDS = ['terminos', 'voces', 'contenido', 'retirada', 'privacidad', 'paises', 'riot'] as const;
 export type DocId = (typeof DOC_IDS)[number];
 
 export type Bloque =
@@ -42,6 +42,11 @@ export interface DocumentoLegal {
   version: string;
   /** Fecha del último cambio, AAAA-MM-DD. */
   updatedAt: string;
+  /**
+   * Documento que no entra en la aceptación general: solo lo acepta quien usa
+   * una función concreta, en el momento de usarla. El texto dice cuándo.
+   */
+  alUsar?: string;
   secciones: (datos: DatosLegales) => Seccion[];
 }
 

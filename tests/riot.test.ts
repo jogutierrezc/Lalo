@@ -27,6 +27,7 @@ import {
   riotGet,
   riotRetryAfter,
 } from '../server/integrations/riot';
+import { RIOT_POLICY_VERSION } from '../server/integrations/riotPolicy';
 import { resetRiotRoutes } from '../server/integrations/riotRoutes';
 import { MigrationMissingError, type AccountRow, type Store } from '../server/integrations/store';
 
@@ -151,7 +152,8 @@ function setup(fetchImpl: (url: string, init?: RequestInit) => Response | Promis
   };
   const call = (part: string, req: Partial<IntegrationRequest> = {}, env: Record<string, string | undefined> = ENV) =>
     handleIntegration('riot', part, { method: 'GET', headers: {}, query: {}, body: undefined, ...req }, env, deps);
-  const link = (riotId = 'Lalo#LAN', platform = 'la1') => call('link', { method: 'POST', body: { riotId, platform } });
+  const link = (riotId = 'Lalo#LAN', platform = 'la1', policy: unknown = RIOT_POLICY_VERSION) =>
+    call('link', { method: 'POST', body: { riotId, platform, policy } });
   const photo = () => call('state', { query: { k: WIDGET_KEY } });
   /** Llamadas a la API de Riot (sin Data Dragon). */
   const riotCalls = () => calls.filter((item) => item.url.includes('api.riotgames.com'));
@@ -327,6 +329,36 @@ describe('riot: panel', () => {
     expect(t.riotCalls()).toHaveLength(0);
   });
 
+  it('sin aceptar la política vigente no se vincula ni se pregunta a Riot', async () => {
+    const t = setup();
+    for (const policy of [null, '', '0.9', true]) {
+      const refused = await t.link('Lalo#LAN', 'la1', policy);
+      expect(refused.status).toBe(400);
+      expect(refused.body.code).toBe('policy');
+    }
+    expect(t.calls).toHaveLength(0);
+    expect((await t.call('status')).body).toMatchObject({ state: 'none', policyCurrent: RIOT_POLICY_VERSION });
+  });
+
+  it('al vincular se guarda qué versión de la política se aceptó y cuándo', async () => {
+    const t = setup();
+    const linked = await t.link();
+    expect(linked.body).toMatchObject({ state: 'linked', policy: RIOT_POLICY_VERSION, policyCurrent: RIOT_POLICY_VERSION });
+    expect((await t.call('status')).body).toMatchObject({ state: 'linked', policy: RIOT_POLICY_VERSION });
+  });
+
+  it('aceptar la versión nueva exige una cuenta vinculada y la versión vigente', async () => {
+    const t = setup();
+    const accept = (policy: unknown) => t.call('accept', { method: 'POST', body: { policy } });
+    expect((await accept(RIOT_POLICY_VERSION)).body.code).toBe('not_linked');
+    await t.link();
+    expect((await accept('0.1')).body.code).toBe('policy');
+    const calls = t.riotCalls().length;
+    expect((await accept(RIOT_POLICY_VERSION)).body).toMatchObject({ state: 'linked', riotId: 'Lalo#LAN', policy: RIOT_POLICY_VERSION });
+    // Aceptar no vuelve a preguntar a Riot
+    expect(t.riotCalls()).toHaveLength(calls);
+  });
+
   it('cada ruta solo admite su método, y una acción desconocida no existe', async () => {
     const t = setup();
     expect((await t.call('link')).status).toBe(405);
@@ -365,7 +397,14 @@ describe('riot: panel', () => {
     expect(t.calls[0].url).toBe('https://europe.api.riotgames.com/riot/account/v1/accounts/by-riot-id/lalo/LAN');
     expect((t.calls[0].init?.headers as Record<string, string>)['X-Riot-Token']).toBe(RIOT_KEY);
     const row = t.rows.get(`${PROFILE}:riot`);
-    expect(row?.meta).toEqual({ platform: 'euw1', puuid: PUUID, gameName: 'LALO', tagLine: 'lan' });
+    expect(row?.meta).toEqual({
+      platform: 'euw1',
+      puuid: PUUID,
+      gameName: 'LALO',
+      tagLine: 'lan',
+      policy: RIOT_POLICY_VERSION,
+      policyAt: new Date(t.clock.now).toISOString(),
+    });
     expect(row?.secret_enc).toBeNull();
     expect(row?.account_name).toBe('LALO#lan');
     // Ni el PUUID ni la clave vuelven al navegador
