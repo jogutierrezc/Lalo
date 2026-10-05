@@ -4,8 +4,9 @@
  * Página «Torneos» sobre la plantilla común del panel: a la izquierda se
  * ajusta, en pestañas, y a la derecha el monitor 16:9 queda siempre a la vista.
  *
- * - Torneo: nombre, tamaño de la llave y los equipos, que por ahora escribe el
- *   streamer a mano (la inscripción por enlace llega en la siguiente entrega).
+ * - Torneo: nombre, tamaño de la llave, la inscripción por enlace (la dirección
+ *   #torneo/<slug> y las solicitudes que llegan por ella, con la nube) y los
+ *   equipos, que también se pueden escribir a mano.
  * - En directo: la mesa de control. Quién juega, quién gana, deshacer,
  *   reiniciar y qué pantalla se ve.
  * - Marca: logo, patrocinadores, estilo y color propio.
@@ -13,8 +14,11 @@
  *   que el streamer y sus moderadores lo manejan desde el chat.
  *
  * Los AJUSTES se guardan solos; el ESTADO de la llave va por el almacén
- * (lib/tournamentStore.ts) y llega al momento a las fuentes de OBS abiertas en
- * este navegador. En el monitor la voz no suena.
+ * (lib/tournamentStore.ts). Con la nube y una cuenta activa ese almacén es el
+ * de lib/tournamentCloud.ts: lo que se marca aquí llega a OBS en otro equipo y
+ * un comando del chat llega a esta página, en unos segundos. Sin la nube, llega
+ * al momento a las fuentes de OBS abiertas en este navegador. En el monitor la
+ * voz no suena.
  */
 
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -22,11 +26,14 @@ import { ArrowDown, ArrowUp, Check, Copy, Play, Plus, Shuffle, Undo2, X } from '
 import { SuiteNav } from '../components/SuiteNav';
 import { Field, Range, Toggle } from '../components/studio/StudioKit';
 import { MediaField, MediaValue } from '../components/recompensas/MediaField';
+import { SignupPanel } from '../components/torneo/SignupPanel';
 import { TournamentLayer } from '../components/torneo/TournamentLayer';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { useTournament } from '../hooks/useTournament';
+import { useTournamentSignup } from '../hooks/useTournamentSignup';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { releaseMedia } from '../lib/mediaRef';
+import { tournamentStore } from '../lib/tournamentStore';
 import { ANNOUNCER_VOICE_ID } from '../types/raid';
 import { loadSettings } from '../types/settings';
 import {
@@ -63,6 +70,7 @@ import {
   shuffleTeams,
   undoLast,
 } from '../utils/tournamentLogic';
+import { type TournamentEntry, teamFromEntry } from '../utils/tournamentSignup';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import '../styles/mascotas.css';
 import '../styles/torneo.css';
@@ -152,6 +160,8 @@ export const TournamentStudio: React.FC = () => {
   // El monitor usa los ajustes ya validados, igual que los recibirá OBS
   const clean = useMemo(() => normalizeTournamentSettings(settings), [settings]);
   const cloudOn = cloud.enabled && cloud.profile?.status === 'active';
+  // Inscripción por enlace: solo con la nube y una cuenta activa
+  const signup = useTournamentSignup(cloudOn && cloud.profile ? cloud.profile.id : null, clean);
 
   useEffect(
     () => () => {
@@ -256,6 +266,26 @@ export const TournamentStudio: React.FC = () => {
     guarded(`La llave ya tiene resultados. Cambiar a ${size} equipos la vuelve a empezar.`, `Pasar a ${size} y reiniciar`, run);
   };
 
+  /**
+   * Mete en la llave al equipo de una solicitud aceptada, al final de la lista, y llama a `done`
+   * cuando ya está dentro. Solo pasa el nombre: los Riot ID se quedan en la solicitud.
+   */
+  const admitTeam = (entry: TournamentEntry, done: () => void): string | null => {
+    // Ya está dentro (se aceptó antes y falló el aviso, o se escribió a mano): no se añade dos veces
+    if (state.teams.some((team) => foldText(team.name) === foldText(entry.team))) {
+      done();
+      return null;
+    }
+    if (state.teams.length >= state.size) {
+      return `La llave es de ${state.size} equipos y ya está completa. Quita un equipo o elige una llave más grande, y vuelve a aceptar a ${entry.team}.`;
+    }
+    guarded(`La llave ya tiene resultados. Aceptar a ${entry.team} la vuelve a empezar.`, 'Aceptar y reiniciar', () => {
+      apply((current) => replaceTeams(current, [...current.teams, teamFromEntry(entry, current.teams)], Date.now()));
+      done();
+    });
+    return null;
+  };
+
   const win = (team: number) => apply((current) => applyWinner(current, team, Date.now()));
   const undo = () => apply((current) => undoLast(current, Date.now()));
   const reset = () =>
@@ -303,10 +333,11 @@ export const TournamentStudio: React.FC = () => {
   // ---------- URL de OBS ----------
   const copyUrl = (withDemo: boolean) => {
     const tts = loadSettings();
-    // Con cuenta va la clave y, de reserva, los ajustes y la llave: si la nube no responde, la fuente usa los de la URL
+    // Con cuenta va la clave y, de reserva, los ajustes: si la nube no responde, la fuente usa los de la URL.
+    // La llave solo viaja en la URL mientras su estado no vive en la nube (lib/tournamentCloud.ts)
     const extra: Record<string, string> = {
       ...(cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : {}),
-      ts: encodeTournamentSettings(clean, state),
+      ts: encodeTournamentSettings(clean, tournamentStore().cloud?.() ? null : state),
     };
     if (withDemo) extra.demo = '1';
     const url = buildSuiteWidgetUrl(window.location.origin, 'tournament', tts.channel, tts, extra);
@@ -343,6 +374,12 @@ export const TournamentStudio: React.FC = () => {
                   onClick={() => setTab(item.id)}
                 >
                   {item.name}
+                  {/* Solicitudes de inscripción sin responder: a la vista desde cualquier pestaña */}
+                  {item.id === 'torneo' && signup.pending.length > 0 && (
+                    <b className="cab-chip tnp-badge" data-status="skipped" aria-label={signup.pending.length === 1 ? '1 solicitud pendiente' : `${signup.pending.length} solicitudes pendientes`}>
+                      {signup.pending.length}
+                    </b>
+                  )}
                 </button>
               ))}
             </div>
@@ -421,6 +458,14 @@ export const TournamentStudio: React.FC = () => {
                     </div>
                   </section>
 
+                  <SignupPanel
+                    signup={signup}
+                    name={clean.name}
+                    free={free}
+                    admit={admitTeam}
+                    confirm={(label, yes, run) => setAsk({ label, yes, run })}
+                  />
+
                   <section className="cab-mod">
                     <h2>Equipos</h2>
                     <p className="cab-hint">
@@ -487,10 +532,9 @@ export const TournamentStudio: React.FC = () => {
                         {teamNote}
                       </p>
                     )}
-                    <p className="cab-note">
-                      Por ahora los equipos se escriben aquí. La inscripción por enlace, para que cada capitán apunte a su equipo, llega en la siguiente
-                      entrega.
-                    </p>
+                    {signup.own && (
+                      <p className="cab-hint">Los equipos que aceptes en «Solicitudes» entran al final de esta lista. También puedes escribirlos a mano.</p>
+                    )}
                   </section>
                 </>
               )}
@@ -557,8 +601,9 @@ export const TournamentStudio: React.FC = () => {
                     </Field>
                   </section>
                   <p className="cab-note">
-                    Lo que marques aquí llega al momento a las fuentes de OBS abiertas en este navegador y, con tu cuenta, a OBS en otro equipo en unos
-                    segundos. Un comando escrito en el chat lo atiende la fuente de OBS: si OBS está en otro equipo, esta página todavía no lo ve.
+                    {cloudOn
+                      ? 'Con tu cuenta, lo que marques aquí llega a OBS en unos segundos, esté en este equipo o en otro, y lo que un moderador escriba en el chat llega a esta página igual de rápido. Si los dos cambiáis algo a la vez, se queda el primero que llegó y aquí verás la llave como quedó.'
+                      : 'Lo que marques aquí llega al momento a las fuentes de OBS abiertas en este navegador. Un comando escrito en el chat lo atiende la fuente de OBS: si OBS está en otro equipo, esta página no lo ve. Con la nube y tu cuenta, sí.'}
                   </p>
                 </>
               )}

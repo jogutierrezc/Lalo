@@ -21,10 +21,10 @@
  * - Los nombres de los equipos los escribe gente de fuera: todo se pinta con
  *   React, nada se inserta como HTML.
  *
- * Un comando escrito en el chat lo atiende ESTA fuente y cambia el estado de su
- * navegador (y lo guarda en su localStorage). Si OBS no comparte navegador con
- * el panel, la página del panel no se entera hasta que el estado viva en la
- * nube (ver lib/tournamentStore.ts).
+ * Un comando escrito en el chat lo atiende ESTA fuente, que cambia el estado y
+ * lo escribe en el almacén. Con el almacén local se queda en su navegador; con
+ * el de la nube (la URL lleva la clave `k`, ver lib/tournamentCloud.ts) llega
+ * al panel en unos segundos.
  */
 
 import React, { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -529,6 +529,8 @@ const DEMO_STEP_MS = 7000;
 
 function firstState(fallback: TournamentState | null | undefined, size: TournamentSettings['size']): TournamentState {
   const stored = tournamentStore().read();
+  // Con el estado en la nube manda ella: el de la URL es de cuando se copió
+  if (stored && tournamentStore().cloud?.()) return stored;
   if (stored && fallback) return isNewerState(fallback, stored) ? fallback : stored;
   return stored ?? fallback ?? emptyTournamentState(size);
 }
@@ -540,11 +542,12 @@ export const TournamentLiveLayer = forwardRef<TournamentLiveHandle, TournamentLi
   const live = useRef({ settings, state, speak });
   live.current = { settings, state, speak };
 
-  // Lo que cambian el panel u otra fuente: solo se adopta si es más nuevo que lo que hay
+  // Lo que cambian el panel u otra fuente: solo se adopta si es más nuevo que lo que hay,
+  // salvo que venga obligado: es el vigente en la nube y un cambio de aquí pudo ser rechazado
   useEffect(
     () =>
-      tournamentStore().subscribe((next) => {
-        if (!isNewerState(next, live.current.state)) return;
+      tournamentStore().subscribe((next, forced) => {
+        if (!forced && !isNewerState(next, live.current.state)) return;
         live.current.state = next;
         setState(next);
       }),
@@ -571,7 +574,7 @@ export const TournamentLiveLayer = forwardRef<TournamentLiveHandle, TournamentLi
         });
         if (!result) return false;
         if (result.state) {
-          // El estado cambia aquí, en la fuente, y se guarda en su navegador (ver la cabecera)
+          // El estado cambia aquí, en la fuente, y va al almacén (ver la cabecera)
           current.state = result.state;
           setState(result.state);
           tournamentStore().write(result.state);

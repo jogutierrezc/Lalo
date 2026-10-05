@@ -17,12 +17,14 @@
  * corchetes (los corchetes son etiquetas de emoción para la voz), y las
  * imágenes solo admiten direcciones que una <img> carga sin ejecutar nada.
  *
- * DECISIÓN (hasta que el estado tenga su sitio en la nube): lo que se sube con
+ * La copia del estado dentro de los ajustes. Mientras el estado NO vive en la
+ * nube (sin cuenta, sin conexión o sin la migración 0017), lo que se sube con
  * queueCloudPush('tournament', …) y lo que se guarda en `lalo_tournament_settings`
  * lleva, además de los ajustes, una copia del estado en el campo `state`. Así el
  * estado llega a OBS en otro equipo con el mismo paquete que ya descarga cada
- * diez segundos, sin tabla nueva. normalizeTournamentSettings ignora ese campo;
- * lo lee loadSyncedTournamentState.
+ * diez segundos. normalizeTournamentSettings ignora ese campo; lo lee
+ * loadSyncedTournamentState. Cuando el almacén de la nube responde
+ * (lib/tournamentCloud.ts), la copia se quita: saveTournamentSettings(…, null).
  */
 
 import { queueCloudPush } from '../lib/cloudConfig';
@@ -349,11 +351,12 @@ export function loadSyncedTournamentState(): TournamentState | null {
 
 /**
  * Guarda los ajustes y, dentro de ellos, la copia del estado (ver la cabecera).
- * Sin `state` se conserva la copia que ya hubiera.
+ * Sin `state` se conserva la copia que ya hubiera; con `null` se quita, que es
+ * lo que toca cuando el estado vive en la nube.
  */
-export function saveTournamentSettings(settings: TournamentSettings, state?: TournamentState): void {
+export function saveTournamentSettings(settings: TournamentSettings, state?: TournamentState | null): void {
   try {
-    const copy = state ?? loadSyncedTournamentState();
+    const copy = state === null ? null : (state ?? loadSyncedTournamentState());
     const payload = copy ? { ...settings, state: copy } : settings;
     localStorage.setItem(TOURNAMENT_STORAGE_KEY, JSON.stringify(payload));
     queueCloudPush('tournament', payload);

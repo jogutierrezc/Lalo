@@ -683,3 +683,108 @@
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* Inscripción por enlace: la dirección, con su parte fija delante del slug */
+.tnp-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tnp-slug {
+  flex: 1 1 260px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+}
+.tnp-slug:focus-within {
+  border-color: var(--cb-fg);
+}
+.tnp-slug > span {
+  flex: none;
+  padding-left: 12px;
+  color: var(--cb-mut);
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.tnp-slug .cab-inp {
+  flex: 1 1 9ch;
+  min-width: 9ch;
+  height: 38px;
+  padding-left: 0;
+  border: 0;
+  background: transparent;
+}
+.tnp-slug .cab-inp:focus-visible {
+  outline: none;
+}
+/* Solicitudes sin responder, en la pestaña */
+.tnp-badge {
+  margin-left: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Solicitudes: quién pide entrar y con qué jugadores */
+.tnp-reqs {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tnp-req {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 14px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+}
+.tnp-req-t {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tnp-req-t b {
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+.tnp-req-t code {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+.tnp-req-a {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.tnp-done summary {
+  cursor: pointer;
+  color: var(--cb-mut);
+  font-weight: 650;
+}
+.tnp-done[open] summary {
+  margin-bottom: 10px;
+}
+.tnp-done .cab-hint {
+  display: block;
+  margin-top: 10px;
+}
+@media (max-width: 560px) {
+  .tnp-req {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tnp-req-a {
+    justify-content: flex-start;
+  }
+}

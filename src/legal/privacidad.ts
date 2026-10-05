@@ -6,6 +6,11 @@
  * verdad (supabase/migrations 0001 a 0008, server/ttsHandler.ts, server/storage,
  * src/lib/cloudConfig.ts y el almacenamiento del navegador). Si la app empieza a
  * recoger algo nuevo, hay que cambiar este texto y subir la versión.
+ *
+ * PENDIENTE DEL DUEÑO: se añadió lo que guarda la inscripción a torneos por
+ * enlace (migración 0017) SIN subir `version` ni `updatedAt`, porque subirlos
+ * vuelve a pedir la aceptación a todas las cuentas. Decide si este cambio lo
+ * merece antes de publicar.
  */
 
 import { fraseContacto, h3, p, ul, type DocumentoLegal } from './tipos';
@@ -52,6 +57,12 @@ export const PRIVACIDAD: DocumentoLegal = {
           'Para leer un mensaje en voz alta, el texto que se va a leer (que puede incluir el nombre de quien escribe) se envía a través de nuestro servidor al proveedor de voz, que devuelve el audio.',
           'No guardamos un historial de los mensajes del chat en nuestra base de datos.'
         ),
+        h3('De quien inscribe a un equipo en un torneo'),
+        ul(
+          'Un streamer puede abrir la inscripción de su torneo en una página pública de la Plataforma. Quien inscribe a un equipo no necesita cuenta. De cada inscripción guardamos el **nombre del equipo**, el **Riot ID del capitán** y los **Riot ID de los demás jugadores** que el capitán escriba, junto con la fecha y si la solicitud está pendiente, aceptada o rechazada.',
+          'Esos datos los ve **solo el streamer que organiza el torneo**, en su panel. En la página pública y en las capas del directo sale únicamente el **nombre del equipo**, y solo cuando el organizador acepta la solicitud. Los Riot ID no se publican ni se envían a Riot Games: no comprobamos que existan.',
+          'Si escribes el Riot ID de otras personas de tu equipo, hazlo con su permiso.'
+        ),
         h3('En tu navegador'),
         ul(
           'La app guarda en el almacenamiento local de tu navegador tu sesión, la configuración de los módulos, el tema del panel, el avance de la bienvenida y de las guías, y listas temporales de moderación (por ejemplo, usuarios silenciados durante el directo). Esos datos no salen de tu navegador salvo la configuración, que se sincroniza con tu cuenta.',
@@ -72,6 +83,7 @@ export const PRIVACIDAD: DocumentoLegal = {
           'Guardar tu configuración y tus archivos y entregarlos a tus fuentes de OBS.',
           'Mostrar en tus capas y leer en voz alta lo que tú decidas de tu chat.',
           'Aplicar los límites de tu plan y administrar las invitaciones y la recuperación de cuentas.',
+          'Que el organizador de un torneo sepa qué equipos piden entrar y quiénes los forman, y pueda aceptarlos o rechazarlos.',
           'Dejar constancia de que aceptaste estos documentos y de qué versión.',
           'Atender tus solicitudes, las notificaciones legales y la seguridad del servicio.'
         ),
@@ -127,6 +139,7 @@ export const PRIVACIDAD: DocumentoLegal = {
           'Los datos de tu cuenta, tu configuración y tus archivos se conservan mientras tu cuenta exista.',
           'Un archivo que borras en Mi cuenta se elimina del almacenamiento en ese momento.',
           'Los datos de tu cuenta de Riot (Riot ID, servidor e identificador) se borran de nuestra base de datos cuando pulsas «Desvincular» en Integraciones.',
+          'Las inscripciones a un torneo se borran cuando el organizador quita la solicitud, borra el enlace de inscripción o se cierra su cuenta. Además, la Plataforma elimina las solicitudes rechazadas a los 30 días y cualquier solicitud a los 180 días; esa limpieza se ejecuta cada vez que alguien envía una inscripción nueva. El nombre de un equipo aceptado sigue en la llave del torneo hasta que el organizador lo quita. Si inscribiste a un equipo y quieres que se borren tus datos antes, pídeselo al organizador o escríbenos.',
           'Si pides cerrar tu cuenta, borramos tus datos, salvo lo que debamos conservar por obligación legal o para atender reclamaciones, como el registro de aceptación de estos documentos.',
           'El texto que se envía para generar voz no se guarda en nuestra base de datos. Los proveedores pueden conservar registros técnicos durante los plazos que fijen sus propias políticas.'
         ),

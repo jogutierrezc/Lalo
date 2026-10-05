@@ -14,6 +14,7 @@
  *   - #mascotas: Mascotas, el personaje que reacciona con voz a canjes, bits y al chat
  *   - #juego: Alertas de juego, la placa con lo que pasa en la cuenta de Riot del streamer
  *   - #torneos: Torneos, la llave de eliminación directa con sus pantallas para OBS
+ *   - #torneo/<slug>: inscripción de un torneo. Página pública: se ve sin iniciar sesión
  *   - #integraciones: galería de servicios conectados (Spotify, Ko-fi, Twitch...)
  *   - #musica: estudio de la capa «Ahora suena»
  *   - #kofi: estudio de las alertas y capas fijas de Ko-fi
@@ -57,6 +58,7 @@ import { Account } from './pages/Account';
 import { AdminShell } from './components/admin/AdminShell';
 import { CloudSetup } from './pages/CloudSetup';
 import { Legal } from './pages/Legal';
+import { TournamentSignup } from './pages/TournamentSignup';
 import { AceptacionCargando, AceptacionGate } from './pages/AceptacionGate';
 import { useAceptacion } from './hooks/useAceptacion';
 import { parseRutaLegal } from './legal/logica';
@@ -65,6 +67,8 @@ import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
 import { isCloudEnabled } from './lib/supabase';
 import { hasTwitchIdentity } from './lib/access';
 import { necesitaRecorrido } from './lib/recorrido';
+import { selectPanelTournamentStore, startWidgetTournament } from './lib/tournamentCloud';
+import { parseSignupRoute } from './utils/tournamentSignup';
 
 export type AppRoute =
   | 'catalogo'
@@ -90,6 +94,7 @@ export type AppRoute =
   | 'admin'
   | 'nube'
   | 'legal'
+  | 'inscripcion'
   | 'widget';
 
 function resolveRoute(): AppRoute {
@@ -101,6 +106,8 @@ function resolveRoute(): AppRoute {
 
   // Términos y políticas: página pública
   if (parseRutaLegal(rawHash)) return 'legal';
+  // Inscripción de un torneo: página pública. Sin slug, #torneo es el panel (más abajo)
+  if (parseSignupRoute(rawHash)) return 'inscripcion';
 
   // 1. Ajustes de TTS (prioridad alta ante cualquier query param)
   if (
@@ -261,12 +268,17 @@ const Routes: React.FC = () => {
     if (!key) return;
     let stop: (() => void) | null = null;
     let alive = true;
-    startWidgetCloud(key).then((stopSync) => {
+    // A la vez que la configuración, el estado vivo del torneo: su almacén pasa a ser el de la nube
+    Promise.all([startWidgetCloud(key), startWidgetTournament(key)]).then(([stopSync, stopTournament]) => {
+      const stopAll = () => {
+        stopSync();
+        stopTournament();
+      };
       if (alive) {
-        stop = stopSync;
+        stop = stopAll;
         setWidgetReady(true);
       } else {
-        stopSync();
+        stopAll();
       }
     });
     return () => {
@@ -281,8 +293,16 @@ const Routes: React.FC = () => {
   // Las capas de OBS nunca piden iniciar sesión
   if (isWidget) return widgetReady ? <Widget /> : null;
 
+  // Estado vivo de «Torneos»: con una cuenta de streamer activa, el panel lo guarda en la nube.
+  // Va aquí y no en un efecto porque la página lee el almacén al montarse; repetirlo no hace nada.
+  selectPanelTournamentStore(
+    cloud.enabled && cloud.session && cloud.profile?.status === 'active' && cloud.profile.role !== 'admin' ? cloud.profile.id : null
+  );
+
   // Los términos y políticas se leen sin iniciar sesión y con la nube apagada
   if (currentRoute === 'legal') return <Legal />;
+  // La inscripción de un torneo la abre gente sin cuenta: tampoco pasa por el acceso
+  if (currentRoute === 'inscripcion') return <TournamentSignup />;
 
   // Bienvenida: el streamer que entró con Twitch y aún no la terminó (o aún no canjeó su código)
   if (cloud.enabled && cloud.session && cloud.profile) {

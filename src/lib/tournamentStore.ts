@@ -17,9 +17,12 @@
  *   la par; unos segundos de diferencia solo importan si los dos cambian algo a
  *   la vez.
  *
- * LÍMITE CONOCIDO: un comando escrito en el chat lo atiende la fuente de OBS y
- * cambia el estado de SU navegador. Si ese navegador no es el del panel, la
- * página del panel no se entera hasta que el estado viva en la nube.
+ * LÍMITE del almacén local: un comando escrito en el chat lo atiende la fuente
+ * de OBS y cambia el estado de SU navegador. Si ese navegador no es el del
+ * panel, la página del panel no se entera. Con la nube encendida y una cuenta
+ * activa se usa el almacén de lib/tournamentCloud.ts, que no tiene ese límite:
+ * App.tsx lo entrega con setTournamentStore (al panel, por la sesión; a la
+ * fuente de OBS, por la clave `k` de su URL).
  */
 
 import { TOURNAMENT_STATE_KEY, TOURNAMENT_STORAGE_KEY, loadSyncedTournamentState, normalizeTournamentState, type TournamentState } from '../types/tournament';
@@ -31,8 +34,18 @@ export interface TournamentStore {
   read: () => TournamentState | null;
   /** Guarda el estado y avisa a quien esté suscrito en otras pestañas o fuentes. */
   write: (state: TournamentState) => void;
-  /** Avisa de cada estado que llega de fuera. Devuelve la función para dejar de escuchar. */
-  subscribe: (listener: (state: TournamentState) => void) => () => void;
+  /**
+   * Avisa de cada estado que llega de fuera. Devuelve la función para dejar de
+   * escuchar. Con `forced`, el estado es el vigente en la nube y hay que
+   * adoptarlo aunque su fecha sea anterior a la del que se tiene (un cambio
+   * local que la nube rechazó).
+   */
+  subscribe: (listener: (state: TournamentState, forced?: boolean) => void) => () => void;
+  /**
+   * true cuando el estado vive en la nube y esta responde (lib/tournamentCloud.ts).
+   * Entonces la copia del estado deja de viajar dentro de los ajustes y de la URL de OBS.
+   */
+  cloud?: () => boolean;
 }
 
 function readLocal(): TournamentState | null {

@@ -6,8 +6,9 @@
  * el ESTADO VIVO, que lee y escribe por el almacén (lib/tournamentStore.ts).
  *
  * Cada cambio del estado se guarda al momento en el almacén y, con una pequeña
- * espera, vuelve a guardar los ajustes: dentro de ellos viaja la copia del
- * estado que le llega a OBS en otro equipo (ver types/tournament.ts).
+ * espera, vuelve a guardar los ajustes. Sin la nube, dentro de ellos viaja la
+ * copia del estado que le llega a OBS en otro equipo (ver types/tournament.ts);
+ * con el estado en la nube (lib/tournamentCloud.ts) esa copia se quita.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -59,18 +60,20 @@ export function useTournament() {
     const timer = setTimeout(() => {
       dirtyRef.current = false;
       const clean = normalizeTournamentSettings(settings);
-      saveTournamentSettings(clean, stateRef.current);
+      // Con el estado en la nube (lib/tournamentCloud.ts) la copia sobra y se quita; si la nube no responde, viaja como siempre
+      saveTournamentSettings(clean, tournamentStore().cloud?.() ? null : stateRef.current);
       postBus({ type: 'TOURNAMENT_SETTINGS_UPDATE', settings: clean });
       setSaved(true);
     }, SAVE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [settings, state]);
 
-  // Estado cambiado en otra pestaña o por un comando en una fuente de OBS de este navegador
+  // Estado cambiado en otra pestaña, por un comando en una fuente de OBS o, con la nube, en otro equipo.
+  // `forced`: es el vigente en la nube y se adopta siempre (un cambio de aquí pudo ser rechazado)
   useEffect(
     () =>
-      tournamentStore().subscribe((next) => {
-        if (!isNewerState(next, stateRef.current)) return;
+      tournamentStore().subscribe((next, forced) => {
+        if (!forced && !isNewerState(next, stateRef.current)) return;
         stateRef.current = next;
         setStateValue(next);
       }),
