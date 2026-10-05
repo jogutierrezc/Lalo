@@ -1,0 +1,125 @@
+COMANDOS PARA MODERADORES · LALO STREAM SUITE
+==============================================
+
+Se escriben en el chat del canal. Solo funcionan si los escribe el streamer
+o alguien con la insignia de moderador.
+
+Cuando un comando funciona, en el directo sale una placa «Moderación» con tu
+nombre y suena un timbre. Lalo no contesta en el chat: la confirmación se ve
+en el stream, con el retraso normal del directo.
+
+REGLA DE ORO: el comando va solo en el mensaje, tal como está aquí.
+"!pausa" funciona. "!pausa porfa" no.
+
+
+1. LA VOZ DEL CHAT
+------------------
+
+  !saltar                  Corta el mensaje que suena y pasa al siguiente.
+  !pausa                   Pausa la voz (el mensaje que suena termina).
+  !continuar               Reanuda la voz.
+  !limpiar                 Vacía la cola de mensajes en espera.
+  !silencio                Emergencia: corta la voz, vacía la cola y pausa.
+
+  !bloquear usuario        La voz deja de leer a ese usuario.
+  !desbloquear usuario     Lo vuelve a permitir.
+  !silenciar usuario 30    Lo bloquea 30 minutos (sin número, 10).
+
+  !mudo                    La voz no suena; los mensajes salen solo en pantalla.
+  !voz                     La voz vuelve a sonar.
+
+  !manual                  Cada mensaje espera a que lo aprueben.
+  !ok                      Aprueba el mensaje más antiguo en espera.
+  !no                      Rechaza el mensaje más antiguo en espera.
+  !auto                    Vuelve a leer sin aprobar.
+
+
+2. SALUDOS, CORTOS Y RAIDS
+--------------------------
+
+  !so canal                Saluda a un canal. Con la capa de raid en pantalla
+                           sale su placa con un corto; si no, lo anuncia la voz.
+                           Ejemplo:  !so pau_rl
+  !clip enlace             Pone un corto concreto en pantalla.
+                           Ejemplo:  !clip https://clips.twitch.tv/NombreDelCorto
+  !cortar                  Retira el saludo que está en pantalla.
+
+  El canal va sin espacios y puede llevar @. Un solo dato detrás del comando.
+
+
+3. PREDICCIONES
+---------------
+
+  !prediccion texto        La voz avisa al chat de que hay una predicción abierta.
+                           Ejemplo:  !prediccion ¿Ganamos esta partida?
+  !prediccion              El mismo aviso, sin texto.
+                           También: !pred  !prediction
+
+  Ojo: esto solo la ANUNCIA. La predicción se crea en Twitch como siempre
+  (/prediction o el panel de moderación).
+
+
+4. RULETA
+---------
+
+  !ruleta                  Abre la ruleta.
+  !cerrarruleta            La cierra.
+
+  La ruleta la giran los puntos del canal o los bits, no un comando.
+
+
+5. MÚSICA («AHORA SUENA»)
+-------------------------
+
+  !cancion                 Muestra la canción que está sonando.
+  !ocultarcancion          La oculta.
+
+
+6. BATALLAS Y ENCUESTAS
+-----------------------
+
+  !poll Gatos vs Perros            Batalla de 60 segundos.
+  !poll Gatos vs Perros 45         La misma, de 45 segundos.
+  !poll "¿Qué juego?" "Uno" "Otro" 90
+                                   Con título, dos opciones y duración.
+  !poll Título | Opción A | Opción B | 60
+                                   Lo mismo, separado con barras.
+  !poll                            Lanza la batalla que el streamer dejó preparada.
+  !poll stop                       La cancela.
+                                   También: !poll cancelar  !poll fin
+
+  En vez de !poll vale !encuesta, !batalla o !versus.
+  La duración va de 10 a 600 segundos.
+  El chat vota escribiendo 1 o 2 (también !voto 1, !voto 2).
+
+
+7. SI ALGO VA MAL
+-----------------
+
+  !actualizar              Recarga la fuente de Lalo en OBS.
+
+
+8. CON EL COMANDO DE LA VOZ DELANTE
+-----------------------------------
+
+  Todo lo de los apartados 1 a 5 y el 7 funciona también con "!s" delante
+  y sin la segunda exclamación:
+
+      !s pausa          igual que   !pausa
+      !s so pau_rl      igual que   !so pau_rl
+      !s cortar         igual que   !cortar
+      !s ruleta         igual que   !ruleta
+
+  Por eso un moderador no puede pedirle a la voz que lea solo esa palabra:
+  "!s pausa" siempre es la orden de pausar.
+
+
+NOTAS PARA EL STREAMER
+----------------------
+  - Los nombres de !so, !clip, !cortar, !ruleta, !cerrarruleta, !cancion,
+    !ocultarcancion y el "!s" de la voz se pueden cambiar en el panel. Si los
+    cambiaste, corrige esta lista antes de enviarla.
+  - Cada comando necesita su capa abierta en OBS: los de la ruleta, la fuente
+    de la ruleta; los de música, «Ahora suena»; !clip y !cortar, el saludo de
+    raid. Con «Todo en uno» van todos.
+  - La lista sale del código de Lalo del 5 de octubre de 2026.

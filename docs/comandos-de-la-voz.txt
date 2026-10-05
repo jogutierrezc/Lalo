@@ -1,0 +1,100 @@
+COMANDOS DE LA VOZ DEL CHAT · LALO STREAM SUITE
+================================================
+
+Se escriben en el chat de Twitch del canal.
+Sacados del código de Lalo el 5 de octubre de 2026 (src/utils/moderation.ts).
+
+
+1. PARA QUE LA VOZ LEA UN MENSAJE (cualquier espectador con permiso)
+--------------------------------------------------------------------
+
+  !s <mensaje>            La voz lee el mensaje.
+                          Ejemplo:  !s hola a todos
+
+  El comando "!s" es el de serie. El streamer puede cambiarlo en
+  «Voz del chat». Quién puede usarlo (todos, subs, VIP, mods), la espera
+  entre mensajes y el largo máximo también se ajustan allí.
+
+  Con emoción: una etiqueta entre corchetes al principio del mensaje.
+                          Ejemplo:  !s [feliz] gracias por el raid
+
+    [feliz]        alegre, contento
+    [emocionado]   hype, entusiasmado
+    [triste]       tristeza, pena
+    [enojado]      enfadado, molesto, furioso
+    [sorprendido]  asombrado, impactado
+    [susurro]      bajito, secreto
+    [grito]        gritando, fuerte
+    [risa]         riendo, jaja
+    [llorando]     llanto
+    [miedo]        asustado, terror
+    [canto]        cantando, canción
+    [calmado]      tranquilo, relax
+    [suspiro]      suspirando
+    [bostezo]      sueño, cansado
+    [nervioso]     nervios, inquieto
+
+  También valen en inglés: [happy], [excited], [sad], [angry]...
+
+
+2. COMANDOS DE MODERACIÓN (solo el streamer y los moderadores)
+--------------------------------------------------------------
+
+  Cada uno se puede escribir de dos formas: directo (!pausa) o con el
+  prefijo de la voz (!s pausa). Va solo en el mensaje, sin más texto.
+  Al usarlo sale en el directo una placa «Moderación» con quién lo hizo,
+  y suenan un timbre y una locución (se pueden apagar en «Voz del chat»).
+
+  Lo que está sonando y la cola
+    !saltar                 Corta el mensaje que suena y pasa al siguiente.
+                            También: !skip  !siguiente  !next
+    !pausa                  Pausa la voz; el mensaje que suena termina.
+                            También: !pause  !pausar
+    !continuar              Reanuda la voz.
+                            También: !resume  !reanudar
+    !limpiar                Vacía la cola de mensajes en espera.
+                            También: !clear  !vaciar
+    !silencio               Corta la voz, vacía la cola y deja todo en pausa.
+                            También: !panic  !panico
+
+  Usuarios
+    !bloquear <usuario>     La voz deja de leer a ese usuario.
+                            También: !block  !ban
+                            Ejemplo:  !bloquear pau_rl
+    !desbloquear <usuario>  Lo vuelve a permitir y quita su silencio temporal.
+                            También: !unblock  !unban
+    !silenciar <usuario> <minutos>
+                            Bloqueo temporal. Sin minutos, 10. Máximo 1440.
+                            También: !timeout
+                            Ejemplo:  !silenciar pau_rl 30
+
+  Aprobación manual
+    !manual                 Cada mensaje espera a que alguien lo apruebe.
+    !auto                   Vuelve a leerlos sin aprobar. También: !automatico
+    !ok                     Aprueba el mensaje más antiguo que espera.
+                            También: !aprobar  !approve
+    !no                     Rechaza el mensaje más antiguo que espera.
+                            También: !rechazar  !reject
+
+  Solo texto
+    !mudo                   La voz no suena; los mensajes salen solo en pantalla.
+                            También: !mute
+    !voz                    Vuelve a sonar. También: !unmute
+
+  Fuente de OBS
+    !actualizar             Recarga la fuente de OBS.
+                            También: !reload  !update  !reiniciar
+
+
+3. A TENER EN CUENTA
+--------------------
+
+  - Los comandos de moderación solo los obedece Lalo si quien escribe es el
+    streamer o lleva la insignia de moderador en ese mensaje.
+  - El nombre de usuario puede ir con o sin @.
+  - Si un moderador escribe "!s pausa", Lalo lo toma como la orden de pausar,
+    no como un mensaje para leer.
+  - Lalo no responde en el chat: la confirmación se ve y se oye en el directo.
+  - Otras capas tienen sus propios comandos (saludo de raid, ruleta, «Ahora
+    suena», batallas, mascota). No están en esta lista: se ven y se cambian
+    en la página de cada una.

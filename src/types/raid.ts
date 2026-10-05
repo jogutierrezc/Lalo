@@ -25,6 +25,8 @@ export interface RaidSettings {
   clipDays: number; // se busca el corto más visto de estos últimos días
   voice: boolean; // la voz da la bienvenida en las raids
   voiceTemplate: string; // texto con {canal} y {personas}
+  /** Voz de la bienvenida y de los avisos por comando (!so, !prediccion). Vacío: la de «Voz del chat». */
+  voiceId: string;
   frame: RaidFrame;
   commands: RaidCommands;
   cooldownSec: number; // espera de cada comando entre un uso y el siguiente
@@ -48,6 +50,9 @@ export const RAID_LIMITS = {
 export const DEFAULT_RAID_COMMANDS: RaidCommands = { so: '!so', clip: '!clip', cut: '!cortar' };
 export const DEFAULT_RAID_TEMPLATE = 'Gracias por la raid, {canal}. Bienvenidas las {personas} personas que llegan.';
 
+/** Brisa, la voz «joven y alegre» del catálogo de serie: la que da los avisos si el streamer no elige otra. */
+export const ANNOUNCER_VOICE_ID = '654e33e85be3406d90b9723712a035a9';
+
 export const DEFAULT_RAID_SETTINGS: RaidSettings = {
   enabled: true,
   minViewers: 5,
@@ -55,6 +60,7 @@ export const DEFAULT_RAID_SETTINGS: RaidSettings = {
   clipDays: 30,
   voice: true,
   voiceTemplate: DEFAULT_RAID_TEMPLATE,
+  voiceId: ANNOUNCER_VOICE_ID,
   frame: 'cabina',
   commands: DEFAULT_RAID_COMMANDS,
   cooldownSec: 10,
@@ -110,6 +116,8 @@ export function normalizeRaidSettings(raw: unknown): RaidSettings {
     clipDays: int(source.clipDays, RAID_LIMITS.clipDays, d.clipDays),
     voice: bool(source.voice, d.voice),
     voiceTemplate: template ? template.slice(0, RAID_LIMITS.template) : d.voiceTemplate,
+    // Sin elegir nunca, Brisa; vacío a propósito, la voz del chat
+    voiceId: typeof source.voiceId === 'string' ? (/^[A-Za-z0-9_-]{8,64}$/.test(source.voiceId) ? source.voiceId : '') : d.voiceId,
     frame: RAID_FRAMES.some((frame) => frame.id === source.frame) ? (source.frame as RaidFrame) : d.frame,
     commands: normalizeCommands(source.commands),
     cooldownSec: int(source.cooldownSec, RAID_LIMITS.cooldownSec, d.cooldownSec),

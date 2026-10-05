@@ -19,7 +19,8 @@ import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
 import { useRaidSettings } from '../hooks/useRaidSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
-import { DEFAULT_RAID_TEMPLATE, RAID_FRAMES, RAID_LIMITS, encodeRaidSettings, normalizeRaidSettings } from '../types/raid';
+import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
+import { ANNOUNCER_VOICE_ID, DEFAULT_RAID_TEMPLATE, RAID_FRAMES, RAID_LIMITS, encodeRaidSettings, normalizeRaidSettings } from '../types/raid';
 import { loadSettings } from '../types/settings';
 import { RaidSampleKind, normalizeLogin, parseClipRef, readClipResponse, sampleGreeting, welcomeText } from '../utils/raidLogic';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
@@ -83,6 +84,7 @@ export const RaidStudio: React.FC = () => {
 
   const [voice] = useState(loadSettings);
   const channel = voice.channel;
+  const voices = useVoiceCatalogue().catalogue.voices;
   // El monitor usa los ajustes ya validados, igual que los recibirá OBS
   const clean = useMemo(() => normalizeRaidSettings(raidSettings), [raidSettings]);
 
@@ -275,11 +277,25 @@ export const RaidStudio: React.FC = () => {
               <h2>Bienvenida con voz</h2>
               <div className="cab-field">
                 <Toggle label="La voz da la bienvenida en las raids" checked={raidSettings.voice} onChange={(voiceOn) => updateSettings({ voice: voiceOn })} />
-                <span className="cab-hint">
-                  Usa la voz que tengas elegida en «Voz del chat» y espera su turno en la misma cola. En los saludos por
-                  comando no habla.
-                </span>
+                <span className="cab-hint">Espera su turno en la misma cola que la Voz del chat.</span>
               </div>
+              <Field
+                label="Voz de los avisos"
+                htmlFor={`${uid}-voice`}
+                hint="La usan la bienvenida de una raid y los avisos por comando (el saludo sin placa y las predicciones). De serie, Brisa."
+              >
+                <select id={`${uid}-voice`} className="cab-inp" value={clean.voiceId} onChange={(e) => updateSettings({ voiceId: e.target.value })}>
+                  <option value="">La misma que la Voz del chat</option>
+                  {voices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                  {clean.voiceId && !voices.some((item) => item.id === clean.voiceId) && (
+                    <option value={clean.voiceId}>{clean.voiceId === ANNOUNCER_VOICE_ID ? 'Brisa' : 'Voz personalizada'}</option>
+                  )}
+                </select>
+              </Field>
               <Field
                 label="Qué dice"
                 htmlFor={`${uid}-tpl`}
@@ -332,7 +348,10 @@ export const RaidStudio: React.FC = () => {
             {/* ---------- Comandos ---------- */}
             <section className="cab-mod" data-tour="raid-commands">
               <h2>Comandos de moderación</h2>
-              <p className="cab-hint">Solo los aceptan el streamer y los moderadores. Escríbelos en el chat de tu canal.</p>
+              <p className="cab-hint">
+                Solo los aceptan el streamer y los moderadores. Escríbelos en el chat de tu canal. También valen con el comando de la voz
+                delante: «{voice.voiceCommand || '!s'} {clean.commands.so.slice(1)} canal».
+              </p>
               <div className="raid-cmds">
                 {commandFields.map(([key, label, example]) => (
                   <Field key={key} label={label} htmlFor={`${uid}-cmd-${key}`} hint={`En el chat: ${example}`}>
@@ -367,6 +386,11 @@ export const RaidStudio: React.FC = () => {
               <p className="cab-note">
                 Si llega un saludo mientras otro está en pantalla, espera su turno. Como mucho esperan cinco; los demás
                 se descartan.
+              </p>
+              <p className="cab-note">
+                Sin esta capa en OBS, «{clean.commands.so} canal» no se pierde: la fuente de la voz lo anuncia en voz alta. Y con
+                «!prediccion» más un texto, la voz avisa al chat de que hay una predicción abierta (Lalo solo la anuncia: la predicción
+                se crea en Twitch).
               </p>
             </section>
           </div>

@@ -57,6 +57,7 @@ import '../styles/raid.css';
 import { PetsSettings, decodePetsSettings, loadPetsSettings, normalizePetsSettings } from '../types/pets';
 import { PetLayer, PetLayerHandle, PetVoiceEvent } from '../components/mascotas/PetLayer';
 import { SAMPLE_CUES } from '../utils/petsLogic';
+import { parseStaffVoice, staffVoiceText, unprefixed } from '../utils/staffVoice';
 import '../styles/mascotas.css';
 import { GameSettings, decodeGameSettings, loadGameSettings, normalizeGameSettings } from '../types/game';
 import { GameWidgetLayer } from '../components/juego/GameWidgetLayer';
@@ -426,16 +427,21 @@ export const Widget: React.FC = () => {
   const rouletteRef = useRef<RouletteLayerHandle | null>(null);
   // Confirmación en pantalla de un comando que atendió una capa (se asigna más abajo, con el aviso de moderación)
   const staffNoticeRef = useRef<(sender: string, message: string) => void>(() => {});
+  // Comandos que la voz atiende sola: !so sin capa de raid y !prediccion (se asigna más abajo, con la cola de voz)
+  const staffVoiceRef = useRef<(message: string) => boolean>(() => false);
   const handleStaffMessage = useCallback((message: string, sender: { name: string; role: UserRole }) => {
-    const taken =
-      (raidRef.current?.command(message, sender) ?? false) ||
-      (sceneRef.current?.raidCommand(message, sender) ?? false) ||
-      (rouletteRef.current?.command(message, sender) ?? false) ||
-      (musicRef.current?.command(message, sender) ?? false) ||
-      (sceneRef.current?.signal({ kind: 'staff', message, sender }) ?? false);
+    // «!s so canal» vale lo mismo que «!so canal»: se prueba el mensaje tal cual y sin el prefijo de la voz
+    const variants = [message, unprefixed(message, voiceCommandRef.current)].filter((item): item is string => Boolean(item));
+    const byLayer = (text: string) =>
+      (raidRef.current?.command(text, sender) ?? false) ||
+      (sceneRef.current?.raidCommand(text, sender) ?? false) ||
+      (rouletteRef.current?.command(text, sender) ?? false) ||
+      (musicRef.current?.command(text, sender) ?? false) ||
+      (sceneRef.current?.signal({ kind: 'staff', message: text, sender }) ?? false);
+    const taken = variants.find(byLayer) ?? variants.find((text) => staffVoiceRef.current(text));
     // Quien lo escribió ve en el directo que su comando llegó
-    if (taken) staffNoticeRef.current(sender.name, message);
-    return taken;
+    if (taken) staffNoticeRef.current(sender.name, taken);
+    return Boolean(taken);
   }, []);
 
   // Integraciones. «Ahora suena»: fuente propia (app=music) o dentro de «Todo en uno». La muestran y
@@ -534,7 +540,24 @@ export const Widget: React.FC = () => {
   });
 
   // La bienvenida de una raid entra en la misma cola de voz que el chat
-  const speakRaidWelcome = useCallback((text: string) => enqueueManualMessage(text, 'Raid', true), [enqueueManualMessage]);
+  // Con la voz de los avisos que el streamer eligió en «Raids» (Brisa, si no tocó nada)
+  const raidSettingsRef = useRef(raidSettings);
+  raidSettingsRef.current = raidSettings;
+  const speakRaidWelcome = useCallback(
+    (text: string) => enqueueManualMessage(text, 'Raid', true, { voiceId: raidSettingsRef.current.voiceId || undefined }),
+    [enqueueManualMessage]
+  );
+  // La voz atiende !prediccion y, si esta fuente no tiene la capa del saludo de raid, también !so.
+  // Solo en las fuentes que llevan la voz del chat: en las demás no hablaría nadie o hablarían dos
+  staffVoiceRef.current = (message) => {
+    if (!['', 'tts', 'all'].includes(appParam)) return false;
+    const command = parseStaffVoice(message, raidSettingsRef.current.commands);
+    if (!command) return false;
+    enqueueManualMessage(staffVoiceText(command), command.kind === 'so' ? 'Raid' : 'Predicción', true, {
+      voiceId: raidSettingsRef.current.voiceId || undefined,
+    });
+    return true;
+  };
   // Lo que dice la ruleta también: una sola voz, la de «Voz del chat», y una frase detrás de otra
   const speakRoulette = useCallback((text: string) => enqueueManualMessage(text, 'Ruleta', true), [enqueueManualMessage]);
   const handleTwitchEvent = useCallback((event: TwitchEvent) => {
@@ -668,9 +691,18 @@ export const Widget: React.FC = () => {
   // Observador de despliegues seguro para OBS Studio:
   // Detecta si se publica un nuevo commit en Vercel y actualiza el overlay de forma transparente
   // ÚNICAMENTE cuando está inactivo y con cooldown de 30 segundos para prevenir cualquier bucle.
+  //
+  // La versión con la que arrancó la fuente se recuerda en una referencia y el vigilante se monta una
+  // sola vez. Antes se reiniciaba con cada cambio de la cola y volvía a tomar la versión del servidor
+  // como punto de partida: en un chat activo podía no enterarse nunca de un despliegue.
+  const busyRef = useRef(false);
+  busyRef.current = isPlaying || messageQueue.length > 0;
   useEffect(() => {
     let initialDeployment: string | null = null;
+    let pendingSince = 0;
     let isChecking = false;
+    /** Con la voz ocupada se espera a que termine; pasado este tiempo se recarga igual. */
+    const MAX_WAIT_MS = 90000;
 
     const checkDeployment = async () => {
       if (isChecking) return;
@@ -686,11 +718,14 @@ export const Widget: React.FC = () => {
         } else if (serverDeployment && initialDeployment !== serverDeployment) {
           const isManual = typeof serverDeployment === 'string' && serverDeployment.includes('manual-reload');
           const lastReload = Number(sessionStorage.getItem('last_auto_update_ts') || '0');
+          if (!pendingSince) pendingSince = Date.now();
+          // No se corta una frase a medias: se espera a que la voz esté libre, con un tope
+          const free = !busyRef.current || Date.now() - pendingSince > MAX_WAIT_MS;
 
           // Si el streamer presionó "Actualizar OBS", recargar sin esperar cooldown
-          if (isManual || Date.now() - lastReload > 25000) {
+          if (isManual || (free && Date.now() - lastReload > 25000)) {
             sessionStorage.setItem('last_auto_update_ts', Date.now().toString());
-            console.log('[OBS Widget] Actualización detectada desde el panel. Recargando overlay en OBS...');
+            console.log('[OBS Widget] Actualización detectada. Recargando overlay en OBS...');
             window.location.reload();
           }
         }
@@ -708,7 +743,7 @@ export const Widget: React.FC = () => {
       clearTimeout(initialTimer);
       clearInterval(intervalTimer);
     };
-  }, [isPlaying, messageQueue.length]);
+  }, []);
 
   // demo=1 en la fuente de la voz o de las alertas: tarjeta de muestra fija para colocarla y ver el tamaño
   const cardDemo = getURLParam('demo') === '1' && ['', 'tts', 'alerts'].includes(appParam);
