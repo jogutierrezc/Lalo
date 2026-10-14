@@ -216,6 +216,7 @@ export const NuevaVozPanel: React.FC<{
 
   // ---------- Datos y permiso ----------
   const [name, setName] = useState('');
+  const [provider, setProvider] = useState<'fish' | 'elevenlabs'>('fish');
   const [description, setDescription] = useState('');
   const [owner, setOwner] = useState<'own' | 'other'>('own');
   const [permissionBy, setPermissionBy] = useState('');
@@ -258,6 +259,7 @@ export const NuevaVozPanel: React.FC<{
         owner,
         permissionBy: owner === 'other' ? permissionBy.trim() : '',
         confirmed,
+        provider,
         files:
           source === 'mic'
             ? [{ name: 'grabacion.wav', type: 'audio/wav', size: parts[0].byteLength }]
@@ -404,6 +406,15 @@ export const NuevaVozPanel: React.FC<{
           <h3>
             <i>2</i>Datos de la voz
           </h3>
+          <div className="cab-field">
+            <label className="cab-label" htmlFor={`${uid}-provider`}>
+              Motor de voz
+            </label>
+            <select id={`${uid}-provider`} className="cab-inp" value={provider} onChange={(event) => setProvider(event.target.value as 'fish' | 'elevenlabs')}>
+              <option value="fish">Fish Audio (el de siempre)</option>
+              <option value="elevenlabs">ElevenLabs (nuevo, solo cuentas activadas)</option>
+            </select>
+          </div>
           <div className="cab-field">
             <label className="cab-label" htmlFor={`${uid}-name`}>
               Nombre

@@ -34,6 +34,7 @@ import {
   type NodeLikeResponse,
 } from '../storage/handlers.js';
 import type { Env } from '../storage/r2.js';
+import { elevenCloneVoice, elevenDeleteVoice, elevenGetVoice, elevenKey, isElevenVoiceId } from '../elevenlabs.js';
 import {
   VOICE_DESCRIPTION_MAX,
   VOICE_MAX_TOTAL_BYTES,
@@ -47,7 +48,7 @@ import {
   type VoiceEnvelopeMeta,
 } from './rules.js';
 
-export type VoicesRoute = 'voices/create' | 'voices/delete';
+export type VoicesRoute = 'voices/create' | 'voices/delete' | 'voices/eleven-import';
 
 const FISH_BASE = 'https://api.fish.audio';
 /** Margen para la ficha que acompaña a los audios. */
@@ -121,9 +122,6 @@ async function createVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: Fet
   if (!isAdmin(ctx.caller)) return fail(403, 'not_admin', 'Solo el administrador puede crear voces.');
 
   const apiKey = fishKey(env);
-  if (!apiKey) {
-    return fail(503, 'fish_not_configured', 'Al servidor le falta la clave de Fish Audio.', { missing: ['FISH_AUDIO_API_KEY'] });
-  }
 
   const bytes = bytesOf(req.body);
   if (!bytes) return fail(400, 'bad_request', 'El envío no llegó con la forma esperada. Recarga la página y vuelve a probar.');
@@ -155,6 +153,13 @@ async function createVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: Fet
     (existing.data ?? []).map((row) => String((row as { name: unknown }).name))
   );
   if (nameProblem) return fail(409, 'bad_name', nameProblem);
+
+  if (meta.provider === 'elevenlabs') {
+    return createElevenVoice(ctx, env, doFetch, meta, parts);
+  }
+  if (!apiKey) {
+    return fail(503, 'fish_not_configured', 'Al servidor le falta la clave de Fish Audio.', { missing: ['FISH_AUDIO_API_KEY'] });
+  }
 
   // 1. El modelo en Fish Audio
   let response: Response;
@@ -227,6 +232,103 @@ async function createVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: Fet
   return { status: 200, body: { voice: inserted.data, state, ready: state === 'trained' } };
 }
 
+// ---------- ElevenLabs ----------
+
+type CatalogVoice = { name: string; description: string; origin: string; owner: string; permissionBy: string };
+
+/** Fila del catálogo para una voz de ElevenLabs. Nace oculta, como las de Fish. */
+async function insertElevenVoice(ctx: Context, voiceId: string, info: CatalogVoice): Promise<ApiResult> {
+  const existing = await ctx.db.from('voices').select('name');
+  if (existing.error) return fail(502, 'catalog_read', `No se pudo leer el catálogo: ${existing.error.message}. ${MIGRATION_HINT}`);
+  const nameProblem = voiceNameProblem(info.name, (existing.data ?? []).map((row) => String((row as { name: unknown }).name)));
+  if (nameProblem) return fail(409, 'bad_name', nameProblem);
+
+  const inserted = await ctx.db
+    .from('voices')
+    .insert({
+      name: info.name.trim(),
+      description: info.description.trim(),
+      reference_id: voiceId,
+      provider: 'elevenlabs',
+      visible: false,
+      is_default: false,
+      origin: info.origin,
+      voice_owner: info.owner,
+      permission_by: info.owner === 'other' ? info.permissionBy.trim() : null,
+      permission_confirmed_at: new Date().toISOString(),
+      created_by: ctx.caller.id,
+    })
+    .select('*')
+    .maybeSingle();
+  if (inserted.error || !inserted.data) {
+    return fail(502, 'catalog_failed', `No se pudo guardar la voz en el catálogo: ${inserted.error?.message ?? 'sin respuesta'}. Puede faltar la migración 0018_elevenlabs.sql.`);
+  }
+  return { status: 200, body: { voice: inserted.data, state: 'trained', ready: true } };
+}
+
+/** Clona la voz en ElevenLabs con las muestras y la añade al catálogo. */
+async function createElevenVoice(
+  ctx: Context,
+  env: Env,
+  doFetch: FetchLike,
+  meta: VoiceEnvelopeMeta,
+  parts: Uint8Array[]
+): Promise<ApiResult> {
+  if (!elevenKey(env)) {
+    return fail(503, 'eleven_not_configured', 'Al servidor le falta la clave de ElevenLabs.', { missing: ['ELEVENLABS_API_KEY'] });
+  }
+  let voiceId: string;
+  try {
+    voiceId = await elevenCloneVoice(
+      meta.name.trim(),
+      meta.description.trim(),
+      parts.map((bytes, index) => ({ name: meta.files[index].name, type: mimeOf(meta.files[index]), bytes })),
+      env,
+      doFetch
+    );
+  } catch (err) {
+    return fail(502, 'eleven_failed', `ElevenLabs no pudo crear la voz: ${describe(err)}`, { stage: 'elevenlabs' });
+  }
+  const saved = await insertElevenVoice(ctx, voiceId, meta);
+  if (saved.status !== 200) {
+    // Sin fila no debe quedar un clon suelto gastando cupo de voces
+    await elevenDeleteVoice(voiceId, env, doFetch);
+  }
+  return saved;
+}
+
+/** Añade al catálogo una voz que ya existe en la cuenta de ElevenLabs (no sube audio). */
+async function importElevenVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: FetchLike): Promise<ApiResult> {
+  if (!isAdmin(ctx.caller)) return fail(403, 'not_admin', 'Solo el administrador puede añadir voces.');
+  if (!elevenKey(env)) {
+    return fail(503, 'eleven_not_configured', 'Al servidor le falta la clave de ElevenLabs.', { missing: ['ELEVENLABS_API_KEY'] });
+  }
+  const body = bodyOf(req);
+  const voiceId = typeof body.voiceId === 'string' ? body.voiceId.trim() : '';
+  if (!isElevenVoiceId(voiceId)) return fail(400, 'bad_request', 'El id de la voz de ElevenLabs no tiene la forma esperada.');
+  const owner = body.owner === 'other' ? 'other' : 'own';
+  const permissionBy = typeof body.permissionBy === 'string' ? body.permissionBy : '';
+  const permission = permissionProblem(owner, permissionBy, body.confirmed === true);
+  if (permission) return fail(400, 'no_permission', permission);
+
+  let found: Awaited<ReturnType<typeof elevenGetVoice>>;
+  try {
+    found = await elevenGetVoice(voiceId, env, doFetch);
+  } catch (err) {
+    return fail(502, 'eleven_unreachable', `No se pudo llegar a ElevenLabs: ${describe(err)}`);
+  }
+  if (!found) return fail(404, 'eleven_not_found', 'ElevenLabs no encuentra esa voz con la clave configurada.');
+
+  const name = (typeof body.name === 'string' && body.name.trim()) || found.name;
+  return insertElevenVoice(ctx, voiceId, {
+    name: name.slice(0, 18),
+    description: typeof body.description === 'string' ? body.description.slice(0, VOICE_DESCRIPTION_MAX) : '',
+    origin: 'uploaded',
+    owner,
+    permissionBy,
+  });
+}
+
 // ---------- Eliminar ----------
 
 async function deleteVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: FetchLike): Promise<ApiResult> {
@@ -236,7 +338,7 @@ async function deleteVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: Fet
   const catalogOnly = body.catalogOnly === true;
   if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) return fail(400, 'bad_request', 'Falta la voz que hay que eliminar.');
 
-  const found = await ctx.db.from('voices').select('id, name, reference_id, is_default').eq('id', id).maybeSingle();
+  const found = await ctx.db.from('voices').select('id, name, reference_id, is_default, provider').eq('id', id).maybeSingle();
   if (found.error) return fail(502, 'catalog_read', `No se pudo leer el catálogo: ${found.error.message}. ${MIGRATION_HINT}`);
   if (!found.data) return fail(404, 'not_found', 'Esa voz ya no está en el catálogo.');
   if (found.data.is_default) {
@@ -246,7 +348,9 @@ async function deleteVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: Fet
 
   // 1. El modelo en Fish Audio
   let fish: 'deleted' | 'not_found' | 'not_owned' | 'skipped' = 'skipped';
-  if (!catalogOnly) {
+  // Las voces de ElevenLabs solo se quitan del catálogo: la voz sigue en esa cuenta por si se usa en otro sitio
+  const isEleven = found.data.provider === 'elevenlabs';
+  if (!catalogOnly && !isEleven) {
     const apiKey = fishKey(env);
     if (!apiKey) {
       return fail(503, 'fish_not_configured', 'Al servidor le falta la clave de Fish Audio, así que no puede borrar el modelo.', {
@@ -306,7 +410,9 @@ export async function handleVoicesApi(
   try {
     const ctx = await identify(req, env);
     if (isResult(ctx)) return ctx;
-    return route === 'voices/create' ? await createVoice(ctx, req, env, doFetch) : await deleteVoice(ctx, req, env, doFetch);
+    if (route === 'voices/create') return await createVoice(ctx, req, env, doFetch);
+    if (route === 'voices/eleven-import') return await importElevenVoice(ctx, req, env, doFetch);
+    return await deleteVoice(ctx, req, env, doFetch);
   } catch (err) {
     console.error(`[Lalo voces] ${route}`, describe(err));
     return fail(500, 'server_error', 'El servidor tuvo un error inesperado.');

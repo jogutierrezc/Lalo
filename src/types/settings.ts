@@ -7,6 +7,8 @@ export interface TTSSettings extends Appearance, Moderation {
   channel: string;
   model: string;
   referenceId: string;
+  /** Motor de la voz elegida. ElevenLabs solo funciona si el administrador lo activó en la cuenta. */
+  engine: 'fish' | 'elevenlabs';
   volume: number; // 0 to 1
   speed: number; // 0.75 a 1.5
   theme: 'glass-dark' | 'neon-purple' | 'cyberpunk';
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: TTSSettings = {
   channel: 'laloplay_',
   model: 's2.1-pro-free',
   referenceId: '5669f8e58ecb476a982bc2b67ac6b538', // Chispa (por defecto en cuentas nuevas)
+  engine: 'fish',
   volume: 0.85,
   speed: 1.0,
   theme: 'glass-dark',
@@ -79,6 +82,7 @@ export function normalizeSettings(raw: unknown): TTSSettings {
     ...parsed,
     volume: numberIn(parsed.volume, 0, 1, DEFAULT_SETTINGS.volume),
     speed: numberIn(parsed.speed, SPEED_MIN, SPEED_MAX, DEFAULT_SETTINGS.speed),
+    engine: parsed.engine === 'elevenlabs' ? 'elevenlabs' : 'fish',
     announceSender: parsed.announceSender !== false,
     announceTemplate: typeof parsed.announceTemplate === 'string' ? parsed.announceTemplate : DEFAULT_SETTINGS.announceTemplate,
     preSound: normalizePreSound(parsed.preSound),

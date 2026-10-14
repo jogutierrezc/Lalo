@@ -15,7 +15,7 @@ import { encodeVoiceEnvelope, type VoiceEnvelopeMeta } from '../../server/voices
 // ---------- Catálogo del streamer ----------
 
 // Las columnas se piden por su nombre: la tabla no deja leer las del permiso (migración 0009)
-const PUBLIC_COLUMNS = 'id, name, description, reference_id, visible, is_default, origin, created_at';
+const PUBLIC_COLUMNS = 'id, name, description, reference_id, visible, is_default, origin, created_at, provider';
 
 let cached: VoiceCatalogue | null = null;
 let pending: Promise<VoiceCatalogue> | null = null;
@@ -185,6 +185,32 @@ export async function createVoiceRequest(
   });
 }
 
+/** Añade al catálogo una voz que ya existe en la cuenta de ElevenLabs. */
+export async function importElevenVoiceRequest(input: {
+  voiceId: string;
+  name: string;
+  description: string;
+  owner: 'own' | 'other';
+  permissionBy: string;
+  confirmed: boolean;
+}): Promise<CreateVoiceResult> {
+  const token = await sessionToken();
+  let res: Response;
+  try {
+    res = await fetch('/api/voices/eleven-import', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    throw new VoiceApiError('No se pudo conectar con el servidor de Lalo. Revisa tu conexión.', 'offline', 0);
+  }
+  let parsed: unknown = null;
+  if ((res.headers.get('content-type') ?? '').includes('application/json')) parsed = await res.json().catch(() => null);
+  if (!res.ok || !parsed || typeof parsed !== 'object') throw errorFrom(res.status, res.ok ? null : parsed);
+  return parsed as CreateVoiceResult;
+}
+
 export interface DeleteVoiceResult {
   deleted: string;
   fish: 'deleted' | 'not_found' | 'not_owned' | 'skipped';
@@ -219,12 +245,20 @@ export interface VoiceSample {
 }
 
 /** Sintetiza un texto con una voz por el servicio de voz de la app (/api/tts). */
-export async function synthesizeSample(text: string, referenceId: string, signal: AbortSignal): Promise<VoiceSample> {
+export async function synthesizeSample(
+  text: string,
+  referenceId: string,
+  signal: AbortSignal,
+  provider: 'fish' | 'elevenlabs' = 'fish'
+): Promise<VoiceSample> {
+  // ElevenLabs se comprueba en el servidor con la sesión del administrador
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (provider === 'elevenlabs') headers.Authorization = `Bearer ${await sessionToken()}`;
   const res = await fetch('/api/tts', {
     method: 'POST',
     signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, reference_id: referenceId, model: 's2.1-pro-free' }),
+    headers,
+    body: JSON.stringify({ text, reference_id: referenceId, model: 's2.1-pro-free', ...(provider === 'elevenlabs' ? { engine: 'elevenlabs' } : {}) }),
   });
   const type = res.headers.get('content-type') || '';
   if (!res.ok || !type.startsWith('audio/')) throw new Error(`El servicio de voz respondió con el código ${res.status}.`);

@@ -23,6 +23,7 @@ import {
 } from '../../lib/voicesCloud';
 import { catalogueCount, deleteWarning, sortAdminVoices, voiceMetaLine } from '../../lib/voicesLogic';
 import { NuevaVozPanel } from './NuevaVozPanel';
+import { ImportarElevenVoz } from './ImportarElevenVoz';
 import type { AdminData } from './useAdminData';
 import '../../styles/voces.css';
 
@@ -86,7 +87,7 @@ export const VocesSection: React.FC<{ data: AdminData }> = ({ data }) => {
     sound.current.abort = abort;
     setPlaying({ id: row.id, state: 'cargando', progress: 0 });
     try {
-      const sample = await synthesizeSample(text, row.reference_id, abort.signal);
+      const sample = await synthesizeSample(text, row.reference_id, abort.signal, row.provider ?? 'fish');
       if (abort.signal.aborted) {
         URL.revokeObjectURL(sample.url);
         return;
@@ -328,6 +329,15 @@ export const VocesSection: React.FC<{ data: AdminData }> = ({ data }) => {
           </>
         )}
       </section>
+
+      <ImportarElevenVoz
+        available={!unreadable}
+        onCreated={(result) => {
+          setFresh((prev) => [...prev, result.voice.id]);
+          setNotice(null);
+          void reloadVoices();
+        }}
+      />
 
       <NuevaVozPanel
         existingNames={rows.map((row) => row.name)}

@@ -65,7 +65,7 @@ import '../styles/mascotas.css';
 import { GameSettings, decodeGameSettings, loadGameSettings, normalizeGameSettings } from '../types/game';
 import { GameWidgetLayer } from '../components/juego/GameWidgetLayer';
 import '../styles/juego.css';
-import { cloudDelivered } from '../lib/widgetCloud';
+import { cloudDelivered, readWidgetKey } from '../lib/widgetCloud';
 import { resolveWidgetSettings } from '../utils/widgetSettings';
 import { shouldPlayPreSound } from '../utils/preSound';
 import { createPreSoundPlayer } from '../utils/preSoundPlayer';
@@ -943,6 +943,8 @@ export const Widget: React.FC = () => {
             text: spokenText,
             reference_id: message.voiceId || settings.referenceId || undefined,
             model: settings.model || 's2.1-pro-free',
+            // ElevenLabs solo para la voz de la cuenta (no para voces fijas de mascotas, raids...); el servidor comprueba el permiso con `k`
+            ...(!message.voiceId && settings.engine === 'elevenlabs' ? { engine: 'elevenlabs', k: readWidgetKey() ?? undefined } : {}),
           }),
         });
 

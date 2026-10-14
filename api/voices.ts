@@ -13,7 +13,7 @@
 import { voicesNodeHandler, type VoicesRoute } from '../server/voices/handlers.js';
 import { routeFromRequest } from '../server/apiRoute.js';
 
-const ROUTES: VoicesRoute[] = ['voices/create', 'voices/delete'];
+const ROUTES: VoicesRoute[] = ['voices/create', 'voices/delete', 'voices/eleven-import'];
 const HANDLERS = new Map(ROUTES.map((route) => [route as string, voicesNodeHandler(route)]));
 
 export default async function handler(req: any, res: any): Promise<void> {
