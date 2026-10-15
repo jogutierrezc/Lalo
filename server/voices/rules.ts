@@ -178,6 +178,8 @@ export interface VoiceEnvelopeMeta {
   permissionBy: string;
   confirmed: boolean;
   files: AudioFileInfo[];
+  /** Motor donde se crea la voz. Sin indicar, Fish Audio. */
+  provider?: 'fish' | 'elevenlabs';
 }
 
 const MAGIC = [0x4c, 0x56, 0x4f, 0x5a]; // LVOZ
@@ -246,6 +248,7 @@ export function decodeVoiceEnvelope(bytes: Uint8Array): { meta: VoiceEnvelopeMet
       owner: data.owner === 'other' ? 'other' : 'own',
       permissionBy: text(data.permissionBy),
       confirmed: data.confirmed === true,
+      provider: data.provider === 'elevenlabs' ? 'elevenlabs' : 'fish',
       files,
     },
     parts,

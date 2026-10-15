@@ -52,6 +52,10 @@ export interface ProfileRow {
   last_seen_at: string | null;
   /** Desde 0006: cuándo terminó la bienvenida. Falta si la migración no está aplicada. */
   onboarded_at?: string | null;
+  /** Desde 0018: el administrador le activó ElevenLabs. */
+  elevenlabs_enabled?: boolean;
+  /** Desde 0018: cuándo cerró el aviso de invitación a ElevenLabs. */
+  elevenlabs_invite_seen_at?: string | null;
 }
 
 export interface InviteCodeRow {
@@ -124,6 +128,8 @@ export interface PublicVoiceRow {
   is_default: boolean;
   origin: 'initial' | 'recorded' | 'uploaded';
   created_at: string;
+  /** Desde 0018: motor de la voz. Sin el campo, Fish Audio. */
+  provider?: 'fish' | 'elevenlabs';
 }
 
 /** Desde 0009: una voz tal como la ve el administrador (admin_voices). */
@@ -249,6 +255,8 @@ export interface RpcArgs {
   admin_voices: Record<string, never>;
   admin_set_voice_visible: { p_voice: string; p_visible: boolean };
   admin_set_default_voice: { p_voice: string };
+  admin_set_elevenlabs: { p_profile: string; p_enabled: boolean };
+  dismiss_elevenlabs_invite: Record<string, never>;
 }
 
 /** Resultado de cada RPC (lo que llega en `data`). */
@@ -265,6 +273,8 @@ export interface RpcResult {
   admin_create_invite: InviteCodeRow;
   admin_revoke_invite: null;
   admin_set_profile: ProfileRow;
+  admin_set_elevenlabs: ProfileRow;
+  dismiss_elevenlabs_invite: null;
   admin_create_recovery_code: string;
   admin_set_storage_capacity: number;
   storage_ready: boolean;

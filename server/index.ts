@@ -10,6 +10,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { processTTSRequest } from './ttsHandler';
+import { elevenAllowed, elevenSynthesize } from './elevenlabs.js';
 import { nodeHandler, type ApiRoute } from './storage/handlers.js';
 import { clipNodeHandler } from './twitch/clips.js';
 import { voicesNodeHandler } from './voices/handlers.js';
@@ -116,6 +117,7 @@ for (const route of storageRoutes) {
 app.post('/api/voices/create', express.raw({ type: 'application/octet-stream', limit: '5mb' }), voicesNodeHandler('voices/create'));
 app.all('/api/voices/create', voicesNodeHandler('voices/create'));
 app.all('/api/voices/delete', voicesNodeHandler('voices/delete'));
+app.all('/api/voices/eleven-import', voicesNodeHandler('voices/eleven-import'));
 
 // Cortos de Twitch para el saludo de raid. La misma lógica que api/twitch/clip.ts
 app.all('/api/twitch/clip', clipNodeHandler);
@@ -146,13 +148,24 @@ interface TTSRequestBody {
 app.post('/api/tts', async (req: Request<{}, {}, TTSRequestBody>, res: Response): Promise<void> => {
   try {
     const { text, reference_id, model } = req.body;
+    const { engine, k } = req.body as { engine?: string; k?: string };
 
     if (!text || typeof text !== 'string') {
       res.status(400).json({ error: 'Parámetro text requerido' });
       return;
     }
 
-    const result = await processTTSRequest(text, reference_id, model);
+    let result;
+    if (engine === 'elevenlabs') {
+      // Mismo control que api/tts.ts: solo cuentas activadas por el administrador
+      if (!(await elevenAllowed(req.headers, String(k ?? ''), process.env))) {
+        res.status(403).json({ error: 'ElevenLabs no está activado para esta cuenta.', code: 'elevenlabs_not_enabled' });
+        return;
+      }
+      result = { status: 200, contentType: 'audio/mpeg', buffer: await elevenSynthesize(text.trim().slice(0, 2000), String(reference_id ?? ''), process.env), headers: undefined };
+    } else {
+      result = await processTTSRequest(text, reference_id, model);
+    }
 
     res.status(result.status);
     res.setHeader('Content-Type', result.contentType);

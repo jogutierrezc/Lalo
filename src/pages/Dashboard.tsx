@@ -18,6 +18,7 @@ import { saveSettings } from '../types/settings';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { useSettings } from '../hooks/useSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
+import { rpc } from '../lib/cloud';
 import { postBus } from '../utils/bus';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { SuiteNav } from '../components/SuiteNav';
@@ -163,14 +164,27 @@ export const Dashboard: React.FC = () => {
     }
     setCustomChosen(false);
     setCustomDraft('');
-    update({ referenceId: value });
+    const engine = voices.find((voice) => voice.id === value)?.provider === 'elevenlabs' ? 'elevenlabs' : 'fish';
+    update({ referenceId: value, engine });
   };
   const typeCustomVoice = (value: string) => {
     const id = value.trim();
     setCustomDraft(id);
     // Un ID vacío dejaría al widget sin voz: se conserva la anterior hasta que haya uno
-    if (id) update({ referenceId: id });
+    // Un ID propio siempre es de Fish Audio
+    if (id) update({ referenceId: id, engine: 'fish' });
   };
+
+  // ---------- Invitación a ElevenLabs ----------
+  // Solo la ve quien el administrador activó, hasta que la cierra
+  const elevenInvite = Boolean(cloud.profile?.elevenlabs_enabled && !cloud.profile.elevenlabs_invite_seen_at);
+  const closeElevenInvite = () => {
+    rpc('dismiss_elevenlabs_invite', {})
+      .then(() => cloud.refresh())
+      .catch(() => {});
+  };
+  const elevenVoices = voices.filter((voice) => voice.provider === 'elevenlabs');
+  const fishVoices = voices.filter((voice) => voice.provider !== 'elevenlabs');
 
   // ---------- Mensaje de prueba ----------
   const [testText, setTestText] = useState('!s [feliz] ¡Hola chat! Este es un mensaje con emoción');
@@ -335,6 +349,20 @@ export const Dashboard: React.FC = () => {
 
             {tab === 'voz' && (
               <>
+                {elevenInvite && (
+                  <div className="cab-note grid gap-2" role="status">
+                    <p>
+                      <b>Te invitamos a probar un nuevo modelo de voces: ElevenLabs.</b> Más expresivo, con emociones y canto. Elige una voz del grupo «ElevenLabs»
+                      en la lista de abajo y úsala con los mismos comandos del chat (por ejemplo, <span className="cab-mono">!s [feliz] hola</span> o{' '}
+                      <span className="cab-mono">!s [canto] la la la</span>). Tus voces de siempre siguen ahí.
+                    </p>
+                    <div>
+                      <button type="button" className="cab-btn2 cab-btn-sm" onClick={closeElevenInvite}>
+                        Entendido
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <Field
                   label="Voz"
                   htmlFor={`${uid}-voice`}
@@ -353,11 +381,20 @@ export const Dashboard: React.FC = () => {
                     className="cab-inp"
                   >
                     {voiceUnknownYet && <option value={settings.referenceId}>Leyendo el catálogo</option>}
-                    {voices.map((voice) => (
+                    {(elevenVoices.length > 0 ? fishVoices : voices).map((voice) => (
                       <option key={voice.id} value={voice.id}>
                         {voice.name}
                       </option>
                     ))}
+                    {elevenVoices.length > 0 && (
+                      <optgroup label="ElevenLabs (nuevo)">
+                        {elevenVoices.map((voice) => (
+                          <option key={voice.id} value={voice.id}>
+                            {voice.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                     <option value="custom">Usar ID propio</option>
                   </select>
                 </Field>

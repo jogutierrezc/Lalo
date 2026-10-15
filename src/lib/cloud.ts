@@ -233,10 +233,13 @@ export async function fetchRedemptions(): Promise<InviteRedemptionRow[]> {
   return (data as InviteRedemptionRow[]) || [];
 }
 
-export type ProfileMeta = Pick<ProfileRow, 'id' | 'invite_code_id' | 'created_at' | 'last_seen_at'>;
+export type ProfileMeta = Pick<ProfileRow, 'id' | 'invite_code_id' | 'created_at' | 'last_seen_at' | 'elevenlabs_enabled'>;
 
 /** Datos de cada perfil que admin_overview no trae: última visita, alta y código con el que entró. */
 export async function fetchProfileMeta(): Promise<ProfileMeta[]> {
+  // elevenlabs_enabled existe desde la migración 0018: sin ella se lee lo demás
+  const withEleven = await client().from('profiles').select('id, invite_code_id, created_at, last_seen_at, elevenlabs_enabled');
+  if (!withEleven.error) return (withEleven.data as ProfileMeta[]) || [];
   const { data, error } = await client().from('profiles').select('id, invite_code_id, created_at, last_seen_at');
   if (error) throw new Error(error.message);
   return (data as ProfileMeta[]) || [];

@@ -64,6 +64,19 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
     }
   };
 
+  const setEleven = async (id: string, enabled: boolean) => {
+    setBusy(true);
+    try {
+      await rpc('admin_set_elevenlabs', { p_profile: id, p_enabled: enabled });
+      setError(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar ElevenLabs en la cuenta.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const createRecovery = async (id: string) => {
     setBusy(true);
     try {
@@ -243,6 +256,24 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                 </select>
                 <span className="cab-hint">Cambiar el plan aplica los límites nuevos al instante.</span>
               </div>
+
+              {selected.status === 'active' && (
+                <div className="cab-field">
+                  <span className="cab-label">Voces ElevenLabs</span>
+                  <button
+                    type="button"
+                    className="cab-btn2 cab-btn-sm"
+                    aria-pressed={Boolean(selectedMeta?.elevenlabs_enabled)}
+                    disabled={busy}
+                    onClick={() => setEleven(selected.profile_id, !selectedMeta?.elevenlabs_enabled)}
+                  >
+                    {selectedMeta?.elevenlabs_enabled ? 'Activado · Desactivar' : 'Activar para esta cuenta'}
+                  </button>
+                  <span className="cab-hint">
+                    Al activarlo, el streamer ve una invitación a probar el nuevo modelo y las voces de ElevenLabs que hayas hecho visibles. Fish Audio sigue igual.
+                  </span>
+                </div>
+              )}
 
               {selected.status === 'pending' ? (
                 <p className="cab-note">Esta cuenta entró con Twitch pero aún no ha canjeado un código. No tiene acceso.</p>

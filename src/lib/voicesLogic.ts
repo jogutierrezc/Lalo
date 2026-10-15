@@ -13,6 +13,8 @@ import type { AdminVoiceRow, PublicVoiceRow, VoiceState } from './cloudTypes';
 
 export interface CatalogueVoice extends PresetVoice {
   isDefault: boolean;
+  /** Motor de la voz. Las fijas y las anteriores a 0018 son de Fish Audio. */
+  provider?: 'fish' | 'elevenlabs';
 }
 
 export interface VoiceCatalogue {
@@ -50,6 +52,7 @@ export function pickCatalogue(input: { cloudEnabled: boolean; rows: PublicVoiceR
       name: row.name,
       description: row.description,
       isDefault: row.is_default,
+      provider: row.provider ?? 'fish',
     })),
     defaultId: byDefault.reference_id,
     source: 'nube',
