@@ -19,6 +19,7 @@ import {
   TOURNAMENT_LIMITS,
   TOURNAMENT_SIZES,
   TOURNAMENT_STYLES,
+  normalizeTournamentRules,
   type TournamentSettings,
   type TournamentSize,
   type TournamentStyle,
@@ -231,6 +232,10 @@ export interface PublicTournament {
   /** Nombres de los equipos que ya están en la llave. */
   teams: string[];
   left: number;
+  /** La presentación va antes del formulario. Sin el dato (falta la migración 0018), encendida. */
+  intro: boolean;
+  /** Reglas propias del torneo. Sin el dato, ninguna. */
+  rules: string[];
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -269,6 +274,12 @@ export function normalizePublicTournament(raw: unknown): PublicTournament | null
     color: typeof raw.color === 'string' && /^#[0-9a-f]{6}$/i.test(raw.color) ? raw.color.toLowerCase() : null,
     teams,
     left: Math.max(0, slots - teams.length),
+    // Una base sin la 0018 no manda estos dos campos: presentación encendida y sin reglas propias
+    intro: raw.intro !== false,
+    rules: (Array.isArray(raw.rules) ? raw.rules : [])
+      .map((item) => plain(item, TOURNAMENT_LIMITS.rule))
+      .filter(Boolean)
+      .slice(0, TOURNAMENT_LIMITS.rules),
   };
 }
 
@@ -284,7 +295,13 @@ export interface TournamentRow {
   sponsors: PublicSponsor[];
   style: TournamentStyle;
   color: string | null;
+  /** Columnas de la migración 0018: la presentación antes del formulario y las reglas propias. */
+  intro_on: boolean;
+  rules: string[];
 }
+
+/** Las columnas que añade la 0018. Una base que aún no la tiene las rechaza: ver saveOwnTournament. */
+export const INTRO_COLUMNS = ['intro_on', 'rules'] as const;
 
 /**
  * Lo que se publica de los ajustes del torneo. `resolve` convierte una imagen
@@ -309,6 +326,8 @@ export function publicRowFromSettings(
     sponsors: settings.sponsors.map((sponsor) => ({ name: sponsor.name, logo: image(sponsor.image?.url) })),
     style: settings.style,
     color: settings.customColor ? settings.color : null,
+    intro_on: settings.intro,
+    rules: normalizeTournamentRules(settings.rules),
   };
 }
 

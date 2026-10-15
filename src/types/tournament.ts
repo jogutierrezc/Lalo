@@ -5,8 +5,9 @@
  * Son dos cosas separadas:
  *
  * - AJUSTES (TournamentSettings): lo que configura el streamer. Nombre, tamaño,
- *   estilo, color propio, logo, patrocinadores, narrador y nombres de los
- *   comandos. Se guardan en este navegador y, con cuenta abierta, en la nube.
+ *   estilo, color propio, logo, patrocinadores, narrador, nombres de los
+ *   comandos y, para la página de inscripción, la presentación y las reglas
+ *   propias. Se guardan en este navegador y, con cuenta abierta, en la nube.
  * - ESTADO VIVO (TournamentState): los equipos en su orden de siembra, quién
  *   ganó cada partida, el historial para deshacer y qué pantalla se ve. Vive
  *   detrás de src/lib/tournamentStore.ts.
@@ -99,6 +100,10 @@ export interface TournamentSettings {
   commands: TournamentCommands;
   /** Segundos que dura la pantalla de victoria antes de volver a la llave. */
   victorySec: number;
+  /** La página de inscripción enseña la presentación (Axo explica el torneo) antes del formulario. */
+  intro: boolean;
+  /** Reglas propias del torneo, una por elemento. Salen en la presentación, después de las generales. */
+  rules: string[];
 }
 
 export interface TournamentTeam {
@@ -143,6 +148,9 @@ export const TOURNAMENT_LIMITS = {
   sponsors: 5,
   teamSize: { min: 1, max: 5 },
   victorySec: { min: 3, max: 15 },
+  /** Reglas propias: cuántas y cuánto mide cada una. Los mismos topes están en la migración 0018. */
+  rules: 6,
+  rule: 110,
 } as const;
 
 export const DEFAULT_TOURNAMENT_COMMANDS: TournamentCommands = { winner: '!ganador', undo: '!deshacer', main: '!torneo' };
@@ -164,6 +172,8 @@ export const DEFAULT_TOURNAMENT_SETTINGS: TournamentSettings = {
   voiceId: ANNOUNCER_VOICE_ID,
   commands: DEFAULT_TOURNAMENT_COMMANDS,
   victorySec: 5,
+  intro: true,
+  rules: [],
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -189,6 +199,22 @@ const text = (value: unknown, max: number): string =>
 const oneOf = <T extends string | number>(value: unknown, list: readonly { id: T }[], fallback: T): T =>
   list.some((item) => item.id === value) ? (value as T) : fallback;
 const ID_RE = /^[a-z0-9_-]{1,24}$/;
+
+/** Controles C1 y marcas invisibles de dirección o anchura cero: la base (0018) no las admite en una regla. */
+const INVISIBLE = /[\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g;
+
+/**
+ * Reglas propias limpias a partir de una lista o de un texto con una regla por
+ * línea: texto llano (sin HTML, sin < > ni corchetes, sin caracteres de control
+ * ni marcas invisibles), sin líneas vacías y dentro de los topes.
+ */
+export function normalizeTournamentRules(raw: unknown): string[] {
+  const lines: unknown[] = typeof raw === 'string' ? raw.split(/\r?\n/) : Array.isArray(raw) ? raw : [];
+  return lines
+    .map((line) => (typeof line === 'string' ? text(line.replace(INVISIBLE, ' '), TOURNAMENT_LIMITS.rule) : ''))
+    .filter(Boolean)
+    .slice(0, TOURNAMENT_LIMITS.rules);
+}
 
 export function normalizeTournamentImage(raw: unknown): TournamentImage | null {
   if (!isObject(raw) || typeof raw.url !== 'string' || !raw.url) return null;
@@ -254,6 +280,8 @@ export function normalizeTournamentSettings(raw: unknown): TournamentSettings {
     voiceId: typeof src.voiceId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(src.voiceId) ? src.voiceId : d.voiceId,
     commands: normalizeCommands(src.commands),
     victorySec: num(src.victorySec, TOURNAMENT_LIMITS.victorySec, d.victorySec),
+    intro: bool(src.intro, d.intro),
+    rules: normalizeTournamentRules(src.rules),
   };
 }
 

@@ -14,7 +14,12 @@
  * Ninguna función lanza errores: devuelven qué pasó para que la página lo
  * explique. Todo lo que llega pasa por utils/tournamentSignup.ts.
  *
- * SIN PROBAR contra Supabase real: la migración 0017 no se ha ejecutado.
+ * La presentación y las reglas propias viajan en dos columnas de la migración
+ * 0018. Mientras no esté aplicada, la base rechaza la fila entera: entonces
+ * saveOwnTournament la vuelve a enviar sin esas dos columnas y lo dice
+ * (`ok_basic`), para que el enlace y el resto de lo público sigan guardándose.
+ *
+ * SIN PROBAR contra Supabase real.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -26,6 +31,7 @@ import {
   type SignupForm,
   type TournamentEntry,
   type TournamentRow,
+  INTRO_COLUMNS,
   SLUG_RE,
   normalizeEntries,
   normalizePublicTournament,
@@ -90,12 +96,31 @@ export async function loadOwnTournament(profileId: string, client: SupabaseClien
 /** Código de PostgreSQL para «ya existe una fila con esa clave»: aquí, el slug de otro streamer. */
 const UNIQUE_VIOLATION = '23505';
 
+/** La base no conoce una columna: la API (PGRST204) o PostgreSQL (42703) lo dicen así. */
+const UNKNOWN_COLUMN = ['PGRST204', '42703'];
+
+/** `ok_basic`: guardado, pero sin la presentación ni las reglas propias (falta la migración 0018). */
+export type SaveResult = 'ok' | 'ok_basic' | 'taken' | 'error';
+
+/** true si el fallo es que la base aún no tiene las columnas de la 0018. */
+function missingIntroColumns(error: { code?: string; message?: string }): boolean {
+  if (!UNKNOWN_COLUMN.includes(error.code ?? '')) return false;
+  const message = error.message ?? '';
+  return INTRO_COLUMNS.some((column) => message.includes(column));
+}
+
 /** Crea o actualiza lo que el streamer publica. `taken`: ese slug ya es de otro torneo. */
-export async function saveOwnTournament(profileId: string, row: TournamentRow, client: SupabaseClient | null = supabase): Promise<'ok' | 'taken' | 'error'> {
+export async function saveOwnTournament(profileId: string, row: TournamentRow, client: SupabaseClient | null = supabase): Promise<SaveResult> {
   if (!client) return 'error';
   const { error } = await client.from('tournaments').upsert({ profile_id: profileId, ...row }, { onConflict: 'profile_id' });
   if (!error) return 'ok';
-  return error.code === UNIQUE_VIOLATION ? 'taken' : 'error';
+  if (error.code === UNIQUE_VIOLATION) return 'taken';
+  if (!missingIntroColumns(error)) return 'error';
+  // Sin la 0018: se guarda lo de siempre. La página pública enseña la presentación de serie, sin reglas propias
+  const { intro_on: _intro, rules: _rules, ...basic } = row;
+  const retry = await client.from('tournaments').upsert({ profile_id: profileId, ...basic }, { onConflict: 'profile_id' });
+  if (!retry.error) return 'ok_basic';
+  return retry.error.code === UNIQUE_VIOLATION ? 'taken' : 'error';
 }
 
 /** Borra el enlace y, con él, todas sus inscripciones (la base las borra en cascada). */

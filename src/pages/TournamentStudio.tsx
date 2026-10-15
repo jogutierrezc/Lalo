@@ -462,6 +462,9 @@ export const TournamentStudio: React.FC = () => {
                     signup={signup}
                     name={clean.name}
                     free={free}
+                    intro={clean.intro}
+                    rules={clean.rules}
+                    onIntro={updateSettings}
                     admit={admitTeam}
                     confirm={(label, yes, run) => setAsk({ label, yes, run })}
                   />

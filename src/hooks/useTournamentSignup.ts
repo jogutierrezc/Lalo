@@ -8,8 +8,10 @@
  * - Sin nube o sin cuenta activa (`profileId` null) no hace nada: `status` es
  *   `off` y la página lo explica.
  * - Lo PÚBLICO del torneo (nombre, juego, tamaño, plazas, logo, patrocinadores,
- *   estilo y color) se vuelve a publicar solo, con una pequeña espera, cada vez
+ *   estilo, color, la presentación y las reglas propias) se vuelve a publicar solo, con una pequeña espera, cada vez
  *   que cambian los ajustes y ya existe el enlace.
+ * - `introMissing`: la base aún no tiene la migración 0018 y lo último se
+ *   guardó sin la presentación ni las reglas propias. El resto funciona igual.
  * - Las solicitudes se vuelven a pedir cada quince segundos con la pestaña a la
  *   vista. No hay aviso en tiempo real: una inscripción nueva tarda eso en salir.
  */
@@ -40,6 +42,8 @@ export function useTournamentSignup(profileId: string | null, settings: Tourname
   const [entries, setEntries] = useState<TournamentEntry[]>([]);
   /** true si la última publicación de los ajustes falló. */
   const [publishFailed, setPublishFailed] = useState(false);
+  /** true si la base guardó lo público sin las columnas de la 0018. */
+  const [introMissing, setIntroMissing] = useState(false);
   const ownRef = useRef(own);
   ownRef.current = own;
 
@@ -104,8 +108,12 @@ export function useTournamentSignup(profileId: string | null, settings: Tourname
       const current = ownRef.current;
       if (!current) return;
       void saveOwnTournament(profileId, publicRowFromSettings(settingsRef.current, current.slug, current.open, resolve)).then((result) => {
-        setPublishFailed(result !== 'ok');
-        if (result === 'ok') published.current = publicKey;
+        const saved = result === 'ok' || result === 'ok_basic';
+        setPublishFailed(!saved);
+        if (saved) {
+          published.current = publicKey;
+          setIntroMissing(result === 'ok_basic');
+        }
       });
     }, PUBLISH_DELAY_MS);
     return () => clearTimeout(timer);
@@ -117,10 +125,12 @@ export function useTournamentSignup(profileId: string | null, settings: Tourname
       if (!profileId) return 'error';
       const open = ownRef.current?.open ?? true;
       const result = await saveOwnTournament(profileId, publicRowFromSettings(settingsRef.current, slug, open, resolve));
-      if (result === 'ok') {
+      if (result === 'ok' || result === 'ok_basic') {
         published.current = publicKey;
         setPublishFailed(false);
+        setIntroMissing(result === 'ok_basic');
         setOwn({ slug, open });
+        return 'ok';
       }
       return result;
     },
@@ -135,8 +145,10 @@ export function useTournamentSignup(profileId: string | null, settings: Tourname
       // El interruptor responde al momento; si la nube no lo guarda, vuelve a su sitio
       setOwn({ ...current, open });
       const result = await saveOwnTournament(profileId, publicRowFromSettings(settingsRef.current, current.slug, open, resolve));
-      if (result !== 'ok') setOwn((prev) => (prev ? { ...prev, open: current.open } : prev));
-      return result === 'ok';
+      const saved = result === 'ok' || result === 'ok_basic';
+      if (!saved) setOwn((prev) => (prev ? { ...prev, open: current.open } : prev));
+      else setIntroMissing(result === 'ok_basic');
+      return saved;
     },
     [profileId, resolve]
   );
@@ -149,6 +161,7 @@ export function useTournamentSignup(profileId: string | null, settings: Tourname
       setOwn(null);
       setEntries([]);
       published.current = null;
+      setIntroMissing(false);
     }
     return ok;
   }, [profileId]);
@@ -171,5 +184,5 @@ export function useTournamentSignup(profileId: string | null, settings: Tourname
   const pending = useMemo(() => entries.filter((entry) => entry.status === 'pending'), [entries]);
   const answered = useMemo(() => entries.filter((entry) => entry.status !== 'pending'), [entries]);
 
-  return { status, own, pending, answered, publishFailed, refresh, saveLink, setOpen, removeLink, mark, remove };
+  return { status, own, pending, answered, publishFailed, introMissing, refresh, saveLink, setOpen, removeLink, mark, remove };
 }

@@ -20,15 +20,29 @@
  *
  * `?demo=` pinta datos de ejemplo SOLO en desarrollo (`npm run dev`), para ver
  * la página sin base de datos: `1` (abierta), `cerrada`, `completa`, `recibida`.
- * En producción se ignora.
+ * En producción se ignora. La muestra admite además `paso` (1 a 6: abre la
+ * presentación en ese paso aunque ya se haya visto), `llave` (4, 8 o 16),
+ * `equipo` (1 a 5), `estilo`, `color=0` (sin color propio), `reglas=0` (sin
+ * reglas propias) e `intro=0` (presentación apagada).
+ *
+ * La presentación (components/torneo/TournamentIntro.tsx) va antes del
+ * formulario: Axo explica el torneo en seis pasos. Al terminarla o saltarla se
+ * recuerda en este navegador (utils/tournamentIntro.ts) y la próxima vez se
+ * entra directo al formulario, donde Axo deja repetirla. No sale si el
+ * streamer la apagó ni en los estados sin torneo (no encontrado, sin la nube,
+ * error). Con la inscripción cerrada o la llave completa se ve igual, pero su
+ * cierre no promete inscribirse.
  */
 
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { Check } from 'lucide-react';
+import { AxoFigure, TournamentIntro } from '../components/torneo/TournamentIntro';
 import { fetchPublicTournament, registerTeam, type PublicResult } from '../lib/tournamentSignupApi';
+import { TOURNAMENT_SIZES, TOURNAMENT_STYLES } from '../types/tournament';
 import { reduced } from '../utils/alertMotion';
+import { firstView, formGuide, introConfig, introSeen, markIntroSeen } from '../utils/tournamentIntro';
 import { inkFor } from '../utils/tournamentLogic';
 import {
   REGISTER_MESSAGES,
@@ -66,12 +80,32 @@ const DEMO: PublicTournament = {
   color: '#3ddcff',
   teams: ['Lobos del Sur', 'Dragones Rojos', 'Nexo Roto', 'Tormenta LAN', 'Furia Andina'],
   left: 3,
+  intro: true,
+  rules: ['Las partidas son a una sola; la final, al mejor de tres.', 'Se juega en el servidor LAN.', 'Avisa en el chat del canal si tu equipo va a llegar tarde.'],
 };
 
-function demoTournament(mode: string): PublicTournament {
-  if (mode === 'cerrada') return { ...DEMO, open: false };
-  if (mode === 'completa') return { ...DEMO, teams: [...DEMO.teams, 'Cóndor Gaming', 'Kraken Norte', 'Barón Dormido'], left: 0 };
-  return DEMO;
+/** Lo que la dirección de la muestra pide además del modo: `#torneo/prueba?demo=1&paso=2&llave=16`. */
+function demoOptions(hash: string): URLSearchParams {
+  return new URLSearchParams(hash.toLowerCase().split('?')[1] ?? '');
+}
+
+function demoTournament(mode: string, options: URLSearchParams): PublicTournament {
+  const slots = TOURNAMENT_SIZES.find((item) => String(item.id) === options.get('llave'))?.id ?? DEMO.slots;
+  const teams = DEMO.teams.slice(0, Math.max(1, slots - 3));
+  const base: PublicTournament = {
+    ...DEMO,
+    slots,
+    teamSize: /^[1-5]$/.test(options.get('equipo') ?? '') ? Number(options.get('equipo')) : DEMO.teamSize,
+    teams,
+    left: slots - teams.length,
+    style: TOURNAMENT_STYLES.find((item) => item.id === options.get('estilo'))?.id ?? DEMO.style,
+    color: options.get('color') === '0' ? null : DEMO.color,
+    rules: options.get('reglas') === '0' ? [] : DEMO.rules,
+    intro: options.get('intro') !== '0',
+  };
+  if (mode === 'cerrada') return { ...base, open: false };
+  if (mode === 'completa') return { ...base, teams: [...DEMO.teams, 'Cóndor Gaming', 'Kraken Norte', 'Barón Dormido'].slice(0, slots), left: 0 };
+  return base;
 }
 
 // ---------- Piezas ----------
@@ -294,11 +328,22 @@ export const TournamentSignup: React.FC = () => {
   const [route, setRoute] = useState<SignupRoute>(readRoute);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [received, setReceived] = useState<string | null>(null);
+  /** Lo que eligió quien mira este torneo: seguir en la presentación o pasar al formulario. */
+  const [chosen, setChosen] = useState<{ slug: string; view: 'intro' | 'form' } | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
   const doneRef = useRef<HTMLHeadingElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
+  /** Dónde estaba Axo al salir de la presentación: de ahí vuela a su sitio junto al formulario. */
+  const flyFrom = useRef<DOMRect | null>(null);
+  const cameFromIntro = useRef(false);
 
   // Datos de ejemplo: solo con el servidor de desarrollo
   const demo = import.meta.env.DEV && route.demo ? route.demo : null;
+  const options = useMemo(() => (demo ? demoOptions(window.location.hash) : null), [demo, route]);
+  /** Solo en la muestra: abrir la presentación en un paso concreto, aunque ya se haya visto. */
+  const demoStep = options && /^[1-6]$/.test(options.get('paso') ?? '') ? Number(options.get('paso')) - 1 : null;
+  // El recuerdo de «ya la vi» se lee una vez por torneo
+  const seen = useMemo(() => introSeen(route.slug), [route.slug]);
 
   useEffect(() => {
     const onChange = () => setRoute(readRoute());
@@ -311,9 +356,9 @@ export const TournamentSignup: React.FC = () => {
   }, []);
 
   const fetchNow = useCallback(async (): Promise<Load> => {
-    if (demo) return { kind: 'ok', tournament: demoTournament(demo) };
+    if (demo) return { kind: 'ok', tournament: demoTournament(demo, options ?? new URLSearchParams()) };
     return fetchPublicTournament(route.slug);
-  }, [demo, route.slug]);
+  }, [demo, options, route.slug]);
 
   // Otro torneo (o la primera vez): se empieza de cero
   useEffect(() => {
@@ -337,6 +382,35 @@ export const TournamentSignup: React.FC = () => {
   }, [fetchNow]);
 
   const tournament = load.kind === 'ok' ? load.tournament : null;
+  const guide = useMemo(() => (tournament ? formGuide(introConfig(tournament), received !== null) : null), [tournament, received]);
+
+  // Qué se ve: la presentación solo existe con un torneo que enseñar y si el streamer no la apagó
+  const view: 'intro' | 'form' =
+    !tournament || !tournament.intro || received
+      ? 'form'
+      : chosen?.slug === route.slug
+        ? chosen.view
+        : demoStep !== null
+          ? 'intro'
+          : firstView(tournament, seen);
+
+  /** Terminó o se saltó la presentación: se recuerda en este navegador y se pasa al formulario. */
+  const leaveIntro = useCallback(
+    (from: DOMRect | null) => {
+      markIntroSeen(route.slug);
+      flyFrom.current = from;
+      cameFromIntro.current = true;
+      setChosen({ slug: route.slug, view: 'form' });
+    },
+    [route.slug]
+  );
+
+  // Al llegar de la presentación, el foco va al nombre del torneo para que un lector de pantalla sepa dónde está
+  useEffect(() => {
+    if (view !== 'form' || !cameFromIntro.current) return;
+    cameFromIntro.current = false;
+    titleRef.current?.focus({ preventScroll: true });
+  }, [view]);
 
   useEffect(() => {
     const previous = document.title;
@@ -354,17 +428,48 @@ export const TournamentSignup: React.FC = () => {
   // Entrada: primero el torneo, luego sus plazas, una a una. Con «reducir movimiento», nada se mueve
   useGSAP(
     () => {
-      if (!pageRef.current || load.kind !== 'ok' || reduced()) return;
+      if (!pageRef.current || load.kind !== 'ok' || view !== 'form') return;
+      const from = flyFrom.current;
+      flyFrom.current = null;
+      if (reduced()) return;
       const q = gsap.utils.selector(pageRef);
+
+      // Axo vuela de la presentación a su sitio junto al formulario. Lo que vuela es una copia de su dibujo
+      let flyer: Element | null = null;
+      const seat = from && from.width > 0 ? q('.ins-guide .pt-svg')[0] : null;
+      if (from && seat) {
+        window.scrollTo(0, 0);
+        const to = seat.getBoundingClientRect();
+        const copy = seat.cloneNode(true) as SVGElement;
+        copy.classList.add('ins-flyer');
+        Object.assign(copy.style, { left: `${to.left}px`, top: `${to.top}px`, width: `${to.width}px`, height: `${to.height}px` });
+        document.body.append(copy);
+        flyer = copy;
+        gsap.set(seat, { visibility: 'hidden' });
+        const land = () => {
+          copy.remove();
+          gsap.set(seat, { clearProps: 'visibility' });
+        };
+        const flight = gsap
+          .timeline({ onComplete: land })
+          .fromTo(copy, { x: from.left - to.left, scale: from.width / to.width, transformOrigin: '0 0' }, { x: 0, scale: 1, duration: 0.85, ease: 'power3.out' }, 0)
+          .fromTo(copy, { y: from.top - to.top }, { y: 0, duration: 0.85, ease: 'power2.inOut' }, 0)
+          .to(copy, { keyframes: [{ rotation: -14, duration: 0.3 }, { rotation: 0, duration: 0.55, ease: 'power2.out' }] }, 0);
+        window.setTimeout(() => flight.progress(1), 1800);
+      }
+
       const tl = gsap
-        .timeline({ defaults: { ease: 'expo.out', clearProps: 'transform,opacity' } })
+        .timeline({ defaults: { ease: 'expo.out', clearProps: 'transform,opacity' }, delay: flyer ? 0.2 : 0 })
         .fromTo(q('[data-in="block"]'), { y: 12, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42, stagger: 0.06 })
         .fromTo(q('[data-in="slot"]'), { x: -8, opacity: 0 }, { x: 0, opacity: 1, duration: 0.3, stagger: 0.025 }, 0.18);
       // Si el navegador frena la animación (pestaña en segundo plano), la página queda entera igual
-      const settle = window.setTimeout(() => tl.progress(1), 1500);
-      return () => window.clearTimeout(settle);
+      const settle = window.setTimeout(() => tl.progress(1), 1700);
+      return () => {
+        window.clearTimeout(settle);
+        flyer?.remove();
+      };
     },
-    { dependencies: [load.kind, route.slug], scope: pageRef, revertOnUpdate: true }
+    { dependencies: [load.kind, route.slug, view], scope: pageRef, revertOnUpdate: true }
   );
 
   // La confirmación entra (el formulario se va sin esperar a nadie); el visto bueno, con un pequeño rebote
@@ -425,6 +530,21 @@ export const TournamentSignup: React.FC = () => {
     );
   }
 
+  if (view === 'intro') {
+    return (
+      <div className="cab ins">
+        <TournamentIntro
+          key={route.slug}
+          tournament={tournament}
+          startStep={chosen ? 0 : (demoStep ?? 0)}
+          focus={chosen !== null}
+          onDone={leaveIntro}
+        />
+        <Foot />
+      </div>
+    );
+  }
+
   const inside = tournament.teams.length;
   const full = tournament.left === 0;
   const accent = tournament.color;
@@ -444,7 +564,9 @@ export const TournamentSignup: React.FC = () => {
             </div>
           )}
           <div className="ins-id">
-            <h1>{tournament.name}</h1>
+            <h1 ref={titleRef} tabIndex={-1}>
+              {tournament.name}
+            </h1>
             <p className="ins-org">
               {tournament.game}
               {tournament.organizer && (
@@ -466,6 +588,21 @@ export const TournamentSignup: React.FC = () => {
             </ul>
           </div>
         </header>
+
+        {tournament.intro && guide && (
+          <div className="ins-guide" data-in="block">
+            <AxoFigure className="ins-guide-fig" emotion={guide.mood} />
+            <div className="tpi-bub">
+              <b>{guide.title}</b>
+              <span>{guide.text}</span>
+              {!received && (
+                <button type="button" className="ins-guide-again" onClick={() => setChosen({ slug: route.slug, view: 'intro' })}>
+                  Ver la presentación
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <main className="ins-body">
           <section className="cab-mod ins-main" data-in="block">

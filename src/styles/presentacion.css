@@ -1,0 +1,1292 @@
+/* ==========================================================================
+   Presentación del torneo: lo que ve quien abre #torneo/<slug> antes del
+   formulario (bajo .tpi). La pantalla va partida en dos: a un lado el escenario
+   de Axo, siempre oscuro y teñido con el acento del torneo; al otro, el paso,
+   que toma el estilo del torneo (Grieta, Cabina, Estadio o Cartel) y su color
+   propio. En pantallas estrechas se apilan (container queries). El estilo solo
+   cambia las variables --t-*, igual que en torneo.css. El dibujo de Axo y sus
+   clases (.pt-svg) vienen de mascotas.css. Al final, el bocadillo con el que
+   Axo acompaña al formulario.
+   ========================================================================== */
+
+.tpi {
+  --tpi-ink: #121315;
+  --tpi-white: #ffffff;
+  --tpi-stage-a: #1c2247;
+  --tpi-stage-m: #121634;
+  --tpi-stage-b: #0b0c18;
+  --tpi-axo: #ff9fb0;
+  --tpi-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  position: relative;
+  container: tpi / inline-size;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  color: var(--t-fg);
+  font-family: 'Onest', system-ui, -apple-system, sans-serif;
+  font-size: 1rem;
+  line-height: 1.5;
+  background:
+    radial-gradient(90% 60% at 88% 0%, color-mix(in srgb, var(--t-acc) 15%, transparent), transparent 62%),
+    var(--t-page);
+  caret-color: var(--t-acct);
+  scrollbar-color: var(--t-line) var(--t-page);
+  -webkit-font-smoothing: antialiased;
+}
+/* Recibe el foco al repetirla, para que se anuncie, pero no es un control: sin anillo */
+.ins .tpi:focus {
+  outline: none;
+}
+.tpi h1,
+.tpi h2,
+.tpi h3,
+.tpi p,
+.tpi ol,
+.tpi ul {
+  margin: 0;
+}
+.tpi ol,
+.tpi ul {
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- Los cuatro estilos ---------- */
+.tpi[data-style='grieta'] {
+  --t-page: #070c16;
+  --t-bg: #0f1a2c;
+  --t-fg: #f1e7cf;
+  --t-acc: #e8c36a;
+  --t-acct: #e8c36a;
+  --t-line: #3a4a66;
+  --t-ink: var(--tpi-ink);
+  --t-title: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --t-ui: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --t-r: 0px;
+  --t-br: 2px;
+  --t-bw: 1px;
+  --t-cut: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+  --t-track: 0.05em;
+  --t-ok: #7fe6a9;
+  --t-ok-bg: #1f3a2c;
+  --t-warn: #ffc861;
+  --t-warn-bg: #40351a;
+}
+.tpi[data-style='cabina'] {
+  --t-page: #121315;
+  --t-bg: #1f2024;
+  --t-fg: #efe9dc;
+  --t-acc: #9146ff;
+  --t-acct: #b995ff;
+  --t-line: #3a3c42;
+  --t-ink: var(--tpi-white);
+  --t-title: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --t-ui: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --t-r: 3px;
+  --t-br: 3px;
+  --t-bw: 1px;
+  --t-cut: none;
+  --t-track: 0.02em;
+  --t-ok: #7fe6a9;
+  --t-ok-bg: #1f3a2c;
+  --t-warn: #ffc861;
+  --t-warn-bg: #40351a;
+}
+.tpi[data-style='estadio'] {
+  --t-page: #090a0d;
+  --t-bg: #171a20;
+  --t-fg: #ffffff;
+  --t-acc: #ff5a36;
+  --t-acct: #ff5a36;
+  --t-line: #2c3038;
+  --t-ink: var(--tpi-ink);
+  --t-title: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --t-ui: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --t-r: 0px;
+  --t-br: 0px;
+  --t-bw: 1px;
+  --t-cut: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  --t-track: 0.01em;
+  --t-ok: #7fe6a9;
+  --t-ok-bg: #1f3a2c;
+  --t-warn: #ffc861;
+  --t-warn-bg: #40351a;
+}
+.tpi[data-style='cartel'] {
+  --t-page: #f4f1ea;
+  --t-bg: #ffffff;
+  --t-fg: #1d1a3a;
+  --t-acc: #ffb347;
+  --t-acct: #1d1a3a;
+  --t-line: #1d1a3a;
+  --t-ink: #1d1a3a;
+  --t-title: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+  --t-ui: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+  --t-r: 14px;
+  --t-br: 999px;
+  --t-bw: 2.5px;
+  --t-cut: none;
+  --t-track: 0;
+  --t-ok: #14613a;
+  --t-ok-bg: #d5efdf;
+  --t-warn: #7a5200;
+  --t-warn-bg: #f8e6bd;
+}
+/* Color propio: sustituye al acento; la tinta que va encima la calcula inkFor() */
+.tpi[data-custom] {
+  --t-acc: var(--tpi-custom);
+  --t-ink: var(--tpi-custom-ink);
+}
+.tpi[data-custom]:not([data-style='cartel']) {
+  --t-acct: color-mix(in srgb, var(--tpi-custom) 70%, #fff);
+}
+
+.tpi ::selection {
+  background: var(--t-acc);
+  color: var(--t-ink);
+}
+.ins .tpi :focus-visible {
+  outline: 2px solid var(--t-acct);
+  outline-offset: 2px;
+}
+.tpi-plate {
+  background: var(--t-bg);
+  border: var(--t-bw) solid var(--t-line);
+  border-radius: var(--t-r);
+  clip-path: var(--t-cut);
+}
+.tpi-title {
+  font-family: var(--t-title);
+  font-weight: 800;
+  letter-spacing: var(--t-track);
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.tpi[data-style='grieta'] .tpi-title {
+  font-weight: 700;
+}
+.tpi[data-style='cabina'] .tpi-title {
+  font-stretch: 72%;
+}
+.tpi[data-style='estadio'] .tpi-title {
+  font-stretch: 62%;
+  font-style: italic;
+}
+.tpi[data-style='cartel'] .tpi-title {
+  text-transform: none;
+  letter-spacing: -0.02em;
+}
+.tpi-mut {
+  color: color-mix(in srgb, var(--t-fg) 72%, transparent);
+}
+/* Solo para lectores de pantalla */
+.tpi-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Cabecera ---------- */
+.tpi-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--t-line) 60%, transparent);
+}
+.tpi-logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  clip-path: none;
+}
+.tpi-logo img,
+.tpi-wel-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.tpi-top-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--t-ui);
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Botones ---------- */
+.tpi-btn,
+.tpi-btn2 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--t-br);
+  font-family: var(--t-ui);
+  font-stretch: 80%;
+  font-weight: 800;
+  font-size: 0.98rem;
+  line-height: 1.1;
+  cursor: pointer;
+  transition:
+    transform 0.14s var(--tpi-ease),
+    opacity 0.16s ease,
+    background-color 0.16s ease;
+}
+.tpi-btn {
+  border: var(--t-bw) solid transparent;
+  background: var(--t-acc);
+  color: var(--t-ink);
+}
+.tpi[data-style='cartel'] .tpi-btn {
+  border-color: var(--t-line);
+}
+.tpi-btn2 {
+  border: 1px solid color-mix(in srgb, var(--t-fg) 34%, transparent);
+  background: transparent;
+  color: var(--t-fg);
+}
+.tpi[data-style='estadio'] .tpi-btn,
+.tpi[data-style='estadio'] .tpi-btn2 {
+  font-style: italic;
+}
+.tpi-btn:disabled,
+.tpi-btn2:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tpi-sm {
+  flex: none;
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.85rem;
+}
+.tpi-big {
+  min-height: 52px;
+  padding: 0 26px;
+  font-size: 1.12rem;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tpi-btn2:not(:disabled):hover {
+    background: color-mix(in srgb, var(--t-fg) 9%, transparent);
+  }
+  .tpi-btn:not(:disabled):hover {
+    background: color-mix(in srgb, var(--t-acc) 88%, var(--t-fg));
+  }
+}
+
+/* ---------- Pastillas de los pasos: pendiente, ahora, hecho ---------- */
+.tpi-nav {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 8px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--t-line) 60%, transparent);
+}
+.tpi-nav::-webkit-scrollbar {
+  display: none;
+}
+.tpi-nav button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--t-br);
+  background: transparent;
+  color: color-mix(in srgb, var(--t-fg) 68%, transparent);
+  font-family: var(--t-ui);
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 0.86rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform 0.14s var(--tpi-ease),
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+.tpi-nav button i {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+.tpi-nav button[data-s='done'] {
+  color: color-mix(in srgb, var(--t-fg) 86%, transparent);
+}
+.tpi-nav button[data-s='done'] i {
+  background: currentColor;
+}
+.tpi-nav button[data-s='now'] {
+  background: color-mix(in srgb, var(--t-fg) 13%, transparent);
+  color: var(--t-fg);
+}
+.tpi-nav button[data-s='now'] i {
+  border-color: var(--t-acct);
+  background: var(--t-acct);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tpi-nav button:not([data-s='now']):hover {
+    background: color-mix(in srgb, var(--t-fg) 7%, transparent);
+  }
+}
+
+/* ---------- La puerta: el escenario de Axo y el paso ---------- */
+.tpi-gate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.tpi-scene {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 18px 16px 20px;
+  text-align: center;
+  color: var(--tpi-white);
+  background: radial-gradient(
+    120% 90% at 50% 34%,
+    color-mix(in srgb, var(--t-acc) 34%, var(--tpi-stage-a)) 0%,
+    var(--tpi-stage-m) 50%,
+    var(--tpi-stage-b) 100%
+  );
+}
+.tpi-halo {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.tpi-glow,
+.tpi-rings i {
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 56%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.tpi-glow {
+  width: 440px;
+  aspect-ratio: 1;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--t-acc) 34%, transparent), transparent);
+}
+.tpi-rings i {
+  aspect-ratio: 1;
+  border: 1px solid rgb(255 255 255 / 0.15);
+}
+.tpi-rings i:nth-child(1) {
+  width: 210px;
+}
+.tpi-rings i:nth-child(2) {
+  width: 350px;
+}
+.tpi-rings i:nth-child(3) {
+  width: 520px;
+}
+/* Burbujas: Axo vive en el agua. Solo se ven cuando la animación las suelta */
+.tpi-bubbles i {
+  position: absolute;
+  top: 34%;
+  width: 11px;
+  aspect-ratio: 1;
+  border: 2px solid rgb(255 255 255 / 0.7);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+.tpi-bubbles i:nth-child(1) {
+  left: 8%;
+}
+.tpi-bubbles i:nth-child(2) {
+  left: 84%;
+  width: 8px;
+}
+.tpi-bubbles i:nth-child(3) {
+  left: 96%;
+  top: 20%;
+  width: 14px;
+}
+.tpi-fig {
+  flex: none;
+  width: 124px;
+  transform-origin: 50% 100%;
+}
+.tpi-fig .pt-svg {
+  width: 100%;
+  height: auto;
+}
+/* Sobre el escenario oscuro la sombra del suelo es negra, no tinta */
+.tpi-scene .pt-svg .sh,
+.ins-guide-fig .pt-svg .sh,
+.ins-flyer .sh {
+  fill: #000;
+  opacity: 0.45;
+}
+.tpi-mood {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.1);
+  color: #d5d8ee;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 80%;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+.tpi-mood i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--t-acc) 80%, #fff);
+}
+
+/* El bocadillo: papel blanco y tinta, como el de las mascotas */
+.tpi-bub {
+  --pt-ink: #1d1a3a;
+  --pt-paper: #ffffff;
+  position: relative;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 14px 12px;
+  border: 2.5px solid var(--pt-ink);
+  border-radius: 18px;
+  background: var(--pt-paper);
+  color: var(--pt-ink);
+  font-family: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.34;
+  text-align: left;
+  box-shadow: 0 10px 22px -10px rgb(0 0 0 / 0.7);
+  overflow-wrap: anywhere;
+}
+.tpi-bub::after {
+  content: '';
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--pt-paper);
+  transform: rotate(45deg);
+}
+.tpi-bub b {
+  font-weight: 800;
+  font-size: 1.12em;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.tpi-bub ::selection,
+.tpi-bub::selection {
+  background: var(--tpi-axo, #ff9fb0);
+  color: var(--pt-ink);
+}
+.tpi-scene .tpi-bub {
+  width: min(100%, 23rem);
+  min-height: 6.6em;
+  align-content: start;
+  margin-top: 4px;
+  text-align: center;
+  text-wrap: pretty;
+  transform-origin: 50% 0%;
+}
+.tpi-scene .tpi-bub::after {
+  left: calc(50% - 6px);
+  top: -8.5px;
+  border-top: 2.5px solid var(--pt-ink);
+  border-left: 2.5px solid var(--pt-ink);
+}
+.tpi-w {
+  display: inline-block;
+  white-space: pre;
+}
+
+.tpi-body {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  padding: 20px 16px 24px;
+  overflow-x: clip;
+}
+.tpi-ct {
+  display: grid;
+  align-content: center;
+  width: 100%;
+  max-width: 680px;
+  min-width: 0;
+}
+.tpi-step {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.tpi-step > h2:not(.tpi-title) {
+  font-family: var(--t-ui);
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 0.86rem;
+  line-height: 1.3;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t-acct);
+}
+.tpi-step p {
+  max-width: 60ch;
+}
+.tpi-fact {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 2px 10px;
+  font-family: var(--t-ui);
+  font-stretch: 78%;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.tpi[data-style='cartel'] .tpi-fact {
+  border-width: 2px;
+  border-radius: 99px;
+  font-size: 0.86rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.tpi-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tpi-fact[data-tone='ok'] {
+  border-color: transparent;
+  background: var(--t-ok-bg);
+  color: var(--t-ok);
+}
+.tpi-fact[data-tone='warn'] {
+  border-color: transparent;
+  background: var(--t-warn-bg);
+  color: var(--t-warn);
+}
+
+/* ---------- 1 · Bienvenida ---------- */
+.tpi-wel {
+  justify-items: start;
+}
+.tpi-wel-logo {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  overflow: hidden;
+}
+.tpi-wel-name {
+  font-size: clamp(2.3rem, 11cqw, 4.6rem);
+  line-height: 0.98;
+  overflow-wrap: anywhere;
+}
+.tpi-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+.tpi-ch {
+  display: inline-block;
+}
+.tpi-wel-rule {
+  width: min(180px, 50%);
+  height: 5px;
+  border-radius: var(--t-br);
+  background: var(--t-acc);
+  transform-origin: 0 50%;
+}
+.tpi-wel-org {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.tpi-wel-org b {
+  font-weight: 700;
+}
+.tpi-wel-sp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  width: 100%;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--t-line) 70%, transparent);
+  font-size: 0.875rem;
+}
+.tpi-wel-sp b {
+  font-family: var(--t-ui);
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+.tpi-wel-sp img {
+  display: block;
+  max-width: 120px;
+  max-height: 30px;
+  object-fit: contain;
+}
+
+/* ---------- 2 · La llave ---------- */
+.tpi-br {
+  min-width: 0;
+}
+.tpi-br svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 78%;
+}
+.tpi-bh {
+  fill: var(--t-acct);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.tpi-cn {
+  fill: none;
+  stroke: color-mix(in srgb, var(--t-fg) 34%, transparent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.tpi-rt {
+  fill: none;
+  stroke: var(--t-acc);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.tpi[data-style='cartel'] .tpi-rt {
+  stroke: var(--t-fg);
+}
+.tpi-sl {
+  fill: var(--t-bg);
+  stroke: color-mix(in srgb, var(--t-fg) 30%, transparent);
+  stroke-width: 1;
+}
+.tpi[data-style='cartel'] .tpi-sl {
+  stroke: var(--t-line);
+  stroke-width: 1.5;
+}
+.tpi-sl[data-kind='tbd'] {
+  fill: color-mix(in srgb, var(--t-bg) 55%, transparent);
+  stroke-dasharray: 3 3;
+}
+.tpi-sl[data-kind='champ'],
+.tpi-sl[data-kind='mine'] {
+  stroke: var(--t-acc);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+.tpi-sn {
+  fill: color-mix(in srgb, var(--t-fg) 76%, transparent);
+  font-weight: 700;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tpi-br [data-opp] {
+  opacity: 0.38;
+}
+.tpi-tk rect {
+  fill: var(--t-acc);
+  stroke: var(--t-ink);
+  stroke-width: 0;
+}
+.tpi[data-style='cartel'] .tpi-tk rect {
+  stroke-width: 2;
+}
+.tpi-tk text {
+  fill: var(--t-ink);
+  font-weight: 800;
+  font-size: 11.5px;
+}
+.tpi-cup {
+  fill: none;
+  stroke: var(--t-acct);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tpi-br-now {
+  min-height: 1.5em;
+  font-weight: 600;
+}
+.tpi-br-now b {
+  color: var(--t-acct);
+  font-weight: 800;
+}
+.tpi[data-style='cartel'] .tpi-br-now b {
+  text-decoration: underline;
+  text-decoration-color: var(--t-acc);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 2px;
+}
+.tpi-br-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 0.9rem;
+}
+
+/* ---------- 3 · Las fases ---------- */
+.tpi-ph,
+.tpi-fl {
+  display: grid;
+}
+.tpi-ph li,
+.tpi-fl li {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 0 12px;
+}
+.tpi-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.tpi-dot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--t-acc);
+  border-radius: 50%;
+  background: var(--t-bg);
+  color: var(--t-acct);
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.tpi-dot svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tpi-ph li[data-end] .tpi-dot {
+  background: var(--t-acc);
+  color: var(--t-ink);
+}
+.tpi[data-style='cartel'] .tpi-dot {
+  border-color: var(--t-line);
+}
+.tpi-seg {
+  flex: 1;
+  width: 3px;
+  min-height: 18px;
+  background: color-mix(in srgb, var(--t-acc) 60%, transparent);
+  transform-origin: 50% 0;
+}
+.tpi[data-style='cartel'] .tpi-seg {
+  background: var(--t-line);
+}
+.tpi-ph-txt {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding-bottom: 14px;
+}
+.tpi-ph li[data-end] .tpi-ph-txt {
+  padding-bottom: 0;
+}
+.tpi-ph-txt b {
+  font-family: var(--t-ui);
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1.12rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.tpi-ph-txt > span {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+.tpi-sq {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: 124px;
+}
+.tpi-sq i {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--t-acc);
+}
+.tpi[data-style='cartel'] .tpi-sq i {
+  border: 1.5px solid var(--t-line);
+  border-radius: 4px;
+}
+.tpi-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 10px 14px;
+}
+.tpi-total b {
+  font-family: var(--t-title);
+  font-weight: 800;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--t-acct);
+  font-variant-numeric: tabular-nums;
+}
+.tpi[data-style='estadio'] .tpi-total b {
+  font-stretch: 70%;
+  font-style: italic;
+}
+
+/* ---------- 4 · Tu equipo ---------- */
+.tpi-seats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 96px));
+  gap: 8px;
+}
+.tpi-seat {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 4px 8px;
+  text-align: center;
+}
+.tpi-seat svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+.tpi-seat b {
+  font-family: var(--t-ui);
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+.tpi-seat span {
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+.tpi-seat[data-cap] {
+  border-color: var(--t-acc);
+}
+.tpi-seat[data-cap] svg {
+  opacity: 1;
+  color: var(--t-acct);
+}
+.tpi-fl-txt {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-width: 0;
+  padding-bottom: 14px;
+}
+.tpi-fl-txt b {
+  font-weight: 700;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.tpi-fl-txt > span:not(.tpi-fact) {
+  font-size: 0.9rem;
+}
+.tpi-fl li:last-child .tpi-seg {
+  display: none;
+}
+.tpi-fl li:last-child .tpi-fl-txt {
+  padding-bottom: 0;
+}
+
+/* ---------- 5 · Reglas ---------- */
+.tpi-rl {
+  display: grid;
+}
+.tpi-rl li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 0 12px;
+  align-items: start;
+  padding: 9px 0;
+  border-top: 1px solid color-mix(in srgb, var(--t-line) 60%, transparent);
+}
+.tpi-rl li:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.tpi-rl svg {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  fill: none;
+  stroke: var(--t-acct);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tpi-rl b {
+  font-weight: 700;
+}
+.tpi-rl span {
+  display: block;
+  font-size: 0.92rem;
+}
+.tpi-own {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+.tpi-own h3 {
+  font-family: var(--t-ui);
+  font-stretch: 78%;
+  font-weight: 800;
+  font-size: 1.02rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.tpi-own ul {
+  display: grid;
+  gap: 6px;
+}
+.tpi-own li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+.tpi-own li::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--t-acc);
+  transform: translateY(-1px);
+}
+.tpi[data-style='cartel'] .tpi-own li::before {
+  border: 1.5px solid var(--t-line);
+  border-radius: 50%;
+}
+
+/* ---------- 6 · Buena suerte ---------- */
+.tpi-lk {
+  position: relative;
+  justify-items: start;
+  padding-block: 56px 16px;
+}
+.tpi-lk-t {
+  position: relative;
+  font-size: clamp(2.5rem, 12cqw, 5rem);
+  line-height: 0.98;
+}
+.tpi-stars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.tpi-stars svg {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  overflow: visible;
+}
+.tpi-stars path {
+  fill: var(--t-acc);
+  stroke: var(--t-ink);
+  stroke-width: 0;
+}
+.tpi[data-style='cartel'] .tpi-stars path {
+  stroke: var(--t-line);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.tpi-lead {
+  font-size: 1.05rem;
+}
+.tpi-lead b {
+  font-weight: 700;
+}
+.tpi-lk-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+/* Confeti: cae por encima de todo y no estorba. Solo existe en el último paso */
+.tpi-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+.tpi-fx i {
+  position: absolute;
+  top: -12px;
+  width: 10px;
+  height: 5px;
+  background: var(--t-acc);
+  opacity: 0;
+}
+.tpi-fx i:nth-child(3n + 1) {
+  background: var(--t-fg);
+}
+.tpi-fx i:nth-child(3n + 2) {
+  background: var(--tpi-axo);
+}
+
+/* ---------- Pie: navegación ---------- */
+.tpi-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px 12px;
+  align-items: center;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid color-mix(in srgb, var(--t-line) 60%, transparent);
+  background: var(--t-page);
+}
+.tpi-mid {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  min-width: 0;
+}
+.tpi-prog-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: min(100%, 300px);
+  font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  font-stretch: 80%;
+  font-weight: 800;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.tpi-prog {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--t-fg) 20%, transparent);
+}
+.tpi-prog i {
+  display: block;
+  height: 100%;
+  background: var(--t-acc);
+  transform: scaleX(0.1667);
+  transform-origin: 0 50%;
+}
+.tpi[data-style='cartel'] .tpi-prog {
+  box-shadow: inset 0 0 0 1.5px var(--t-line);
+}
+.tpi-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 0.82rem;
+  color: color-mix(in srgb, var(--t-fg) 76%, transparent);
+  cursor: pointer;
+}
+.tpi-tog {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--t-fg) 26%, transparent);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.tpi-tog::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--t-page);
+  transition: transform 0.18s var(--tpi-ease);
+}
+.tpi-tog:checked {
+  background: var(--t-acct);
+}
+.tpi-tog:checked::after {
+  transform: translateX(16px);
+}
+
+@container tpi (max-width: 520px) {
+  .tpi-foot {
+    grid-template-columns: 1fr 1fr;
+  }
+  .tpi-mid {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .tpi-foot .tpi-btn {
+    justify-self: end;
+  }
+  .tpi-foot .tpi-btn2 {
+    justify-self: start;
+  }
+  .tpi-lk {
+    padding-block: 44px 8px;
+  }
+}
+@container tpi (min-width: 720px) {
+  .tpi-gate {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    min-height: 560px;
+  }
+  .tpi-scene {
+    gap: 12px;
+    padding: 28px 20px;
+  }
+  .tpi-fig {
+    width: 188px;
+  }
+  .tpi-scene .tpi-bub {
+    min-height: 7.6em;
+    padding: 13px 16px 15px;
+    font-size: 1.08rem;
+  }
+  .tpi-body {
+    align-content: center;
+    padding: 28px clamp(24px, 4cqw, 56px) 32px;
+  }
+  .tpi-top,
+  .tpi-nav,
+  .tpi-foot {
+    padding-inline: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpi-btn,
+  .tpi-btn2,
+  .tpi-nav button,
+  .tpi-tog,
+  .tpi-tog::after {
+    transition: none;
+  }
+}
+
+/* ==========================================================================
+   Axo junto al formulario (.ins-guide): recuerda qué falta y deja repetir la
+   presentación. Vive en la página de inscripción, con los tokens de Cabina.
+   ========================================================================== */
+.ins-guide {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  max-width: 36rem;
+  min-width: 0;
+}
+.ins-guide-fig {
+  flex: none;
+  width: 78px;
+}
+.ins-guide-fig .pt-svg {
+  width: 100%;
+  height: auto;
+}
+.ins-guide .tpi-bub {
+  flex: 1;
+  gap: 4px;
+  justify-items: start;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+.ins-guide .tpi-bub::after {
+  left: -8.5px;
+  bottom: 14px;
+  border-bottom: 2.5px solid var(--pt-ink);
+  border-left: 2.5px solid var(--pt-ink);
+}
+/* El enlace para repetir la presentación: un botón con cara de enlace, en la tinta del bocadillo */
+.ins-guide-again {
+  min-height: 28px;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pt-ink);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ins .ins-guide-again:focus-visible {
+  outline: 2px solid var(--pt-ink);
+  outline-offset: 2px;
+}
+/* El pie legal, debajo de la presentación */
+.tpi + .ins-foot {
+  padding: 16px 20px 28px;
+}
+/* El título recibe el foco al llegar de la presentación, pero no es un control: sin anillo */
+.ins-id h1:focus {
+  outline: none;
+}
+/* Axo en vuelo, de la presentación a su sitio junto al formulario */
+.ins-flyer {
+  position: fixed;
+  z-index: 40;
+  margin: 0;
+  pointer-events: none;
+}

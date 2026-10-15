@@ -577,6 +577,9 @@ describe('Torneos: lo público nunca incluye Riot ID', () => {
       teams: ['Lobos del Sur', 'Nexo Roto'],
       // Las plazas salen de los equipos que se enseñan, no de lo que diga la respuesta
       left: 6,
+      // Sin los campos de la 0018: presentación encendida y sin reglas propias
+      intro: true,
+      rules: [],
     });
     const text = JSON.stringify(shown);
     ['Lalo#LAN', 'Ana#EUW', 'Espía#EUW', '#LAN', '#EUW', 'captain', 'players', 'widget_key', KEY, 'profile_id', PROFILE, 'entries', 'javascript:'].forEach((secret) =>
@@ -637,6 +640,8 @@ describe('Torneos: lo público nunca incluye Riot ID', () => {
       ],
       style: 'grieta',
       color: '#ff8800',
+      intro_on: true,
+      rules: [],
     });
     expect(publicRowFromSettings({ ...settings, customColor: false, logo: null }, 'x-y', false, resolve)).toMatchObject({ color: null, logo_url: null, signup_open: false });
   });

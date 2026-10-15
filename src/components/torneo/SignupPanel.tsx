@@ -1,12 +1,15 @@
 /**
  * src/components/torneo/SignupPanel.tsx
  *
- * La inscripción por enlace dentro de la pestaña «Torneo» del panel. Dos
+ * La inscripción por enlace dentro de la pestaña «Torneo» del panel. Tres
  * módulos:
  *
  * - Inscripción por enlace: la dirección `#torneo/<slug>` con el slug editable
  *   (se propone uno a partir del nombre y se avisa si ya es de otro torneo),
  *   copiar, abrir y el interruptor «Inscripción abierta».
+ * - Presentación de la página: el interruptor «Mostrar la presentación antes
+ *   del formulario» y las reglas propias del torneo, una por línea. Salen en la
+ *   presentación que Axo hace a quien abre el enlace.
  * - Solicitudes: las inscripciones pendientes, con el equipo, el Riot ID del
  *   capitán y los jugadores, y Aceptar, Rechazar y Quitar. Debajo, las ya
  *   respondidas, para consultar sus datos o quitarlas.
@@ -23,6 +26,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Check, Copy, ExternalLink, RefreshCw } from 'lucide-react';
 import { Toggle } from '../studio/StudioKit';
 import type { useTournamentSignup } from '../../hooks/useTournamentSignup';
+import { TOURNAMENT_LIMITS, normalizeTournamentRules } from '../../types/tournament';
 import { type TournamentEntry, SLUG_LIMITS, draftSlug, proposeSlug, signupHash, signupUrl, slugProblem } from '../../utils/tournamentSignup';
 
 interface SignupPanelProps {
@@ -31,6 +35,11 @@ interface SignupPanelProps {
   name: string;
   /** Plazas libres en la llave. */
   free: number;
+  /** La página enseña la presentación antes del formulario. */
+  intro: boolean;
+  /** Reglas propias del torneo, ya limpias. */
+  rules: string[];
+  onIntro: (patch: { intro?: boolean; rules?: string[] }) => void;
   /**
    * Mete en la llave al equipo de una solicitud y llama a `done` cuando ya está
    * dentro (si la llave había empezado, tras confirmarlo). Devuelve por qué no
@@ -69,7 +78,55 @@ const EntryText: React.FC<{ entry: TournamentEntry }> = ({ entry }) => (
   </div>
 );
 
-export const SignupPanel: React.FC<SignupPanelProps> = ({ signup, name, free, admit, confirm }) => {
+/** Lo más que cabe en el campo: todas las reglas con su tope, y los saltos de línea entre ellas. */
+const RULES_MAX_CHARS = TOURNAMENT_LIMITS.rules * (TOURNAMENT_LIMITS.rule + 1);
+
+/**
+ * El campo de las reglas propias. Guarda lo escrito tal cual mientras se
+ * escribe (un salto de línea recién puesto no puede desaparecer) y a los
+ * ajustes manda las reglas ya limpias.
+ */
+const RulesField: React.FC<{ rules: string[]; onChange: (rules: string[]) => void }> = ({ rules, onChange }) => {
+  const uid = useId();
+  const [draft, setDraft] = useState(() => rules.join('\n'));
+  const lines = draft.split('\n').filter((line) => line.trim()).length;
+  const tooLong = draft.split('\n').some((line) => line.trim().length > TOURNAMENT_LIMITS.rule);
+
+  // Si las reglas cambian fuera de aquí (otro equipo, la nube), el campo se pone al día
+  useEffect(() => {
+    setDraft((current) => (normalizeTournamentRules(current).join('\n') === rules.join('\n') ? current : rules.join('\n')));
+  }, [rules]);
+
+  return (
+    <div className="cab-field">
+      <label className="cab-label" htmlFor={`${uid}-rules`}>
+        Reglas propias (una por línea)
+      </label>
+      <textarea
+        id={`${uid}-rules`}
+        className="cab-inp"
+        rows={4}
+        maxLength={RULES_MAX_CHARS}
+        placeholder={'Las partidas son a una sola; la final, al mejor de tres.\nSe juega en el servidor LAN.'}
+        value={draft}
+        aria-describedby={`${uid}-rules-note`}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          onChange(normalizeTournamentRules(e.target.value));
+        }}
+      />
+      <span id={`${uid}-rules-note`} className="cab-hint">
+        {lines > TOURNAMENT_LIMITS.rules
+          ? `Solo salen las ${TOURNAMENT_LIMITS.rules} primeras: quita o junta alguna.`
+          : tooLong
+            ? `Cada regla admite hasta ${TOURNAMENT_LIMITS.rule} caracteres: lo que pasa de ahí se corta.`
+            : `Salen después de las reglas generales. Hasta ${TOURNAMENT_LIMITS.rules} reglas de ${TOURNAMENT_LIMITS.rule} caracteres. Si lo dejas vacío, ese bloque no aparece.`}
+      </span>
+    </div>
+  );
+};
+
+export const SignupPanel: React.FC<SignupPanelProps> = ({ signup, name, free, intro, rules, onIntro, admit, confirm }) => {
   const uid = useId();
   const { status, own, pending, answered } = signup;
   const [draft, setDraft] = useState('');
@@ -257,6 +314,28 @@ export const SignupPanel: React.FC<SignupPanelProps> = ({ signup, name, free, ad
           </>
         )}
       </section>
+
+      {own && (
+        <section className="cab-mod">
+          <h2>Presentación de la página</h2>
+          <div className="cab-field">
+            <Toggle label="Mostrar la presentación antes del formulario" checked={intro} onChange={(next) => onIntro({ intro: next })} />
+            <span className="cab-hint">
+              {intro
+                ? 'Quien abre el enlace ve primero a Axo explicar el torneo en seis pasos: cómo se juega, las fases, el equipo y las reglas. Puede saltarla, y la segunda vez entra directo al formulario.'
+                : 'Apagada: el enlace lleva directo al formulario y tus reglas propias no se enseñan.'}
+            </span>
+          </div>
+          <RulesField rules={rules} onChange={(next) => onIntro({ rules: next })} />
+          {signup.introMissing && (
+            <p className="cab-note" role="status">
+              Tu base de datos aún no guarda estos dos ajustes: falta aplicar en Supabase la migración 0018. Mientras tanto la página enseña la
+              presentación sin reglas propias, y el enlace y las solicitudes funcionan igual.
+            </p>
+          )}
+          <p className="cab-hint">Para verla tal como queda, abre «Ver la página» aquí arriba.</p>
+        </section>
+      )}
 
       {own && (
         <section className="cab-mod">
