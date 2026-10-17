@@ -88,8 +88,7 @@ con un código de afiliado válido podría activarse como streamer sin Twitch
 
 ## 4. Ejecutar las migraciones
 
-Hazlo **antes** del primer inicio de sesión. Son tres archivos y van **en
-orden**:
+Hazlo **antes** del primer inicio de sesión. Van **en este orden exacto**:
 
 1. `supabase/migrations/0001_lalo_init.sql`
 2. `supabase/migrations/0002_widget_version.sql`
@@ -98,7 +97,18 @@ orden**:
 5. `supabase/migrations/0005_r2_storage.sql` (archivos en Cloudflare R2; ver `CLOUDFLARE-R2.md`)
 6. `supabase/migrations/0006_onboarding.sql` (bienvenida de streamers)
 7. `supabase/migrations/0007_chat_module.sql` (capa Chat en vivo)
-8. `supabase/migrations/0008_terms_acceptance.sql` (aceptación de los términos y políticas; sin probar)
+8. `supabase/migrations/0008_terms_acceptance.sql` (aceptación de términos y políticas)
+9. `supabase/migrations/0009_voice_catalog.sql` (catálogo de voces administrado)
+10. `supabase/migrations/0010_raid_module.sql` (saludo de raid con corto)
+11. `supabase/migrations/0011_studio_module.sql` (editor de escenas Studio)
+12. `supabase/migrations/0012_eventsub.sql` (canal de eventos EventSub y Power-ups)
+13. `supabase/migrations/0013_integrations.sql` (integraciones cifradas: Spotify y Ko-fi)
+14. `supabase/migrations/0014_pets_module.sql` (módulo Mascotas)
+15. `supabase/migrations/0015_game_module.sql` (módulo Alertas de juego / Riot)
+16. `supabase/migrations/0016_tournament_module.sql` (módulo Torneos)
+17. `supabase/migrations/0017_tournament_signup.sql` (inscripción pública de torneos)
+18. `supabase/migrations/0018_elevenlabs.sql` (permiso por cuenta y catálogo para motor ElevenLabs)
+19. `supabase/migrations/0018_tournament_intro.sql` (presentación y animaciones de enfrentamiento en torneos; comparte prefijo `0018_` pero es independiente de `0018_elevenlabs.sql`)
 
 **Opción A — SQL Editor (la más simple)**
 

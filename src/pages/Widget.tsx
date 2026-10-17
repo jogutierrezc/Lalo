@@ -1308,6 +1308,22 @@ export const Widget: React.FC = () => {
   }, [activeReward]);
 
   useEffect(() => {
+    const scheduleRewardHide = (durationSec: number) => {
+      if (rewardHideTimerRef.current) clearTimeout(rewardHideTimerRef.current);
+      rewardHideTimerRef.current = setTimeout(() => {
+        if (rewardOverlayRef.current) {
+          gsap.to(rewardOverlayRef.current, {
+            opacity: 0,
+            duration: 0.22,
+            ease: 'power2.out',
+            onComplete: () => setActiveReward(null),
+          });
+        } else {
+          setActiveReward(null);
+        }
+      }, durationSec * 1000);
+    };
+
     const stop = listenBus((message: BusMessage) => {
       // Las capas de una escena de Studio ven también lo que pasa por el bus (ajustes, pruebas, giros, votos)
       sceneRef.current?.signal({ kind: 'bus', message });
@@ -1368,6 +1384,7 @@ export const Widget: React.FC = () => {
 
         // Si la alerta incluye video transparente, proyectarlo en el overlay
         if (alert.videoUrl && !inScene) {
+          const durationSec = alert.duration || 5;
           setActiveReward({
             id: alert.id,
             user: alert.user,
@@ -1381,8 +1398,9 @@ export const Widget: React.FC = () => {
             screenShake: alert.screenShake,
             accentColor: alert.accent || '#9146ff',
             soundType: alert.soundType,
-            duration: alert.duration || 5,
+            duration: durationSec,
           });
+          scheduleRewardHide(durationSec);
         }
 
         // Encolar síntesis de voz (TTS) solo si el modo es 'tts' o 'both'
@@ -1413,20 +1431,7 @@ export const Widget: React.FC = () => {
           );
         }
         setActiveReward(reward);
-        const durationSec = reward.duration || 6;
-        if (rewardHideTimerRef.current) clearTimeout(rewardHideTimerRef.current);
-        rewardHideTimerRef.current = setTimeout(() => {
-          if (rewardOverlayRef.current) {
-            gsap.to(rewardOverlayRef.current, {
-              opacity: 0,
-              duration: 0.22,
-              ease: 'power2.out',
-              onComplete: () => setActiveReward(null),
-            });
-          } else {
-            setActiveReward(null);
-          }
-        }, durationSec * 1000);
+        scheduleRewardHide(reward.duration || 6);
       }
       if (message.type === 'CHAT_SETTINGS_UPDATE') {
         setChatSettings(normalizeChatSettings(message.settings));
@@ -1511,6 +1516,7 @@ export const Widget: React.FC = () => {
           );
         }
         if (cel.victoryVideoUrl) {
+          const durationSec = cel.duration || 6;
           setActiveReward({
             id: `goal-cel-${cel.goalId}-${Date.now()}`,
             user: 'Comunidad',
@@ -1524,11 +1530,9 @@ export const Widget: React.FC = () => {
             screenShake: cel.screenShake,
             accentColor: '#ffd700',
             soundType: cel.victorySoundType,
-            duration: cel.duration || 6,
+            duration: durationSec,
           });
-          setTimeout(() => {
-            setActiveReward(null);
-          }, (cel.duration || 6) * 1000);
+          scheduleRewardHide(durationSec);
         }
       }
       // Una escena de Studio con capa «Batalla» la lleva esa capa: aquí no cuenta, no suena y no habla.
@@ -1816,6 +1820,7 @@ export const Widget: React.FC = () => {
       isProcessingRef.current = false;
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       if (pollWinnerTimerRef.current) clearTimeout(pollWinnerTimerRef.current);
+      if (rewardHideTimerRef.current) clearTimeout(rewardHideTimerRef.current);
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current.src = '';

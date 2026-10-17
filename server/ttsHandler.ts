@@ -8,7 +8,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const MAX_TTS_LENGTH = 2000;
+export const MAX_TTS_LENGTH = 2000;
 const LALOPLAY_CLONED_VOICE = '37f9f4eec7624089a49b188d47588f2c';
 const OLD_PRESET_VOICE = '7f92f8afb8ec43bf81429cc1c9199cb1';
 
@@ -78,7 +78,7 @@ const EMOTION_MAP: Record<string, string> = {
   nervous: 'nervous',
 };
 
-function normalizeServerText(text: string): string {
+export function normalizeServerText(text: string): string {
   if (!text || !text.includes('[') || !text.includes(']')) return text;
   return text.replace(/\[([a-zA-ZáéíóúÁÉÍÓÚñÑ\s-_]{2,30})\]/g, (match, raw) => {
     const key = raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');

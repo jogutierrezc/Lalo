@@ -31,36 +31,38 @@
  *   - #widget / /widget / ?channel=: Overlay transparente para OBS Studio
  */
 
-import React, { useState, useEffect } from 'react';
-import { Catalog } from './pages/Catalog';
-import { Dashboard } from './pages/Dashboard';
-import { Widget } from './pages/Widget';
-import { Control } from './pages/Control';
-import { AlertsStudio } from './pages/AlertsStudio';
-import { TwitchIOStudio } from './pages/TwitchIOStudio';
-import { RewardsStudio } from './pages/RewardsStudio';
-import { GoalsStudio } from './pages/GoalsStudio';
-import { RouletteStudio } from './pages/RouletteStudio';
-import { PollsStudio } from './pages/PollsStudio';
-import { ChatStudio } from './pages/ChatStudio';
-import { RaidStudio } from './pages/RaidStudio';
-import { Studio } from './pages/Studio';
-import { PowerupsStudio } from './pages/PowerupsStudio';
-import { PetsStudio } from './pages/PetsStudio';
-import { TournamentStudio } from './pages/TournamentStudio';
-import { GameStudio } from './pages/GameStudio';
-import { Integraciones } from './pages/Integraciones';
-import { MusicStudio } from './pages/MusicStudio';
-import { KofiStudio } from './pages/KofiStudio';
-import { Access } from './pages/Access';
-import { Bienvenida, bienvenidaHechaAqui } from './pages/Bienvenida';
-import { Account } from './pages/Account';
-import { AdminShell } from './components/admin/AdminShell';
-import { CloudSetup } from './pages/CloudSetup';
-import { Legal } from './pages/Legal';
-import { TournamentSignup } from './pages/TournamentSignup';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { bienvenidaHechaAqui } from './pages/Bienvenida';
 import { AceptacionCargando, AceptacionGate } from './pages/AceptacionGate';
 import { useAceptacion } from './hooks/useAceptacion';
+
+const Catalog = lazy(() => import('./pages/Catalog').then((m) => ({ default: m.Catalog })));
+const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
+const Widget = lazy(() => import('./pages/Widget').then((m) => ({ default: m.Widget })));
+const Control = lazy(() => import('./pages/Control').then((m) => ({ default: m.Control })));
+const AlertsStudio = lazy(() => import('./pages/AlertsStudio').then((m) => ({ default: m.AlertsStudio })));
+const TwitchIOStudio = lazy(() => import('./pages/TwitchIOStudio').then((m) => ({ default: m.TwitchIOStudio })));
+const RewardsStudio = lazy(() => import('./pages/RewardsStudio').then((m) => ({ default: m.RewardsStudio })));
+const GoalsStudio = lazy(() => import('./pages/GoalsStudio').then((m) => ({ default: m.GoalsStudio })));
+const RouletteStudio = lazy(() => import('./pages/RouletteStudio').then((m) => ({ default: m.RouletteStudio })));
+const PollsStudio = lazy(() => import('./pages/PollsStudio').then((m) => ({ default: m.PollsStudio })));
+const ChatStudio = lazy(() => import('./pages/ChatStudio').then((m) => ({ default: m.ChatStudio })));
+const RaidStudio = lazy(() => import('./pages/RaidStudio').then((m) => ({ default: m.RaidStudio })));
+const Studio = lazy(() => import('./pages/Studio').then((m) => ({ default: m.Studio })));
+const PowerupsStudio = lazy(() => import('./pages/PowerupsStudio').then((m) => ({ default: m.PowerupsStudio })));
+const PetsStudio = lazy(() => import('./pages/PetsStudio').then((m) => ({ default: m.PetsStudio })));
+const TournamentStudio = lazy(() => import('./pages/TournamentStudio').then((m) => ({ default: m.TournamentStudio })));
+const GameStudio = lazy(() => import('./pages/GameStudio').then((m) => ({ default: m.GameStudio })));
+const Integraciones = lazy(() => import('./pages/Integraciones').then((m) => ({ default: m.Integraciones })));
+const MusicStudio = lazy(() => import('./pages/MusicStudio').then((m) => ({ default: m.MusicStudio })));
+const KofiStudio = lazy(() => import('./pages/KofiStudio').then((m) => ({ default: m.KofiStudio })));
+const Access = lazy(() => import('./pages/Access').then((m) => ({ default: m.Access })));
+const Bienvenida = lazy(() => import('./pages/Bienvenida').then((m) => ({ default: m.Bienvenida })));
+const Account = lazy(() => import('./pages/Account').then((m) => ({ default: m.Account })));
+const AdminShell = lazy(() => import('./components/admin/AdminShell').then((m) => ({ default: m.AdminShell })));
+const CloudSetup = lazy(() => import('./pages/CloudSetup').then((m) => ({ default: m.CloudSetup })));
+const Legal = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Legal })));
+const TournamentSignup = lazy(() => import('./pages/TournamentSignup').then((m) => ({ default: m.TournamentSignup })));
 import { parseRutaLegal } from './legal/logica';
 import { CloudProvider, useCloudSession } from './hooks/useCloudSession';
 import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
@@ -387,7 +389,9 @@ const Routes: React.FC = () => {
 
 export const App: React.FC = () => (
   <CloudProvider>
-    <Routes />
+    <Suspense fallback={null}>
+      <Routes />
+    </Suspense>
   </CloudProvider>
 );
 

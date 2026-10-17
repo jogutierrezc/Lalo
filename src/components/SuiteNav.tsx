@@ -345,13 +345,11 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
       // El aviso de sincronización del panel ya explica el fallo
     }
 
-    // Servidor local: señal de recarga para las fuentes de este equipo
+    // Señal HTTP de recarga para fuentes de navegador de OBS conectadas al mismo servidor
     try {
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        await fetch('/api/obs/reload', { method: 'POST' });
-      }
+      await fetch('/api/obs/reload', { method: 'POST' });
     } catch {
-      // Sin servidor local, el bus ya avisó a las fuentes abiertas en este navegador
+      // Sin servidor o fuera de línea, el bus y la nube ya avisaron a las fuentes
     }
 
     try {
