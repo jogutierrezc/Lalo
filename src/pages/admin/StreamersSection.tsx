@@ -20,7 +20,7 @@ import {
   type ProfileFilter,
 } from '../../lib/adminLogic';
 import { formatBytes, rpc } from '../../lib/cloud';
-import type { ProfileStatus } from '../../lib/cloudTypes';
+import type { AdminVoiceRow, ProfileStatus } from '../../lib/cloudTypes';
 import { formatDate } from './adminFormat';
 import type { AdminData } from './useAdminData';
 import { VERSIONES_ACTUALES } from '../../legal';
@@ -46,7 +46,7 @@ const DAILY_LIMIT_OPTIONS: { value: number; label: string }[] = [
 ];
 
 export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null }> = ({ data, ownId }) => {
-  const { overview, plans, invites, meta, usage, usageByProfile, acceptances, planName, reload, setError } = data;
+  const { overview, plans, invites, meta, usage, usageByProfile, acceptances, planName, reload, setError, voices } = data;
   const [filter, setFilter] = useState<ProfileFilter>('todas');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -115,6 +115,19 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo cambiar el tope diario de ElevenLabs.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setVoice = async (id: string, voice: AdminVoiceRow) => {
+    setBusy(true);
+    try {
+      await rpc('admin_set_streamer_voice', { p_profile: id, p_reference_id: voice.reference_id, p_engine: voice.provider ?? 'fish' });
+      setError(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar la voz del streamer.');
     } finally {
       setBusy(false);
     }
@@ -421,6 +434,43 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                   )}
                   <span className="cab-hint">
                     Al activarlo, el streamer ve las voces de ElevenLabs visibles. Si supera el tope diario, Lalo pasa automáticamente a Fish Audio ese día.
+                  </span>
+                </div>
+              )}
+
+              {selected.status === 'active' && voices && (
+                <div className="cab-field">
+                  <label className="cab-label" htmlFor="adm-streamer-voice">
+                    Voz de TTS de esta cuenta
+                  </label>
+                  <select
+                    id="adm-streamer-voice"
+                    className="cab-inp"
+                    value=""
+                    disabled={busy}
+                    onChange={(e) => {
+                      const voice = voices.find((item) => item.reference_id === e.target.value);
+                      if (voice) setVoice(selected.profile_id, voice);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Enviar una voz al OBS del streamer…
+                    </option>
+                    {voices
+                      .filter((voice) => voice.visible)
+                      .map((voice) => (
+                        <option
+                          key={voice.id}
+                          value={voice.reference_id}
+                          disabled={voice.provider === 'elevenlabs' && !selectedMeta?.elevenlabs_enabled}
+                        >
+                          {voice.name}
+                          {voice.provider === 'elevenlabs' ? ' · ElevenLabs' : ''}
+                        </option>
+                      ))}
+                  </select>
+                  <span className="cab-hint">
+                    El cambio llega al OBS del streamer en medio minuto aprox. Las voces de ElevenLabs solo se pueden enviar si la cuenta tiene ElevenLabs activado.
                   </span>
                 </div>
               )}
