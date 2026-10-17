@@ -32,7 +32,6 @@
  */
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
-import { bienvenidaHechaAqui } from './pages/Bienvenida';
 import { AceptacionCargando, AceptacionGate } from './pages/AceptacionGate';
 import { useAceptacion } from './hooks/useAceptacion';
 
@@ -68,7 +67,7 @@ import { CloudProvider, useCloudSession } from './hooks/useCloudSession';
 import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
 import { isCloudEnabled } from './lib/supabase';
 import { hasTwitchIdentity } from './lib/access';
-import { necesitaRecorrido } from './lib/recorrido';
+import { bienvenidaHechaAqui, necesitaRecorrido } from './lib/recorrido';
 import { selectPanelTournamentStore, startWidgetTournament } from './lib/tournamentCloud';
 import { parseSignupRoute } from './utils/tournamentSignup';
 

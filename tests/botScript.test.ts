@@ -194,4 +194,23 @@ describe('toolStatusFrom', () => {
     expect(status.tts).toBeUndefined();
     expect(status.encuestas).toBeUndefined();
   });
+
+  it('resume el estado de studio, powerups, mascotas, torneos, música, ko-fi y juego', () => {
+    const status = toolStatusFrom({
+      studio: { scenes: [{}, {}] },
+      powerups: { enabled: true, rules: { a: { action: 'sound' }, b: { action: 'none' } } },
+      pets: { enabled: true, name: 'Chispa' },
+      tournament: { enabled: true, size: 8 },
+      music: { show: 'cambio' },
+      kofi: { events: { don: { on: true }, mem: { on: true }, shop: { on: false } } },
+      game: { enabled: true, alerts: { win: { on: true }, loss: { on: false } } },
+    });
+    expect(status.studio).toEqual({ text: '2 escenas', empty: false });
+    expect(status.powerups).toEqual({ text: '1 regla activa', empty: false });
+    expect(status.mascotas).toEqual({ text: 'Chispa activa', empty: false });
+    expect(status.torneos).toEqual({ text: '8 equipos', empty: false });
+    expect(status.musica).toEqual({ text: 'Al cambiar canción', empty: false });
+    expect(status.kofi).toEqual({ text: '2 avisos activos', empty: false });
+    expect(status.juego).toEqual({ text: '1 alerta activa', empty: false });
+  });
 });

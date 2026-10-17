@@ -432,3 +432,19 @@
   - Filtro `En OBS (7d)` y desglose de módulos guardados e integraciones activas por streamer.
 - [x] 36.4: Verificación y Quality Gates:
   - 46 archivos de prueba y 1 023 tests pasando en Vitest, `npx tsc --noEmit` con 0 errores y `npm run build` limpio.
+
+## Phase 37: Mejoras en la Cabina del Streamer (Inicio, Mi Cuenta, En Vivo) y Auditoría Multi-Agente (ECC + Impeccable + Santa Method)
+- [x] 37.1: Inicio (`#dashboard` / `src/pages/Catalog.tsx`, `src/components/inicio/toolStatus.ts`, `src/components/SuiteNav.tsx`):
+  - Catálogo ampliado con las 16 herramientas del streamer (`studio`, `powerups`, `mascotas`, `torneos`, `musica`, `kofi`, `juego` además de las 9 originales) y todas las fuentes de OBS.
+  - Estado activo real (`toolStatusFrom`) reactivo a eventos `storage` y finalización de carga de la nube (`cloud.loading`).
+  - Unificación de parámetros codificados de capas en URLs de OBS (`layerParamsForWidget`) compartida entre `SuiteNav.tsx` y `Catalog.tsx`.
+- [x] 37.2: Transparencia en «Mi cuenta» (`#cuenta` / `src/pages/Account.tsx`):
+  - Visualización del plan activo (`fetchPlans`), pulso de conexión con OBS (`profile.last_widget_at`), botón «Copiar clave» de un clic y estado/tope diario de voces ElevenLabs con explicación del respaldo automático a Fish Audio.
+- [x] 37.3: Cabina «En vivo» (`#control` / `src/pages/Control.tsx`), Sincronización de `powerups` (`src/lib/widgetCloud.ts`) y Limpieza de Chunk (`src/pages/Bienvenida.tsx`):
+  - Formulario rápido «Enviar un mensaje a la cola» dentro de «Al aire» en `Control.tsx` para hablar o probar el volumen sin salir del control en directo.
+  - Emisión de `StorageEvent` en `announce(module)` (`widgetCloud.ts`) con guard `inFlight` en `startWidgetCloud`.
+  - Extracción de `bienvenidaHechaAqui` a `src/lib/recorrido.ts` eliminando la advertencia de importación dinámica/estática de Vite y aislando `Bienvenida.tsx` en su propio chunk perezoso.
+- [x] 37.4: Auditoría Multi-Agente en Paralelo (`security-reviewer`, `react-reviewer`, `typescript-reviewer`):
+  - Los 3 agentes independientes otorgaron veredicto **PASS**, verificando RLS, cuotas de servidor, limpieza de temporizadores, accesibilidad y tipado estricto.
+  - 46 suites de prueba y 1 024 tests pasando en Vitest, `npx tsc --noEmit` con 0 errores y `npm run build` sin advertencias.
+

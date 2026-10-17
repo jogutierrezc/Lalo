@@ -99,10 +99,20 @@ export const Control: React.FC = () => {
   const [tourOpen, setTourOpen] = useState(false);
   // Fila con sus acciones desplegadas («Más»)
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const [quickText, setQuickText] = useState('');
   // Aviso de lo último que se hizo en una fila; si fue un bloqueo, se puede deshacer
   const feedback = useUndo<{ where: Where; blocked?: string }>();
   const emergency = useDelayedAction<Emergency>(CONFIRM_SECONDS);
   const emergencySent = useUndo<null>();
+
+  const sendQuickMessage = (event: React.FormEvent) => {
+    event.preventDefault();
+    const raw = quickText.trim();
+    if (!raw || !online) return;
+    postBus({ type: 'ENQUEUE', text: raw, user: settings.channel || 'Streamer' });
+    setQuickText('');
+    feedback.offer('Mensaje enviado a la cola.', { where: 'cola' });
+  };
 
   // La guía se abre sola la primera vez; después solo desde el botón de la cabecera
   useEffect(() => {
@@ -352,6 +362,30 @@ export const Control: React.FC = () => {
                   <span className="cab-hint">{textOnly ? 'La alerta aparece sin voz.' : 'La alerta aparece y se lee en voz alta.'}</span>
                 </div>
               </div>
+
+              <form className="cab-field" onSubmit={sendQuickMessage}>
+                <label className="cab-label" htmlFor={`${uid}-quick`}>
+                  Enviar un mensaje a la cola
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <input
+                    id={`${uid}-quick`}
+                    type="text"
+                    className="cab-inp min-w-[220px] flex-1"
+                    maxLength={settings.maxLength}
+                    value={quickText}
+                    onChange={(e) => setQuickText(e.target.value)}
+                    placeholder="Escribe algo para que la voz lo lea ahora…"
+                    disabled={!online}
+                  />
+                  <button type="submit" className="cab-btn2" disabled={!online || !quickText.trim()}>
+                    Leer en el directo
+                  </button>
+                </div>
+                <span className="cab-hint">
+                  Sirve para hablar por la voz del chat o probar el volumen sin salir de En vivo.
+                </span>
+              </form>
             </section>
 
             <section className="cab-mod" data-tour="emergencia">

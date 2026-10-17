@@ -12,8 +12,9 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { SuiteNav } from '../components/SuiteNav';
 import { useCloudSession } from '../hooks/useCloudSession';
-import { fetchOwnMedia, formatBytes, rpc } from '../lib/cloud';
-import type { MediaFileRow, ProfileUsageRow } from '../lib/cloudTypes';
+import { fetchOwnMedia, fetchPlans, formatBytes, rpc } from '../lib/cloud';
+import { relativeDay } from '../lib/adminLogic';
+import type { MediaFileRow, PlanRow, ProfileUsageRow } from '../lib/cloudTypes';
 import { StorageApiError, deleteMediaFile, uploadMediaFile } from '../lib/storageApi';
 import { UPLOAD_ALLOWED_MIME, checkUpload } from '../../server/storage/limits';
 import { UsageMeter } from '../components/UsageMeter';
@@ -31,11 +32,14 @@ export const Account: React.FC = () => {
   const { enabled, profile, refresh, signOut } = useCloudSession();
   const uid = useId();
   const [usage, setUsage] = useState<ProfileUsageRow | null>(null);
+  const [plans, setPlans] = useState<PlanRow[]>([]);
   const [files, setFiles] = useState<MediaFileRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [rotated, setRotated] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // null: aún no se sabe. false: el administrador no lo ha activado (o falta la migración)
   const [storageReady, setStorageReady] = useState<boolean | null>(null);
@@ -49,9 +53,14 @@ export const Account: React.FC = () => {
   const load = useCallback(async () => {
     if (!profile) return;
     try {
-      const [rows, media] = await Promise.all([rpc('profile_usage', {}), fetchOwnMedia(profile.id)]);
+      const [rows, media, planRows] = await Promise.all([
+        rpc('profile_usage', {}),
+        fetchOwnMedia(profile.id),
+        fetchPlans().catch(() => [] as PlanRow[]),
+      ]);
       setUsage(rows[0] || null);
       setFiles(media);
+      setPlans(planRows);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo leer tu cuenta.');
@@ -78,8 +87,26 @@ export const Account: React.FC = () => {
     };
   }, [enabled, profileId]);
 
-  // Al salir de la página se corta la subida en curso
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Al salir de la página se corta la subida en curso y se limpia el temporizador de copia
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    },
+    []
+  );
+
+  const copyWidgetKey = async () => {
+    if (!profile?.widget_key) return;
+    try {
+      await navigator.clipboard?.writeText(profile.widget_key);
+      setCopiedKey(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopiedKey(false), 2000);
+    } catch {
+      setCopiedKey(false);
+    }
+  };
 
   const rotate = async () => {
     try {
@@ -306,6 +333,42 @@ export const Account: React.FC = () => {
                 <span>{profile.display_name || profile.twitch_login || 'Sin nombre'}</span>
               </div>
               <div className="cab-field">
+                <span className="cab-label">Plan</span>
+                <span>
+                  {plans.find((p) => p.id === (usage?.plan_id || profile.plan_id))?.name ||
+                    plans.find((p) => p.is_default)?.name ||
+                    'Estándar'}
+                </span>
+              </div>
+              <div className="cab-field">
+                <span className="cab-label">Conexión con OBS</span>
+                <span>
+                  {profile.last_widget_at
+                    ? `Última consulta: ${relativeDay(profile.last_widget_at, Date.now())}`
+                    : 'Aún sin abrir en OBS'}
+                </span>
+                <span className="cab-hint">
+                  Se actualiza cada vez que una fuente de navegador de OBS lee tu configuración con tu clave.
+                </span>
+              </div>
+              {profile.elevenlabs_enabled && (
+                <div className="cab-field">
+                  <span className="cab-label">Voces ElevenLabs</span>
+                  <span>
+                    Activas ·{' '}
+                    <span className="cab-mono">
+                      {(profile.elevenlabs_daily_chars ?? 15000) > 0
+                        ? `${(profile.elevenlabs_daily_chars ?? 15000).toLocaleString('es-ES')} caracteres al día`
+                        : 'Sin tope diario'}
+                    </span>
+                  </span>
+                  <span className="cab-hint">
+                    Si en un directo muy largo llegas al tope diario, Lalo pasa automáticamente a Fish Audio el resto del
+                    día para que tu stream nunca se quede mudo.
+                  </span>
+                </div>
+              )}
+              <div className="cab-field">
                 <span className="cab-label">Clave de OBS</span>
                 <span className="cab-url cab-mono">{showKey ? key : `${key.slice(0, 6)}…${key.slice(-4)}`}</span>
                 <span className="cab-hint">
@@ -315,6 +378,9 @@ export const Account: React.FC = () => {
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="cab-btn2" onClick={() => setShowKey(!showKey)}>
                   {showKey ? 'Ocultar clave' : 'Ver clave'}
+                </button>
+                <button type="button" className="cab-btn2" onClick={copyWidgetKey}>
+                  {copiedKey ? 'Clave copiada' : 'Copiar clave'}
                 </button>
                 {!confirmRotate && (
                   <button type="button" className="cab-btn2" onClick={() => setConfirmRotate(true)}>

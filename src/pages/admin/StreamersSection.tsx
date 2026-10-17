@@ -6,7 +6,7 @@
  * suspender o reactivar). Las filas se pueden recorrer y elegir con el teclado.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { UsageMeter } from '../../components/UsageMeter';
 import {
   adminHref,
@@ -53,6 +53,14 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
   const [recovery, setRecovery] = useState<{ profileId: string; code: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    },
+    []
+  );
 
   // El administrador no es un streamer: su propia cuenta no aparece en la lista
   const accounts = useMemo(
@@ -129,7 +137,11 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
   const copyRecovery = (code: string) => {
     navigator.clipboard
       ?.writeText(code)
-      .then(() => setCopied(true))
+      .then(() => {
+        setCopied(true);
+        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+      })
       .catch(() => setError('No se pudo copiar. Selecciona el código y cópialo a mano.'));
   };
 

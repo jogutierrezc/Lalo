@@ -159,6 +159,15 @@ export const claveTareas = (perfilId: string) => `lalo_primeros_pasos_${perfilId
 /** Clave de este navegador que recuerda la bienvenida terminada si la cuenta no pudo guardarlo. */
 export const claveBienvenida = (perfilId: string) => `lalo_bienvenida_hecha_${perfilId}`;
 
+/** Recuerdo en este navegador de que la bienvenida ya se terminó (por si la cuenta no pudo guardarlo). */
+export function bienvenidaHechaAqui(perfilId: string): boolean {
+  try {
+    return localStorage.getItem(claveBienvenida(perfilId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Lee el estado guardado. Lo que no se reconoce se ignora. */
 export function leerTareas(raw: string | null | undefined): EstadoTareas {
   if (!raw) return {};

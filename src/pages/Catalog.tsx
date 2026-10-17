@@ -11,8 +11,28 @@
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { BellRing, Bot, Check, Clapperboard, Coins, Copy, Gamepad2, MessagesSquare, Mic, Play, Swords, Target } from 'lucide-react';
-import { SuiteNav } from '../components/SuiteNav';
+import {
+  BellRing,
+  Bot,
+  Check,
+  Clapperboard,
+  Coffee,
+  Coins,
+  Copy,
+  Gamepad2,
+  Layers,
+  Medal,
+  MessagesSquare,
+  Mic,
+  Music,
+  PawPrint,
+  Play,
+  Swords,
+  Target,
+  Trophy,
+  Zap,
+} from 'lucide-react';
+import { SuiteNav, layerParamsForWidget } from '../components/SuiteNav';
 import { Field } from '../components/studio/StudioKit';
 import { useSettings } from '../hooks/useSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
@@ -25,8 +45,13 @@ import { loadRewardsSettings } from '../types/rewards';
 import { loadGoalsSettings } from '../types/goals';
 import { loadRouletteSettings } from '../types/roulette';
 import { loadTwitchIOSettings } from '../types/twitchio';
-import { encodeChatSettings, loadChatSettings } from '../types/chat';
-import { encodeRaidSettings, loadRaidSettings } from '../types/raid';
+import { loadStudioSettings } from '../types/studio';
+import { loadPowerupsSettings } from '../types/powerups';
+import { loadPetsSettings } from '../types/pets';
+import { loadTournamentSettings } from '../types/tournament';
+import { loadMusicSettings } from '../types/music';
+import { loadKofiSettings } from '../types/kofi';
+import { loadGameSettings } from '../types/game';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { ToolId, toolStatusFrom } from '../components/inicio/toolStatus';
 import { PrimerosPasos } from '../components/recorrido/PrimerosPasos';
@@ -124,6 +149,27 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    id: 'powerups',
+    name: 'Power-ups',
+    text: 'Sonidos, vídeos o voz cuando alguien usa un Power-up de Bits en el canal.',
+    href: '#powerups',
+    icon: Zap,
+  },
+  {
+    id: 'mascotas',
+    name: 'Mascotas',
+    text: 'Tu personaje reacciona con voz y emociones a canjes, bits, raids y menciones.',
+    href: '#mascotas',
+    icon: PawPrint,
+  },
+  {
+    id: 'torneos',
+    name: 'Torneos',
+    text: 'Llaves de eliminación directa en vivo con narrador y página de inscripción.',
+    href: '#torneos',
+    icon: Medal,
+  },
+  {
     id: 'metas',
     name: 'Metas',
     text: 'Barras de progreso de seguidores, suscripciones o bits, con celebración al llegar.',
@@ -216,11 +262,39 @@ const TOOLS: Tool[] = [
     icon: Clapperboard,
   },
   {
+    id: 'studio',
+    name: 'Studio',
+    text: 'Editor visual de escenas a 1920 × 1080 para combinar capas, textos, cámaras y temporizadores.',
+    href: '#studio',
+    icon: Layers,
+  },
+  {
     id: 'twitchio',
     name: 'Bot',
     text: 'Comandos del chat con respuestas automáticas.',
     href: '#twitchio',
     icon: Bot,
+  },
+  {
+    id: 'musica',
+    name: 'Ahora suena',
+    text: 'Muestra la canción actual con diseños animados y comandos de chat.',
+    href: '#musica',
+    icon: Music,
+  },
+  {
+    id: 'kofi',
+    name: 'Ko-fi',
+    text: 'Alertas de donaciones, membresías y pedidos de tienda, con barra de meta y apoyos recientes.',
+    href: '#kofi',
+    icon: Coffee,
+  },
+  {
+    id: 'juego',
+    name: 'Alertas de juego',
+    text: 'Avisos automáticos de victorias, rachas, subidas de rango y pentakills en League of Legends.',
+    href: '#juego',
+    icon: Trophy,
   },
 ];
 
@@ -228,11 +302,19 @@ const SOURCES: { app: WidgetAppType; name: string; note: string; recommended?: b
   { app: 'all', name: 'Todo en uno', note: 'Una sola fuente con todas las capas', recommended: true },
   { app: 'tts', name: 'Voz', note: 'Mensajes leídos en voz alta' },
   { app: 'alerts', name: 'Alertas', note: 'Follows, suscripciones, bits y raids' },
+  { app: 'rewards', name: 'Recompensas', note: 'Sonidos, placas y vídeos por puntos o bits' },
+  { app: 'pets', name: 'Mascota', note: 'Tu personaje reacciona con voz a canjes, bits y al chat' },
   { app: 'goals', name: 'Metas', note: 'Barras de progreso' },
   { app: 'roulette', name: 'Ruleta', note: 'Rueda de retos y castigos' },
   { app: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
   { app: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
   { app: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
+  { app: 'music', name: 'Ahora suena', note: 'La canción que estás escuchando' },
+  { app: 'kofi', name: 'Alertas de Ko-fi', note: 'Donaciones, membresías, pedidos y comisiones' },
+  { app: 'kofigoal', name: 'Meta de Ko-fi', note: 'Lo recaudado, en barra o en depósito' },
+  { app: 'kofirecent', name: 'Últimos apoyos de Ko-fi', note: 'Lista corta de quien te apoyó' },
+  { app: 'game', name: 'Alertas de juego', note: 'Victorias, rango y jugadas de tu cuenta de Riot' },
+  { app: 'tournament', name: 'Torneo', note: 'La llave, la tabla y el campeón de tu torneo' },
 ];
 
 /** Lee lo guardado de cada herramienta para decir cuánto hay activo. */
@@ -243,6 +325,13 @@ function readToolStatus() {
     goals: loadGoalsSettings(),
     roulette: loadRouletteSettings(),
     bot: loadTwitchIOSettings(),
+    studio: loadStudioSettings(),
+    powerups: loadPowerupsSettings(),
+    pets: loadPetsSettings(),
+    tournament: loadTournamentSettings(),
+    music: loadMusicSettings(),
+    kofi: loadKofiSettings(),
+    game: loadGameSettings(),
   });
 }
 
@@ -252,7 +341,7 @@ export const Catalog: React.FC = () => {
   const uid = useId();
 
   const [tourOpen, setTourOpen] = useState(false);
-  const [toolStatus] = useState(readToolStatus);
+  const [toolStatus, setToolStatus] = useState(readToolStatus);
   const [testNote, setTestNote] = useState<string | null>(null);
   const [copied, setCopied] = useState<WidgetAppType | null>(null);
   const [copyFailed, setCopyFailed] = useState<{ name: string; url: string } | null>(null);
@@ -263,6 +352,17 @@ export const Catalog: React.FC = () => {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const channel = settings.channel.trim();
+
+  // Refresca el estado de cada herramienta cuando termina de bajar la nube o cambia localStorage
+  useEffect(() => {
+    setToolStatus(readToolStatus());
+  }, [cloud.loading]);
+
+  useEffect(() => {
+    const refreshStatus = () => setToolStatus(readToolStatus());
+    window.addEventListener('storage', refreshStatus);
+    return () => window.removeEventListener('storage', refreshStatus);
+  }, []);
 
   // La guía se abre sola la primera vez; después se accede desde el botón de la cabecera
   useEffect(() => {
@@ -296,19 +396,11 @@ export const Catalog: React.FC = () => {
       channelRef.current?.focus();
       return;
     }
-    const url = buildSuiteWidgetUrl(
-      baseUrl,
-      source.app,
-      channel,
-      loadSettings(),
-      cloud.profile?.status === 'active'
-        ? { k: cloud.profile.widget_key }
-        : source.app === 'chat'
-          ? { cs: encodeChatSettings(loadChatSettings()) }
-          : source.app === 'raid' || source.app === 'all'
-            ? { rs: encodeRaidSettings(loadRaidSettings()) }
-            : undefined
-    );
+    const widgetKeyParam = cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined;
+    const url = buildSuiteWidgetUrl(baseUrl, source.app, channel, loadSettings(), {
+      ...widgetKeyParam,
+      ...layerParamsForWidget(source.app),
+    });
     try {
       if (!navigator.clipboard) throw new Error('Portapapeles no disponible');
       await navigator.clipboard.writeText(url);

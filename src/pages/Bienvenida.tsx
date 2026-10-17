@@ -20,7 +20,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { completeOnboarding, fetchOwnPlan, getCaminoElegido, getPendingCode } from '../lib/cloud';
 import { outcomeMessage } from '../lib/accesoMensajes';
-import { claveBienvenida, lineasDelPlan, pasoConSesion, type PasoId, type PasoNarrado } from '../lib/recorrido';
+import { bienvenidaHechaAqui, claveBienvenida, lineasDelPlan, pasoConSesion, type PasoId, type PasoNarrado } from '../lib/recorrido';
 import { alertasActivas, guardarCanal, limpiarCanal } from '../lib/recorridoCanal';
 import { loadSettings } from '../types/settings';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
@@ -29,6 +29,8 @@ import { LateralRecorrido, MarcoRecorrido, TarjetaPlan, TituloPaso, usePasoAnima
 import { PrimerosPasos, anotarTarea } from '../components/recorrido/PrimerosPasos';
 import { Aceptacion } from '../components/legal/Aceptacion';
 import type { Aceptacion as EstadoAceptacion } from '../hooks/useAceptacion';
+
+export { bienvenidaHechaAqui };
 
 type Plan = { nombre: string; lineas: string[] };
 type EstadoPlan = 'sin-pedir' | 'cargando' | 'listo' | 'fallo';
@@ -51,15 +53,6 @@ function guardarAvance(perfilId: string, avance: Avance): void {
     sessionStorage.setItem(claveAvance(perfilId), JSON.stringify(avance));
   } catch {
     // Sin almacenamiento de sesión: una recarga vuelve al primer paso
-  }
-}
-
-/** Recuerdo en este navegador de que la bienvenida ya se terminó (por si la cuenta no pudo guardarlo). */
-export function bienvenidaHechaAqui(perfilId: string): boolean {
-  try {
-    return localStorage.getItem(claveBienvenida(perfilId)) === '1';
-  } catch {
-    return false;
   }
 }
 

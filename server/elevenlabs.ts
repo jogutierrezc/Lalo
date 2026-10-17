@@ -274,7 +274,13 @@ export async function elevenCloneVoice(
   const response = await doFetch(`${API}/v1/voices/add`, { method: 'POST', headers: { 'xi-api-key': elevenKey(env) }, body: form });
   const text = await response.text().catch(() => '');
   if (!response.ok) throw new Error(`ElevenLabs HTTP ${response.status}: ${text.slice(0, 300)}`);
-  const id = (JSON.parse(text || '{}') as { voice_id?: string }).voice_id;
+  let parsed: { voice_id?: string } = {};
+  try {
+    parsed = JSON.parse(text || '{}') as { voice_id?: string };
+  } catch {
+    throw new Error('ElevenLabs devolvió una respuesta inválida al crear la voz.');
+  }
+  const id = parsed.voice_id;
   if (!id) throw new Error('ElevenLabs aceptó el audio pero no devolvió el id de la voz.');
   return id;
 }

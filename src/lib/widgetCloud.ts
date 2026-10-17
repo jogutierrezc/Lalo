@@ -63,10 +63,7 @@ export function cloudDelivered(module: ConfigModule): boolean {
 
 /** Avisa a las capas ya montadas de que su configuración cambió. */
 function announce(module: ConfigModule): void {
-  if (module === 'tts') {
-    postBus({ type: 'SETTINGS_UPDATE', settings: loadSettings() });
-    window.dispatchEvent(new StorageEvent('storage', { key: MODULE_STORAGE_KEYS.tts }));
-  }
+  if (module === 'tts') postBus({ type: 'SETTINGS_UPDATE', settings: loadSettings() });
   if (module === 'alerts') postBus({ type: 'ALERT_SETTINGS_UPDATE', settings: loadAlertsSettings() });
   if (module === 'goals') postBus({ type: 'GOALS_SETTINGS_UPDATE', settings: loadGoalsSettings() });
   if (module === 'roulette') postBus({ type: 'ROULETTE_SETTINGS_UPDATE', settings: loadRouletteSettings() });
@@ -80,6 +77,11 @@ function announce(module: ConfigModule): void {
   if (module === 'game') postBus({ type: 'GAME_SETTINGS_UPDATE', settings: loadGameSettings() });
   // El almacén del torneo escucha este mismo aviso y recoge el estado que viaja dentro de los ajustes
   if (module === 'tournament') postBus({ type: 'TOURNAMENT_SETTINGS_UPDATE', settings: loadTournamentSettings() });
+  // localStorage.setItem no dispara 'storage' en la misma ventana; lo enviamos para las capas que escuchan 'storage' (rewards, powerups, bot, tts)
+  const storageKey = MODULE_STORAGE_KEYS[module];
+  if (storageKey && typeof window !== 'undefined' && typeof StorageEvent !== 'undefined') {
+    window.dispatchEvent(new StorageEvent('storage', { key: storageKey }));
+  }
 }
 
 async function pullBundle(key: string, notify: boolean): Promise<boolean> {
@@ -137,20 +139,26 @@ export async function startWidgetCloud(key: string): Promise<() => void> {
     console.error('[Lalo] No se pudo leer la configuración de la nube:', err);
   }
 
+  let inFlight = false;
   const timer = setInterval(async () => {
-    if (stopped) return;
-    const version = await readVersion();
-    if (!version && !versionWorks && failedChecks >= FULL_PULL_EVERY) {
-      failedChecks = 0;
-      // pullBundle solo avisa a las capas de los módulos que cambiaron
-      await pullBundle(key, true).catch(() => false);
-      return;
-    }
-    if (!version || version === lastVersion) return;
+    if (stopped || inFlight) return;
+    inFlight = true;
     try {
-      if (await pullBundle(key, true)) lastVersion = version;
-    } catch (err) {
-      console.error('[Lalo] No se pudo actualizar la configuración:', err);
+      const version = await readVersion();
+      if (!version && !versionWorks && failedChecks >= FULL_PULL_EVERY) {
+        failedChecks = 0;
+        // pullBundle solo avisa a las capas de los módulos que cambiaron
+        await pullBundle(key, true).catch(() => false);
+        return;
+      }
+      if (!version || version === lastVersion) return;
+      try {
+        if (await pullBundle(key, true)) lastVersion = version;
+      } catch (err) {
+        console.error('[Lalo] No se pudo actualizar la configuración:', err);
+      }
+    } finally {
+      inFlight = false;
     }
   }, CHECK_EVERY_MS);
 

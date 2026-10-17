@@ -13,7 +13,7 @@
  * la desplace; por eso lleva la clase .cab, que le da los tokens del tema.
  */
 
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   BellRing,
@@ -210,6 +210,37 @@ function useWidgetOpenHere(): boolean {
   return seenAt > 0 && clock - seenAt < WIDGET_STALE_MS;
 }
 
+/**
+ * Los ajustes del chat, del saludo de raid, de las recompensas y de la ruleta viajan en la URL: OBS no comparte
+ * almacenamiento con el panel. Con cuenta en la nube va además la clave: la fuente usa lo de la cuenta y deja
+ * lo de la URL de reserva, por si la nube no responde.
+ */
+export function layerParamsForWidget(mode: WidgetAppType): Record<string, string> {
+  if (mode === 'chat') return { cs: encodeChatSettings(loadChatSettings()) };
+  if (mode === 'rewards') return { rw: encodeRewardsSettings(loadRewardsSettings()) };
+  if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
+  if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
+  if (mode === 'music') return { ms: encodeMusicSettings(loadMusicSettings()) };
+  if (mode === 'pets') return { ps: encodePetsSettings(loadPetsSettings()) };
+  if (mode === 'game') return { gs: encodeGameSettings(loadGameSettings()) };
+  if (mode === 'tournament') return { ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()) };
+  if (mode === 'kofi' || mode === 'kofigoal' || mode === 'kofirecent') return { kf: encodeKofiSettings(loadKofiSettings()) };
+  if (mode === 'all') {
+    return {
+      cs: encodeChatSettings(loadChatSettings()),
+      rs: encodeRaidSettings(loadRaidSettings()),
+      rw: encodeRewardsSettings(loadRewardsSettings()),
+      rl: encodeRouletteSettings(loadRouletteSettings()),
+      ms: encodeMusicSettings(loadMusicSettings()),
+      kf: encodeKofiSettings(loadKofiSettings()),
+      ps: encodePetsSettings(loadPetsSettings()),
+      gs: encodeGameSettings(loadGameSettings()),
+      ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()),
+    };
+  }
+  return {};
+}
+
 export const SuiteNav: React.FC<SuiteNavProps> = ({
   currentApp,
   channel = 'laloplay_',
@@ -223,8 +254,18 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<'idle' | 'busy' | 'done'>('idle');
   const [activeNotice, setActiveNotice] = useState<{ appType: string; url: string } | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const widgetOpenHere = useWidgetOpenHere();
   const cloud = useCloudSession();
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    },
+    []
+  );
 
   // La cuenta solo existe con la nube configurada; sin ella, «Nube» explica qué
   // falta para encenderla. El administrador tiene su propia consola (AdminShell)
@@ -247,35 +288,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   useEffect(() => onCloudSyncMessage(setSyncMessage), []);
   const current = nav.flatMap((section) => section.items).find((item) => item.app === currentApp);
 
-  // Los ajustes del chat, del saludo de raid, de las recompensas y de la ruleta viajan en la URL: OBS no comparte
-  // almacenamiento con el panel. Con cuenta en la nube va además la clave: la fuente usa lo de la cuenta y deja
-  // lo de la URL de reserva, por si la nube no responde
-  const layerParams = (mode: WidgetAppType): Record<string, string> => {
-    if (mode === 'chat') return { cs: encodeChatSettings(loadChatSettings()) };
-    if (mode === 'rewards') return { rw: encodeRewardsSettings(loadRewardsSettings()) };
-    if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
-    if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
-    if (mode === 'music') return { ms: encodeMusicSettings(loadMusicSettings()) };
-    if (mode === 'pets') return { ps: encodePetsSettings(loadPetsSettings()) };
-    if (mode === 'game') return { gs: encodeGameSettings(loadGameSettings()) };
-    if (mode === 'tournament') return { ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()) };
-    if (mode === 'kofi' || mode === 'kofigoal' || mode === 'kofirecent') return { kf: encodeKofiSettings(loadKofiSettings()) };
-    if (mode === 'all') {
-      return {
-        cs: encodeChatSettings(loadChatSettings()),
-        rs: encodeRaidSettings(loadRaidSettings()),
-        rw: encodeRewardsSettings(loadRewardsSettings()),
-        rl: encodeRouletteSettings(loadRouletteSettings()),
-        ms: encodeMusicSettings(loadMusicSettings()),
-        kf: encodeKofiSettings(loadKofiSettings()),
-        ps: encodePetsSettings(loadPetsSettings()),
-        gs: encodeGameSettings(loadGameSettings()),
-        ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()),
-      };
-    }
-    return {};
-  };
-  const extraFor = (mode: WidgetAppType): Record<string, string> => ({ ...widgetKeyParam, ...layerParams(mode) });
+  const extraFor = (mode: WidgetAppType): Record<string, string> => ({ ...widgetKeyParam, ...layerParamsForWidget(mode) });
 
   const getWidgetUrl = (mode: WidgetAppType) => {
     const ttsSettings = loadSettings();
@@ -317,7 +330,8 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
       ?.writeText(getWidgetUrl(mode))
       .then(() => {
         setCopiedKey(mode);
-        setTimeout(() => setCopiedKey(null), 2000);
+        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = setTimeout(() => setCopiedKey(null), 2000);
       })
       .catch(() => setCopiedKey(null));
   };
@@ -361,7 +375,8 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
     setSyncState('done');
     playAlertAudio('synth-bell', 0.45);
     setActiveNotice({ appType: targetApp.toUpperCase(), url: activeUrl });
-    setTimeout(() => setSyncState('idle'), 2800);
+    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(() => setSyncState('idle'), 2800);
   };
 
   const side = (
