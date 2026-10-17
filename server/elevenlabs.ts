@@ -59,7 +59,14 @@ export function toElevenTags(text: string): string {
   });
 }
 
-// ---------- Quién puede usarlo ----------
+// ---------- Quién puede usarlo y control de cuota diaria ----------
+
+export interface ElevenQuotaCheckResult {
+  allowed: boolean;
+  reason: 'ok' | 'not_enabled' | 'quota_exceeded';
+  charsUsed?: number;
+  charsLimit?: number;
+}
 
 /**
  * ¿Puede esta petición usar ElevenLabs? Vale la clave `k` de la capa de OBS o la
@@ -96,6 +103,114 @@ export async function elevenAllowed(
     // Ante un error se niega: ElevenLabs gasta créditos
   }
   return false;
+}
+
+/**
+ * Comprueba permiso y tope diario de caracteres en ElevenLabs y anota el uso del día
+ * en tts_usage_daily (migración 0019). Si la migración 0019 aún no está aplicada,
+ * cae de forma transparente en `elevenAllowed`.
+ */
+export async function elevenQuotaCheckAndRecord(
+  headers: Record<string, string | string[] | undefined>,
+  widgetKey: string,
+  chars: number,
+  env: Env
+): Promise<ElevenQuotaCheckResult> {
+  const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
+  const service = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  if (!url || !service) return { allowed: false, reason: 'not_enabled' };
+
+  const db = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
+  try {
+    let profileId: string | null = null;
+    const rawAuth = headers.authorization ?? headers.Authorization;
+    const token = (Array.isArray(rawAuth) ? rawAuth[0] : rawAuth ?? '').replace(/^Bearer\s+/i, '').trim();
+    if (token) {
+      const { data } = await db.auth.getUser(token);
+      profileId = data.user?.id ?? null;
+    }
+
+    const cleanKey = widgetKey && widgetKey.length <= 128 ? widgetKey.trim() : '';
+    if (!profileId && !cleanKey) {
+      return { allowed: false, reason: 'not_enabled' };
+    }
+
+    const { data, error } = await db.rpc('check_and_record_tts_usage', {
+      p_profile_id: profileId,
+      p_widget_key: cleanKey || null,
+      p_provider: 'elevenlabs',
+      p_chars: Math.max(0, Math.floor(chars || 0)),
+    });
+
+    if (!error && data && typeof data === 'object') {
+      const res = data as {
+        allowed?: boolean;
+        reason?: string;
+        chars_used?: number;
+        chars_limit?: number;
+      };
+      if (res.allowed) {
+        return {
+          allowed: true,
+          reason: 'ok',
+          charsUsed: res.chars_used,
+          charsLimit: res.chars_limit,
+        };
+      }
+      if (res.reason === 'quota_exceeded') {
+        return {
+          allowed: false,
+          reason: 'quota_exceeded',
+          charsUsed: res.chars_used,
+          charsLimit: res.chars_limit,
+        };
+      }
+      return { allowed: false, reason: 'not_enabled' };
+    }
+
+    // Fallback si la migración 0019 aún no se ejecutó en Supabase
+    const fallbackAllowed = await elevenAllowed(headers, widgetKey, env);
+    return { allowed: fallbackAllowed, reason: fallbackAllowed ? 'ok' : 'not_enabled' };
+  } catch {
+    return { allowed: false, reason: 'not_enabled' };
+  }
+}
+
+/**
+ * Registra el uso diario de Fish Audio en segundo plano para la analítica del administrador.
+ * Nunca bloquea ni lanza errores si la nube no está configurada o falta la migración 0019.
+ */
+export async function recordFishTtsUsage(
+  headers: Record<string, string | string[] | undefined>,
+  widgetKey: string,
+  chars: number,
+  env: Env
+): Promise<void> {
+  const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
+  const service = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  if (!url || !service || chars <= 0) return;
+
+  try {
+    const db = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
+    let profileId: string | null = null;
+    const rawAuth = headers.authorization ?? headers.Authorization;
+    const token = (Array.isArray(rawAuth) ? rawAuth[0] : rawAuth ?? '').replace(/^Bearer\s+/i, '').trim();
+    if (token) {
+      const { data } = await db.auth.getUser(token);
+      profileId = data.user?.id ?? null;
+    }
+    const cleanKey = widgetKey && widgetKey.length <= 128 ? widgetKey.trim() : '';
+    if (!profileId && !cleanKey) return;
+
+    await db.rpc('check_and_record_tts_usage', {
+      p_profile_id: profileId,
+      p_widget_key: cleanKey || null,
+      p_provider: 'fish',
+      p_chars: Math.max(0, Math.floor(chars || 0)),
+    });
+  } catch {
+    // Silencioso: la síntesis de Fish Audio nunca depende de la telemetría
+  }
 }
 
 // ---------- Síntesis ----------

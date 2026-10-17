@@ -12,7 +12,7 @@
  * - CORS universal y compatibilidad total con Node.js en Vercel Serverless.
  */
 
-import { elevenAllowed, elevenSynthesize } from '../server/elevenlabs.js';
+import { elevenQuotaCheckAndRecord, elevenSynthesize, recordFishTtsUsage } from '../server/elevenlabs.js';
 import {
   processTTSRequest,
   normalizeServerText,
@@ -86,25 +86,37 @@ export default async function handler(req: any, res: any) {
       return res.end(JSON.stringify({ error: 'Parámetro text requerido' }));
     }
 
+    const spoken = normalizeServerText(text.trim().slice(0, MAX_TTS_LENGTH));
+    const widgetKey = String(body?.k ?? '');
     let result: TTSProcessResult;
+
     if (body?.engine === 'elevenlabs') {
-      // Motor opcional: solo para cuentas que el administrador activó. Se comprueba aquí, no en el navegador.
-      const allowed = await elevenAllowed(req.headers ?? {}, String(body.k ?? ''), process.env);
-      if (!allowed) {
+      // Motor opcional: comprueba permiso y cuota diaria en el servidor
+      const check = await elevenQuotaCheckAndRecord(req.headers ?? {}, widgetKey, spoken.length, process.env);
+      if (!check.allowed && check.reason === 'quota_exceeded') {
+        // Cuota diaria de ElevenLabs agotada: cae a Fish Audio para no dejar mudo el directo
+        const fallback = await processTTSRequest(spoken, undefined, model);
+        void recordFishTtsUsage(req.headers ?? {}, widgetKey, spoken.length, process.env);
+        result = {
+          ...fallback,
+          headers: { ...(fallback.headers ?? {}), 'X-Lalo-TTS-Fallback': 'elevenlabs-quota' },
+        };
+      } else if (!check.allowed) {
         const payload = { error: 'ElevenLabs no está activado para esta cuenta.', code: 'elevenlabs_not_enabled' };
         if (typeof res.status === 'function') return res.status(403).json(payload);
         res.statusCode = 403;
         res.setHeader('Content-Type', 'application/json');
         return res.end(JSON.stringify(payload));
+      } else {
+        result = {
+          status: 200,
+          contentType: 'audio/mpeg',
+          buffer: await elevenSynthesize(spoken, String(reference_id ?? ''), process.env),
+        };
       }
-      const spoken = normalizeServerText(text.trim().slice(0, MAX_TTS_LENGTH));
-      result = {
-        status: 200,
-        contentType: 'audio/mpeg',
-        buffer: await elevenSynthesize(spoken, String(reference_id ?? ''), process.env),
-      };
     } else {
       result = await processTTSRequest(text, reference_id, model);
+      void recordFishTtsUsage(req.headers ?? {}, widgetKey, spoken.length, process.env);
     }
 
     res.setHeader('Content-Type', result.contentType);

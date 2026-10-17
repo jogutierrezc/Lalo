@@ -1,7 +1,7 @@
 import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { processTTSRequest, normalizeServerText, MAX_TTS_LENGTH, type TTSProcessResult } from './server/ttsHandler';
-import { elevenAllowed, elevenSynthesize } from './server/elevenlabs';
+import { elevenQuotaCheckAndRecord, elevenSynthesize, recordFishTtsUsage } from './server/elevenlabs';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 function createTTSMiddleware() {
@@ -29,23 +29,33 @@ function createTTSMiddleware() {
             return;
           }
 
+          const spoken = normalizeServerText(text.trim().slice(0, MAX_TTS_LENGTH));
+          const widgetKey = String(parsed.k ?? '');
           let result: TTSProcessResult;
           if (parsed.engine === 'elevenlabs') {
-            const allowed = await elevenAllowed(req.headers ?? {}, String(parsed.k ?? ''), process.env);
-            if (!allowed) {
+            const check = await elevenQuotaCheckAndRecord(req.headers ?? {}, widgetKey, spoken.length, process.env);
+            if (!check.allowed && check.reason === 'quota_exceeded') {
+              const fallback = await processTTSRequest(spoken, undefined, model);
+              void recordFishTtsUsage(req.headers ?? {}, widgetKey, spoken.length, process.env);
+              result = {
+                ...fallback,
+                headers: { ...(fallback.headers ?? {}), 'X-Lalo-TTS-Fallback': 'elevenlabs-quota' },
+              };
+            } else if (!check.allowed) {
               res.statusCode = 403;
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({ error: 'ElevenLabs no está activado para esta cuenta.', code: 'elevenlabs_not_enabled' }));
               return;
+            } else {
+              result = {
+                status: 200,
+                contentType: 'audio/mpeg',
+                buffer: await elevenSynthesize(spoken, String(reference_id ?? ''), process.env),
+              };
             }
-            const spoken = normalizeServerText(text.trim().slice(0, MAX_TTS_LENGTH));
-            result = {
-              status: 200,
-              contentType: 'audio/mpeg',
-              buffer: await elevenSynthesize(spoken, String(reference_id ?? ''), process.env),
-            };
           } else {
             result = await processTTSRequest(text, reference_id, model);
+            void recordFishTtsUsage(req.headers ?? {}, widgetKey, spoken.length, process.env);
           }
 
           res.statusCode = result.status;

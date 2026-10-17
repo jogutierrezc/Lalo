@@ -7,14 +7,32 @@
  */
 
 import type { AuthErrorLike } from './access';
-import type { InviteCodeRow, InviteRedemptionRow, ProfileUsageRow } from './cloudTypes';
+import type {
+  AdminAuditEntry,
+  AdminProfileUsageDetail,
+  AdminUsageReport,
+  ConfigModule,
+  InviteCodeRow,
+  InviteRedemptionRow,
+  ProfileUsageRow,
+} from './cloudTypes';
 
 // ---------- Secciones ----------
 
-export type AdminSection = 'resumen' | 'codigos' | 'limites' | 'almacenamiento' | 'voces' | 'streamers' | 'integraciones' | 'acceso';
+export type AdminSection =
+  | 'resumen'
+  | 'uso'
+  | 'codigos'
+  | 'limites'
+  | 'almacenamiento'
+  | 'voces'
+  | 'streamers'
+  | 'integraciones'
+  | 'acceso';
 
 export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'resumen', label: 'Resumen' },
+  { id: 'uso', label: 'Uso y actividad' },
   { id: 'codigos', label: 'Códigos de invitación' },
   { id: 'limites', label: 'Límites' },
   { id: 'almacenamiento', label: 'Almacenamiento' },
@@ -38,6 +56,71 @@ export function adminSectionFromHash(hash: string): AdminSection {
 
 export function adminHref(section: AdminSection): string {
   return section === 'resumen' ? '#admin' : `#admin/${section}`;
+}
+
+// ---------- Módulos y telemetría de uso ----------
+
+export const MODULE_LABELS: Record<ConfigModule, { label: string; group: string }> = {
+  tts: { label: 'Voz en vivo (TTS)', group: 'Directo' },
+  alerts: { label: 'Alertas de stream', group: 'Directo' },
+  studio: { label: 'Studio (escenas)', group: 'Directo' },
+  chat: { label: 'Chat en vivo', group: 'Directo' },
+  roulette: { label: 'Ruleta', group: 'Comunidad' },
+  rewards: { label: 'Canjes y recompensas', group: 'Comunidad' },
+  goals: { label: 'Metas comunitarias', group: 'Comunidad' },
+  polls: { label: 'Batallas y encuestas', group: 'Comunidad' },
+  raid: { label: 'Saludo de raid', group: 'Directo' },
+  powerups: { label: 'Power-ups y EventSub', group: 'Comunidad' },
+  pets: { label: 'Mascotas', group: 'Comunidad' },
+  game: { label: 'Alertas de juego (Riot)', group: 'Integración' },
+  tournament: { label: 'Torneos', group: 'Comunidad' },
+  music: { label: 'Ahora suena (Spotify)', group: 'Integración' },
+  kofi: { label: 'Donaciones Ko-fi', group: 'Integración' },
+  bot: { label: 'Bot y comandos', group: 'Directo' },
+  marathon: { label: 'Reloj de maratón', group: 'Directo' },
+  focus: { label: 'Modo concentración', group: 'Directo' },
+};
+
+export interface ModuleAdoptionItem {
+  module: ConfigModule;
+  label: string;
+  group: string;
+  streamers: number;
+  percent: number;
+  lastUpdatedAt: string | null;
+}
+
+/**
+ * Devuelve los 18 módulos ordenados de mayor a menor adopción entre los streamers activos.
+ */
+export function moduleAdoptionRows(
+  usage: AdminUsageReport | null,
+  activeStreamersCount: number
+): ModuleAdoptionItem[] {
+  const byMod = new Map((usage?.modules ?? []).map((row) => [row.module, row]));
+  const denom = Math.max(1, activeStreamersCount);
+  const allModules = Object.keys(MODULE_LABELS) as ConfigModule[];
+
+  return allModules
+    .map((mod) => {
+      const meta = MODULE_LABELS[mod];
+      const found = byMod.get(mod);
+      const streamers = found?.streamers ?? 0;
+      const percent = activeStreamersCount > 0 ? Math.min(100, Math.round((streamers / denom) * 100)) : 0;
+      return {
+        module: mod,
+        label: meta.label,
+        group: meta.group,
+        streamers,
+        percent,
+        lastUpdatedAt: found?.last_updated_at ?? null,
+      };
+    })
+    .sort((a, b) => b.streamers - a.streamers || a.label.localeCompare(b.label, 'es'));
+}
+
+export function moduleLabel(mod: ConfigModule): string {
+  return MODULE_LABELS[mod]?.label ?? mod;
 }
 
 // ---------- Códigos ----------
@@ -84,17 +167,37 @@ export function isNearlyFull(row: ProfileUsageRow): boolean {
   return row.status === 'active' && usageRatio(row) >= NEARLY_FULL;
 }
 
+/** Cuenta con ElevenLabs habilitado que ha consumido hoy el 85% o más de su cuota diaria de caracteres. */
+export function isElevenNearlyFull(detail: AdminProfileUsageDetail | undefined, enabled = true): boolean {
+  if (!detail || !enabled) return false;
+  if (detail.elevenlabs_daily_chars <= 0) return false;
+  return detail.tts_today.eleven_chars / detail.elevenlabs_daily_chars >= NEARLY_FULL;
+}
+
+/** Cuenta cuyo OBS se ha conectado en los últimos `days` días. */
+export function isActiveInObs(detail: AdminProfileUsageDetail | undefined, now: number, days = 7): boolean {
+  if (!detail?.last_widget_at) return false;
+  return now - new Date(detail.last_widget_at).getTime() <= days * DAY_MS;
+}
+
 export const profileName = (row: Pick<ProfileUsageRow, 'display_name' | 'twitch_login'>) =>
   row.display_name || row.twitch_login || 'Sin nombre';
 
-export type ProfileFilter = 'todas' | 'activas' | 'llenas' | 'suspendidas';
+export type ProfileFilter = 'todas' | 'activas' | 'en-obs' | 'llenas' | 'suspendidas';
 
-export function filterProfiles(rows: ProfileUsageRow[], filter: ProfileFilter, search: string): ProfileUsageRow[] {
+export function filterProfiles(
+  rows: ProfileUsageRow[],
+  filter: ProfileFilter,
+  search: string,
+  usageByProfile?: Map<string, AdminProfileUsageDetail>,
+  now: number = Date.now()
+): ProfileUsageRow[] {
   const query = search.trim().toLowerCase();
   return rows.filter((row) => {
     if (filter === 'activas' && row.status !== 'active') return false;
     if (filter === 'suspendidas' && row.status !== 'suspended') return false;
     if (filter === 'llenas' && !isNearlyFull(row)) return false;
+    if (filter === 'en-obs' && !isActiveInObs(usageByProfile?.get(row.profile_id), now, 7)) return false;
     if (!query) return true;
     return `${row.display_name ?? ''} ${row.twitch_login ?? ''}`.toLowerCase().includes(query);
   });
@@ -172,6 +275,7 @@ export function buildAttention(input: {
   storageError?: string | null;
   profiles: ProfileUsageRow[];
   invites: InviteCodeRow[];
+  usage?: AdminUsageReport | null;
   now: number;
 }): AttentionItem[] {
   const items: AttentionItem[] = [];
@@ -220,6 +324,19 @@ export function buildAttention(input: {
     });
   }
 
+  if (input.usage) {
+    const usageMap = new Map(input.usage.profiles.map((u) => [u.profile_id, u]));
+    const elevenHigh = input.profiles.filter((row) => row.status === 'active' && isElevenNearlyFull(usageMap.get(row.profile_id)));
+    if (elevenHigh.length > 0) {
+      items.push({
+        level: 'warn',
+        text: `${elevenHigh.length === 1 ? '1 cuenta está' : `${elevenHigh.length} cuentas están`} al 85% o más de su tope diario de ElevenLabs: ${elevenHigh.map(profileName).join(', ')}.`,
+        section: 'uso',
+        action: 'Ver consumo',
+      });
+    }
+  }
+
   for (const invite of invitesExpiringSoon(input.invites, input.now)) {
     const days = daysLeft(invite, input.now) ?? 0;
     const when = days <= 1 ? 'caduca en menos de un día' : `caduca en ${days} días`;
@@ -245,14 +362,15 @@ export interface ActivityItem {
 }
 
 /**
- * Actividad que se puede reconstruir con filas reales: canjes de códigos y
- * códigos creados. No hay registro de suspensiones ni de cambios de plan.
+ * Actividad que se puede reconstruir con filas reales: canjes de códigos,
+ * códigos creados y el registro de auditoría administrativa (migración 0019).
  */
 export function buildActivity(
   invites: InviteCodeRow[],
   redemptions: InviteRedemptionRow[],
   profiles: ProfileUsageRow[],
-  limit = 8
+  limit = 8,
+  auditLog: AdminAuditEntry[] = []
 ): ActivityItem[] {
   const codeOf = new Map(invites.map((invite) => [invite.id, invite.code]));
   const nameOf = new Map(profiles.map((row) => [row.profile_id, profileName(row)]));
@@ -265,6 +383,12 @@ export function buildActivity(
       at: invite.created_at,
       text: `Se creó el código ${invite.code}${invite.note ? ` para ${invite.note}` : ''}`,
     })),
+    ...auditLog
+      .filter((entry) => Boolean(entry.detail))
+      .map((entry) => ({
+        at: entry.created_at,
+        text: entry.detail,
+      })),
   ];
   return items.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, limit);
 }

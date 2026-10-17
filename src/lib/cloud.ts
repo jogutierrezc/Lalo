@@ -9,6 +9,8 @@
 import { supabase } from './supabase';
 import { adminSignInProblem, type AuthErrorLike } from './access';
 import type {
+  AdminUsageReport,
+  ConfigModule,
   InviteCodeRow,
   InviteRedemptionRow,
   MediaFileRow,
@@ -233,16 +235,109 @@ export async function fetchRedemptions(): Promise<InviteRedemptionRow[]> {
   return (data as InviteRedemptionRow[]) || [];
 }
 
-export type ProfileMeta = Pick<ProfileRow, 'id' | 'invite_code_id' | 'created_at' | 'last_seen_at' | 'elevenlabs_enabled'>;
+export type ProfileMeta = Pick<
+  ProfileRow,
+  'id' | 'invite_code_id' | 'created_at' | 'last_seen_at' | 'elevenlabs_enabled' | 'last_widget_at' | 'elevenlabs_daily_chars'
+>;
 
-/** Datos de cada perfil que admin_overview no trae: última visita, alta y código con el que entró. */
+/** Datos de cada perfil que admin_overview no trae: última visita, alta, pulso de OBS y ElevenLabs. */
 export async function fetchProfileMeta(): Promise<ProfileMeta[]> {
-  // elevenlabs_enabled existe desde la migración 0018: sin ella se lee lo demás
+  const with0019 = await client()
+    .from('profiles')
+    .select('id, invite_code_id, created_at, last_seen_at, elevenlabs_enabled, last_widget_at, elevenlabs_daily_chars');
+  if (!with0019.error) return (with0019.data as ProfileMeta[]) || [];
+
+  // Fallback si falta 0019 pero está 0018
   const withEleven = await client().from('profiles').select('id, invite_code_id, created_at, last_seen_at, elevenlabs_enabled');
   if (!withEleven.error) return (withEleven.data as ProfileMeta[]) || [];
+
   const { data, error } = await client().from('profiles').select('id, invite_code_id, created_at, last_seen_at');
   if (error) throw new Error(error.message);
   return (data as ProfileMeta[]) || [];
+}
+
+/**
+ * Informe de uso y adopción de herramientas para el administrador.
+ * Si la migración 0019 está aplicada, usa el RPC `admin_usage_report` completo.
+ * Si aún no está aplicada, reconstruye la adopción de módulos directamente desde `public.configs`
+ * (que el administrador ya puede leer desde 0001).
+ */
+export async function fetchAdminUsageReport(): Promise<AdminUsageReport | null> {
+  try {
+    const report = await rpc('admin_usage_report', {});
+    if (report && Array.isArray(report.modules)) {
+      return { ...report, full_telemetry: true };
+    }
+  } catch {
+    // Si 0019 aún no está aplicada, reconstruir desde public.configs
+  }
+
+  try {
+    const { data, error } = await client().from('configs').select('profile_id, module, updated_at');
+    if (error || !data) return null;
+
+    const rows = data as { profile_id: string; module: ConfigModule; updated_at: string }[];
+    const byModule = new Map<ConfigModule, { streamers: Set<string>; lastUpdated: string | null }>();
+    const byProfile = new Map<string, { modules: Set<ConfigModule>; lastUpdated: string | null }>();
+
+    for (const row of rows) {
+      const modEntry = byModule.get(row.module) ?? { streamers: new Set<string>(), lastUpdated: null };
+      modEntry.streamers.add(row.profile_id);
+      if (!modEntry.lastUpdated || row.updated_at > modEntry.lastUpdated) {
+        modEntry.lastUpdated = row.updated_at;
+      }
+      byModule.set(row.module, modEntry);
+
+      const profEntry = byProfile.get(row.profile_id) ?? { modules: new Set<ConfigModule>(), lastUpdated: null };
+      profEntry.modules.add(row.module);
+      if (!profEntry.lastUpdated || row.updated_at > profEntry.lastUpdated) {
+        profEntry.lastUpdated = row.updated_at;
+      }
+      byProfile.set(row.profile_id, profEntry);
+    }
+
+    const modules = Array.from(byModule.entries())
+      .map(([module, info]) => ({
+        module,
+        streamers: info.streamers.size,
+        last_updated_at: info.lastUpdated,
+      }))
+      .sort((a, b) => b.streamers - a.streamers || a.module.localeCompare(b.module));
+
+    const profiles = Array.from(byProfile.entries()).map(([profile_id, info]) => ({
+      profile_id,
+      last_widget_at: null,
+      configs_updated_at: info.lastUpdated,
+      modules: Array.from(info.modules).sort(),
+      integrations: [],
+      tournament: null,
+      elevenlabs_daily_chars: 15000,
+      tts_today: { fish_requests: 0, fish_chars: 0, eleven_requests: 0, eleven_chars: 0 },
+      tts_7d: { fish_requests: 0, fish_chars: 0, eleven_requests: 0, eleven_chars: 0 },
+    }));
+
+    return {
+      modules,
+      profiles,
+      totals: {
+        obs_active_24h: 0,
+        obs_active_7d: 0,
+        panel_active_7d: 0,
+        configured_streamers: byProfile.size,
+        tts_7d_requests: 0,
+        tts_7d_chars: 0,
+        eleven_7d_requests: 0,
+        eleven_7d_chars: 0,
+        eleven_today_chars: 0,
+        active_tournaments: 0,
+        total_tournament_entries: 0,
+      },
+      audit_log: [],
+      full_telemetry: false,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Cambia la clave de quien ha entrado. Devuelve null si se cambió, o el error de Supabase. */

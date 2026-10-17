@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import {
+  fetchAdminUsageReport,
   fetchAllAcceptances,
   fetchInvites,
   fetchPlans,
@@ -16,7 +17,16 @@ import {
   rpc,
   type ProfileMeta,
 } from '../../lib/cloud';
-import type { AdminOverview, AdminVoiceRow, InviteCodeRow, InviteRedemptionRow, PlanRow, TermsAcceptanceRow } from '../../lib/cloudTypes';
+import type {
+  AdminOverview,
+  AdminProfileUsageDetail,
+  AdminUsageReport,
+  AdminVoiceRow,
+  InviteCodeRow,
+  InviteRedemptionRow,
+  PlanRow,
+  TermsAcceptanceRow,
+} from '../../lib/cloudTypes';
 import { fetchAdminVoices } from '../../lib/voicesCloud';
 import { StorageApiError, fetchStorageStatus, type StorageStatus } from '../../lib/storageApi';
 
@@ -28,6 +38,9 @@ export interface AdminData {
   invites: InviteCodeRow[];
   redemptions: InviteRedemptionRow[];
   meta: Map<string, ProfileMeta>;
+  /** Informe de adopción de módulos, pulso OBS, consumo TTS y registro de auditoría. */
+  usage: AdminUsageReport | null;
+  usageByProfile: Map<string, AdminProfileUsageDetail>;
   /** Aceptaciones de términos por cuenta. null: no se pudieron leer (falta la migración 0008). */
   acceptances: Map<string, TermsAcceptanceRow[]> | null;
   /** Catálogo de voces. null: aún no se leyó o no se pudo leer (falta la migración 0009). */
@@ -53,6 +66,7 @@ export function useAdminData(): AdminData {
   const [invites, setInvites] = useState<InviteCodeRow[]>([]);
   const [redemptions, setRedemptions] = useState<InviteRedemptionRow[]>([]);
   const [metaRows, setMetaRows] = useState<ProfileMeta[]>([]);
+  const [usage, setUsage] = useState<AdminUsageReport | null>(null);
   const [acceptanceRows, setAcceptanceRows] = useState<TermsAcceptanceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [voices, setVoices] = useState<AdminVoiceRow[] | null>(null);
@@ -63,14 +77,15 @@ export function useAdminData(): AdminData {
 
   const reload = useCallback(async () => {
     try {
-      const [nextOverview, nextPlans, nextInvites, nextRedemptions, nextMeta, nextAcceptances] = await Promise.all([
+      const [nextOverview, nextPlans, nextInvites, nextRedemptions, nextMeta, nextAcceptances, nextUsage] = await Promise.all([
         rpc('admin_overview', {}),
         fetchPlans(),
         fetchInvites(),
-        // Estas tres solo enriquecen la vista: si fallan, la consola sigue
+        // Estas lecturas solo enriquecen la vista: si fallan, la consola sigue
         fetchRedemptions().catch(() => []),
         fetchProfileMeta().catch(() => []),
         fetchAllAcceptances().catch(() => null),
+        fetchAdminUsageReport().catch(() => null),
       ]);
       setOverview(nextOverview);
       setPlans(nextPlans);
@@ -78,6 +93,7 @@ export function useAdminData(): AdminData {
       setRedemptions(nextRedemptions);
       setMetaRows(nextMeta);
       setAcceptanceRows(nextAcceptances);
+      setUsage(nextUsage);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo leer la consola.');
@@ -116,6 +132,10 @@ export function useAdminData(): AdminData {
   }, [reload, reloadStorage, reloadVoices]);
 
   const meta = useMemo(() => new Map(metaRows.map((row) => [row.id, row])), [metaRows]);
+  const usageByProfile = useMemo(
+    () => new Map((usage?.profiles ?? []).map((row) => [row.profile_id, row])),
+    [usage]
+  );
   const acceptances = useMemo(() => {
     if (!acceptanceRows) return null;
     const byProfile = new Map<string, TermsAcceptanceRow[]>();
@@ -131,6 +151,8 @@ export function useAdminData(): AdminData {
     invites,
     redemptions,
     meta,
+    usage,
+    usageByProfile,
     acceptances,
     voices,
     voicesError,

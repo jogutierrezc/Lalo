@@ -320,3 +320,31 @@
 .acc-progress .cab-meter i {
   transition: transform 0.15s linear;
 }
+
+/* Telemetría y detalle 360: cifras tabulares, cabeceras con acción y listas de chips */
+.adm-badge,
+.cab-stats dd,
+.adm-table td,
+.adm-kv dd {
+  font-variant-numeric: tabular-nums;
+}
+.adm-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.adm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.adm-meter-cell {
+  min-width: 140px;
+}
+.cab-inp.adm-select-sm {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 0.8125rem;
+}

@@ -10,14 +10,17 @@ import {
   filterProfiles,
   inviteState,
   invitesExpiringSoon,
+  isActiveInObs,
+  isElevenNearlyFull,
   isNearlyFull,
+  moduleAdoptionRows,
   passwordChangeProblem,
   passwordProblem,
   relativeDay,
   storageHealth,
   type StorageSummary,
 } from '../src/lib/adminLogic';
-import type { InviteCodeRow, ProfileUsageRow } from '../src/lib/cloudTypes';
+import type { AdminProfileUsageDetail, AdminUsageReport, InviteCodeRow, ProfileUsageRow } from '../src/lib/cloudTypes';
 import { buildPublicUrl } from '../src/lib/storageApi';
 
 const NOW = new Date('2026-10-03T12:00:00Z').getTime();
@@ -36,6 +39,19 @@ const profile = (patch: Partial<ProfileUsageRow>): ProfileUsageRow => ({
   storage_limit_bytes: 40 * MB,
   max_file_bytes: 5 * MB,
   max_files: 30,
+  ...patch,
+});
+
+const usageDetail = (patch: Partial<AdminProfileUsageDetail>): AdminProfileUsageDetail => ({
+  profile_id: 'p1',
+  last_widget_at: null,
+  configs_updated_at: null,
+  modules: [],
+  integrations: [],
+  tournament: null,
+  elevenlabs_daily_chars: 15000,
+  tts_7d: { fish_requests: 0, fish_chars: 0, eleven_requests: 0, eleven_chars: 0 },
+  tts_today: { fish_requests: 0, fish_chars: 0, eleven_requests: 0, eleven_chars: 0 },
   ...patch,
 });
 
@@ -58,6 +74,7 @@ const okStorage: StorageSummary = { configured: true, missing: [], capacityBytes
 describe('adminSectionFromHash', () => {
   it('lee cada sección de la consola', () => {
     expect(adminSectionFromHash('#admin')).toBe('resumen');
+    expect(adminSectionFromHash('#admin/uso')).toBe('uso');
     expect(adminSectionFromHash('#admin/codigos')).toBe('codigos');
     expect(adminSectionFromHash('#/admin/limites/')).toBe('limites');
     expect(adminSectionFromHash('#ADMIN/Almacenamiento')).toBe('almacenamiento');
@@ -72,7 +89,7 @@ describe('adminSectionFromHash', () => {
   });
 
   it('adminHref y adminSectionFromHash son inversas', () => {
-    for (const section of ['resumen', 'codigos', 'limites', 'almacenamiento', 'streamers', 'acceso'] as const) {
+    for (const section of ['resumen', 'uso', 'codigos', 'limites', 'almacenamiento', 'streamers', 'acceso'] as const) {
       expect(adminSectionFromHash(adminHref(section))).toBe(section);
     }
   });
@@ -95,7 +112,7 @@ describe('códigos', () => {
   });
 });
 
-describe('cuentas', () => {
+describe('cuentas y telemetría', () => {
   it('casi llena es activa y al 85% o más', () => {
     expect(isNearlyFull(profile({ bytes_used: 34 * MB }))).toBe(true);
     expect(isNearlyFull(profile({ bytes_used: 33 * MB }))).toBe(false);
@@ -103,19 +120,67 @@ describe('cuentas', () => {
     expect(isNearlyFull(profile({ bytes_used: 0, storage_limit_bytes: 0 }))).toBe(false);
   });
 
-  it('filtra por estado y por nombre', () => {
+  it('detecta cuota diaria de ElevenLabs al 85% o más y pulso OBS', () => {
+    const detailHigh = usageDetail({
+      last_widget_at: new Date(NOW - 2 * DAY).toISOString(),
+      elevenlabs_daily_chars: 10000,
+      tts_today: { fish_requests: 0, fish_chars: 0, eleven_requests: 12, eleven_chars: 8500 },
+    });
+    expect(isElevenNearlyFull(detailHigh, true)).toBe(true);
+    expect(isElevenNearlyFull(detailHigh, false)).toBe(false);
+    expect(isElevenNearlyFull({ ...detailHigh, elevenlabs_daily_chars: 0 }, true)).toBe(false);
+    expect(isActiveInObs(detailHigh, NOW, 7)).toBe(true);
+    expect(isActiveInObs(detailHigh, NOW, 1)).toBe(false);
+  });
+
+  it('filtra por estado, por OBS activo y por nombre', () => {
     const rows = [
       profile({ profile_id: 'a', display_name: 'Mar', twitch_login: 'mar_ia' }),
       profile({ profile_id: 'b', display_name: 'Dani', twitch_login: 'dani_gg', bytes_used: 39 * MB }),
       profile({ profile_id: 'c', display_name: null, twitch_login: 'xx_pro', status: 'suspended' }),
     ];
-    const ids = (filter: Parameters<typeof filterProfiles>[1], search = '') => filterProfiles(rows, filter, search).map((row) => row.profile_id);
+    const usageMap = new Map<string, AdminProfileUsageDetail>([
+      ['a', usageDetail({ profile_id: 'a', last_widget_at: new Date(NOW - 2 * DAY).toISOString() })],
+      ['b', usageDetail({ profile_id: 'b', last_widget_at: new Date(NOW - 10 * DAY).toISOString() })],
+    ]);
+    const ids = (filter: Parameters<typeof filterProfiles>[1], search = '') =>
+      filterProfiles(rows, filter, search, usageMap, NOW).map((row) => row.profile_id);
     expect(ids('todas')).toEqual(['a', 'b', 'c']);
     expect(ids('activas')).toEqual(['a', 'b']);
+    expect(ids('en-obs')).toEqual(['a']);
     expect(ids('llenas')).toEqual(['b']);
     expect(ids('suspendidas')).toEqual(['c']);
     expect(ids('todas', ' DANI ')).toEqual(['b']);
     expect(ids('activas', 'xx')).toEqual([]);
+  });
+
+  it('ordena los 18 módulos por adopción y calcula el porcentaje', () => {
+    const report: AdminUsageReport = {
+      modules: [
+        { module: 'tts', streamers: 3, last_updated_at: new Date(NOW - DAY).toISOString() },
+        { module: 'roulette', streamers: 1, last_updated_at: new Date(NOW - 2 * DAY).toISOString() },
+      ],
+      profiles: [],
+      totals: {
+        obs_active_24h: 1,
+        obs_active_7d: 2,
+        panel_active_7d: 3,
+        configured_streamers: 3,
+        tts_7d_requests: 10,
+        tts_7d_chars: 500,
+        eleven_7d_requests: 4,
+        eleven_7d_chars: 200,
+        eleven_today_chars: 50,
+        active_tournaments: 0,
+        total_tournament_entries: 0,
+      },
+      audit_log: [],
+      full_telemetry: true,
+    };
+    const ranked = moduleAdoptionRows(report, 4);
+    expect(ranked).toHaveLength(18);
+    expect(ranked[0]).toMatchObject({ module: 'tts', streamers: 3, percent: 75 });
+    expect(ranked[1]).toMatchObject({ module: 'roulette', streamers: 1, percent: 25 });
   });
 });
 
@@ -163,7 +228,32 @@ describe('requiere tu atención', () => {
     expect(first({ ...okStorage, lastTest: { ok: false, step: 'permiso', detail: '' } }).text).toContain('falló');
   });
 
-  it('junta las cuentas casi llenas y lista los códigos que caducan', () => {
+  it('junta las cuentas casi llenas, las cuotas de ElevenLabs altas y los códigos que caducan', () => {
+    const usage: AdminUsageReport = {
+      modules: [],
+      profiles: [
+        usageDetail({
+          profile_id: 'c',
+          elevenlabs_daily_chars: 10000,
+          tts_today: { fish_requests: 0, fish_chars: 0, eleven_requests: 15, eleven_chars: 9000 },
+        }),
+      ],
+      totals: {
+        obs_active_24h: 0,
+        obs_active_7d: 0,
+        panel_active_7d: 0,
+        configured_streamers: 0,
+        tts_7d_requests: 0,
+        tts_7d_chars: 0,
+        eleven_7d_requests: 0,
+        eleven_7d_chars: 0,
+        eleven_today_chars: 9000,
+        active_tournaments: 0,
+        total_tournament_entries: 0,
+      },
+      audit_log: [],
+      full_telemetry: true,
+    };
     const items = buildAttention({
       storage: okStorage,
       now: NOW,
@@ -173,23 +263,39 @@ describe('requiere tu atención', () => {
         profile({ profile_id: 'c', display_name: 'Luz' }),
       ],
       invites: [invite({ code: 'LALO-7KQ2', expires_at: new Date(NOW + 6 * DAY - 1000).toISOString() })],
+      usage,
     });
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(3);
     expect(items[0]).toMatchObject({ level: 'warn', section: 'streamers' });
     expect(items[0].text).toBe('2 cuentas están al 85% o más de su plan: Dani, Caro.');
-    expect(items[1].text).toBe('El código LALO-7KQ2 caduca en 6 días y sigue sin usar.');
-    expect(attentionCounts(items)).toEqual({ streamers: 1, codigos: 1 });
+    expect(items[1]).toMatchObject({ level: 'warn', section: 'uso' });
+    expect(items[1].text).toBe('1 cuenta está al 85% o más de su tope diario de ElevenLabs: Luz.');
+    expect(items[2].text).toBe('El código LALO-7KQ2 caduca en 6 días y sigue sin usar.');
+    expect(attentionCounts(items)).toEqual({ streamers: 1, uso: 1, codigos: 1 });
   });
 });
 
 describe('actividad', () => {
-  it('mezcla canjes y códigos creados, lo más reciente primero', () => {
+  it('mezcla canjes, códigos creados y auditoría administrativa, lo más reciente primero', () => {
     const items = buildActivity(
       [invite({ id: 'i1', code: 'LALO-AAAA', note: 'Pau', created_at: new Date(NOW - 3 * DAY).toISOString() })],
       [{ invite_code_id: 'i1', profile_id: 'p1', redeemed_at: new Date(NOW - DAY).toISOString() }],
-      [profile({})]
+      [profile({})],
+      8,
+      [
+        {
+          id: 1,
+          action: 'plan_change',
+          detail: 'Se cambió el plan de Mar a Pro',
+          created_at: new Date(NOW - 1000).toISOString(),
+        },
+      ]
     );
-    expect(items.map((item) => item.text)).toEqual(['Mar canjeó LALO-AAAA', 'Se creó el código LALO-AAAA para Pau']);
+    expect(items.map((item) => item.text)).toEqual([
+      'Se cambió el plan de Mar a Pro',
+      'Mar canjeó LALO-AAAA',
+      'Se creó el código LALO-AAAA para Pau',
+    ]);
   });
 
   it('escribe la fecha de forma relativa', () => {

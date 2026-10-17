@@ -22,11 +22,11 @@ const LEVEL_CHIP: Record<AttentionItem['level'], { status?: string; label: strin
 };
 
 export const ResumenSection: React.FC<{ data: AdminData; attention: AttentionItem[] }> = ({ data, attention }) => {
-  const { overview, invites, redemptions } = data;
+  const { overview, invites, redemptions, usage } = data;
   if (!overview) return null;
   const totals = overview.totals;
   const suspended = overview.profiles.filter((row) => row.status === 'suspended').length;
-  const activity = buildActivity(invites, redemptions, overview.profiles);
+  const activity = buildActivity(invites, redemptions, overview.profiles, 8, usage?.audit_log ?? []);
   const now = Date.now();
 
   return (
@@ -60,6 +60,14 @@ export const ResumenSection: React.FC<{ data: AdminData; attention: AttentionIte
           <dd>{totals.active_profiles}</dd>
         </div>
         <div>
+          <dt>En OBS (7 días)</dt>
+          <dd>{usage?.full_telemetry ? usage.totals.obs_active_7d : '—'}</dd>
+        </div>
+        <div>
+          <dt>Locuciones (7 días)</dt>
+          <dd>{usage?.full_telemetry ? usage.totals.tts_7d_requests.toLocaleString('es-ES') : '—'}</dd>
+        </div>
+        <div>
           <dt>Suspendidas</dt>
           <dd>{suspended}</dd>
         </div>
@@ -85,7 +93,7 @@ export const ResumenSection: React.FC<{ data: AdminData; attention: AttentionIte
         <section className="cab-mod">
           <h2>Actividad reciente</h2>
           {activity.length === 0 ? (
-            <p className="cab-note">Todavía no hay canjes ni códigos creados.</p>
+            <p className="cab-note">Todavía no hay canjes, códigos ni cambios registrados.</p>
           ) : (
             <ul className="cab-rows adm-list">
               {activity.map((item) => (
@@ -96,7 +104,9 @@ export const ResumenSection: React.FC<{ data: AdminData; attention: AttentionIte
               ))}
             </ul>
           )}
-          <p className="cab-hint">Solo aparecen canjes y códigos creados. Lalo no guarda un historial de suspensiones ni de cambios de plan.</p>
+          <p className="cab-hint">
+            Reúne canjes, códigos creados y cambios administrativos recientes (planes, suspensiones y topes de ElevenLabs).
+          </p>
         </section>
 
         <section className="cab-mod">

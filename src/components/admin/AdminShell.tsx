@@ -15,7 +15,22 @@
 
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Gauge, HardDrive, KeyRound, LayoutGrid, Menu, Mic, PanelLeftClose, PanelLeftOpen, Plug, Ticket, Users, X } from 'lucide-react';
+import {
+  Activity,
+  FileText,
+  Gauge,
+  HardDrive,
+  KeyRound,
+  LayoutGrid,
+  Menu,
+  Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plug,
+  Ticket,
+  Users,
+  X,
+} from 'lucide-react';
 import { ThemeSwitch } from '../ThemeSwitch';
 import { useCloudSession } from '../../hooks/useCloudSession';
 import {
@@ -30,6 +45,7 @@ import {
 } from '../../lib/adminLogic';
 import { useAdminData } from '../../pages/admin/useAdminData';
 import { ResumenSection } from '../../pages/admin/ResumenSection';
+import { UsoSection } from '../../pages/admin/UsoSection';
 import { CodigosSection } from '../../pages/admin/CodigosSection';
 import { LimitesSection } from '../../pages/admin/LimitesSection';
 import { AlmacenamientoSection } from '../../pages/admin/AlmacenamientoSection';
@@ -41,6 +57,7 @@ import '../../styles/admin.css';
 
 const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> = {
   resumen: LayoutGrid,
+  uso: Activity,
   codigos: Ticket,
   limites: Gauge,
   almacenamiento: HardDrive,
@@ -113,7 +130,7 @@ export const AdminShell: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [drawerOpen]);
 
-  const { overview, invites, storage, storageError, storageLoading } = data;
+  const { overview, invites, usage, storage, storageError, storageLoading } = data;
   const attention = useMemo(
     () =>
       overview && !storageLoading
@@ -122,10 +139,11 @@ export const AdminShell: React.FC = () => {
             storageError: storageError?.message,
             profiles: overview.profiles.filter((row) => row.role !== 'admin'),
             invites,
+            usage,
             now: Date.now(),
           })
         : [],
-    [overview, invites, storage, storageError, storageLoading]
+    [overview, invites, usage, storage, storageError, storageLoading]
   );
   const counts = attentionCounts(attention);
   const title = ADMIN_SECTIONS.find((entry) => entry.id === section)?.label ?? 'Resumen';
@@ -250,6 +268,7 @@ export const AdminShell: React.FC = () => {
 
         <main key={section} className="adm-view">
           {section === 'resumen' && <ResumenSection data={data} attention={attention} />}
+          {section === 'uso' && <UsoSection data={data} ownId={profile?.id ?? null} />}
           {section === 'codigos' && overview && <CodigosSection data={data} />}
           {section === 'limites' && <LimitesSection data={data} />}
           {section === 'almacenamiento' && <AlmacenamientoSection data={data} />}

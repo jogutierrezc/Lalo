@@ -56,6 +56,10 @@ export interface ProfileRow {
   elevenlabs_enabled?: boolean;
   /** Desde 0018: cuándo cerró el aviso de invitación a ElevenLabs. */
   elevenlabs_invite_seen_at?: string | null;
+  /** Desde 0019: última vez que una fuente de OBS consultó su llave. */
+  last_widget_at?: string | null;
+  /** Desde 0019: tope diario de caracteres en ElevenLabs (0 = sin límite). */
+  elevenlabs_daily_chars?: number;
 }
 
 export interface InviteCodeRow {
@@ -222,6 +226,70 @@ export interface AdminOverview {
   totals: AdminTotals;
 }
 
+/** Desde 0019: adopción por módulo sincronizado en public.configs. */
+export interface AdminUsageModuleRow {
+  module: ConfigModule;
+  streamers: number;
+  last_updated_at: string | null;
+}
+
+export interface AdminTtsPeriodUsage {
+  fish_requests: number;
+  fish_chars: number;
+  eleven_requests: number;
+  eleven_chars: number;
+}
+
+export interface AdminProfileTournamentInfo {
+  slug: string;
+  name: string;
+  signup_open: boolean;
+  entries_count: number;
+}
+
+export interface AdminProfileUsageDetail {
+  profile_id: string;
+  last_widget_at: string | null;
+  configs_updated_at: string | null;
+  modules: ConfigModule[];
+  integrations: ('spotify' | 'kofi' | 'riot')[];
+  tournament: AdminProfileTournamentInfo | null;
+  elevenlabs_daily_chars: number;
+  tts_today: AdminTtsPeriodUsage;
+  tts_7d: AdminTtsPeriodUsage;
+}
+
+export interface AdminUsageTotals {
+  obs_active_24h: number;
+  obs_active_7d: number;
+  panel_active_7d: number;
+  configured_streamers: number;
+  tts_7d_requests: number;
+  tts_7d_chars: number;
+  eleven_7d_requests: number;
+  eleven_7d_chars: number;
+  eleven_today_chars: number;
+  active_tournaments: number;
+  total_tournament_entries: number;
+}
+
+export interface AdminAuditEntry {
+  id: number;
+  action: string;
+  detail: string;
+  created_at: string;
+}
+
+/** admin_usage_report() (migración 0019, o reconstruido desde configs si falta 0019). */
+export interface AdminUsageReport {
+  modules: AdminUsageModuleRow[];
+  profiles: AdminProfileUsageDetail[];
+  totals: AdminUsageTotals;
+  audit_log: AdminAuditEntry[];
+  /** true si viene de admin_usage_report (0019); false si se reconstruyó solo con configs. */
+  full_telemetry?: boolean;
+}
+
 /** Argumentos de las RPCs (nombres exactos de los parámetros SQL). */
 export interface RpcArgs {
   check_invite: { p_code: string };
@@ -233,6 +301,7 @@ export interface RpcArgs {
   widget_version: { p_key: string };
   profile_usage: { p_profile?: string | null; p_all?: boolean };
   admin_overview: Record<string, never>;
+  admin_usage_report: Record<string, never>;
   admin_create_invite: {
     p_plan?: string | null;
     p_max_uses?: number;
@@ -256,6 +325,7 @@ export interface RpcArgs {
   admin_set_voice_visible: { p_voice: string; p_visible: boolean };
   admin_set_default_voice: { p_voice: string };
   admin_set_elevenlabs: { p_profile: string; p_enabled: boolean };
+  admin_set_elevenlabs_limit: { p_profile: string; p_daily_chars: number };
   dismiss_elevenlabs_invite: Record<string, never>;
 }
 
@@ -270,10 +340,12 @@ export interface RpcResult {
   widget_version: string | null;
   profile_usage: ProfileUsageRow[];
   admin_overview: AdminOverview;
+  admin_usage_report: AdminUsageReport;
   admin_create_invite: InviteCodeRow;
   admin_revoke_invite: null;
   admin_set_profile: ProfileRow;
   admin_set_elevenlabs: ProfileRow;
+  admin_set_elevenlabs_limit: ProfileRow;
   dismiss_elevenlabs_invite: null;
   admin_create_recovery_code: string;
   admin_set_storage_capacity: number;

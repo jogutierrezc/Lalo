@@ -8,7 +8,17 @@
 
 import React, { useMemo, useState } from 'react';
 import { UsageMeter } from '../../components/UsageMeter';
-import { adminHref, filterProfiles, isNearlyFull, profileName, relativeDay, type ProfileFilter } from '../../lib/adminLogic';
+import {
+  adminHref,
+  filterProfiles,
+  isActiveInObs,
+  isElevenNearlyFull,
+  isNearlyFull,
+  moduleLabel,
+  profileName,
+  relativeDay,
+  type ProfileFilter,
+} from '../../lib/adminLogic';
 import { formatBytes, rpc } from '../../lib/cloud';
 import type { ProfileStatus } from '../../lib/cloudTypes';
 import { formatDate } from './adminFormat';
@@ -22,12 +32,21 @@ const STATUS_CHIP: Record<ProfileStatus, string> = { active: 'read', pending: 's
 const FILTERS: { id: ProfileFilter; label: string }[] = [
   { id: 'todas', label: 'Todas' },
   { id: 'activas', label: 'Activas' },
+  { id: 'en-obs', label: 'En OBS (7d)' },
   { id: 'llenas', label: 'Casi llenas' },
   { id: 'suspendidas', label: 'Suspendidas' },
 ];
 
+const DAILY_LIMIT_OPTIONS: { value: number; label: string }[] = [
+  { value: 5000, label: '5 000 car. / día' },
+  { value: 15000, label: '15 000 car. / día (estándar)' },
+  { value: 30000, label: '30 000 car. / día' },
+  { value: 50000, label: '50 000 car. / día' },
+  { value: 0, label: 'Sin tope diario' },
+];
+
 export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null }> = ({ data, ownId }) => {
-  const { overview, plans, invites, meta, acceptances, planName, reload, setError } = data;
+  const { overview, plans, invites, meta, usage, usageByProfile, acceptances, planName, reload, setError } = data;
   const [filter, setFilter] = useState<ProfileFilter>('todas');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -40,9 +59,12 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
     () => (overview?.profiles ?? []).filter((row) => row.profile_id !== ownId && row.role !== 'admin'),
     [overview, ownId]
   );
-  const rows = useMemo(() => filterProfiles(accounts, filter, search), [accounts, filter, search]);
-  const selected = accounts.find((row) => row.profile_id === selectedId) ?? null;
   const now = Date.now();
+  const rows = useMemo(
+    () => filterProfiles(accounts, filter, search, usageByProfile, now),
+    [accounts, filter, search, usageByProfile, now]
+  );
+  const selected = accounts.find((row) => row.profile_id === selectedId) ?? null;
 
   if (!overview) return null;
 
@@ -77,6 +99,19 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
     }
   };
 
+  const setElevenLimit = async (id: string, chars: number) => {
+    setBusy(true);
+    try {
+      await rpc('admin_set_elevenlabs_limit', { p_profile: id, p_daily_chars: chars });
+      setError(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar el tope diario de ElevenLabs.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const createRecovery = async (id: string) => {
     setBusy(true);
     try {
@@ -99,6 +134,7 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
   };
 
   const selectedMeta = selected ? meta.get(selected.profile_id) : undefined;
+  const selectedUsage = selected ? usageByProfile.get(selected.profile_id) : undefined;
   const enteredWith = selectedMeta?.invite_code_id
     ? invites.find((invite) => invite.id === selectedMeta.invite_code_id)?.code ?? 'Un código que ya no existe'
     : 'Sin código';
@@ -109,6 +145,16 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
     : terms.estado === 'nunca'
       ? 'Sin aceptar'
       : `${terms.estado === 'al-dia' ? 'Aceptados' : 'Aceptó una versión anterior'} el ${formatDate(terms.fecha ?? '')}`;
+
+  const connectedIntegrations: string[] = [];
+  if (selectedUsage?.integrations.includes('spotify')) connectedIntegrations.push('Spotify');
+  if (selectedUsage?.integrations.includes('kofi')) connectedIntegrations.push('Ko-fi');
+  if (selectedUsage?.integrations.includes('riot')) connectedIntegrations.push('Riot Games');
+  if (selectedUsage?.tournament) {
+    connectedIntegrations.push(
+      `Torneo (${selectedUsage.tournament.signup_open ? 'abierto' : 'cerrado'} · ${selectedUsage.tournament.entries_count} inscr.)`
+    );
+  }
 
   return (
     <>
@@ -147,7 +193,7 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                   <th>Streamer</th>
                   <th>Plan</th>
                   <th>Archivos</th>
-                  <th>Última vez</th>
+                  <th>Panel / OBS</th>
                   <th>Estado</th>
                 </tr>
               </thead>
@@ -159,6 +205,8 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                 )}
                 {rows.map((row) => {
                   const who = profileName(row);
+                  const rowUsage = usageByProfile.get(row.profile_id);
+                  const obsLive = isActiveInObs(rowUsage, now, 1);
                   return (
                     <tr
                       key={row.profile_id}
@@ -175,6 +223,9 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                     >
                       <td>
                         <b>{who}</b>
+                        {rowUsage && rowUsage.modules.length > 0 && (
+                          <div className="cab-hint cab-mono">{rowUsage.modules.length} mód.</div>
+                        )}
                       </td>
                       <td>{planName(row.plan_id)}</td>
                       <td>
@@ -183,7 +234,12 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                         </span>
                         <UsageMeter used={row.bytes_used} limit={row.storage_limit_bytes} label={`Espacio de ${who}`} />
                       </td>
-                      <td>{relativeDay(meta.get(row.profile_id)?.last_seen_at, now)}</td>
+                      <td>
+                        <div>{relativeDay(meta.get(row.profile_id)?.last_seen_at, now)}</div>
+                        <div className="cab-hint cab-mono">
+                          OBS: {obsLive ? 'Hoy' : relativeDay(rowUsage?.last_widget_at, now)}
+                        </div>
+                      </td>
                       <td>
                         <span className="cab-chip" data-status={STATUS_CHIP[row.status]}>
                           {STATUS_LABEL[row.status]}
@@ -219,11 +275,19 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                   {formatBytes(selected.bytes_used)} de {formatBytes(selected.storage_limit_bytes)}
                 </dd>
                 <dt>Archivos</dt>
-                <dd>
+                <dd className="cab-mono">
                   {selected.file_count} de {selected.max_files}
                 </dd>
-                <dt>Última vez</dt>
+                <dt>En el panel</dt>
                 <dd>{relativeDay(selectedMeta?.last_seen_at, now)}</dd>
+                <dt>En OBS</dt>
+                <dd>{relativeDay(selectedUsage?.last_widget_at, now)}</dd>
+                <dt>Voz (7 días)</dt>
+                <dd className="cab-mono">
+                  {selectedUsage
+                    ? `${(selectedUsage.tts_7d.fish_requests + selectedUsage.tts_7d.eleven_requests).toLocaleString('es-ES')} loc. · ${(selectedUsage.tts_7d.fish_chars + selectedUsage.tts_7d.eleven_chars).toLocaleString('es-ES')} car.`
+                    : '0'}
+                </dd>
                 <dt>Alta</dt>
                 <dd>{selectedMeta ? formatDate(selectedMeta.created_at) : 'Sin datos'}</dd>
                 <dt>Entró con</dt>
@@ -234,6 +298,36 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
               <UsageMeter used={selected.bytes_used} limit={selected.storage_limit_bytes} label={`Espacio de ${profileName(selected)}`} />
               {isNearlyFull(selected) && (
                 <p className="cab-note">Esta cuenta está al 85% o más de su plan. Puedes pasarla a un plan mayor.</p>
+              )}
+
+              <div className="cab-field">
+                <span className="cab-label">
+                  Herramientas guardadas ({selectedUsage?.modules.length ?? 0} de 18)
+                </span>
+                {selectedUsage && selectedUsage.modules.length > 0 ? (
+                  <div className="adm-chips">
+                    {selectedUsage.modules.map((mod) => (
+                      <span key={mod} className="cab-chip">
+                        {moduleLabel(mod)}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="cab-hint">Todavía no ha guardado cambios en ningún módulo.</span>
+                )}
+              </div>
+
+              {connectedIntegrations.length > 0 && (
+                <div className="cab-field">
+                  <span className="cab-label">Integraciones y extras activos</span>
+                  <div className="adm-chips">
+                    {connectedIntegrations.map((name) => (
+                      <span key={name} className="cab-chip" data-status="read">
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               )}
 
               <div className="cab-field">
@@ -269,8 +363,52 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                   >
                     {selectedMeta?.elevenlabs_enabled ? 'Activado · Desactivar' : 'Activar para esta cuenta'}
                   </button>
+                  {selectedMeta?.elevenlabs_enabled && selectedUsage && (
+                    <div className="grid gap-2 pt-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="cab-mono">
+                          Hoy: {selectedUsage.tts_today.eleven_chars.toLocaleString('es-ES')}{' '}
+                          {selectedUsage.elevenlabs_daily_chars > 0
+                            ? `de ${selectedUsage.elevenlabs_daily_chars.toLocaleString('es-ES')} car.`
+                            : 'car. (sin tope)'}
+                        </span>
+                        {isElevenNearlyFull(selectedUsage, true) && (
+                          <span className="cab-chip" data-status="skipped">
+                            ≥85% hoy
+                          </span>
+                        )}
+                      </div>
+                      {selectedUsage.elevenlabs_daily_chars > 0 && (
+                        <UsageMeter
+                          used={selectedUsage.tts_today.eleven_chars}
+                          limit={selectedUsage.elevenlabs_daily_chars}
+                          label={`Cuota diaria ElevenLabs de ${profileName(selected)}`}
+                        />
+                      )}
+                      {usage?.full_telemetry && (
+                        <>
+                          <label className="cab-label" htmlFor="adm-eleven-limit">
+                            Tope diario de caracteres ElevenLabs
+                          </label>
+                          <select
+                            id="adm-eleven-limit"
+                            className="cab-inp"
+                            value={selectedUsage.elevenlabs_daily_chars}
+                            disabled={busy}
+                            onChange={(e) => setElevenLimit(selected.profile_id, Number(e.target.value))}
+                          >
+                            {DAILY_LIMIT_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <span className="cab-hint">
-                    Al activarlo, el streamer ve una invitación a probar el nuevo modelo y las voces de ElevenLabs que hayas hecho visibles. Fish Audio sigue igual.
+                    Al activarlo, el streamer ve las voces de ElevenLabs visibles. Si supera el tope diario, Lalo pasa automáticamente a Fish Audio ese día.
                   </span>
                 </div>
               )}

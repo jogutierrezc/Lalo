@@ -10,7 +10,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { processTTSRequest, normalizeServerText, MAX_TTS_LENGTH } from './ttsHandler';
-import { elevenAllowed, elevenSynthesize } from './elevenlabs.js';
+import { elevenQuotaCheckAndRecord, elevenSynthesize, recordFishTtsUsage } from './elevenlabs.js';
 import { nodeHandler, type ApiRoute } from './storage/handlers.js';
 import { clipNodeHandler } from './twitch/clips.js';
 import { voicesNodeHandler } from './voices/handlers.js';
@@ -155,17 +155,24 @@ app.post('/api/tts', async (req: Request<{}, {}, TTSRequestBody>, res: Response)
       return;
     }
 
+    const spoken = normalizeServerText(text.trim().slice(0, MAX_TTS_LENGTH));
+    const widgetKey = String(k ?? '');
     let result;
     if (engine === 'elevenlabs') {
-      // Mismo control que api/tts.ts: solo cuentas activadas por el administrador
-      if (!(await elevenAllowed(req.headers, String(k ?? ''), process.env))) {
+      const check = await elevenQuotaCheckAndRecord(req.headers, widgetKey, spoken.length, process.env);
+      if (!check.allowed && check.reason === 'quota_exceeded') {
+        const fallback = await processTTSRequest(spoken, undefined, model);
+        void recordFishTtsUsage(req.headers, widgetKey, spoken.length, process.env);
+        result = { ...fallback, headers: { ...(fallback.headers ?? {}), 'X-Lalo-TTS-Fallback': 'elevenlabs-quota' } };
+      } else if (!check.allowed) {
         res.status(403).json({ error: 'ElevenLabs no está activado para esta cuenta.', code: 'elevenlabs_not_enabled' });
         return;
+      } else {
+        result = { status: 200, contentType: 'audio/mpeg', buffer: await elevenSynthesize(spoken, String(reference_id ?? ''), process.env), headers: undefined };
       }
-      const spoken = normalizeServerText(text.trim().slice(0, MAX_TTS_LENGTH));
-      result = { status: 200, contentType: 'audio/mpeg', buffer: await elevenSynthesize(spoken, String(reference_id ?? ''), process.env), headers: undefined };
     } else {
       result = await processTTSRequest(text, reference_id, model);
+      void recordFishTtsUsage(req.headers, widgetKey, spoken.length, process.env);
     }
 
     res.status(result.status);

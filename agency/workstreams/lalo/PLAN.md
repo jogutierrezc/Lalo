@@ -413,4 +413,22 @@
   - `tsc --noEmit` completado con 0 errores de TypeScript.
   - Compilación de producción Vite verificada exitosamente en 5.76s.
 
+## Phase 35: Auditoría Full-Stack ECC y Optimización de Producción
+- [x] 35.1: Unificación de síntesis TTS (`server/ttsHandler.ts`, `api/tts.ts`, `server/index.ts`, `vite.config.ts`) eliminando código triplicado entre Express, Vite y Vercel Serverless.
+- [x] 35.2: Corrección de temporizadores y referencias en OBS (`src/pages/Widget.tsx`) evitando cortes prematuros de videos de recompensas y alertas encadenadas.
+- [x] 35.3: Code-splitting de producción (`src/App.tsx`, `vite.config.ts`) con `React.lazy` + `Suspense` y separación de `react-vendor`, `supabase-vendor`, `gsap-vendor`, `tmi-vendor` e `icons-vendor`.
 
+## Phase 36: Telemetría Operativa del Administrador, Cuotas de ElevenLabs con Respaldo Automático y Auditoría (ECC + Impeccable)
+- [x] 36.1: Migración `supabase/migrations/0019_admin_usage_and_audit.sql`:
+  - Pulso real de OBS (`profiles.last_widget_at`) actualizado automáticamente desde `widget_version` y `widget_bundle` (con ventana de 10 min para no saturar escrituras).
+  - Contabilidad diaria de síntesis de voz por streamer y motor (`public.tts_usage_daily`) y cuota diaria configurable de ElevenLabs (`profiles.elevenlabs_daily_chars`, por defecto 15 000 caracteres/día).
+  - Registro de auditoría administrativa (`public.admin_audit_log`) en cambios de plan, suspensiones/reactivaciones, activación de ElevenLabs y ajustes de cuota diaria.
+  - RPC `public.admin_usage_report()` con adopción de los 18 módulos, integraciones conectadas, estado de torneos y consumo de voz (hoy y últimos 7 días).
+- [x] 36.2: Protección de créditos de ElevenLabs en `/api/tts` (`server/elevenlabs.ts`, `api/tts.ts`, `server/index.ts`, `vite.config.ts`):
+  - Si un streamer supera su tope diario de ElevenLabs, el servidor conmuta automáticamente esa locución a Fish Audio (`X-Lalo-TTS-Fallback: elevenlabs-quota`) para que sus alertas en OBS nunca queden en silencio ni consuman créditos extra.
+- [x] 36.3: Nueva vista `#admin/uso` (`src/pages/admin/UsoSection.tsx`) y ficha 360° en `#admin/streamers` (`src/pages/admin/StreamersSection.tsx`):
+  - Ranking de adopción de las 18 herramientas con barra de progreso y fecha de último uso.
+  - Tabla de pulso en OBS y consumo de voz por streamer (Fish Audio vs ElevenLabs) con selector de tope diario en vivo.
+  - Filtro `En OBS (7d)` y desglose de módulos guardados e integraciones activas por streamer.
+- [x] 36.4: Verificación y Quality Gates:
+  - 46 archivos de prueba y 1 023 tests pasando en Vitest, `npx tsc --noEmit` con 0 errores y `npm run build` limpio.
