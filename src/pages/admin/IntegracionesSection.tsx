@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ServiceCard, type CardTone } from '../../components/integraciones/ServiceCard';
 import { integrationsServerStatus, type IntegrationsServerStatus } from '../../lib/integrationsApi';
 import { adminHref, storageHealth, type StorageHealth } from '../../lib/adminLogic';
+import { rpc } from '../../lib/cloud';
 import type { AdminData } from './useAdminData';
 import '../../styles/integraciones.css';
 
@@ -30,6 +31,9 @@ const list = (items: string[]): string => items.join(', ');
 
 export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) => {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
+  const [elevenSlot, setElevenSlot] = useState<1 | 2 | null>(null);
+  const [elevenSlotProblem, setElevenSlotProblem] = useState<string | null>(null);
+  const [elevenSlotBusy, setElevenSlotBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoad({ kind: 'loading' });
@@ -41,10 +45,43 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
     refresh();
   }, [refresh]);
 
+  // Clave de ElevenLabs que el servidor usa ahora. La lee de Supabase
+  // (migración 0020) y la puede cambiar el administrador con los botones.
+  useEffect(() => {
+    let alive = true;
+    rpc('eleven_active_slot', {})
+      .then((slot) => {
+        if (alive) {
+          setElevenSlot(slot === 2 ? 2 : 1);
+          setElevenSlotProblem(null);
+        }
+      })
+      .catch(() => {
+        if (alive) setElevenSlotProblem('No se pudo leer la clave activa: puede faltar la migración 0020 (claves de ElevenLabs) en Supabase.');
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const setElevenKey = async (slot: 1 | 2) => {
+    setElevenSlotBusy(true);
+    try {
+      const value = await rpc('admin_set_eleven_active_slot', { p_slot: slot });
+      setElevenSlot(value === 2 ? 2 : 1);
+      setElevenSlotProblem(null);
+    } catch (err) {
+      setElevenSlotProblem(err instanceof Error ? err.message : 'No se pudo cambiar la clave de ElevenLabs.');
+    } finally {
+      setElevenSlotBusy(false);
+    }
+  };
+
   const status = load.kind === 'ready' ? load.status : null;
   const r2 = R2_STATE[data.storageLoading ? 'unknown' : storageHealth(data.storage)];
   const spotifyReady = status !== null && status.spotifyMissing.length === 0 && status.database.length === 0;
   const kofiReady = status !== null && status.kofiMissing.length === 0 && status.database.length === 0;
+  const elevenActive = elevenSlot !== null && (status ? (elevenSlot === 1 ? status.elevenKey1 : status.elevenKey2) : false);
   const pending = load.kind === 'loading' ? 'Comprobando' : 'Sin respuesta';
 
   return (
@@ -132,6 +169,44 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
             <a className="studio-link" href={adminHref('voces')}>
               Voces
             </a>
+          </p>
+        </ServiceCard>
+
+        <ServiceCard
+          mark="EL"
+          name="ElevenLabs"
+          status={elevenSlotProblem ? 'Sin datos' : elevenSlot === null ? 'Leyendo' : elevenActive ? `Activa (clave ${elevenSlot})` : 'Sin clave'}
+          tone={elevenSlotProblem ? 'warn' : elevenActive ? 'on' : 'warn'}
+          adminOnly
+        >
+          <p>Servicio de voces alternativo a Fish Audio. El servidor puede llevar dos claves y aquí se elige cuál se usa para sintetizar, importar y clonar voces.</p>
+          {elevenSlotProblem && <p className="cab-note">{elevenSlotProblem}</p>}
+          {elevenSlot !== null && (
+            <div className="flex flex-wrap items-center gap-2">
+              {([1, 2] as const).map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  className="cab-btn2 cab-btn-sm"
+                  aria-pressed={elevenSlot === slot}
+                  disabled={elevenSlotBusy || (status ? !(slot === 1 ? status.elevenKey1 : status.elevenKey2) : true)}
+                  onClick={() => setElevenKey(slot)}
+                >
+                  Clave {slot}
+                  {slot === 1 ? ' (ELEVENLABS_API_KEY)' : ' (ELEVENLABS_API_KEY_2)'}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="cab-hint">
+            {status
+              ? !status.elevenKey1 && !status.elevenKey2
+                ? 'Falta ELEVENLABS_API_KEY en el servidor: el motor de ElevenLabs no puede hablar.'
+                : !status.elevenKey2
+                  ? 'El servidor tiene solo la clave 1. Añade ELEVENLABS_API_KEY_2 como variable de entorno para poder alternar.'
+                  : 'Las dos claves están en el servidor.'
+              : 'Sin datos del servidor.'}{' '}
+            Las voces de ElevenLabs pertenecen a la cuenta de su clave: al cambiar de clave, las voces creadas con la otra dejan de encontrarse hasta importarlas de nuevo.
           </p>
         </ServiceCard>
 

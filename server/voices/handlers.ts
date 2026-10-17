@@ -34,7 +34,7 @@ import {
   type NodeLikeResponse,
 } from '../storage/handlers.js';
 import type { Env } from '../storage/r2.js';
-import { elevenCloneVoice, elevenDeleteVoice, elevenGetVoice, elevenKey, isElevenVoiceId } from '../elevenlabs.js';
+import { elevenAnyKey, elevenCloneVoice, elevenDeleteVoice, elevenGetVoice, isElevenVoiceId } from '../elevenlabs.js';
 import {
   VOICE_DESCRIPTION_MAX,
   VOICE_MAX_TOTAL_BYTES,
@@ -274,8 +274,8 @@ async function createElevenVoice(
   meta: VoiceEnvelopeMeta,
   parts: Uint8Array[]
 ): Promise<ApiResult> {
-  if (!elevenKey(env)) {
-    return fail(503, 'eleven_not_configured', 'Al servidor le falta la clave de ElevenLabs.', { missing: ['ELEVENLABS_API_KEY'] });
+  if (!elevenAnyKey(env)) {
+    return fail(503, 'eleven_not_configured', 'Al servidor le falta alguna clave de ElevenLabs.', { missing: ['ELEVENLABS_API_KEY', 'ELEVENLABS_API_KEY_2'] });
   }
   let voiceId: string;
   try {
@@ -300,8 +300,8 @@ async function createElevenVoice(
 /** Añade al catálogo una voz que ya existe en la cuenta de ElevenLabs (no sube audio). */
 async function importElevenVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: FetchLike): Promise<ApiResult> {
   if (!isAdmin(ctx.caller)) return fail(403, 'not_admin', 'Solo el administrador puede añadir voces.');
-  if (!elevenKey(env)) {
-    return fail(503, 'eleven_not_configured', 'Al servidor le falta la clave de ElevenLabs.', { missing: ['ELEVENLABS_API_KEY'] });
+  if (!elevenAnyKey(env)) {
+    return fail(503, 'eleven_not_configured', 'Al servidor le falta alguna clave de ElevenLabs.', { missing: ['ELEVENLABS_API_KEY', 'ELEVENLABS_API_KEY_2'] });
   }
   const body = bodyOf(req);
   const voiceId = typeof body.voiceId === 'string' ? body.voiceId.trim() : '';

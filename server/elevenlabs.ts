@@ -10,6 +10,10 @@
  * de emoción entre corchetes). Si ElevenLabs publica otro, se cambia la variable
  * en Vercel sin tocar el código.
  *
+ * Claves: ELEVENLABS_API_KEY (1) y ELEVENLABS_API_KEY_2 (2). Cuál se usa la
+ * elige el administrador en el panel (app_settings, migración 0020); si esa
+ * clave falta en el entorno, se usa la otra que exista.
+ *
  * SIN PROBAR contra ElevenLabs ni Supabase reales.
  */
 
@@ -24,8 +28,65 @@ const VOICE_ID_SHAPE = /^[A-Za-z0-9]{12,40}$/;
 
 export const isElevenVoiceId = (value: string): boolean => VOICE_ID_SHAPE.test(value.trim());
 
-export function elevenKey(env: Env): string {
-  return (env.ELEVENLABS_API_KEY ?? '').replace(/^["']|["']$/g, '').trim();
+export type ElevenKeySlot = 1 | 2;
+const SETTING_ELEVEN_ACTIVE_KEY = 'elevenlabs_active_key';
+
+const cleanSecret = (value: string | undefined): string => (value ?? '').trim().replace(/^["']|["']$/g, '').trim();
+
+export function elevenKeySlot(env: Env, slot: ElevenKeySlot): string {
+  return slot === 2 ? cleanSecret(env.ELEVENLABS_API_KEY_2) : cleanSecret(env.ELEVENLABS_API_KEY);
+}
+
+/** ¿Hay alguna clave de ElevenLabs configurada? Guardia de las rutas de voces. */
+export function elevenAnyKey(env: Env): boolean {
+  return Boolean(elevenKeySlot(env, 1) || elevenKeySlot(env, 2));
+}
+
+/** Cliente mínimo de app_settings que necesitan las pruebas. */
+interface SettingsReader {
+  from: (table: string) => {
+    select: (cols: string) => {
+      eq: (col: string, val: string) => {
+        maybeSingle: () => Promise<{ data: unknown }>;
+      };
+    };
+  };
+}
+
+/**
+ * Slot activo de ElevenLabs (1 o 2), elegido por el administrador en el panel y
+ * guardado en app_settings (migración 0020). Si no hay Supabase o falta la
+ * migración, se queda en el 1: es el valor por defecto y un problema de la nube
+ * no debe romper la síntesis.
+ */
+export async function elevenActiveSlot(env: Env, db?: SettingsReader): Promise<ElevenKeySlot> {
+  const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
+  const service = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  if (!db && (!url || !service)) return 1;
+  try {
+    const client =
+      db ?? (createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } }) as unknown as SettingsReader);
+    const { data } = await client.from('app_settings').select('value').eq('key', SETTING_ELEVEN_ACTIVE_KEY).maybeSingle();
+    const value = (data as { value?: string } | null)?.value;
+    return value === '2' ? 2 : 1;
+  } catch {
+    return 1;
+  }
+}
+
+/**
+ * La clave de ElevenLabs que deben usar todas las llamadas (síntesis, importar,
+ * clonar, borrar): la del slot activo. Si esa no está configurada, se usa la
+ * otra para que la petición no caiga por un despiste del panel.
+ */
+export async function elevenActiveKey(env: Env, db?: SettingsReader): Promise<{ key: string; slot: ElevenKeySlot }> {
+  const slot = await elevenActiveSlot(env, db);
+  const own = elevenKeySlot(env, slot);
+  if (own) return { key: own, slot };
+  // La clave elegida falta en el entorno: se usa la otra y se reporta su slot.
+  const other: ElevenKeySlot = slot === 1 ? 2 : 1;
+  const fallback = elevenKeySlot(env, other);
+  return fallback ? { key: fallback, slot: other } : { key: '', slot };
 }
 
 export function elevenModel(env: Env): string {
@@ -221,8 +282,8 @@ export async function elevenSynthesize(
   env: Env,
   doFetch: FetchLike = fetch
 ): Promise<Buffer> {
-  const apiKey = elevenKey(env);
-  if (!apiKey) throw new Error('ELEVENLABS_API_KEY no configurada en las variables de entorno de Vercel');
+  const { key: apiKey } = await elevenActiveKey(env);
+  if (!apiKey) throw new Error('Ninguna clave de ElevenLabs está configurada (ELEVENLABS_API_KEY o ELEVENLABS_API_KEY_2)');
   if (!isElevenVoiceId(voiceId)) throw new Error('El id de voz de ElevenLabs no es válido');
 
   const response = await doFetch(
@@ -248,8 +309,9 @@ export async function elevenGetVoice(
   env: Env,
   doFetch: FetchLike = fetch
 ): Promise<{ voice_id: string; name: string } | null> {
+  const { key: apiKey } = await elevenActiveKey(env);
   const response = await doFetch(`${API}/v1/voices/${encodeURIComponent(voiceId.trim())}`, {
-    headers: { 'xi-api-key': elevenKey(env) },
+    headers: { 'xi-api-key': apiKey },
   });
   if (!response.ok) return null;
   const body = (await response.json().catch(() => null)) as { voice_id?: string; name?: string } | null;
@@ -271,7 +333,8 @@ export async function elevenCloneVoice(
   files.forEach((file, index) => {
     form.append('files', new Blob([file.bytes as unknown as BlobPart], { type: file.type }), file.name || `audio-${index + 1}`);
   });
-  const response = await doFetch(`${API}/v1/voices/add`, { method: 'POST', headers: { 'xi-api-key': elevenKey(env) }, body: form });
+  const { key: apiKey } = await elevenActiveKey(env);
+  const response = await doFetch(`${API}/v1/voices/add`, { method: 'POST', headers: { 'xi-api-key': apiKey }, body: form });
   const text = await response.text().catch(() => '');
   if (!response.ok) throw new Error(`ElevenLabs HTTP ${response.status}: ${text.slice(0, 300)}`);
   let parsed: { voice_id?: string } = {};
@@ -286,10 +349,11 @@ export async function elevenCloneVoice(
 }
 
 export async function elevenDeleteVoice(voiceId: string, env: Env, doFetch: FetchLike = fetch): Promise<boolean> {
+  const { key: apiKey } = await elevenActiveKey(env);
   try {
     const response = await doFetch(`${API}/v1/voices/${encodeURIComponent(voiceId.trim())}`, {
       method: 'DELETE',
-      headers: { 'xi-api-key': elevenKey(env) },
+      headers: { 'xi-api-key': apiKey },
     });
     return response.ok;
   } catch {

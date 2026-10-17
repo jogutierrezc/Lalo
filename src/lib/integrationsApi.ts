@@ -246,6 +246,9 @@ export interface IntegrationsServerStatus {
   kofiBase: string;
   /** El servidor tiene RIOT_API_KEY. Nunca llega su valor. */
   riotConfigured: boolean;
+  /** El servidor tiene cada clave de ElevenLabs (ELEVENLABS_API_KEY y ELEVENLABS_API_KEY_2). */
+  elevenKey1: boolean;
+  elevenKey2: boolean;
   /** Cuentas de Riot vinculadas, o null si no se pudo contar. */
   riotLinked: number | null;
 }
@@ -271,6 +274,8 @@ export async function integrationsServerStatus(): Promise<ApiOutcome<Integration
       kofiMissing: strings(kofi.missing),
       kofiBase: typeof kofi.base === 'string' ? kofi.base : '',
       riotConfigured: riot.configured === true,
+      elevenKey1: obj(d.eleven).key1 === true,
+      elevenKey2: obj(d.eleven).key2 === true,
       riotLinked: typeof riot.linked === 'number' ? riot.linked : null,
     },
   };

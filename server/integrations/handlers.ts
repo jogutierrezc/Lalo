@@ -16,6 +16,7 @@ import { readRiotKey } from './riot.js';
 import { RIOT_ACTIONS, handleRiot, type RiotAction } from './riotRoutes.js';
 import { readSpotifyConfig, redirectUri } from './spotify.js';
 import { SPOTIFY_ACTIONS, SPOTIFY_SEATS, handleSpotify, type SpotifyAction } from './spotifyRoutes.js';
+import { elevenKeySlot } from '../elevenlabs.js';
 import { missingSupabase, type Env } from './store.js';
 
 /** Estado del servidor para la consola del administrador. Solo dice qué variables faltan, nunca su valor. */
@@ -46,6 +47,7 @@ async function adminStatus(req: IntegrationRequest, env: Env, deps: Deps): Promi
         database,
         migration,
         fish: { configured: Boolean((env.FISH_AUDIO_API_KEY ?? '').trim()) },
+        eleven: { key1: Boolean(elevenKeySlot(env, 1)), key2: Boolean(elevenKeySlot(env, 2)) },
         spotify: { missing: readSpotifyConfig(env).missing, redirectUri: redirectUri(env), seats, seatsMax: SPOTIFY_SEATS },
         kofi: { missing: kofiMissing(env), base: publicBase(env) },
         riot: { configured: Boolean(readRiotKey(env)), linked: riotLinked },

@@ -326,6 +326,8 @@ export interface RpcArgs {
   admin_set_default_voice: { p_voice: string };
   admin_set_elevenlabs: { p_profile: string; p_enabled: boolean };
   admin_set_elevenlabs_limit: { p_profile: string; p_daily_chars: number };
+  eleven_active_slot: Record<string, never>;
+  admin_set_eleven_active_slot: { p_slot: number };
   dismiss_elevenlabs_invite: Record<string, never>;
 }
 
@@ -346,6 +348,8 @@ export interface RpcResult {
   admin_set_profile: ProfileRow;
   admin_set_elevenlabs: ProfileRow;
   admin_set_elevenlabs_limit: ProfileRow;
+  eleven_active_slot: number;
+  admin_set_eleven_active_slot: number;
   dismiss_elevenlabs_invite: null;
   admin_create_recovery_code: string;
   admin_set_storage_capacity: number;
