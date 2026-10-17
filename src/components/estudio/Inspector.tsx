@@ -16,6 +16,7 @@ import {
   AlignStartVertical,
   Lock,
   LockOpen,
+  Maximize2,
 } from 'lucide-react';
 import { ANIMS, AnimId, MIN_SIZE, STAGE_H, STAGE_W, STUDIO_LIMITS, StudioLayer, isLaloLayer, typeInfo } from '../../types/studio';
 import type { AlignTo } from '../../utils/studioGeometry';
@@ -108,16 +109,31 @@ export const Inspector: React.FC<InspectorProps> = ({
           <NumField label="Ancho" value={layer.w} min={MIN_SIZE} max={STAGE_W * 2} disabled={locked} onChange={(w) => setSize('w', w)} onDone={onDone} />
           <NumField label="Alto" value={layer.h} min={MIN_SIZE} max={STAGE_H * 2} disabled={locked} onChange={(h) => setSize('h', h)} onDone={onDone} />
         </div>
-        <button
-          type="button"
-          className="cab-btn2 st-btn"
-          aria-pressed={layer.keepRatio}
-          onClick={() => onChange({ keepRatio: !layer.keepRatio })}
-          title="También puedes mantener pulsada Mayús al estirar"
-        >
-          {layer.keepRatio ? <Lock /> : <LockOpen />}
-          Mantener proporción
-        </button>
+        <div className="st-row">
+          <button
+            type="button"
+            className="cab-btn2 st-btn"
+            aria-pressed={layer.keepRatio}
+            onClick={() => onChange({ keepRatio: !layer.keepRatio })}
+            title="También puedes mantener pulsada Mayús al estirar"
+          >
+            {layer.keepRatio ? <Lock /> : <LockOpen />}
+            Mantener proporción
+          </button>
+          <button
+            type="button"
+            className="cab-btn2 st-btn"
+            disabled={locked}
+            onClick={() => {
+              onChange({ x: 0, y: 0, w: STAGE_W, h: STAGE_H, keepRatio: false });
+              onDone();
+            }}
+            title="Ocupar todo el lienzo (1920 × 1080)"
+          >
+            <Maximize2 />
+            Todo el lienzo
+          </button>
+        </div>
         <div className="st-row" role="group" aria-label="Alinear con el lienzo">
           {ALIGN_BUTTONS.map(({ to, label, icon: Icon }) => (
             <button key={to} type="button" className="cab-icon" aria-label={label} title={label} disabled={locked} onClick={() => onAlign(to)}>

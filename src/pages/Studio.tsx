@@ -90,14 +90,37 @@ export const Studio: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const sceneRef = useRef<SceneHandle | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
   const deleted = useUndo<{ settings: StudioSettings; sceneId: string }>();
   const channel = loadSettings().channel;
 
-  // Los ajustes de las capas de Lalo se leen de sus módulos: aquí solo se colocan
-  const data = useMemo<SceneData>(
-    () => ({ chat: loadChatSettings(), raid: loadRaidSettings(), goals: loadGoalsSettings(), alerts: loadAlertsSettings() }),
+  // Los ajustes de las capas de Lalo se leen de sus módulos y se refrescan si llega sincronización de la nube u otra pestaña
+  const readSceneData = useCallback(
+    (): SceneData => ({
+      chat: loadChatSettings(),
+      raid: loadRaidSettings(),
+      goals: loadGoalsSettings(),
+      alerts: loadAlertsSettings(),
+    }),
     []
   );
+  const [data, setData] = useState<SceneData>(readSceneData);
+
+  useEffect(() => {
+    const syncData = () => setData(readSceneData());
+    window.addEventListener('storage', syncData);
+    window.addEventListener('lalo_cloud_synced', syncData);
+    return () => {
+      window.removeEventListener('storage', syncData);
+      window.removeEventListener('lalo_cloud_synced', syncData);
+    };
+  }, [readSceneData]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const patchPrefs = (patch: Partial<EditorPrefs>) => setPrefs((prev) => ({ ...prev, ...patch }));
   useEffect(() => {
@@ -241,7 +264,11 @@ export const Studio: React.FC = () => {
       ?.writeText(sceneUrl)
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2200);
+        if (copiedTimerRef.current !== null) window.clearTimeout(copiedTimerRef.current);
+        copiedTimerRef.current = window.setTimeout(() => {
+          copiedTimerRef.current = null;
+          setCopied(false);
+        }, 2200);
       })
       .catch(() => setNote('No se pudo copiar. Selecciona la URL de abajo y cópiala a mano.'));
   };

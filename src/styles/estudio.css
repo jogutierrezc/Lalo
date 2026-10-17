@@ -312,6 +312,9 @@
   padding: 0 8px;
   font-size: 0.875rem;
 }
+.cab .st-inp[type='number'] {
+  font-variant-numeric: tabular-nums;
+}
 .cab textarea.st-inp {
   height: auto;
   min-height: 58px;
@@ -350,6 +353,7 @@
 .st-ed .cab-range output {
   min-width: 6ch;
   font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Paleta «Añadir» */
@@ -507,21 +511,74 @@
 .st-hit {
   position: absolute;
   cursor: move;
+  transition: outline-color 120ms ease;
 }
 .st-hit[data-lock] {
+  pointer-events: none;
+}
+.st-hit:hover:not([data-sel]) {
+  outline: 1px dashed rgba(61, 220, 255, 0.55);
+}
+.st-hit:hover:not([data-sel])::before {
+  content: attr(data-name);
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  max-width: calc(100% - 8px);
+  padding: 2px 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(10, 12, 24, 0.84);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   pointer-events: none;
 }
 .st-hit[data-sel] {
   outline: 1.5px solid var(--st-sel);
 }
+.st-hud {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 4;
+  padding: 2px 7px;
+  border: 1px solid var(--st-sel);
+  border-radius: 3px;
+  background: rgba(10, 12, 24, 0.92);
+  color: #ffffff;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+.st-hud[data-pos='below'] {
+  top: calc(100% + 6px);
+  bottom: auto;
+}
 .st-hd {
   position: absolute;
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   margin: -6px 0 0 -6px;
   border: 1.5px solid var(--st-sel);
   border-radius: 2px;
   background: #0a0c18;
+  transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1), background-color 120ms ease;
+}
+.st-hd::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.st-hd:hover {
+  background: var(--st-sel);
+  transform: scale(1.2);
 }
 .st-hd[data-h='nw'] { top: 0; left: 0; cursor: nwse-resize; }
 .st-hd[data-h='n'] { top: 0; left: 50%; cursor: ns-resize; }
@@ -555,6 +612,7 @@
   color: var(--cb-mut);
   font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
   font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
 }
 .st-tools {
   display: flex;

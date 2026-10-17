@@ -41,6 +41,12 @@ export function layerStates(anim: AnimId, fromLeft: boolean, still: boolean): { 
 /** La salida dura menos que la entrada. */
 export const exitSeconds = (duration: number) => Math.max(0.12, Math.round(duration * 45) / 100);
 
+/** Curva de entrada: «pop» lleva un rebote elástico sutil; el resto frena con suavidad. */
+export function enterEase(anim: AnimId, still = false): string {
+  if (still) return 'power2.out';
+  return anim === 'pop' ? 'back.out(1.45)' : 'expo.out';
+}
+
 const CLEAR = 'transform,opacity,clipPath';
 
 export function killLayer(el: HTMLElement): void {
@@ -50,18 +56,20 @@ export function killLayer(el: HTMLElement): void {
 
 export function layerEnter(el: HTMLElement, anim: AnimId, o: LayerMotion): gsap.core.Tween | null {
   killLayer(el);
-  const states = layerStates(anim, o.fromLeft, reduced());
+  const still = reduced();
+  const states = layerStates(anim, o.fromLeft, still);
   if (!states) return null;
   return gsap.fromTo(el, states.hidden, {
     ...states.shown,
     duration: o.duration,
     delay: o.delay || 0,
-    ease: 'expo.out',
+    ease: enterEase(anim, still),
+    overwrite: 'auto',
     clearProps: CLEAR,
   });
 }
 
-/** Salida. `onDone` se llama siempre, también si la animación es «ninguna». */
+/** Salida interrumpible desde el estado en curso. `onDone` se llama siempre, también si la animación es «ninguna». */
 export function layerExit(el: HTMLElement, anim: AnimId, o: LayerMotion, onDone: () => void): gsap.core.Tween | null {
   gsap.killTweensOf(el);
   const states = layerStates(anim, o.fromLeft, reduced());
@@ -69,5 +77,12 @@ export function layerExit(el: HTMLElement, anim: AnimId, o: LayerMotion, onDone:
     onDone();
     return null;
   }
-  return gsap.fromTo(el, states.shown, { ...states.hidden, duration: exitSeconds(o.duration), ease: 'power2.out', onComplete: onDone });
+  return gsap.to(el, {
+    ...states.hidden,
+    duration: exitSeconds(o.duration),
+    ease: 'power2.in',
+    overwrite: 'auto',
+    onComplete: onDone,
+  });
 }
+

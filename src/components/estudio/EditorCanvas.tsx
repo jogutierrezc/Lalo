@@ -15,7 +15,7 @@
  */
 
 import React, { useRef, useState } from 'react';
-import { MIN_SIZE, STAGE_H, STAGE_W, StudioLayer, StudioScene } from '../../types/studio';
+import { MIN_SIZE, STAGE_H, STAGE_W, StudioLayer, StudioScene, isLaloLayer } from '../../types/studio';
 import { HANDLES, Handle, Rect, keepOnStage, resizeRect, roundRect, snapMove, snapResize } from '../../utils/studioGeometry';
 import type { EditorPrefs } from './editorPrefs';
 import { SceneData, SceneHandle, SceneView } from './SceneView';
@@ -73,6 +73,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
+  const [dragMode, setDragMode] = useState<'move' | 'resize' | null>(null);
   const selected = scene.layers.find((layer) => layer.id === selectedId) || null;
 
   const snapOptions = (id: string, scale: number, off: boolean) => ({
@@ -122,6 +123,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
     if (!drag.moved) {
       if (Math.abs(sx) + Math.abs(sy) < START_DISTANCE) return;
       drag.moved = true;
+      setDragMode(drag.handle ? 'resize' : 'move');
     }
     const dx = sx * drag.scale;
     const dy = sy * drag.scale;
@@ -152,7 +154,21 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
     dragRef.current = null;
     if (stageRef.current?.hasPointerCapture(event.pointerId)) stageRef.current.releasePointerCapture(event.pointerId);
     setGuides({ v: [], h: [] });
+    setDragMode(null);
     if (drag.moved) onStepEnd();
+  };
+
+  const onDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const hit = target.closest<HTMLElement>('[data-layer]');
+    if (!hit) return;
+    const layer = scene.layers.find((item) => item.id === hit.dataset.layer);
+    if (!layer) return;
+    if (isLaloLayer(layer.type)) {
+      sceneRef.current?.test(layer.id);
+    } else {
+      sceneRef.current?.play(layer.id, 'enter');
+    }
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -214,6 +230,7 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onDoubleClick={onDoubleClick}
         onKeyDown={onKeyDown}
         onKeyUp={onKeyUp}
         onBlur={onStepEnd}
@@ -230,10 +247,16 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
                 key={layer.id}
                 className="st-hit"
                 data-layer={layer.id}
+                data-name={layer.name}
                 data-sel={layer.id === selectedId ? '' : undefined}
                 data-lock={layer.locked ? '' : undefined}
                 style={hitStyle(layer, index)}
               >
+                {layer.id === selectedId && dragMode && (
+                  <span className="st-hud" data-pos={layer.y < 56 ? 'below' : undefined}>
+                    {dragMode === 'move' ? `${layer.x}, ${layer.y}` : `${layer.w} × ${layer.h}`}
+                  </span>
+                )}
                 {layer.id === selectedId &&
                   !layer.locked &&
                   HANDLES.map((handle) => <i key={handle} className="st-hd" data-h={handle} />)}
@@ -251,3 +274,4 @@ export const EditorCanvas: React.FC<EditorCanvasProps> = ({
     </div>
   );
 };
+

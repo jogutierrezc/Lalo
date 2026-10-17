@@ -120,22 +120,25 @@ const LayerShell = memo(function LayerShell({ layer, z, mode, data, registry, pl
 
   // Vista previa de la entrada y la salida desde el editor
   useEffect(() => {
+    let activeTween: gsap.core.Tween | null = null;
     let back: gsap.core.Tween | null = null;
     players.set(layer.id, (kind, withDelay) => {
       const el = innerRef.current;
       if (!el) return;
       const m = motionRef.current;
+      activeTween?.kill();
       back?.kill();
       if (kind === 'enter') {
-        layerEnter(el, m.enter, { ...m, delay: withDelay ? m.delay : 0 });
+        activeTween = layerEnter(el, m.enter, { ...m, delay: withDelay ? m.delay : 0 });
         return;
       }
       // Tras la salida la capa vuelve a su sitio para seguir editando
-      layerExit(el, m.exit, m, () => {
+      activeTween = layerExit(el, m.exit, m, () => {
         back = gsap.delayedCall(0.6, () => killLayer(el));
       });
     });
     return () => {
+      activeTween?.kill();
       back?.kill();
       players.delete(layer.id);
     };

@@ -48,7 +48,7 @@ import {
   uniqueName,
   updateLayer,
 } from '../src/utils/studioScenes';
-import { exitSeconds, layerStates } from '../src/utils/studioMotion';
+import { enterEase, exitSeconds, layerStates } from '../src/utils/studioMotion';
 import { CONFIG_MODULES } from '../src/lib/cloudTypes';
 import { MODULE_STORAGE_KEYS } from '../src/lib/cloudConfig';
 
@@ -331,4 +331,12 @@ describe('studio: animaciones', () => {
     expect(exitSeconds(0.5)).toBeLessThan(0.5);
     expect(exitSeconds(0.2)).toBeGreaterThanOrEqual(0.12);
   });
+
+  it('la entrada con rebote usa una curva elástica sutil y las demás frenan con suavidad', () => {
+    expect(enterEase('pop', false)).toBe('back.out(1.45)');
+    expect(enterEase('up', false)).toBe('expo.out');
+    expect(enterEase('side', false)).toBe('expo.out');
+    expect(enterEase('pop', true)).toBe('power2.out');
+  });
 });
+
