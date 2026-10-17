@@ -1,5 +1,8 @@
 import { readFileSync } from 'node:fs';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { TournamentLayer } from '../src/components/torneo/TournamentLayer';
 import {
   DEFAULT_TOURNAMENT_COMMANDS,
   DEFAULT_TOURNAMENT_SETTINGS,
@@ -589,5 +592,54 @@ describe('torneos: nube, URL y Studio', () => {
     expect(routeTournamentSignal(layer, { kind: 'raid', channel: 'x', viewers: 3, login: 'x' })).toBe(false);
     expect(routeTournamentSignal(null, { kind: 'staff', message: '!ganador lobos', sender })).toBe(false);
     expect(layer.command).toHaveBeenCalledTimes(1);
+  });
+
+  it('pinta conectores SVG en la llave, brillo en Sigue, barra de progreso en Victoria y confeti en Campeón', () => {
+    const activeState = play(tournament(8), false, 1000);
+    const bracketHtml = renderToStaticMarkup(
+      React.createElement(TournamentLayer, {
+        settings: DEFAULT_TOURNAMENT_SETTINGS,
+        state: activeState,
+        scene: 'llave',
+        still: true,
+      })
+    );
+    expect(bracketHtml).toContain('class="tn-wires"');
+    expect(bracketHtml).toContain('tn-wire--lit');
+    expect(bracketHtml).toContain('data-a="top-sub"');
+
+    const sigueHtml = renderToStaticMarkup(
+      React.createElement(TournamentLayer, {
+        settings: DEFAULT_TOURNAMENT_SETTINGS,
+        state: activeState,
+        scene: 'sigue',
+        still: true,
+      })
+    );
+    expect(sigueHtml).toContain('data-a="vs"');
+    expect(sigueHtml).toContain('class="tn-shine"');
+
+    const victoriaHtml = renderToStaticMarkup(
+      React.createElement(TournamentLayer, {
+        settings: DEFAULT_TOURNAMENT_SETTINGS,
+        state: activeState,
+        scene: 'victoria',
+        still: true,
+      })
+    );
+    expect(victoriaHtml).toContain('class="tn-vic-bar"');
+    expect(victoriaHtml).toContain('data-a="vbar"');
+    expect(victoriaHtml).toContain('data-a="fx"');
+
+    const campeonHtml = renderToStaticMarkup(
+      React.createElement(TournamentLayer, {
+        settings: DEFAULT_TOURNAMENT_SETTINGS,
+        state: sampleFinishedState(8),
+        scene: 'campeon',
+        still: true,
+      })
+    );
+    expect(campeonHtml).toContain('class="tn-ring"');
+    expect(campeonHtml).toContain('data-a="fx"');
   });
 });

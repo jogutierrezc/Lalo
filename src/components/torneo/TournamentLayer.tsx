@@ -78,29 +78,57 @@ interface TournamentLayerProps {
 const EXIT_SEC = 0.16;
 /** Pasado este tiempo la entrada se da por terminada aunque OBS la haya frenado. */
 const SETTLE_MS = 2600;
-const CONFETTI = 46;
+const CONFETTI_CHAMP = 52;
+const CONFETTI_VIC = 18;
+
+interface EnterOptions {
+  animateFrame?: boolean;
+  victorySec?: number;
+}
 
 // ---------- Movimiento ----------
 
-function confetti(root: HTMLElement): void {
+function confetti(root: HTMLElement, mode: 'campeon' | 'victoria' = 'campeon'): void {
   const box = root.querySelector<HTMLElement>('[data-a="fx"]');
   if (!box) return;
+  box.replaceChildren();
+  const count = mode === 'campeon' ? CONFETTI_CHAMP : CONFETTI_VIC;
   const tones = ['var(--t-acc)', 'var(--t-fg)', 'var(--tn-white)'];
-  for (let i = 0; i < CONFETTI; i += 1) {
+  const shapes = ['ribbon', 'diamond', 'spark'] as const;
+  const height = box.clientHeight || 720;
+
+  for (let i = 0; i < count; i += 1) {
     const bit = document.createElement('i');
-    bit.style.left = `${gsap.utils.random(2, 98)}%`;
-    bit.style.background = tones[i % 3];
+    const shape = shapes[i % shapes.length];
+    bit.dataset.shape = shape;
+    bit.style.left = `${gsap.utils.random(6, 94)}%`;
+    bit.style.background = tones[i % tones.length];
     box.append(bit);
+
+    const driftX = gsap.utils.random(-95, 95);
+    const fallDuration = mode === 'campeon' ? gsap.utils.random(2.3, 3.9) : gsap.utils.random(1.5, 2.4);
+    const startDelay = mode === 'campeon' ? gsap.utils.random(0.12, 1.25) : gsap.utils.random(0.05, 0.45);
+
     gsap.fromTo(
       bit,
-      { y: 0, rotation: 0, autoAlpha: 1 },
       {
-        y: box.clientHeight * 1.1,
-        x: gsap.utils.random(-60, 60),
-        rotation: gsap.utils.random(-540, 540),
-        autoAlpha: 0.9,
-        duration: gsap.utils.random(2.2, 3.8),
-        delay: gsap.utils.random(0.3, 1.4),
+        y: gsap.utils.random(-30, 10),
+        x: 0,
+        scale: gsap.utils.random(0.85, 1.2),
+        rotation: gsap.utils.random(-45, 45),
+        rotationX: gsap.utils.random(0, 180),
+        rotationY: gsap.utils.random(0, 180),
+        autoAlpha: 0,
+      },
+      {
+        y: height * (mode === 'campeon' ? 1.12 : 0.85),
+        x: driftX,
+        rotation: gsap.utils.random(-520, 520),
+        rotationX: gsap.utils.random(360, 900),
+        rotationY: gsap.utils.random(360, 900),
+        autoAlpha: mode === 'campeon' ? 0.92 : 0.78,
+        duration: fallDuration,
+        delay: startDelay,
         ease: 'power1.in',
       }
     );
@@ -108,49 +136,133 @@ function confetti(root: HTMLElement): void {
 }
 
 /** Entrada de una pantalla. `flash` es el equipo que acaba de avanzar: entra en su casilla nueva. */
-function playEnter(root: HTMLElement, scene: TournamentScene, flash: number | null): gsap.core.Timeline {
+function playEnter(root: HTMLElement, scene: TournamentScene, flash: number | null, options: EnterOptions = {}): gsap.core.Timeline {
+  const { animateFrame = true, victorySec = 5 } = options;
   const tl = gsap.timeline();
-  const q = (name: string) => Array.from(root.querySelectorAll<HTMLElement>(`[data-a="${name}"]`));
+  const q = (name: string) => Array.from(root.querySelectorAll<HTMLElement | SVGElement>(`[data-a="${name}"]`));
   const from = (targets: Element[], vars: gsap.TweenVars, at: number) => {
     if (targets.length) tl.from(targets, vars, at);
   };
+  gsap.set([...q('top'), ...q('sp'), ...q('top-sub')], { clearProps: 'all' });
+
   if (reduced()) {
-    tl.from(Array.from(root.children), { autoAlpha: 0, duration: 0.2 });
+    const main = root.querySelector<HTMLElement>('.tn-main');
+    tl.from(main ? [main] : Array.from(root.children), { autoAlpha: 0, duration: 0.2 });
     return tl;
   }
-  from(q('top'), { x: -30, autoAlpha: 0, duration: 0.4, ease: 'expo.out' }, 0);
-  from(q('sp'), { y: 16, autoAlpha: 0, duration: 0.4, ease: 'expo.out' }, 0.1);
+
+  if (animateFrame) {
+    from(q('top'), { x: -24, autoAlpha: 0, duration: 0.38, ease: 'expo.out', clearProps: 'transform' }, 0);
+    from(q('sp'), { y: 14, autoAlpha: 0, duration: 0.38, ease: 'expo.out', clearProps: 'transform' }, 0.08);
+  } else {
+    from(q('top-sub'), { y: -6, autoAlpha: 0, duration: 0.26, ease: 'power2.out', clearProps: 'transform' }, 0);
+  }
 
   if (scene === 'llave') {
+    const heads = Array.from(root.querySelectorAll<HTMLElement>('.tn-h'));
     const cards = Array.from(root.querySelectorAll<HTMLElement>('.tn-mc'));
+    const wires = q('wire');
+    from(heads, { y: -8, autoAlpha: 0, duration: 0.26, ease: 'power2.out', stagger: 0.04, clearProps: 'transform' }, 0.04);
     // Con muchas casillas el escalonado se acorta: la llave entera entra en menos de medio segundo
-    from(cards, { autoAlpha: 0, x: -18, duration: 0.3, ease: 'power3.out', stagger: Math.min(0.05, 0.35 / Math.max(1, cards.length)) }, 0.1);
+    from(
+      cards,
+      {
+        autoAlpha: 0,
+        x: -16,
+        scale: 0.96,
+        duration: 0.32,
+        ease: 'power3.out',
+        stagger: Math.min(0.045, 0.34 / Math.max(1, cards.length)),
+        clearProps: 'transform',
+      },
+      0.08
+    );
+    from(
+      wires,
+      {
+        autoAlpha: 0,
+        scaleX: 0,
+        transformOrigin: '0% 50%',
+        duration: 0.34,
+        ease: 'expo.out',
+        stagger: 0.03,
+        clearProps: 'transform',
+      },
+      0.2
+    );
     if (flash !== null) {
       const rows = Array.from(root.querySelectorAll<HTMLElement>(`.tn-mr[data-t="${flash}"]`));
-      from(rows.slice(-1), { rotationX: -90, transformOrigin: '50% 0%', autoAlpha: 0, duration: 0.5, ease: 'back.out(1.6)' }, 0.55);
+      from(
+        rows.slice(-1),
+        {
+          rotationX: -75,
+          y: -6,
+          transformOrigin: '50% 0%',
+          autoAlpha: 0,
+          duration: 0.48,
+          ease: 'back.out(1.6)',
+          clearProps: 'transform',
+        },
+        0.48
+      );
     }
   }
   if (scene === 'sigue') {
-    from(q('tag'), { y: -14, autoAlpha: 0, duration: 0.3, ease: 'power3.out' }, 0.15);
-    from(q('left'), { xPercent: -60, autoAlpha: 0, duration: 0.5, ease: 'expo.out' }, 0.2);
-    from(q('right'), { xPercent: 60, autoAlpha: 0, duration: 0.5, ease: 'expo.out' }, 0.2);
-    from(q('vs'), { scale: 0.3, autoAlpha: 0, duration: 0.45, ease: 'back.out(2.4)' }, 0.5);
-    from(q('after'), { autoAlpha: 0, y: 8, duration: 0.3 }, 0.75);
+    from(q('tag'), { y: -12, scale: 0.92, autoAlpha: 0, duration: 0.3, ease: 'power3.out', clearProps: 'transform' }, 0.1);
+    from(q('left'), { xPercent: -32, scale: 0.94, autoAlpha: 0, duration: 0.46, ease: 'expo.out', clearProps: 'transform' }, 0.16);
+    from(q('right'), { xPercent: 32, scale: 0.94, autoAlpha: 0, duration: 0.46, ease: 'expo.out', clearProps: 'transform' }, 0.16);
+    from(q('vs'), { scale: 0.88, rotation: -8, autoAlpha: 0, duration: 0.42, ease: 'back.out(1.9)', clearProps: 'transform' }, 0.38);
+    from(q('after'), { autoAlpha: 0, y: 8, duration: 0.3, ease: 'power2.out', clearProps: 'transform' }, 0.58);
+    const shine = q('shine');
+    if (shine.length) tl.to(shine, { xPercent: 460, duration: 0.95, ease: 'power2.inOut', stagger: 0.12 }, 0.48);
   }
   if (scene === 'tabla') {
     const rows = q('row');
-    from(rows, { autoAlpha: 0, x: 24, duration: 0.3, ease: 'power3.out', stagger: Math.min(0.06, 0.5 / Math.max(1, rows.length)) }, 0.15);
+    from(
+      rows,
+      {
+        autoAlpha: 0,
+        x: 20,
+        scale: 0.98,
+        duration: 0.3,
+        ease: 'power3.out',
+        stagger: Math.min(0.055, 0.46 / Math.max(1, rows.length)),
+        clearProps: 'transform',
+      },
+      0.1
+    );
   }
   if (scene === 'victoria' || scene === 'campeon') {
-    from(q('ring'), { scale: 0.4, autoAlpha: 0, duration: 0.5, ease: 'back.out(2)' }, 0.1);
-    from(q('tag'), { y: -14, autoAlpha: 0, duration: 0.3, ease: 'power3.out' }, 0.2);
-    from(q('card'), { scaleX: 0.2, autoAlpha: 0, duration: 0.5, ease: 'expo.out' }, 0.25);
-    from(Array.from(root.querySelectorAll<HTMLElement>('.tn-l')), { autoAlpha: 0, y: 16, filter: 'blur(6px)', duration: 0.4, ease: 'power3.out', stagger: 0.03 }, 0.45);
-    from(q('sub'), { autoAlpha: 0, y: 6, duration: 0.3 }, 0.85);
-    from(q('after'), { autoAlpha: 0, y: 8, duration: 0.3 }, 0.95);
+    from(q('ring'), { scale: 0.88, y: 10, autoAlpha: 0, duration: 0.46, ease: 'back.out(1.8)', clearProps: 'transform' }, 0.08);
+    from(q('tag'), { y: -12, scale: 0.92, autoAlpha: 0, duration: 0.3, ease: 'power3.out', clearProps: 'transform' }, 0.16);
+    from(q('card'), { scale: 0.92, y: 14, autoAlpha: 0, duration: 0.46, ease: 'expo.out', clearProps: 'transform' }, 0.2);
+    from(
+      Array.from(root.querySelectorAll<HTMLElement>('.tn-l')),
+      {
+        autoAlpha: 0,
+        y: 14,
+        filter: 'blur(4px)',
+        duration: 0.38,
+        ease: 'power3.out',
+        stagger: 0.026,
+        clearProps: 'filter,transform',
+      },
+      0.38
+    );
+    from(q('sub'), { autoAlpha: 0, y: 6, duration: 0.3, ease: 'power2.out', clearProps: 'transform' }, 0.74);
+    from(q('after'), { autoAlpha: 0, y: 8, duration: 0.3, ease: 'power2.out', clearProps: 'transform' }, 0.84);
     const shine = q('shine');
-    if (shine.length) tl.to(shine, { xPercent: 460, duration: 1, ease: 'power2.inOut' }, 0.9);
-    if (scene === 'campeon') confetti(root);
+    if (shine.length) tl.to(shine, { xPercent: 460, duration: 1, ease: 'power2.inOut' }, 0.78);
+    const vbar = q('vbar');
+    if (vbar.length) {
+      tl.fromTo(
+        vbar,
+        { scaleX: 1, transformOrigin: '0% 50%' },
+        { scaleX: 0, transformOrigin: '0% 50%', duration: Math.max(1.5, victorySec - 0.35), ease: 'none' },
+        0.25
+      );
+    }
+    confetti(root, scene);
   }
   return tl;
 }
@@ -200,6 +312,54 @@ const Row: React.FC<{ side: BracketSide; other: BracketSide; match: BracketMatch
   );
 };
 
+/** Conectores geométricos entre las partidas de una ronda y la siguiente. */
+const RoundWires: React.FC<{ list: number[]; bracket: BracketMatch[]; now: number | null }> = ({ list, bracket, now }) => {
+  const count = list.length;
+  if (count < 2) return null;
+  const pairs = Math.floor(count / 2);
+  return (
+    <svg className="tn-wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {Array.from({ length: pairs }, (_, pairIdx) => {
+        const topIndex = list[pairIdx * 2];
+        const botIndex = list[pairIdx * 2 + 1];
+        const topMatch = bracket[topIndex];
+        const botMatch = bracket[botIndex];
+        const yTop = ((pairIdx * 2 + 0.5) / count) * 100;
+        const yBot = ((pairIdx * 2 + 1.5) / count) * 100;
+        const yMid = ((pairIdx * 2 + 1) / count) * 100;
+        const topLit = Boolean(topMatch && (topMatch.played || typeof topMatch.out === 'number'));
+        const botLit = Boolean(botMatch && (botMatch.played || typeof botMatch.out === 'number'));
+        const topNow = now === topIndex;
+        const botNow = now === botIndex;
+        const topPath = `M 0 ${yTop} H 52 V ${yMid} H 100`;
+        const botPath = `M 0 ${yBot} H 52 V ${yMid} H 100`;
+        return (
+          <g key={pairIdx} data-a="wire">
+            <path className="tn-wire" d={topPath} vectorEffect="non-scaling-stroke" />
+            <path className="tn-wire" d={botPath} vectorEffect="non-scaling-stroke" />
+            {(topLit || topNow) && (
+              <path
+                className="tn-wire tn-wire--lit"
+                data-now={topNow ? '' : undefined}
+                d={topPath}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {(botLit || botNow) && (
+              <path
+                className="tn-wire tn-wire--lit"
+                data-now={botNow ? '' : undefined}
+                d={botPath}
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
 const Bracket: React.FC<{ state: TournamentState }> = ({ state }) => {
   const bracket = buildBracket(state);
   const rounds = roundMatches(state.size);
@@ -219,7 +379,14 @@ const Bracket: React.FC<{ state: TournamentState }> = ({ state }) => {
             {list.map((index) => {
               const match = bracket[index];
               return (
-                <div key={index} className="tn-mc" data-now={now === index ? '' : undefined} data-empty={match.out === 'bye' ? '' : undefined}>
+                <div
+                  key={index}
+                  className="tn-mc"
+                  data-match={index}
+                  data-now={now === index ? '' : undefined}
+                  data-done={match.played ? '' : undefined}
+                  data-empty={match.out === 'bye' ? '' : undefined}
+                >
                   <div className="tn-plate">
                     <Row side={match.sides[0]} other={match.sides[1]} match={match} state={state} final={round === rounds.length - 1} />
                     <Row side={match.sides[1]} other={match.sides[0]} match={match} state={state} final={round === rounds.length - 1} />
@@ -227,6 +394,7 @@ const Bracket: React.FC<{ state: TournamentState }> = ({ state }) => {
                 </div>
               );
             })}
+            {round < rounds.length - 1 && <RoundWires list={list} bracket={bracket} now={now} />}
           </div>
         ))}
       </div>
@@ -261,10 +429,12 @@ function screenOf(scene: TournamentScene, state: TournamentState, tournamentName
           <div className="tn-vs">
             <div className="tn-t tn-plate" data-a="left">
               <p className="tn-title">{team(teams[0])}</p>
+              <i className="tn-shine" data-a="shine" />
             </div>
             <i data-a="vs">VS</i>
             <div className="tn-t tn-plate" data-a="right">
               <p className="tn-title">{team(teams[1])}</p>
+              <i className="tn-shine" data-a="shine" />
             </div>
           </div>
           <span className="tn-after tn-plate" data-a="after">
@@ -316,25 +486,29 @@ function screenOf(scene: TournamentScene, state: TournamentState, tournamentName
     return {
       sub: roundLabel(roundOf(last, size), size),
       main: (
-        <div className="tn-vic">
-          <span className="tn-tag" data-a="tag">
-            Victoria · {matchName(last, size)}
-          </span>
-          <div className="tn-card tn-plate" data-a="card">
-            <p className="tn-vname tn-title">
-              <Letters text={team(winner)} />
-            </p>
-            {to && (
-              <span className="tn-sub" data-a="sub">
-                Avanza a {to}
-              </span>
-            )}
-            <i className="tn-shine" data-a="shine" />
+        <>
+          <div className="tn-fx" data-a="fx" />
+          <div className="tn-vic">
+            <span className="tn-tag" data-a="tag">
+              Victoria · {matchName(last, size)}
+            </span>
+            <div className="tn-card tn-plate" data-a="card">
+              <p className="tn-vname tn-title">
+                <Letters text={team(winner)} />
+              </p>
+              {to && (
+                <span className="tn-sub" data-a="sub">
+                  Avanza a {to}
+                </span>
+              )}
+              <i className="tn-shine" data-a="shine" />
+              <i className="tn-vic-bar" data-a="vbar" />
+            </div>
+            <span className="tn-after tn-plate" data-a="after">
+              <span className="tn-mut">Vence a</span> {team(loser)}
+            </span>
           </div>
-          <span className="tn-after tn-plate" data-a="after">
-            <span className="tn-mut">Vence a</span> {team(loser)}
-          </span>
-        </div>
+        </>
       ),
     };
   }
@@ -393,12 +567,18 @@ function screenOf(scene: TournamentScene, state: TournamentState, tournamentName
 export const TournamentLayer: React.FC<TournamentLayerProps> = ({ settings, state, isStudio = false, scene, still = false, replay = 0, onNarrate }) => {
   const [, setTick] = useState(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const prevReplayRef = useRef(replay);
   const live = useRef({ settings, state, scene, onNarrate });
   live.current = { settings, state, scene, onNarrate };
 
   const target = scene ?? sceneNow(state, settings.victorySec, Date.now());
   const targetKey = `${target}|${state.sceneAt}|${replay}`;
-  const [view, setView] = useState<{ scene: TournamentScene; key: string; flash: number | null }>({ scene: target, key: targetKey, flash: null });
+  const [view, setView] = useState<{ scene: TournamentScene; key: string; flash: number | null; animateFrame: boolean }>({
+    scene: target,
+    key: targetKey,
+    flash: null,
+    animateFrame: true,
+  });
 
   // La pantalla de victoria caduca sola: un temporizador vuelve a mirar qué toca
   useEffect(() => {
@@ -409,26 +589,37 @@ export const TournamentLayer: React.FC<TournamentLayerProps> = ({ settings, stat
     return () => clearTimeout(timer);
   }, [scene, state.scene, state.sceneAt, settings.victorySec]);
 
-  // Cambio de pantalla: la anterior se va rápido y, con un temporizador, entra la nueva
+  // Cambio de pantalla: mantiene el marco (logo + patrocinadores) salvo al abrir/cerrar todo o repetir prueba
   useEffect(() => {
     if (view.key === targetKey) return;
     const { state: current } = live.current;
+    const replayChanged = prevReplayRef.current !== replay;
+    prevReplayRef.current = replay;
     // Tras una victoria, quien avanza entra en su casilla de la llave
     const flash = view.scene === 'victoria' && target === 'llave' && current.last !== null ? (current.results[current.last] ?? null) : null;
-    const next = { scene: target, key: targetKey, flash };
+    const animateFrame = view.scene === 'oculto' || target === 'oculto' || replayChanged;
+    const next = { scene: target, key: targetKey, flash, animateFrame };
     const body = bodyRef.current;
     if (still || !body || view.scene === 'oculto') {
       setView(next);
       return;
     }
-    // El contenedor no tiene caja propia (display: contents): se funden sus piezas
-    const tween = gsap.to(Array.from(body.children), { autoAlpha: 0, duration: EXIT_SEC, ease: 'power2.out' });
+    const mainEl = body.querySelector<HTMLElement>('.tn-main');
+    const subEl = body.querySelector<HTMLElement>('[data-a="top-sub"]');
+    const exitTargets =
+      target === 'oculto'
+        ? Array.from(body.children)
+        : [mainEl, subEl].filter((el): el is HTMLElement => Boolean(el));
+    const exitVars: gsap.TweenVars = reduced()
+      ? { autoAlpha: 0, duration: EXIT_SEC, ease: 'power2.out' }
+      : { autoAlpha: 0, y: -8, scale: 0.985, filter: 'blur(3px)', duration: EXIT_SEC, ease: 'power2.in' };
+    const tween = gsap.to(exitTargets, exitVars);
     const timer = setTimeout(() => setView(next), EXIT_SEC * 1000 + 30);
     return () => {
       clearTimeout(timer);
       tween.kill();
     };
-  }, [targetKey, target, view.key, view.scene, still]);
+  }, [targetKey, target, view.key, view.scene, still, replay]);
 
   // Entrada de la pantalla recién puesta
   useLayoutEffect(() => {
@@ -436,7 +627,10 @@ export const TournamentLayer: React.FC<TournamentLayerProps> = ({ settings, stat
     if (!body || still || view.scene === 'oculto') return;
     let tl: gsap.core.Timeline | null = null;
     const ctx = gsap.context(() => {
-      tl = playEnter(body, view.scene, view.flash);
+      tl = playEnter(body, view.scene, view.flash, {
+        animateFrame: view.animateFrame,
+        victorySec: live.current.settings.victorySec,
+      });
     }, body);
     // Si OBS frena la animación con la fuente oculta, la pantalla queda entera igual
     const settle = setTimeout(() => tl?.progress(1), SETTLE_MS);
@@ -448,9 +642,42 @@ export const TournamentLayer: React.FC<TournamentLayerProps> = ({ settings, stat
       ctx.revert();
       body.querySelector('[data-a="fx"]')?.replaceChildren();
     };
-    // Solo al cambiar de pantalla: un resultado nuevo en la misma pantalla no repite la entrada
+    // Solo al cambiar de pantalla: un resultado nuevo en la misma pantalla no repite la entrada completa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.key, still]);
+
+  // Micro-coreografía cuando cambia el estado dentro de la misma pantalla (ej. deshacer o marcar en vivo sobre llave/tabla)
+  const prevVersionRef = useRef(state.version);
+  useEffect(() => {
+    if (prevVersionRef.current === state.version) return;
+    prevVersionRef.current = state.version;
+    const body = bodyRef.current;
+    if (!body || still || reduced() || view.key !== targetKey) return;
+    const ctx = gsap.context(() => {
+      if (view.scene === 'llave') {
+        const nowCard = body.querySelector<HTMLElement>('.tn-mc[data-now]');
+        if (nowCard) {
+          gsap.fromTo(nowCard, { scale: 0.96 }, { scale: 1, duration: 0.36, ease: 'back.out(1.8)', clearProps: 'transform' });
+        }
+        if (state.last !== null) {
+          const lastWinner = state.results[state.last];
+          if (typeof lastWinner === 'number') {
+            const rows = Array.from(body.querySelectorAll<HTMLElement>(`.tn-mr[data-t="${lastWinner}"]`));
+            const latestRow = rows[rows.length - 1];
+            if (latestRow) {
+              gsap.fromTo(latestRow, { x: -10, autoAlpha: 0.35 }, { x: 0, autoAlpha: 1, duration: 0.34, ease: 'power3.out', clearProps: 'transform,opacity,visibility' });
+            }
+          }
+        }
+      } else if (view.scene === 'tabla') {
+        const rows = Array.from(body.querySelectorAll<HTMLElement>('.tn-tr'));
+        if (rows.length) {
+          gsap.fromTo(rows, { x: 10 }, { x: 0, duration: 0.26, ease: 'power2.out', stagger: 0.025, clearProps: 'transform' });
+        }
+      }
+    }, body);
+    return () => ctx.revert();
+  }, [state.version, state.last, state.results, still, view.key, view.scene, targetKey]);
 
   // Narrador: cuenta cada cambio marcado en el estado. Lo que había al montar no se narra
   const cueRef = useRef(state.cueAt);
@@ -480,17 +707,19 @@ export const TournamentLayer: React.FC<TournamentLayerProps> = ({ settings, stat
       style={settings.customColor ? ({ '--tn-custom': settings.color, '--tn-custom-ink': inkFor(settings.color) } as React.CSSProperties) : undefined}
     >
       {screen && (
-        <div ref={bodyRef} key={view.key} style={{ display: 'contents' }}>
+        <div ref={bodyRef} style={{ display: 'contents' }}>
           <div className="tn-top" data-a="top">
             {(logoUrl || isStudio) && <div className="tn-logo tn-plate">{logoUrl ? <img src={logoUrl} alt="" /> : 'TU LOGO'}</div>}
             <div className="tn-name tn-plate">
               <b className="tn-title">{settings.name}</b>
-              <span>
+              <span key={view.key} data-a="top-sub">
                 {settings.game} · {screen.sub}
               </span>
             </div>
           </div>
-          <div className="tn-main">{screen.main}</div>
+          <div key={view.key} className="tn-main">
+            {screen.main}
+          </div>
           {sponsors.length > 0 ? (
             <div className="tn-sp tn-plate" data-a="sp">
               <span className="tn-mut">Con el apoyo de</span>

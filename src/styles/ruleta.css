@@ -20,12 +20,15 @@
   font-weight: 800;
   letter-spacing: 0.01em;
 }
-/* Al detenerse, lo que no ganó se apaga */
+/* Al detenerse, lo que no ganó se apaga y el ganador cobra relieve */
 .rw-seg {
-  transition: opacity 0.35s ease;
+  transition: opacity 0.35s ease, filter 0.35s ease;
 }
 .rw-seg[data-dim] {
-  opacity: 0.32;
+  opacity: 0.3;
+}
+.rw-seg[data-win] {
+  filter: drop-shadow(0 0 0.45em rgba(255, 255, 255, 0.38));
 }
 
 /* En el monitor del estudio la rueda y el resultado caben en el 16:9 */
@@ -35,6 +38,8 @@
 
 /* La etiqueta puede ser más ancha que la rueda: se centra bajo ella sin cortarse */
 .ovl .rl-unit {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -43,6 +48,70 @@
   flex: none;
   max-width: 34em;
   text-align: center;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.ovl .rl-label[data-spinning] {
+  box-shadow: 0 0 1.1em rgba(255, 255, 255, 0.14);
+}
+.ovl .rl-spinner {
+  animation: rl-spin-tag 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes rl-spin-tag {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Confeti 3D en la fuente de OBS */
+.rl-fx {
+  position: absolute;
+  inset: -4em -2em;
+  z-index: 0;
+  overflow: hidden;
+  perspective: 34em;
+  pointer-events: none;
+}
+.rl-fx i {
+  position: absolute;
+  top: -4%;
+  width: 0.68em;
+  height: 0.34em;
+  border-radius: 0.06em;
+  backface-visibility: visible;
+}
+.rl-fx i[data-shape='diamond'] {
+  width: 0.5em;
+  height: 0.5em;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+.rl-fx i[data-shape='spark'] {
+  width: 0.84em;
+  height: 0.22em;
+  border-radius: 999px;
+}
+
+/* Destello especular y barra de cierre automático en WinnerBanner */
+.rl-shine {
+  position: absolute;
+  inset: 0;
+  width: 34%;
+  background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--c-ink) 26%, transparent), transparent);
+  transform: translateX(-140%);
+  pointer-events: none;
+}
+.rl-dismiss-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0.2em;
+  background: color-mix(in srgb, var(--c-ink) 45%, transparent);
+  pointer-events: none;
 }
 
 /* Fila de un segmento: una línea en ancho normal, dos cuando no cabe */

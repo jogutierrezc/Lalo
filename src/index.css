@@ -1592,11 +1592,14 @@ body[data-panel-theme='twitch'] .cab .cab-btn-danger {
   position: relative;
   width: 100%;
   padding: 1.1em 1.3em 1.2em;
+  overflow: hidden;
   border-radius: var(--p-r);
   background: var(--c);
   color: var(--c-ink);
   font-family: var(--p-font);
-  box-shadow: 0 0.8em 2em -0.5em rgba(0, 0, 0, 0.7);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--c-ink) 18%, transparent),
+    0 0.8em 2em -0.5em rgba(0, 0, 0, 0.7);
   pointer-events: auto;
 }
 .rl-who {
@@ -1638,6 +1641,7 @@ body[data-panel-theme='twitch'] .cab .cab-btn-danger {
   display: inline-block;
   font-size: 1.8em;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .rl-timer i {
   flex: 1;

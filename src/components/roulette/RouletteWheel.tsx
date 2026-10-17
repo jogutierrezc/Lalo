@@ -17,6 +17,7 @@ import {
   polarToCartesian,
   RouletteStyle,
 } from '../../types/roulette';
+import { reduced } from '../../utils/alertMotion';
 import { inkFor } from '../../utils/appearance';
 import '../../styles/ruleta.css';
 import { playWheelTick, playWheelFanfare, playWheelWhoosh } from '../../utils/rouletteAudio';
@@ -60,7 +61,11 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
   const pointerAssemblyRef = useRef<SVGGElement | null>(null);
   const pointerRef = useRef<SVGGElement | null>(null);
   const shockwaveRef = useRef<SVGCircleElement | null>(null);
+  const hubRingRef = useRef<SVGCircleElement | null>(null);
   const pointerTweenRef = useRef<gsap.core.Tween | null>(null);
+  const recoilTweenRef = useRef<gsap.core.Tween | null>(null);
+  const shockwaveTweenRef = useRef<gsap.core.Tween | null>(null);
+  const hubTweenRef = useRef<gsap.core.Tween | null>(null);
   const pointerAngleRef = useRef<{ angle: number }>({ angle: 0 });
 
   const lastSliceRef = useRef<number>(-1);
@@ -97,6 +102,7 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
 
     const startRot = startRotation !== undefined ? startRotation : currentAngleRef.current;
     const endRot = targetRotation;
+    const isReduced = reduced();
 
     lastSliceRef.current = Math.floor(startRot / sliceAngle);
     lastTickTimeRef.current = 0;
@@ -118,19 +124,15 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
     }
 
     const triggerPointerFlick = () => {
-      if (!pointerRef.current) return;
-      if (pointerTweenRef.current) {
-        pointerTweenRef.current.kill();
-      }
+      if (!pointerRef.current || isReduced) return;
+      pointerTweenRef.current?.kill();
       const pObj = pointerAngleRef.current;
       pointerTweenRef.current = gsap.to(pObj, {
         angle: 14,
         duration: 0.032,
         ease: 'power1.out',
         onUpdate: () => {
-          if (pointerRef.current) {
-            pointerRef.current.setAttribute('transform', `rotate(${pObj.angle}, 220, 22)`);
-          }
+          pointerRef.current?.setAttribute('transform', `rotate(${pObj.angle}, 220, 22)`);
         },
         onComplete: () => {
           pointerTweenRef.current = gsap.to(pObj, {
@@ -138,14 +140,10 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
             duration: 0.16,
             ease: 'elastic.out(2.0, 0.25)',
             onUpdate: () => {
-              if (pointerRef.current) {
-                pointerRef.current.setAttribute('transform', `rotate(${pObj.angle}, 220, 22)`);
-              }
+              pointerRef.current?.setAttribute('transform', `rotate(${pObj.angle}, 220, 22)`);
             },
             onComplete: () => {
-              if (pointerRef.current) {
-                pointerRef.current.setAttribute('transform', 'rotate(0, 220, 22)');
-              }
+              pointerRef.current?.setAttribute('transform', 'rotate(0, 220, 22)');
             },
           });
         },
@@ -191,18 +189,17 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
         const finalNormalized = ((endRot % 360) + 360) % 360;
         currentAngleRef.current = finalNormalized;
 
-        if (pointerTweenRef.current) {
-          pointerTweenRef.current.kill();
-        }
+        pointerTweenRef.current?.kill();
         pointerAngleRef.current.angle = 0;
         if (pointerRef.current) {
           pointerRef.current.setAttribute('transform', 'rotate(0, 220, 22)');
         }
 
         // Micro-retroceso físico de inercia al clavar el perno (Emil Kowalski delight)
-        if (wheelGroupRef.current) {
+        if (wheelGroupRef.current && !isReduced) {
+          recoilTweenRef.current?.kill();
           const recoilProxy = { angle: endRot };
-          gsap.to(recoilProxy, {
+          recoilTweenRef.current = gsap.to(recoilProxy, {
             angle: endRot - 1.2,
             duration: 0.12,
             yoyo: true,
@@ -221,18 +218,34 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
               );
             },
           });
+        } else if (wheelGroupRef.current) {
+          wheelGroupRef.current.setAttribute('transform', `rotate(${finalNormalized}, 220, 220)`);
         }
 
-        // Shockwave de onda expansiva desde la aguja
-        if (shockwaveRef.current) {
-          gsap.fromTo(
+        // Shockwave de onda expansiva desde la aguja y pulso en el eje central
+        if (shockwaveRef.current && !isReduced) {
+          shockwaveTweenRef.current?.kill();
+          shockwaveTweenRef.current = gsap.fromTo(
             shockwaveRef.current,
-            { attr: { r: 8 }, opacity: 0.9 },
+            { attr: { r: 8 }, opacity: 0.92 },
             {
-              attr: { r: 42 },
+              attr: { r: 46 },
               opacity: 0,
               duration: 0.55,
               ease: 'power2.out',
+            }
+          );
+        }
+        if (hubRingRef.current && !isReduced) {
+          hubTweenRef.current?.kill();
+          hubTweenRef.current = gsap.fromTo(
+            hubRingRef.current,
+            { attr: { r: 30 }, opacity: 0.85 },
+            {
+              attr: { r: 64 },
+              opacity: 0,
+              duration: 0.6,
+              ease: 'expo.out',
             }
           );
         }
@@ -260,9 +273,10 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
 
     return () => {
       spinTween.kill();
-      if (pointerTweenRef.current) {
-        pointerTweenRef.current.kill();
-      }
+      pointerTweenRef.current?.kill();
+      recoilTweenRef.current?.kill();
+      shockwaveTweenRef.current?.kill();
+      hubTweenRef.current?.kill();
     };
   }, [
     isSpinning,
@@ -285,10 +299,10 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
   const hasResult = Boolean(targetWinner) && !isSpinning;
 
   return (
-    <div className="rw" style={{ width: size, height: size }}>
+    <div className="rw" data-spinning={isSpinning ? '' : undefined} style={{ width: size, height: size }}>
       <svg viewBox="0 0 440 440" className="rw-svg" aria-hidden="true">
         {/* Aro */}
-        <circle cx={cx} cy={cy} r="199" fill={theme.ring} stroke={theme.line} strokeWidth="2" />
+        <circle cx={cx} cy={cy} r="199" fill={theme.ring} stroke={theme.line} strokeWidth="2.5" />
 
         {/* Plato giratorio: rota sobre el eje (220, 220) */}
         <g
@@ -302,12 +316,18 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
             // El texto corre a lo largo del radio, que es donde el segmento tiene sitio
             const textPos = polarToCartesian(cx, cy, radius * 0.58, midAngle);
             const pegPos = polarToCartesian(cx, cy, radius - 6, startAngle);
-            const dimmed = hasResult && targetWinner?.id !== segment.id;
+            const isWin = hasResult && targetWinner?.id === segment.id;
+            const dimmed = hasResult && !isWin;
             const label = segment.text.length > maxChars ? `${segment.text.slice(0, maxChars - 1).trimEnd()}…` : segment.text;
 
             return (
-              <g key={segment.id} className="rw-seg" data-dim={dimmed ? '' : undefined}>
-                <path d={describeArc(cx, cy, radius, startAngle, endAngle)} fill={segment.color} stroke={theme.ring} strokeWidth="3" />
+              <g key={segment.id} className="rw-seg" data-dim={dimmed ? '' : undefined} data-win={isWin ? '' : undefined}>
+                <path
+                  d={describeArc(cx, cy, radius, startAngle, endAngle)}
+                  fill={segment.color}
+                  stroke={isWin ? theme.mark : theme.ring}
+                  strokeWidth={isWin ? '4' : '3'}
+                />
                 <text
                   x={textPos.x}
                   y={textPos.y}
@@ -326,6 +346,9 @@ export const RouletteWheel: React.FC<RouletteWheelProps> = ({
             );
           })}
         </g>
+
+        {/* Pulso radial del eje al detenerse */}
+        <circle ref={hubRingRef} cx={cx} cy={cy} r="30" fill="none" stroke={theme.mark} strokeWidth="2.5" opacity="0" />
 
         {/* Eje */}
         <circle cx={cx} cy={cy} r="30" fill={theme.ring} stroke={theme.mark} strokeWidth="3" />

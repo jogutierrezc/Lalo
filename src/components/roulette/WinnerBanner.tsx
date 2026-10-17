@@ -50,25 +50,38 @@ export const WinnerBanner: React.FC<WinnerBannerProps> = ({
   useLayoutEffect(() => {
     const root = containerRef.current;
     if (!root) return;
-    if (reduced()) {
-      gsap.fromTo(root, { opacity: 0 }, { opacity: 1, duration: 0.25 });
-      return;
-    }
-    const tl = gsap.timeline({ delay: 0.25 });
-    tl.fromTo(
-      root,
-      { clipPath: 'inset(0 100% 0 0)' },
-      { clipPath: 'inset(0 0% 0 0)', duration: 0.5, ease: 'expo.out' }
-    ).fromTo(
-      root.querySelectorAll('.rl-title span'),
-      { y: '0.5em', opacity: 0 },
-      { y: 0, opacity: 1, duration: 0.32, ease: 'expo.out', stagger: 0.06 },
-      0.15
-    );
-    return () => {
-      tl.kill();
-    };
-  }, [segment.id]);
+    const ctx = gsap.context(() => {
+      if (reduced()) {
+        gsap.fromTo(root, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.25 });
+        return;
+      }
+      const tl = gsap.timeline({ delay: 0.18 });
+      tl.fromTo(
+        root,
+        { clipPath: 'inset(0 100% 0 0)', scale: 0.96 },
+        { clipPath: 'inset(0 0% 0 0)', scale: 1, duration: 0.48, ease: 'expo.out', clearProps: 'clipPath,transform' }
+      ).fromTo(
+        root.querySelectorAll('.rl-title span'),
+        { y: '0.42em', autoAlpha: 0, filter: 'blur(3px)' },
+        { y: 0, autoAlpha: 1, filter: 'blur(0px)', duration: 0.34, ease: 'power3.out', stagger: 0.05, clearProps: 'filter,transform' },
+        0.12
+      );
+      const shine = root.querySelector<HTMLElement>('[data-a="shine"]');
+      if (shine) {
+        tl.to(shine, { xPercent: 460, duration: 0.95, ease: 'power2.inOut' }, 0.34);
+      }
+      const dbar = root.querySelector<HTMLElement>('[data-a="dbar"]');
+      if (dbar && initialDuration === 0 && autoDismissSec && autoDismissSec > 0) {
+        tl.fromTo(
+          dbar,
+          { scaleX: 1, transformOrigin: '0% 50%' },
+          { scaleX: 0, transformOrigin: '0% 50%', duration: Math.max(1.2, autoDismissSec - 0.3), ease: 'none' },
+          0.2
+        );
+      }
+    }, root);
+    return () => ctx.revert();
+  }, [segment.id, initialDuration, autoDismissSec]);
 
   // Lógica de cuenta regresiva
   useEffect(() => {
@@ -95,18 +108,25 @@ export const WinnerBanner: React.FC<WinnerBannerProps> = ({
 
   // La barra recorre cada segundo de forma lineal, así avanza sin saltos
   useEffect(() => {
-    if (!progressBarRef.current || initialDuration <= 0) return;
+    const bar = progressBarRef.current;
+    const clock = clockRef.current;
+    if (!bar || initialDuration <= 0) return;
     const target = Math.max(0, (isTimerRunning ? timeLeft - 1 : timeLeft) / initialDuration);
-    gsap.to(progressBarRef.current, {
+    const barTween = gsap.to(bar, {
       scaleX: target,
       duration: isTimerRunning ? 1 : 0.2,
       ease: 'none',
       overwrite: true,
     });
+    let clockTween: gsap.core.Tween | null = null;
     // Últimos 5 segundos: un pulso del reloj por segundo
-    if (isTimerRunning && timeLeft <= 5 && timeLeft > 0 && clockRef.current && !reduced()) {
-      gsap.fromTo(clockRef.current, { scale: 1.14 }, { scale: 1, duration: 0.25, ease: 'power2.out' });
+    if (isTimerRunning && timeLeft <= 5 && timeLeft > 0 && clock && !reduced()) {
+      clockTween = gsap.fromTo(clock, { scale: 1.12 }, { scale: 1, duration: 0.25, ease: 'power2.out', clearProps: 'transform' });
     }
+    return () => {
+      barTween.kill();
+      clockTween?.kill();
+    };
   }, [timeLeft, initialDuration, isTimerRunning]);
 
   // Auto-cierre si está configurado (y no hay temporizador activo pendiente)
@@ -127,6 +147,7 @@ export const WinnerBanner: React.FC<WinnerBannerProps> = ({
       className="rl-res"
       style={{ '--c': segment.color, '--c-ink': inkFor(segment.color) } as React.CSSProperties}
     >
+      <i className="rl-shine" data-a="shine" aria-hidden="true" />
       {onDismiss && (
         <button type="button" onClick={onDismiss} className="rl-x" aria-label="Cerrar resultado">
           <X className="h-4 w-4" />
@@ -146,7 +167,7 @@ export const WinnerBanner: React.FC<WinnerBannerProps> = ({
         {segment.intensity && <span>Intensidad {INTENSITY[segment.intensity]}</span>}
       </p>
 
-      {initialDuration > 0 && (
+      {initialDuration > 0 ? (
         <>
           <div className="rl-timer">
             {isCompleted ? (
@@ -183,6 +204,8 @@ export const WinnerBanner: React.FC<WinnerBannerProps> = ({
             </div>
           )}
         </>
+      ) : (
+        autoDismissSec && autoDismissSec > 0 && <i className="rl-dismiss-bar" data-a="dbar" aria-hidden="true" />
       )}
     </div>
   );

@@ -6,7 +6,10 @@
  * gestión de preajustes y persistencia en LocalStorage.
  */
 
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { RouletteOverlayView } from '../src/components/roulette/RouletteOverlayView';
 import {
   getSegmentAngle,
   polarToCartesian,
@@ -277,6 +280,27 @@ describe('Roulette Category Labels & Visual Assets', () => {
       expect(info.color.startsWith('#')).toBe(true);
       expect(info.icon.length).toBeGreaterThan(0);
     });
+  });
+
+  it('destaca el segmento ganador con data-win, añade confeti 3D en OBS, brillo rl-shine y barra de cierre rl-dismiss-bar', () => {
+    const winner = { ...DEFAULT_ROULETTE_SETTINGS.segments[0], durationSec: 0 };
+    const html = renderToStaticMarkup(
+      React.createElement(RouletteOverlayView, {
+        settings: DEFAULT_ROULETTE_SETTINGS,
+        targetRotation: 330,
+        startRotation: 330,
+        targetWinner: winner,
+        isSpinning: false,
+        activeUser: 'laloplay_',
+        winnerBanner: { segment: winner, user: 'laloplay_' },
+        onSpinComplete: () => {},
+      })
+    );
+    expect(html).toContain('class="rl-fx"');
+    expect(html).toContain('data-win=""');
+    expect(html).toContain('data-dim=""');
+    expect(html).toContain('class="rl-shine"');
+    expect(html).toContain('class="rl-dismiss-bar"');
   });
 });
 

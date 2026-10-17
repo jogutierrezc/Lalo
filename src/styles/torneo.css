@@ -114,6 +114,12 @@
   border-radius: var(--t-r);
   background: var(--t-bg);
   clip-path: var(--t-cut);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--t-fg) 10%, transparent),
+    0 0.28em 0.9em rgb(0 0 0 / 0.26);
+}
+.tnl[data-style='cartel'] .tn-plate {
+  box-shadow: 0.2em 0.2em 0 var(--t-line);
 }
 .tn-title {
   font-family: var(--t-title);
@@ -176,10 +182,12 @@
   text-overflow: ellipsis;
 }
 .tn-name span {
+  display: inline-block;
   color: var(--t-acc);
   font-stretch: 80%;
   font-weight: 700;
   font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -222,6 +230,7 @@
    --tn-k encoge las casillas según el tamaño: con 16 equipos hay ocho partidas
    en la primera columna y tienen que caber en el mismo alto. */
 .tn-br {
+  --tn-gap: 1.8em;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0.6em;
@@ -235,22 +244,20 @@
 }
 .tn-br[data-size='16'] {
   --tn-k: 0.52;
+  --tn-gap: 1.2em;
 }
 .tn-heads,
 .tn-cols {
   display: grid;
   grid-template-columns: repeat(var(--tn-rounds, 3), minmax(0, 1fr));
-  gap: 1.8em;
+  gap: var(--tn-gap);
 }
 .tn-cols {
   min-height: 0;
   font-size: calc(1em * var(--tn-k));
 }
-.tn-br[data-size='16'] .tn-heads,
-.tn-br[data-size='16'] .tn-cols {
-  column-gap: 1.2em;
-}
 .tn-col {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.7em;
@@ -261,17 +268,58 @@
 .tn-br[data-size='16'] .tn-col {
   gap: 0.4em;
 }
+/* Conectores SVG entre rondas de la llave */
+.tn-wires {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: var(--tn-gap);
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.tn-wire {
+  fill: none;
+  stroke: color-mix(in srgb, var(--t-line) 78%, transparent);
+  stroke-width: 1.75px;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+.tn-wire--lit {
+  stroke: var(--t-acc);
+  stroke-width: 2.4px;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--t-acc) 45%, transparent));
+}
+.tn-wire--lit[data-now] {
+  stroke-dasharray: 4 3;
+  animation: tn-wire-pulse 1.3s ease-in-out infinite alternate;
+}
+.tnl[data-style='cartel'] .tn-wire--lit {
+  stroke: var(--t-line);
+  filter: none;
+}
+@keyframes tn-wire-pulse {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
 .tn-h {
   color: var(--t-acc);
   font-stretch: 78%;
   font-weight: 800;
   font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   text-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
 }
 .tn-mc {
   position: relative;
+  z-index: 1;
   display: grid;
 }
 /* La partida en juego: un filete que respira */
@@ -281,12 +329,13 @@
   inset: -0.25em;
   border: 0.14em solid var(--t-acc);
   border-radius: calc(var(--t-r) + 0.2em);
+  box-shadow: 0 0 0.85em color-mix(in srgb, var(--t-acc) 35%, transparent);
   pointer-events: none;
   animation: tn-now 1.3s ease-in-out infinite alternate;
 }
 @keyframes tn-now {
   from {
-    opacity: 0.25;
+    opacity: 0.28;
   }
   to {
     opacity: 1;
@@ -325,6 +374,9 @@
   font-size: 0.72em;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.tn-mr[data-w] {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--t-acc) 14%, transparent), transparent 72%);
 }
 .tn-mr[data-w] i {
   background: var(--t-acc);
@@ -372,6 +424,7 @@
   font-stretch: 78%;
   font-weight: 800;
   font-size: 0.95em;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -383,7 +436,9 @@
   width: 100%;
 }
 .tn-t {
+  position: relative;
   padding: 0.9em 1.2em 1em;
+  overflow: hidden;
   text-align: center;
 }
 .tn-t p {
@@ -393,12 +448,26 @@
   text-wrap: balance;
 }
 .tn-vs > i {
+  display: inline-block;
   color: var(--t-acc);
   font-family: var(--t-title);
   font-style: normal;
   font-weight: 800;
   font-size: 2em;
-  text-shadow: 0 2px 6px rgb(0 0 0 / 0.6);
+  text-shadow:
+    0 2px 6px rgb(0 0 0 / 0.6),
+    0 0 0.55em color-mix(in srgb, var(--t-acc) 35%, transparent);
+  animation: tn-vs-pulse 2.4s ease-in-out infinite alternate;
+}
+@keyframes tn-vs-pulse {
+  from {
+    transform: scale(0.96);
+    opacity: 0.86;
+  }
+  to {
+    transform: scale(1.05);
+    opacity: 1;
+  }
 }
 .tn-after {
   max-width: 100%;
@@ -410,6 +479,8 @@
 /* ---------- Victoria y campeón ---------- */
 .tn-vic,
 .tn-ch {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 0.7em;
   align-self: center;
@@ -425,6 +496,17 @@
   width: 100%;
   padding: 1.2em 2em 1.3em;
   overflow: hidden;
+}
+/* Barra de cuenta regresiva que indica cuánto queda antes de volver a la llave */
+.tn-vic-bar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 0.2em;
+  background: var(--t-acc);
+  box-shadow: 0 0 0.6em color-mix(in srgb, var(--t-acc) 60%, transparent);
+  pointer-events: none;
 }
 .tn-vname {
   font-size: 4em;
@@ -464,6 +546,7 @@
   width: 35%;
   background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--t-acc) 35%, transparent), transparent);
   transform: translateX(-140%);
+  pointer-events: none;
 }
 .tn-ring {
   display: grid;
@@ -473,26 +556,44 @@
   border: 0.36em solid var(--t-acc);
   border-radius: 50%;
   background: var(--t-bg);
+  box-shadow:
+    0 0 0 0.24em color-mix(in srgb, var(--t-acc) 18%, transparent),
+    0 0 2.2em color-mix(in srgb, var(--t-acc) 32%, transparent);
   color: var(--t-acc);
   font-family: var(--t-title);
   font-weight: 800;
   font-size: 1.4em;
+  font-variant-numeric: tabular-nums;
 }
 .tnl[data-style='cartel'] .tn-ring {
+  box-shadow: 0.18em 0.18em 0 var(--t-line);
   color: var(--t-fg);
 }
 .tn-fx {
   position: absolute;
   inset: -6em -2em;
   overflow: hidden;
+  perspective: 36em;
   pointer-events: none;
 }
 .tn-fx i {
   position: absolute;
   top: -4%;
-  width: 0.7em;
+  width: 0.72em;
   height: 0.36em;
+  border-radius: 0.06em;
   background: var(--t-acc);
+  backface-visibility: visible;
+}
+.tn-fx i[data-shape='diamond'] {
+  width: 0.52em;
+  height: 0.52em;
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+.tn-fx i[data-shape='spark'] {
+  width: 0.88em;
+  height: 0.22em;
+  border-radius: 999px;
 }
 
 /* ---------- Tabla ---------- */
@@ -570,7 +671,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tn-mc[data-now]::after {
+  .tn-mc[data-now]::after,
+  .tn-vs > i,
+  .tn-wire--lit[data-now] {
     animation: none;
   }
 }
