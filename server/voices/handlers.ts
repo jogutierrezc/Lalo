@@ -34,7 +34,15 @@ import {
   type NodeLikeResponse,
 } from '../storage/handlers.js';
 import type { Env } from '../storage/r2.js';
-import { elevenAnyKey, elevenCloneVoice, elevenDeleteVoice, elevenGetVoice, isElevenVoiceId } from '../elevenlabs.js';
+import {
+  elevenActiveKey,
+  elevenAnyKey,
+  elevenCloneVoice,
+  elevenDeleteVoice,
+  elevenGetVoice,
+  isElevenVoiceId,
+  type ElevenKeySlot,
+} from '../elevenlabs.js';
 import {
   VOICE_DESCRIPTION_MAX,
   VOICE_MAX_TOTAL_BYTES,
@@ -237,7 +245,7 @@ async function createVoice(ctx: Context, req: ApiRequest, env: Env, doFetch: Fet
 type CatalogVoice = { name: string; description: string; origin: string; owner: string; permissionBy: string };
 
 /** Fila del catálogo para una voz de ElevenLabs. Nace oculta, como las de Fish. */
-async function insertElevenVoice(ctx: Context, voiceId: string, info: CatalogVoice): Promise<ApiResult> {
+async function insertElevenVoice(ctx: Context, voiceId: string, info: CatalogVoice, slot: ElevenKeySlot): Promise<ApiResult> {
   const existing = await ctx.db.from('voices').select('name');
   if (existing.error) return fail(502, 'catalog_read', `No se pudo leer el catálogo: ${existing.error.message}. ${MIGRATION_HINT}`);
   const nameProblem = voiceNameProblem(info.name, (existing.data ?? []).map((row) => String((row as { name: unknown }).name)));
@@ -250,6 +258,7 @@ async function insertElevenVoice(ctx: Context, voiceId: string, info: CatalogVoi
       description: info.description.trim(),
       reference_id: voiceId,
       provider: 'elevenlabs',
+      eleven_slot: slot,
       visible: false,
       is_default: false,
       origin: info.origin,
@@ -277,6 +286,8 @@ async function createElevenVoice(
   if (!elevenAnyKey(env)) {
     return fail(503, 'eleven_not_configured', 'Al servidor le falta alguna clave de ElevenLabs.', { missing: ['ELEVENLABS_API_KEY', 'ELEVENLABS_API_KEY_2'] });
   }
+  // La voz se crea con la clave activa: su slot es el que se guarda en el catálogo
+  const { slot } = await elevenActiveKey(env);
   let voiceId: string;
   try {
     voiceId = await elevenCloneVoice(
@@ -289,7 +300,7 @@ async function createElevenVoice(
   } catch (err) {
     return fail(502, 'eleven_failed', `ElevenLabs no pudo crear la voz: ${describe(err)}`, { stage: 'elevenlabs' });
   }
-  const saved = await insertElevenVoice(ctx, voiceId, meta);
+  const saved = await insertElevenVoice(ctx, voiceId, meta, slot);
   if (saved.status !== 200) {
     // Sin fila no debe quedar un clon suelto gastando cupo de voces
     await elevenDeleteVoice(voiceId, env, doFetch);
@@ -320,13 +331,19 @@ async function importElevenVoice(ctx: Context, req: ApiRequest, env: Env, doFetc
   if (!found) return fail(404, 'eleven_not_found', 'ElevenLabs no encuentra esa voz con la clave configurada.');
 
   const name = (typeof body.name === 'string' && body.name.trim()) || found.name;
-  return insertElevenVoice(ctx, voiceId, {
-    name: name.slice(0, 18),
-    description: typeof body.description === 'string' ? body.description.slice(0, VOICE_DESCRIPTION_MAX) : '',
-    origin: 'uploaded',
-    owner,
-    permissionBy,
-  });
+  const { slot } = await elevenActiveKey(env);
+  return insertElevenVoice(
+    ctx,
+    voiceId,
+    {
+      name: name.slice(0, 18),
+      description: typeof body.description === 'string' ? body.description.slice(0, VOICE_DESCRIPTION_MAX) : '',
+      origin: 'uploaded',
+      owner,
+      permissionBy,
+    },
+    slot
+  );
 }
 
 // ---------- Eliminar ----------
