@@ -29,8 +29,9 @@ import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, t
 import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSettings } from './settings.js';
 import { parseEmotion } from './emotion.js';
 import { INTENT_GESTURE, detectIntent } from './intent.js';
+import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 
-export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config'] as const;
+export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat'] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
 const MEMORY_LIMIT = 20;
@@ -40,7 +41,12 @@ export interface LuxDeps {
   fetch: NvidiaFetch;
   auth: Auth;
   db: (env: Env) => LuxDb | null;
+  /** Tiempo de espera del chat por espectador. Las pruebas pasan uno propio. */
+  cooldown?: LuxCooldown;
+  now?: () => number;
 }
+
+const chatCooldown = new LuxCooldown();
 
 export const defaultLuxDeps: LuxDeps = {
   fetch: (...args) => fetch(...args),
@@ -289,6 +295,90 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
   }
 }
 
+/**
+ * Lux en el chat de Twitch. El bot no tiene sesión: el streamer se identifica con
+ * su clave de OBS (widget_key), igual que el overlay. Mismo camino de respuesta que el panel.
+ */
+async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  if (req.method.toUpperCase() !== 'POST') return fail(405, 'method', 'Esta ruta solo admite POST.');
+  const db = deps.db(env);
+  if (!db || !db.profileByWidgetKey) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+
+  const raw = bodyOf(req);
+  const widgetKey = typeof raw.k === 'string' ? raw.k.trim() : '';
+  if (!widgetKey || widgetKey.length > 128) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
+
+  try {
+    const profile = await db.profileByWidgetKey(widgetKey);
+    if (!profile) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
+    const current = settingsFromRow(await db.settingsRow(profile.id));
+
+    if (raw.command === 'on' || raw.command === 'off') {
+      // El bot manda privileged según el rango del autor en el chat (canal o moderador).
+      if (raw.privileged !== true) return fail(403, 'not_privileged', 'Solo el canal o los moderadores pueden cambiar Lux en el chat.');
+      const value = raw.command === 'on';
+      await db.saveSettingsRow(rowFromSettings(profile.id, { ...current, chatEnabled: value }));
+      return { status: 200, body: { chatEnabled: value } };
+    }
+    if (raw.command !== 'ask') return fail(400, 'bad_command', 'Comando no admitido.');
+
+    if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
+    if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
+
+    const message = typeof raw.message === 'string' ? raw.message.trim() : '';
+    if (!message || message.length > LUX_CHAT_MAX) {
+      return fail(400, 'bad_message', `El mensaje tiene que tener entre 1 y ${LUX_CHAT_MAX} caracteres.`);
+    }
+    const viewer = typeof raw.viewer === 'string' && raw.viewer.trim() ? raw.viewer.trim().slice(0, VIEWER_MAX) : 'Espectador';
+    const wait = (deps.cooldown ?? chatCooldown).take(`${profile.id}:${viewer.toLowerCase()}`, (deps.now ?? Date.now)());
+    if (!wait.ok) return { status: 200, body: { skipped: 'cooldown', waitSeconds: wait.waitSeconds } };
+
+    const target = await activeProvider(db);
+    const apiKey = await readApiKey(env, db, target);
+    if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
+    const model = await activeModel(db, target);
+    const memories = current.memoryEnabled ? await db.memories(profile.id, MEMORY_LIMIT) : [];
+    const intent = detectIntent(message);
+
+    const text = await nvidiaChat({
+      baseUrl: LUX_PROVIDERS[target].baseUrl,
+      apiKey,
+      model,
+      messages: buildLuxMessages({
+        viewer,
+        message,
+        memories,
+        personality: current.personality,
+        language: current.language,
+        replyMax: current.replyMax,
+        intent,
+      }),
+      maxTokens: Math.ceil(current.replyMax / 2) + 40,
+      fetch: deps.fetch,
+    });
+    const { text: spoken, emotion } = parseEmotion(text);
+    const reply = (spoken || '…').slice(0, current.replyMax);
+
+    await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply, model }).catch(() => {
+      console.error('[Lalo lux] no se pudo guardar el registro de la respuesta del chat');
+    });
+    return {
+      status: 200,
+      body: {
+        reply,
+        emotion,
+        intent,
+        gesture: INTENT_GESTURE[intent],
+        model,
+        voice: { referenceId: current.voiceReferenceId, engine: current.voiceEngine },
+      },
+    };
+  } catch (err) {
+    if (err instanceof NvidiaError) return nvidiaFailure(err);
+    return luxFailure(err, 'lux/chat');
+  }
+}
+
 /** Entrada única de Lux. `overrides` solo lo usan las pruebas. */
 export async function handleLux(action: LuxAction, req: IntegrationRequest, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<IntegrationResult> {
   const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
@@ -307,5 +397,7 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return reply(req, env, deps);
     case 'config':
       return config(req, env, deps);
+    case 'chat':
+      return chat(req, env, deps);
   }
 }

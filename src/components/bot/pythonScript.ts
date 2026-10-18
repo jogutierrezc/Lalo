@@ -119,10 +119,51 @@ PREFIX = ${pyString(prefix)}
 BOT_NAME = ${pyString(botName)}
 WELCOME = ${pyString(settings.welcomeMessage.trim())}
 LALO_URL = "http://localhost:3001/api/twitchio/event"
+# Lux (personaje IA): la clave de OBS de tu panel de Lalo, en Cuenta.
+LUX_URL = "http://localhost:3001/api/lux/chat"
+LUX_KEY = "TU_CLAVE_OBS"
 
 
 def fill(text, user=""):
     return text.replace("{user}", user).replace("{channel}", CHANNEL)
+
+
+def is_privileged(author):
+    return bool(getattr(author, "is_mod", False) or getattr(author, "is_broadcaster", False))
+
+
+async def lux_post(payload):
+    async with aiohttp.ClientSession() as session:
+        async with session.post(LUX_URL, json={"k": LUX_KEY, **payload}) as response:
+            return await response.json(content_type=None)
+
+
+async def lux_ask(message, text):
+    if not text:
+        await message.channel.send("@" + message.author.name + " escribe tu mensaje después de !lux.")
+        return
+    try:
+        data = await lux_post({"command": "ask", "viewer": message.author.name, "message": text})
+    except (aiohttp.ClientError, ValueError) as error:
+        print("No se pudo hablar con Lux: " + str(error))
+        return
+    if data.get("reply"):
+        await message.channel.send(data["reply"])
+    elif data.get("skipped") == "cooldown":
+        await message.channel.send("@" + message.author.name + " espera " + str(data.get("waitSeconds", 10)) + " s antes de volver a preguntar a Lux.")
+
+
+async def lux_switch(message, turn_on):
+    if not is_privileged(message.author):
+        await message.channel.send("@" + message.author.name + " solo el canal o los moderadores pueden hacerlo.")
+        return
+    try:
+        action = "on" if turn_on else "off"
+        await lux_post({"command": action, "privileged": True})
+    except (aiohttp.ClientError, ValueError) as error:
+        print("No se pudo cambiar Lux: " + str(error))
+        return
+    await message.channel.send("Lux responderá en el chat." if turn_on else "Lux dejará de responder en el chat.")
 
 
 class LaloBot(commands.Bot):
@@ -150,6 +191,10 @@ class LaloBot(commands.Bot):
                     })
             except aiohttp.ClientError as error:
                 print(f"No se pudo avisar al panel de Lalo: {error}")
+        if content == PREFIX + "luxon" or content == PREFIX + "luxoff":
+            await lux_switch(message, content == PREFIX + "luxon")
+        elif content == PREFIX + "lux" or content.startswith(PREFIX + "lux "):
+            await lux_ask(message, content[len(PREFIX) + 3:].strip())
         await self.handle_commands(message)
 ${handlers.length ? `\n${handlers.join('\n\n')}\n` : ''}
 

@@ -44,6 +44,8 @@ export interface LuxDb {
   insertReply(row: LuxReplyRow): Promise<void>;
   /** Fila de lux_settings del streamer, o null si nunca guardó ajustes. */
   settingsRow(profileId: string): Promise<Record<string, unknown> | null>;
+  /** Perfil por su clave de OBS (widget_key). Lo usa el chat, que no tiene sesión. Opcional en las pruebas. */
+  profileByWidgetKey?(widgetKey: string): Promise<LuxProfile | null>;
   saveSettingsRow(row: Record<string, unknown>): Promise<void>;
 }
 
@@ -113,6 +115,18 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     async insertReply(row) {
       const { error } = await db.from('lux_replies').insert(row);
       check(error);
+    },
+
+    async profileByWidgetKey(widgetKey) {
+      const { data, error } = await db
+        .from('profiles')
+        .select('id, role, lux_enabled, elevenlabs_enabled')
+        .eq('widget_key', widgetKey)
+        .maybeSingle();
+      check(error);
+      if (!data) return null;
+      const row = data as { id: string; role: string; lux_enabled: boolean | null; elevenlabs_enabled: boolean | null };
+      return { id: row.id, role: row.role, luxEnabled: row.lux_enabled === true, elevenlabsEnabled: row.elevenlabs_enabled === true };
     },
 
     async settingsRow(profileId) {

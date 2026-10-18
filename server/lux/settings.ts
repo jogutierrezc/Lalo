@@ -23,6 +23,8 @@ export interface LuxSettings {
   language: LuxLanguage;
   memoryEnabled: boolean;
   obsSize: number;
+  /** Lux responde a !lux en el chat (migración 0026). */
+  chatEnabled: boolean;
   /** Voz del catálogo (reference_id) y su motor. Null: la voz por defecto. */
   voiceReferenceId: string | null;
   voiceEngine: LuxVoiceEngine | null;
@@ -36,6 +38,7 @@ export const DEFAULT_LUX_SETTINGS: LuxSettings = {
   obsSize: LUX_LIMITS.obsSize.default,
   voiceReferenceId: null,
   voiceEngine: null,
+  chatEnabled: true,
 };
 
 export type SettingsCheck = { ok: true; value: LuxSettings } | { ok: false; field: keyof LuxSettings; message: string };
@@ -86,6 +89,11 @@ export function normalizeLuxSettings(input: Record<string, unknown>, base: LuxSe
     value.obsSize = input.obsSize;
   }
 
+  if (input.chatEnabled !== undefined) {
+    if (typeof input.chatEnabled !== 'boolean') return { ok: false, field: 'chatEnabled', message: 'El chat de Lux es sí o no.' };
+    value.chatEnabled = input.chatEnabled;
+  }
+
   if (input.voiceReferenceId !== undefined) {
     if (input.voiceReferenceId === null) {
       value.voiceReferenceId = null;
@@ -118,6 +126,7 @@ export function settingsFromRow(row: Record<string, unknown> | null): LuxSetting
     { language: row.language },
     { memoryEnabled: row.memory_enabled },
     { obsSize: row.obs_size },
+    { chatEnabled: row.chat_enabled },
     // La voz va como pareja: o las dos columnas, o ninguna.
     { voiceReferenceId: row.voice_reference_id ?? null, voiceEngine: row.voice_engine ?? null },
   ];
@@ -139,6 +148,7 @@ export function rowFromSettings(profileId: string, value: LuxSettings): Record<s
     language: value.language,
     memory_enabled: value.memoryEnabled,
     obs_size: value.obsSize,
+    chat_enabled: value.chatEnabled,
     voice_reference_id: value.voiceReferenceId,
     voice_engine: value.voiceEngine,
     updated_at: new Date().toISOString(),
