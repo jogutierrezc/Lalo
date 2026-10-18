@@ -12,7 +12,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ServiceCard, type CardTone } from '../../components/integraciones/ServiceCard';
 import { integrationsServerStatus, type IntegrationsServerStatus } from '../../lib/integrationsApi';
-import { luxSaveKey, luxSetModel, luxStatus, luxTest, type LuxStatus } from '../../lib/luxApi';
+import { luxSaveKey, luxSetModel, luxSetProvider, luxStatus, luxTest, type LuxProviderId, type LuxStatus } from '../../lib/luxApi';
 import { adminHref, storageHealth, type StorageHealth } from '../../lib/adminLogic';
 import { rpc } from '../../lib/cloud';
 import type { AdminData } from './useAdminData';
@@ -38,6 +38,8 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
   const [lux, setLux] = useState<LuxStatus | null>(null);
   const [luxProblem, setLuxProblem] = useState<string | null>(null);
   const [luxInput, setLuxInput] = useState('');
+  // Proveedor al que va la clave que se pega. Es independiente del proveedor activo.
+  const [luxKeyProvider, setLuxKeyProvider] = useState<LuxProviderId | null>(null);
   const [luxBusy, setLuxBusy] = useState(false);
   const [luxNote, setLuxNote] = useState<string | null>(null);
 
@@ -56,10 +58,12 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
   }, [refreshLux]);
 
   // La clave pasa por el servidor y no se conserva en el estado: al guardar se vacía el campo.
-  const saveLuxKey = async (value: string) => {
+  const keyTarget: LuxProviderId = luxKeyProvider ?? lux?.provider ?? 'nvidia';
+
+  const saveLuxKey = async (value: string, provider: LuxProviderId) => {
     setLuxBusy(true);
     setLuxNote(null);
-    const res = await luxSaveKey(value);
+    const res = await luxSaveKey(value, provider);
     setLuxInput('');
     if (res.ok) {
       setLuxProblem(null);
@@ -78,6 +82,20 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
     if (res.ok) {
       setLuxProblem(null);
       setLuxNote(`Modelo cambiado a ${res.data.model}. Prueba la conexión para confirmar que responde.`);
+      await refreshLux();
+    } else {
+      setLuxProblem(res.message);
+    }
+    setLuxBusy(false);
+  };
+
+  const changeLuxProvider = async (provider: LuxProviderId) => {
+    setLuxBusy(true);
+    setLuxNote(null);
+    const res = await luxSetProvider(provider);
+    if (res.ok) {
+      setLuxProblem(null);
+      setLuxNote(`Lux usa ahora ${provider === 'mistral' ? 'Mistral AI' : 'NVIDIA'}. Prueba la conexión para confirmar.`);
       await refreshLux();
     } else {
       setLuxProblem(res.message);
@@ -275,13 +293,54 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
           tone={lux ? (lux.configured && lux.vault ? 'on' : 'warn') : luxProblem ? 'warn' : undefined}
           adminOnly
         >
-          <p>Modelo de lenguaje del personaje Lux, a través de build.nvidia.com. Pega aquí la clave: el servidor la guarda cifrada y nunca vuelve a mostrarla.</p>
+          <p>Modelo de lenguaje del personaje Lux: NVIDIA (build.nvidia.com) o Mistral AI. Pega aquí la clave del proveedor activo: el servidor la guarda cifrada y nunca vuelve a mostrarla.</p>
           {luxProblem && <p className="cab-note">{luxProblem}</p>}
+          {lux && (
+            <div className="cab-field">
+              <label className="cab-label" htmlFor="adm-lux-provider">
+                Proveedor de IA
+              </label>
+              <select
+                id="adm-lux-provider"
+                className="cab-inp"
+                value={lux.provider}
+                disabled={luxBusy}
+                onChange={(e) => changeLuxProvider(e.target.value as LuxProviderId)}
+              >
+                {lux.providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>
+                    {provider.label}
+                    {lux.configuredByProvider[provider.id] ? '' : ' (sin clave)'}
+                  </option>
+                ))}
+              </select>
+              <span className="cab-hint">Mistral responde más rápido. Cada proveedor tiene su propia clave y su propio modelo.</span>
+            </div>
+          )}
           {lux && !lux.vault && (
             <p className="cab-error" role="alert">
               Falta INTEGRATIONS_ENC_KEY en el servidor: no se puede guardar la clave.
             </p>
           )}
+          <div className="cab-field">
+            <label className="cab-label" htmlFor="adm-lux-key-provider">
+              Clave para
+            </label>
+            <select
+              id="adm-lux-key-provider"
+              className="cab-inp"
+              value={keyTarget}
+              disabled={luxBusy}
+              onChange={(e) => setLuxKeyProvider(e.target.value as LuxProviderId)}
+            >
+              {(lux?.providers ?? []).map((provider) => (
+                <option key={provider.id} value={provider.id}>
+                  {provider.label}
+                  {lux?.configuredByProvider[provider.id] ? ' (con clave)' : ' (sin clave)'}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex flex-wrap items-end gap-2">
             <div className="cab-field">
               <label className="cab-label" htmlFor="adm-lux-key">
@@ -293,7 +352,13 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
                 className="cab-inp"
                 autoComplete="off"
                 spellCheck={false}
-                placeholder={lux?.configured ? 'Guardada · escribe una nueva para cambiarla' : 'nvapi-…'}
+                placeholder={
+                  lux?.configuredByProvider[keyTarget]
+                    ? 'Guardada · escribe una nueva para cambiarla'
+                    : keyTarget === 'mistral'
+                      ? 'Clave de Mistral'
+                      : 'nvapi-…'
+                }
                 value={luxInput}
                 disabled={luxBusy}
                 onChange={(e) => setLuxInput(e.target.value)}
@@ -303,15 +368,15 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
               type="button"
               className="cab-btn2 cab-btn-sm"
               disabled={luxBusy || !lux?.vault || luxInput.trim() === ''}
-              onClick={() => saveLuxKey(luxInput.trim())}
+              onClick={() => saveLuxKey(luxInput.trim(), keyTarget)}
             >
               Guardar clave
             </button>
             <button type="button" className="cab-btn2 cab-btn-sm" disabled={luxBusy || !lux?.configured} onClick={testLux}>
               Probar conexión
             </button>
-            {lux?.configured && (
-              <button type="button" className="cab-btn2 cab-btn-sm" disabled={luxBusy} onClick={() => saveLuxKey('')}>
+            {lux?.configuredByProvider[keyTarget] && (
+              <button type="button" className="cab-btn2 cab-btn-sm" disabled={luxBusy} onClick={() => saveLuxKey('', keyTarget)}>
                 Borrar clave
               </button>
             )}

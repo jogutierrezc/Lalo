@@ -2006,8 +2006,7 @@
           const size = box.getSize(new THREE.Vector3());
           const center = box.getCenter(new THREE.Vector3());
           const halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-          const halfExtent = (Math.max(size.x, size.y) / 2) * 1.12;
-          document.documentElement.dataset.diag = JSON.stringify({ size, center, min: box.min, max: box.max, kids: scene.children.map((c) => `${c.type}:${c.name || ''}:${c.visible}`), rect: canvas.getBoundingClientRect().toJSON(), vh: innerHeight, vw: innerWidth });
+          const halfExtent = (Math.max(size.x, size.y) / 2) * 1.25;
           camState.theta = 0;
           camState.phi = 1.48;
           camState.targetY = center.y;
@@ -2028,6 +2027,138 @@
         const index = typeof data.index === 'number' ? data.index : EXPRESSIONS.findIndex((item) => item.id === data.id);
         if (index >= 0 && index < EXPRESSIONS.length) applyExpressionTo3DModel(index);
       });
+    })();
+  </script>
+
+  <script>
+    // Voz de Lux en el overlay. Llegan mensajes por el canal 'lux_bus':
+    //   { type: 'speak', text, emotion, voice: { referenceId, engine } }
+    // Se pide el audio a /api/tts (con la clave k del overlay para el tope de uso),
+    // se reproduce y la boca se abre y cierra según el volumen real del audio.
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const widgetKey = params.get('k') || '';
+      const IDS = EXPRESSIONS.map((item) => item.id);
+      const showExpression = (id) => {
+        const index = IDS.indexOf(id);
+        if (index >= 0) applyExpressionTo3DModel(index);
+      };
+      const knownEmotion = (id) => (IDS.includes(id) ? id : 'normal');
+
+      let audioContext = null;
+      let queue = Promise.resolve();
+
+      const ensureContext = () => {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        return audioContext;
+      };
+
+      // En OBS, la fuente de navegador reproduce sin ningún clic: no se espera ningún gesto.
+      // Si un navegador normal bloquea el audio, el aviso sale en la consola y la frase se descarta.
+
+      async function synthesize(text, voice) {
+        const body = { text, k: widgetKey || undefined };
+        if (voice && voice.referenceId) body.reference_id = voice.referenceId;
+        if (voice && voice.engine) body.engine = voice.engine;
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error('tts ' + res.status);
+        return res.blob();
+      }
+
+      // Mueve la boca con el volumen del audio: abierta mientras suena, cerrada en los silencios.
+      function lipSync(audio, analyser, emotion) {
+        const data = new Uint8Array(analyser.fftSize);
+        let open = false;
+        let last = 0;
+        const tick = (now) => {
+          if (audio.paused || audio.ended) return;
+          analyser.getByteTimeDomainData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 1) {
+            const sample = (data[i] - 128) / 128;
+            sum += sample * sample;
+          }
+          const level = Math.sqrt(sum / data.length);
+          const nowOpen = level > 0.04;
+          if (nowOpen !== open && now - last > 110) {
+            open = nowOpen;
+            last = now;
+            showExpression(open ? 'habla' : emotion);
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+
+      async function playOne(text, emotion, voice) {
+        showExpression(emotion);
+        let blob;
+        try {
+          blob = await synthesize(text, voice);
+        } catch {
+          // La voz elegida falló (cuenta sin ElevenLabs, voz borrada...): Lux habla con la voz por defecto.
+          try {
+            blob = await synthesize(text, {});
+          } catch {
+            showExpression('normal');
+            return;
+          }
+        }
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        // El analizador (boca) solo se conecta si el contexto ya está activo: suspendido, silenciaría el audio.
+        const context = ensureContext();
+        if (context.state === 'running') {
+          try {
+            const source = context.createMediaElementSource(audio);
+            const analyser = context.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
+            analyser.connect(context.destination);
+            audio.addEventListener('play', () => lipSync(audio, analyser, emotion));
+          } catch {
+            // Sin analizador, el personaje habla igual con la expresión de la emoción.
+          }
+        }
+        await new Promise((resolve) => {
+          audio.addEventListener('ended', resolve, { once: true });
+          audio.addEventListener('error', resolve, { once: true });
+          audio.play().catch((err) => {
+            console.warn('[Lux] El navegador bloqueó el audio:', err && err.name);
+            resolve();
+          });
+        });
+        URL.revokeObjectURL(url);
+        showExpression('normal');
+      }
+
+      const speak = (text, emotion, voice) => {
+        const clean = String(text || '').trim().slice(0, 500);
+        if (!clean) return;
+        const mood = knownEmotion(emotion);
+        const stamp = Date.now();
+        // Una frase que esperó más de 20 s (audio bloqueado) se descarta: no suena de golpe, ya caducada.
+        queue = queue
+          .then(() => (Date.now() - stamp > 20000 ? null : playOne(clean, mood, voice || {})))
+          .catch(() => showExpression('normal'));
+      };
+
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bus = new BroadcastChannel('lux_bus');
+        bus.onmessage = (event) => {
+          const data = event.data;
+          if (!data) return;
+          if (data.type === 'speak') speak(data.text, data.emotion, data.voice);
+          if (data.type === 'emotion') showExpression(knownEmotion(data.id));
+        };
+      }
+
+      // Para probar desde la consola: window.luxSpeak('Hola', 'feliz')
+      window.luxSpeak = (text, emotion, voice) => speak(text, emotion, voice);
     })();
   </script>
 </body>

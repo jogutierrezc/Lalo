@@ -9,6 +9,7 @@
 
 import type { ChatMessage } from './nvidia.js';
 import type { LuxMemoryRow } from './luxDb.js';
+import { EMOTION_INSTRUCTION } from './emotion.js';
 
 export const LUX_MAX_INPUT = 500;
 
@@ -18,10 +19,21 @@ export interface LuxTurn {
   viewer: string | null;
   message: string;
   memories: LuxMemoryRow[];
+  /** Ajustes del streamer: personalidad, idioma y longitud máxima de la respuesta. */
+  personality?: string;
+  language?: 'es' | 'en' | 'pt';
+  replyMax?: number;
 }
 
+const LANGUAGE_NAMES = { es: 'español', en: 'inglés', pt: 'portugués' } as const;
+
 export function buildLuxMessages(turn: LuxTurn): ChatMessage[] {
-  const messages: ChatMessage[] = [{ role: 'system', content: PLACEHOLDER_SYSTEM }];
+  const lines = [PLACEHOLDER_SYSTEM];
+  if (turn.personality) lines.push(`Personalidad del personaje: ${turn.personality}`);
+  if (turn.language) lines.push(`Responde siempre en ${LANGUAGE_NAMES[turn.language]}.`);
+  if (turn.replyMax) lines.push(`No superes ${turn.replyMax} caracteres.`);
+  lines.push(EMOTION_INSTRUCTION);
+  const messages: ChatMessage[] = [{ role: 'system', content: lines.join('\n') }];
   if (turn.memories.length > 0) {
     const lines = turn.memories.map((memory) => `- (${memory.kind}${memory.subject ? `, ${memory.subject}` : ''}) ${memory.content}`);
     messages.push({ role: 'system', content: `Recuerdos del canal:\n${lines.join('\n')}` });

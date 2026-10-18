@@ -13,8 +13,22 @@ export interface LuxModelOption {
   label: string;
 }
 
+export type LuxProviderId = 'nvidia' | 'mistral';
+
+export interface LuxProviderOption {
+  id: LuxProviderId;
+  label: string;
+  defaultModel: string;
+  models: LuxModelOption[];
+}
+
 export interface LuxStatus {
+  /** Proveedor que usa Lux ahora. */
+  provider: LuxProviderId;
+  providers: LuxProviderOption[];
+  /** Hay clave guardada para el proveedor activo. */
   configured: boolean;
+  configuredByProvider: Record<LuxProviderId, boolean>;
   vault: boolean;
   model: string;
   defaultModel: string;
@@ -32,13 +46,23 @@ export async function luxStatus(): Promise<ApiOutcome<LuxStatus>> {
   return {
     ok: true,
     data: {
+      provider: res.data.provider === 'mistral' ? 'mistral' : 'nvidia',
+      providers: Array.isArray(res.data.providers) ? (res.data.providers as LuxProviderOption[]) : [],
       configured: res.data.configured === true,
+      configuredByProvider: (res.data.configuredByProvider ?? { nvidia: false, mistral: false }) as Record<LuxProviderId, boolean>,
       vault: res.data.vault === true,
       model: String(res.data.model ?? ''),
       defaultModel: String(res.data.defaultModel ?? ''),
       models: Array.isArray(res.data.models) ? (res.data.models as LuxModelOption[]) : [],
     },
   };
+}
+
+/** Elige el proveedor de IA de Lux (NVIDIA o Mistral). El modelo y la clave son los de ese proveedor. */
+export async function luxSetProvider(provider: LuxProviderId): Promise<ApiOutcome<{ provider: LuxProviderId }>> {
+  const res = await call('/api/lux/provider', 'POST', { provider });
+  if (!res.ok) return res;
+  return { ok: true, data: { provider: res.data.provider === 'mistral' ? 'mistral' : 'nvidia' } };
 }
 
 export async function luxSetModel(model: string): Promise<ApiOutcome<{ model: string }>> {
@@ -48,8 +72,9 @@ export async function luxSetModel(model: string): Promise<ApiOutcome<{ model: st
 }
 
 /** Guarda la clave. Con cadena vacía, la borra. */
-export async function luxSaveKey(apiKey: string): Promise<ApiOutcome<{ configured: boolean }>> {
-  const res = await call('/api/lux/key', 'POST', { apiKey });
+/** Guarda la clave del proveedor indicado. Sin proveedor, usa el activo. */
+export async function luxSaveKey(apiKey: string, provider?: LuxProviderId): Promise<ApiOutcome<{ configured: boolean }>> {
+  const res = await call('/api/lux/key', 'POST', { apiKey, provider });
   if (!res.ok) return res;
   return { ok: true, data: { configured: res.data.configured === true } };
 }
@@ -58,4 +83,58 @@ export async function luxTest(): Promise<ApiOutcome<LuxTestResult>> {
   const res = await call('/api/lux/test', 'POST');
   if (!res.ok) return res;
   return { ok: true, data: { model: String(res.data.model ?? ''), latencyMs: Number(res.data.latencyMs ?? 0) } };
+}
+
+/** Ajustes de Lux del streamer (lux_settings, migración 0024). */
+export interface LuxSettingsView {
+  personality: string;
+  replyMax: number;
+  language: 'es' | 'en' | 'pt';
+  memoryEnabled: boolean;
+  obsSize: number;
+  voiceReferenceId: string | null;
+  voiceEngine: 'fish' | 'elevenlabs' | null;
+}
+
+/** Voz que Lux usa para hablar: la del catálogo elegida, o null para la voz por defecto. */
+export interface LuxVoice {
+  referenceId: string | null;
+  engine: 'fish' | 'elevenlabs' | null;
+}
+
+export interface LuxSettingsResult {
+  settings: LuxSettingsView;
+  /** Campo que rechazó el servidor, para marcarlo en el formulario. */
+  field?: keyof LuxSettingsView;
+}
+
+export async function luxGetSettings(): Promise<ApiOutcome<LuxSettingsView>> {
+  const res = await call('/api/lux/config', 'GET');
+  if (!res.ok) return res;
+  return { ok: true, data: res.data.settings as LuxSettingsView };
+}
+
+export async function luxSaveSettings(patch: Partial<LuxSettingsView>): Promise<ApiOutcome<LuxSettingsView>> {
+  const res = await call('/api/lux/config', 'POST', patch as Record<string, unknown>);
+  if (!res.ok) return res;
+  return { ok: true, data: res.data.settings as LuxSettingsView };
+}
+
+/** Prueba: un mensaje al modelo con los ajustes guardados. */
+export async function luxAsk(
+  message: string,
+  viewer?: string
+): Promise<ApiOutcome<{ reply: string; emotion: string; model: string; voice: LuxVoice }>> {
+  const res = await call('/api/lux/reply', 'POST', { message, viewer: viewer || undefined });
+  if (!res.ok) return res;
+  const voice = (res.data.voice ?? {}) as LuxVoice;
+  return {
+    ok: true,
+    data: {
+      reply: String(res.data.reply ?? ''),
+      emotion: String(res.data.emotion ?? 'normal'),
+      model: String(res.data.model ?? ''),
+      voice: { referenceId: voice.referenceId ?? null, engine: voice.engine ?? null },
+    },
+  };
 }

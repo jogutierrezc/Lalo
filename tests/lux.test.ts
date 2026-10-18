@@ -20,6 +20,7 @@ function memoryDb(seed: { profiles?: LuxProfile[]; memories?: LuxMemoryRow[]; se
   const settings = new Map(Object.entries(seed.settings ?? {}));
   const profiles = new Map((seed.profiles ?? []).map((p) => [p.id, p]));
   const replies: LuxReplyRow[] = [];
+  const rows = new Map<string, Record<string, unknown>>();
   const db: LuxDb = {
     async setting(key) {
       return settings.get(key) ?? null;
@@ -36,6 +37,12 @@ function memoryDb(seed: { profiles?: LuxProfile[]; memories?: LuxMemoryRow[]; se
     },
     async insertReply(row) {
       replies.push(row);
+    },
+    async settingsRow(id) {
+      return rows.get(id) ?? null;
+    },
+    async saveSettingsRow(row) {
+      rows.set(String(row.profile_id), row);
     },
   };
   return { db, settings, replies };
@@ -192,7 +199,7 @@ describe('respuesta de Lux', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ reply: '¡Bienvenidos al directo!', model: 'google/gemma-4-31b-it' });
+    expect(res.body).toMatchObject({ reply: '¡Bienvenidos al directo!', emotion: 'normal', model: 'google/gemma-4-31b-it' });
     const sent = JSON.parse(String(calls[0].init.body));
     expect(sent.model).toBe('google/gemma-4-31b-it');
     expect(JSON.stringify(sent.messages)).toContain('El canal se llama LaloPlay');

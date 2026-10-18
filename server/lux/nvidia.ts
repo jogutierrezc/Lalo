@@ -65,6 +65,8 @@ export function parseChatText(json: unknown): string | null {
 }
 
 export interface ChatOptions {
+  /** Base del proveedor (sin /chat/completions). Por defecto, NVIDIA. */
+  baseUrl?: string;
   apiKey: string;
   model: string;
   messages: ChatMessage[];
@@ -82,7 +84,7 @@ export async function nvidiaChat(opts: ChatOptions): Promise<string> {
 
   let res: Response;
   try {
-    res = await doFetch(`${NVIDIA_BASE_URL}/chat/completions`, {
+    res = await doFetch(`${opts.baseUrl ?? NVIDIA_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${opts.apiKey}`,
@@ -110,3 +112,33 @@ export async function nvidiaChat(opts: ChatOptions): Promise<string> {
   if (!text) throw new NvidiaError('bad_response', res.status);
   return text;
 }
+
+// ---------- Proveedores de IA para Lux ----------
+
+export const MISTRAL_BASE_URL = 'https://api.mistral.ai/v1';
+
+export const LUX_PROVIDERS = {
+  nvidia: {
+    label: 'NVIDIA',
+    baseUrl: NVIDIA_BASE_URL,
+    defaultModel: DEFAULT_LUX_MODEL,
+    models: LUX_MODELS.map((model) => ({ ...model })),
+  },
+  mistral: {
+    label: 'Mistral AI',
+    baseUrl: MISTRAL_BASE_URL,
+    defaultModel: 'ministral-8b-latest',
+    models: [
+      { id: 'ministral-8b-latest', label: 'Ministral 8B (la más rápida)' },
+      { id: 'mistral-small-latest', label: 'Mistral Small' },
+    ],
+  },
+} as const;
+
+export type LuxProvider = keyof typeof LUX_PROVIDERS;
+
+export const isLuxProvider = (value: string): value is LuxProvider => Object.prototype.hasOwnProperty.call(LUX_PROVIDERS, value);
+
+/** Modelo válido para ese proveedor, o null si no pertenece a él. */
+export const providerModel = (provider: LuxProvider, id: string): string | null =>
+  (LUX_PROVIDERS[provider].models as readonly { id: string }[]).some((model) => model.id === id) ? id : null;

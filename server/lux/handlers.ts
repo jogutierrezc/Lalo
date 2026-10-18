@@ -13,13 +13,23 @@
  */
 
 import { defaultDeps, failureOf, fail, isFail, type Auth, type IntegrationRequest, type IntegrationResult } from '../integrations/http.js';
-import type { Env } from '../integrations/store.js';
-import { SETTING_MODEL, activeModel, isNvidiaKey, keyState, readApiKey, saveApiKey } from './keyVault.js';
+import { MigrationMissingError, type Env } from '../integrations/store.js';
+
+/** Como failureOf, pero el aviso de migración nombra las de Lux (0023 a 0025), no la de integraciones. */
+function luxFailure(err: unknown, where: string): IntegrationResult {
+  if (err instanceof MigrationMissingError) {
+    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023, 0024 o 0025) en Supabase.');
+  }
+  return failureOf(err, where);
+}
+import { MODEL_SETTING, PROVIDER_SETTING, activeModel, activeProvider, isKeyFor, keyState, readApiKey, saveApiKey } from './keyVault.js';
 import { LUX_MAX_INPUT, buildLuxMessages } from './prompt.js';
 import { supabaseLuxDb, type LuxDb } from './luxDb.js';
-import { NvidiaError, nvidiaChat, DEFAULT_LUX_MODEL, LUX_MODELS, isLuxModel, type NvidiaFetch } from './nvidia.js';
+import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, type LuxProvider, type NvidiaFetch } from './nvidia.js';
+import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSettings } from './settings.js';
+import { parseEmotion } from './emotion.js';
 
-export const LUX_ACTIONS = ['status', 'key', 'model', 'test', 'reply'] as const;
+export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config'] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
 const MEMORY_LIMIT = 20;
@@ -72,17 +82,45 @@ async function status(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
   if (denied) return denied;
   const db = deps.db(env);
   if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
-  const state = await keyState(env, db);
+  const provider = await activeProvider(db);
+  const state = await keyState(env, db, provider);
+  const nvidia = await keyState(env, db, 'nvidia');
+  const mistral = await keyState(env, db, 'mistral');
   return {
     status: 200,
     body: {
+      provider,
+      providers: (Object.keys(LUX_PROVIDERS) as LuxProvider[]).map((id) => ({
+        id,
+        label: LUX_PROVIDERS[id].label,
+        defaultModel: LUX_PROVIDERS[id].defaultModel,
+        models: LUX_PROVIDERS[id].models.map((item) => ({ ...item })),
+      })),
       configured: state.configured,
+      configuredByProvider: { nvidia: nvidia.configured, mistral: mistral.configured },
       vault: state.vault,
-      model: await activeModel(db),
-      defaultModel: DEFAULT_LUX_MODEL,
-      models: LUX_MODELS.map((model) => ({ ...model })),
+      model: await activeModel(db, provider),
+      defaultModel: LUX_PROVIDERS[provider].defaultModel,
+      models: LUX_PROVIDERS[provider].models.map((item) => ({ ...item })),
     },
   };
+}
+
+/** Proveedor que llega en la petición, o el activo si no llega ninguno válido. */
+async function providerFrom(body: Record<string, unknown>, db: LuxDb): Promise<LuxProvider> {
+  return typeof body.provider === 'string' && isLuxProvider(body.provider) ? body.provider : activeProvider(db);
+}
+
+async function provider(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  if (req.method.toUpperCase() !== 'POST') return fail(405, 'method', 'Esta ruta solo admite POST.');
+  const denied = await requireAdmin(req, env, deps);
+  if (denied) return denied;
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const raw = typeof bodyOf(req).provider === 'string' ? (bodyOf(req).provider as string) : '';
+  if (!isLuxProvider(raw)) return fail(400, 'bad_provider', 'Proveedor no admitido.');
+  await db.putSetting(PROVIDER_SETTING, raw);
+  return { status: 200, body: { provider: raw } };
 }
 
 async function model(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
@@ -92,10 +130,11 @@ async function model(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
   const db = deps.db(env);
   if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
 
+  const target = await providerFrom(bodyOf(req), db);
   const chosen = typeof bodyOf(req).model === 'string' ? (bodyOf(req).model as string).trim() : '';
-  if (!isLuxModel(chosen)) return fail(400, 'bad_model', 'Ese modelo no está en la lista de modelos de Lux.');
-  await db.putSetting(SETTING_MODEL, chosen);
-  return { status: 200, body: { model: chosen } };
+  if (!providerModel(target, chosen)) return fail(400, 'bad_model', 'Ese modelo no está en la lista de modelos de ese proveedor.');
+  await db.putSetting(MODEL_SETTING[target], chosen);
+  return { status: 200, body: { provider: target, model: chosen } };
 }
 
 async function key(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
@@ -110,9 +149,12 @@ async function key(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<In
   const field = bodyOf(req).apiKey;
   if (typeof field !== 'string') return fail(400, 'missing_key', 'Falta el campo apiKey.');
   const raw = field.trim();
-  if (raw && !isNvidiaKey(raw)) return fail(400, 'bad_key', 'La clave no tiene el formato de NVIDIA (empieza por «nvapi-»).');
+  const target = await providerFrom(bodyOf(req), db);
+  if (raw && !isKeyFor(target, raw)) {
+    return fail(400, 'bad_key', `La clave no tiene el formato de ${LUX_PROVIDERS[target].label}.`);
+  }
 
-  const outcome = await saveApiKey(env, db, raw ? raw : null);
+  const outcome = await saveApiKey(env, db, raw ? raw : null, target);
   if (outcome === 'no_vault') return fail(503, 'no_vault', 'Falta INTEGRATIONS_ENC_KEY en el servidor: no se puede guardar la clave cifrada.');
   return { status: 200, body: { configured: outcome === 'saved' } };
 }
@@ -124,12 +166,14 @@ async function test(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
   const db = deps.db(env);
   if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
 
-  const apiKey = await readApiKey(env, db);
-  if (!apiKey) return fail(503, 'no_key', 'No hay clave de NVIDIA guardada. Configúrala en el panel de administración, en Integraciones.');
-  const model = await activeModel(db);
+  const target = await activeProvider(db);
+  const apiKey = await readApiKey(env, db, target);
+  if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
+  const model = await activeModel(db, target);
   const started = Date.now();
   try {
     await nvidiaChat({
+      baseUrl: LUX_PROVIDERS[target].baseUrl,
       apiKey,
       model,
       messages: [{ role: 'user', content: 'Responde solo con la palabra: ok' }],
@@ -142,6 +186,39 @@ async function test(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
     return failureOf(err, 'lux/test');
   }
   return { status: 200, body: { ok: true, model, latencyMs: Date.now() - started } };
+}
+
+/** Ajustes del streamer que ve su propio panel. Lee y guarda solo su fila; el administrador no edita la de otros aquí. */
+async function config(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  const method = req.method.toUpperCase();
+  if (method !== 'GET' && method !== 'POST') return fail(405, 'method', 'Esta ruta admite GET y POST.');
+  const caller = await deps.auth(req, env);
+  if (isFail(caller)) return caller;
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+
+  try {
+    const profile = await db.profile(caller.id);
+    if (!profile) return fail(403, 'no_profile', 'No se encontró tu perfil.');
+    if (profile.role !== 'admin' && !profile.luxEnabled) return fail(403, 'lux_disabled', 'Lux no está activado para tu cuenta.');
+
+    if (method === 'GET') {
+      const current = settingsFromRow(await db.settingsRow(caller.id));
+      return { status: 200, body: { settings: current, limits: { personality: 600, replyMax: [60, 500], obsSize: [10, 100] } } };
+    }
+
+    const current = settingsFromRow(await db.settingsRow(caller.id));
+    const check = normalizeLuxSettings(bodyOf(req), current);
+    if (!check.ok) return fail(400, 'bad_settings', check.message, { field: check.field });
+    // Una voz de ElevenLabs solo se guarda si la cuenta tiene ElevenLabs activado (si no, el servidor da 403 al hablar).
+    if (check.value.voiceEngine === 'elevenlabs' && profile.role !== 'admin' && !profile.elevenlabsEnabled) {
+      return fail(400, 'voice_not_allowed', 'Tu cuenta no tiene ElevenLabs activado: elige una voz de Fish Audio.');
+    }
+    await db.saveSettingsRow(rowFromSettings(caller.id, check.value));
+    return { status: 200, body: { settings: check.value } };
+  } catch (err) {
+    return luxFailure(err, 'lux/config');
+  }
 }
 
 async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
@@ -163,28 +240,47 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
     }
     const viewer = typeof raw.viewer === 'string' && raw.viewer.trim() ? raw.viewer.trim().slice(0, VIEWER_MAX) : null;
 
-    const apiKey = await readApiKey(env, db);
-    if (!apiKey) return fail(503, 'no_key', 'No hay clave de NVIDIA guardada. Configúrala en el panel de administración, en Integraciones.');
-    const model = await activeModel(db);
-    const memories = await db.memories(profile.id, MEMORY_LIMIT);
+    const target = await activeProvider(db);
+    const apiKey = await readApiKey(env, db, target);
+    if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
+    const model = await activeModel(db, target);
+    const ajustes: LuxSettings = settingsFromRow(await db.settingsRow(profile.id));
+    const memories = ajustes.memoryEnabled ? await db.memories(profile.id, MEMORY_LIMIT) : [];
 
     const text = await nvidiaChat({
+      baseUrl: LUX_PROVIDERS[target].baseUrl,
       apiKey,
       model,
-      messages: buildLuxMessages({ viewer, message, memories }),
-      maxTokens: 200,
+      messages: buildLuxMessages({
+        viewer,
+        message,
+        memories,
+        personality: ajustes.personality,
+        language: ajustes.language,
+        replyMax: ajustes.replyMax,
+      }),
+      maxTokens: Math.ceil(ajustes.replyMax / 2) + 40,
       fetch: deps.fetch,
     });
-    const clipped = text.slice(0, LUX_MAX_INPUT);
+    const { text: spoken, emotion } = parseEmotion(text);
+    const clipped = (spoken || '…').slice(0, ajustes.replyMax);
 
     // Registro de la respuesta: si falla, la respuesta igualmente se entrega.
     await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply: clipped, model }).catch(() => {
       console.error('[Lalo lux] no se pudo guardar el registro de la respuesta');
     });
-    return { status: 200, body: { reply: clipped, model } };
+    return {
+      status: 200,
+      body: {
+        reply: clipped,
+        emotion,
+        model,
+        voice: { referenceId: ajustes.voiceReferenceId, engine: ajustes.voiceEngine },
+      },
+    };
   } catch (err) {
     if (err instanceof NvidiaError) return nvidiaFailure(err);
-    return failureOf(err, 'lux/reply');
+    return luxFailure(err, 'lux/reply');
   }
 }
 
@@ -198,9 +294,13 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return key(req, env, deps);
     case 'model':
       return model(req, env, deps);
+    case 'provider':
+      return provider(req, env, deps);
     case 'test':
       return test(req, env, deps);
     case 'reply':
       return reply(req, env, deps);
+    case 'config':
+      return config(req, env, deps);
   }
 }

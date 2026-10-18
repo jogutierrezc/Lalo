@@ -15,6 +15,8 @@ export interface LuxProfile {
   id: string;
   role: string;
   luxEnabled: boolean;
+  /** Puede usar voces de ElevenLabs (interruptor del administrador, migración 0018). */
+  elevenlabsEnabled?: boolean;
 }
 
 export interface LuxMemoryRow {
@@ -40,10 +42,14 @@ export interface LuxDb {
   /** Memorias más recientes de un streamer, las fijadas primero. */
   memories(profileId: string, limit: number): Promise<LuxMemoryRow[]>;
   insertReply(row: LuxReplyRow): Promise<void>;
+  /** Fila de lux_settings del streamer, o null si nunca guardó ajustes. */
+  settingsRow(profileId: string): Promise<Record<string, unknown> | null>;
+  saveSettingsRow(row: Record<string, unknown>): Promise<void>;
 }
 
 // 42P01: la tabla no existe. 42703: columna inexistente. PGRST205 y PGRST202: lo mismo, dicho por PostgREST.
-const MISSING_CODES = ['42P01', '42883', '42703', 'PGRST205', 'PGRST202'];
+// PGRST204: PostgREST no encuentra una columna nueva en su caché (migración 0025 sin aplicar).
+const MISSING_CODES = ['42P01', '42883', '42703', 'PGRST205', 'PGRST202', 'PGRST204'];
 
 function check(error: { code?: string; message: string } | null): void {
   if (!error) return;
@@ -77,11 +83,15 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     },
 
     async profile(profileId) {
-      const { data, error } = await db.from('profiles').select('id, role, lux_enabled').eq('id', profileId).maybeSingle();
+      const { data, error } = await db
+        .from('profiles')
+        .select('id, role, lux_enabled, elevenlabs_enabled')
+        .eq('id', profileId)
+        .maybeSingle();
       check(error);
       if (!data) return null;
-      const row = data as { id: string; role: string; lux_enabled: boolean | null };
-      return { id: row.id, role: row.role, luxEnabled: row.lux_enabled === true };
+      const row = data as { id: string; role: string; lux_enabled: boolean | null; elevenlabs_enabled: boolean | null };
+      return { id: row.id, role: row.role, luxEnabled: row.lux_enabled === true, elevenlabsEnabled: row.elevenlabs_enabled === true };
     },
 
     async memories(profileId, limit) {
@@ -102,6 +112,17 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
 
     async insertReply(row) {
       const { error } = await db.from('lux_replies').insert(row);
+      check(error);
+    },
+
+    async settingsRow(profileId) {
+      const { data, error } = await db.from('lux_settings').select('*').eq('profile_id', profileId).maybeSingle();
+      check(error);
+      return (data as Record<string, unknown> | null) ?? null;
+    },
+
+    async saveSettingsRow(row) {
+      const { error } = await db.from('lux_settings').upsert(row, { onConflict: 'profile_id' });
       check(error);
     },
   };

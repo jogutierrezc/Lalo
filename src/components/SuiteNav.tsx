@@ -21,6 +21,7 @@ import {
   Check,
   Clapperboard,
   Coffee,
+  Sparkles,
   CloudOff,
   Coins,
   Copy,
@@ -86,6 +87,7 @@ export type SuiteApp =
   | 'integraciones'
   | 'musica'
   | 'kofi'
+  | 'lux'
   | 'juego'
   | 'cuenta'
   | 'admin'
@@ -138,6 +140,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
       { app: 'integraciones', label: 'Integraciones', href: '#integraciones', icon: Plug },
       { app: 'musica', label: 'Ahora suena', href: '#musica', icon: Music },
       { app: 'kofi', label: 'Ko-fi', href: '#kofi', icon: Coffee },
+      { app: 'lux', label: 'Lux AI', href: '#lux', icon: Sparkles },
       { app: 'juego', label: 'Alertas de juego', href: '#juego', icon: Trophy },
     ],
   },

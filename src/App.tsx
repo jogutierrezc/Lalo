@@ -55,6 +55,7 @@ const GameStudio = lazy(() => import('./pages/GameStudio').then((m) => ({ defaul
 const Integraciones = lazy(() => import('./pages/Integraciones').then((m) => ({ default: m.Integraciones })));
 const MusicStudio = lazy(() => import('./pages/MusicStudio').then((m) => ({ default: m.MusicStudio })));
 const KofiStudio = lazy(() => import('./pages/KofiStudio').then((m) => ({ default: m.KofiStudio })));
+const LuxAI = lazy(() => import('./pages/LuxAI').then((m) => ({ default: m.LuxAI })));
 const Access = lazy(() => import('./pages/Access').then((m) => ({ default: m.Access })));
 const Bienvenida = lazy(() => import('./pages/Bienvenida').then((m) => ({ default: m.Bienvenida })));
 const Account = lazy(() => import('./pages/Account').then((m) => ({ default: m.Account })));
@@ -91,6 +92,7 @@ export type AppRoute =
   | 'integraciones'
   | 'musica'
   | 'kofi'
+  | 'lux'
   | 'cuenta'
   | 'admin'
   | 'nube'
@@ -220,6 +222,7 @@ function resolveRoute(): AppRoute {
   if (/^integraciones([?/]|$)/.test(hash)) return 'integraciones';
   if (/^(musica|ahora-suena)([?/]|$)/.test(hash)) return 'musica';
   if (/^ko-?fi([?/]|$)/.test(hash)) return 'kofi';
+  if (/^lux([?/]|$)/.test(hash)) return 'lux';
 
   // 9. Fuentes de navegador para OBS Studio
   if (
@@ -376,6 +379,8 @@ const Routes: React.FC = () => {
       return <MusicStudio />;
     case 'kofi':
       return <KofiStudio />;
+    case 'lux':
+      return <LuxAI />;
     case 'twitchio':
       return <TwitchIOStudio />;
     case 'tts':
