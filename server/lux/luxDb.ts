@@ -68,6 +68,8 @@ export interface LuxDb {
   speechSince?(profileId: string, afterId: number): Promise<LuxSpeechItem[]>;
   latestSpeechId?(profileId: string): Promise<number>;
   pruneSpeech?(profileId: string, beforeIso: string): Promise<void>;
+  /** Voz de TTS del streamer (configs, módulo 'tts'): la que usa el !s del chat. */
+  ttsVoice?(profileId: string): Promise<{ referenceId: string | null; engine: string | null }>;
   saveSettingsRow(row: Record<string, unknown>): Promise<void>;
 }
 
@@ -172,6 +174,15 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .maybeSingle();
       check(error);
       return data ? Number((data as { id: number }).id) : 0;
+    },
+
+    async ttsVoice(profileId) {
+      const { data, error } = await db.from('configs').select('data').eq('profile_id', profileId).eq('module', 'tts').maybeSingle();
+      check(error);
+      const cfg = ((data as { data?: Record<string, unknown> } | null)?.data ?? {}) as Record<string, unknown>;
+      const referenceId = typeof cfg.referenceId === 'string' && cfg.referenceId ? cfg.referenceId : null;
+      const engine = cfg.engine === 'elevenlabs' ? 'elevenlabs' : referenceId ? 'fish' : null;
+      return { referenceId, engine };
     },
 
     async pruneSpeech(profileId, beforeIso) {

@@ -108,7 +108,9 @@ export const LuxAI: React.FC = () => {
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   // La clave k es la de OBS del streamer (la misma de la pestaña Cuenta): el overlay la usa para el tope de voz.
   const keyPart = profile?.widget_key ? `&k=${encodeURIComponent(profile.widget_key)}` : '';
-  const overlayUrl = `${origin}/lux/index.html?overlay=1&size=${draft.obsSize}${keyPart}`;
+  // Canal de Twitch: el overlay lee el chat para el !lux y el !s. Una sola fuente de OBS para los dos.
+  const channelPart = profile?.twitch_login ? `&channel=${encodeURIComponent(profile.twitch_login)}` : '';
+  const overlayUrl = `${origin}/lux/index.html?overlay=1&size=${draft.obsSize}${keyPart}${channelPart}`;
   const answered = turns.some((turn) => turn.reply);
 
   // Manda una frase al overlay abierto en este navegador. Sin overlay abierto, nadie la oye.

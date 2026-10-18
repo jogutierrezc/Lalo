@@ -44,8 +44,28 @@ export function intentGuidance(intent: LuxIntent): string {
   }
 }
 
+/** Gestos que entiende el overlay. Los tres últimos los pide el espectador en el mensaje. */
+export type LuxGesture = 'bow' | 'pride' | 'shrug' | 'nod' | 'idle' | 'wave' | 'spin' | 'dance';
+
+const DANCE = /\b(baila|bailar|bailes|dance|dancing|danza|dança|dançar)\b/i;
+const SPIN = /\b(gira|girar|da una vuelta|vuelta|spin|turn around|rode|rodar|gire)\b/i;
+const WAVE = /\b(saluda|saludar|saludo|agita|wave|waving|hi there|acena|acenar|saluda con la mano)\b/i;
+
+/** Gesto que pide el mensaje (baila, gira, saluda), o null si no pide ninguno. */
+export function detectGestureRequest(message: string): 'dance' | 'spin' | 'wave' | null {
+  if (DANCE.test(message)) return 'dance';
+  if (SPIN.test(message)) return 'spin';
+  if (WAVE.test(message)) return 'wave';
+  return null;
+}
+
+/** Gesto final: el que pide el espectador si lo hay; si no, el de la intención. */
+export function gestureFor(message: string, intent: LuxIntent): LuxGesture {
+  return detectGestureRequest(message) ?? INTENT_GESTURE[intent];
+}
+
 /** Gesto del personaje para cada intención. Los nombres son los que entiende el overlay. */
-export const INTENT_GESTURE: Record<LuxIntent, 'bow' | 'pride' | 'shrug' | 'nod' | 'idle'> = {
+export const INTENT_GESTURE: Record<LuxIntent, LuxGesture> = {
   insulto: 'shrug',
   agradecimiento: 'bow',
   cumplido: 'pride',

@@ -28,7 +28,7 @@ import { supabaseLuxDb, type LuxDb } from './luxDb.js';
 import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, type LuxProvider, type NvidiaFetch } from './nvidia.js';
 import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSettings } from './settings.js';
 import { parseEmotion } from './emotion.js';
-import { INTENT_GESTURE, detectIntent } from './intent.js';
+import { detectIntent, gestureFor } from './intent.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 
@@ -280,14 +280,14 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
       console.error('[Lalo lux] no se pudo guardar el registro de la respuesta');
     });
     // Desde el panel solo se manda a OBS si el streamer lo pide (botón «Hablar en el overlay»).
-    if (raw.speak === true) await enqueueSpeech(db, profile.id, clipped, emotion, INTENT_GESTURE[intent], ajustes);
+    if (raw.speak === true) await enqueueSpeech(db, profile.id, clipped, emotion, gestureFor(message, intent), ajustes);
     return {
       status: 200,
       body: {
         reply: clipped,
         emotion,
         intent,
-        gesture: INTENT_GESTURE[intent],
+        gesture: gestureFor(message, intent),
         model,
         voice: { referenceId: ajustes.voiceReferenceId, engine: ajustes.voiceEngine },
       },
@@ -366,14 +366,14 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
       console.error('[Lalo lux] no se pudo guardar el registro de la respuesta del chat');
     });
     // En directo, lo que Lux responde en el chat también se oye en OBS.
-    await enqueueSpeech(db, profile.id, reply, emotion, INTENT_GESTURE[intent], current);
+    await enqueueSpeech(db, profile.id, reply, emotion, gestureFor(message, intent), current);
     return {
       status: 200,
       body: {
         reply,
         emotion,
         intent,
-        gesture: INTENT_GESTURE[intent],
+        gesture: gestureFor(message, intent),
         model,
         voice: { referenceId: current.voiceReferenceId, engine: current.voiceEngine },
       },
@@ -450,12 +450,14 @@ async function speech(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
     if (!profile) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
     const afterRaw = req.query.after;
     if (afterRaw === undefined || afterRaw === '') {
-      return { status: 200, body: { items: [], last: await db.latestSpeechId(profile.id) } };
+      const tts = db.ttsVoice ? await db.ttsVoice(profile.id) : { referenceId: null, engine: null };
+      return { status: 200, body: { items: [], last: await db.latestSpeechId(profile.id), tts } };
     }
     const after = Number(afterRaw);
     if (!Number.isInteger(after) || after < 0) return fail(400, 'bad_after', 'El parámetro after no es válido.');
     const items = profile.role === 'admin' || profile.luxEnabled ? await db.speechSince(profile.id, after) : [];
-    return { status: 200, body: { items, last: items.length ? items[items.length - 1].id : after } };
+    const tts = db.ttsVoice ? await db.ttsVoice(profile.id) : { referenceId: null, engine: null };
+    return { status: 200, body: { items, last: items.length ? items[items.length - 1].id : after, tts } };
   } catch (err) {
     return luxFailure(err, 'lux/speech');
   }
