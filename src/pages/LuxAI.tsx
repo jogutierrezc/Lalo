@@ -27,6 +27,7 @@ const DEFAULTS: LuxSettingsView = {
   obsSize: 40,
   voiceReferenceId: null,
   voiceEngine: null,
+  voiceVolume: 100,
 };
 const PERSONALITY_MAX = 600;
 const LANGUAGES: { value: LuxSettingsView['language']; label: string }[] = [
@@ -291,6 +292,15 @@ export const LuxAI: React.FC = () => {
                   step={5}
                   format={(value) => `${value}% de la altura`}
                   onChange={(value) => update('obsSize', value)}
+                />
+                <Range
+                  label="Volumen de la voz"
+                  value={draft.voiceVolume}
+                  min={0}
+                  max={100}
+                  step={5}
+                  format={(value) => `${value}%`}
+                  onChange={(value) => update('voiceVolume', value)}
                 />
                 <Field label="Dirección para la fuente de navegador" htmlFor="lux-url" hint="Fondo transparente. Pégala en OBS como fuente de navegador.">
                   <div className="flex items-center gap-2">

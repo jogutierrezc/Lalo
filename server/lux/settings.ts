@@ -25,6 +25,8 @@ export interface LuxSettings {
   obsSize: number;
   /** Lux responde a !lux en el chat (migración 0026). */
   chatEnabled: boolean;
+  /** Volumen de la voz en el overlay, de 0 a 100 (migración 0028). */
+  voiceVolume: number;
   /** Voz del catálogo (reference_id) y su motor. Null: la voz por defecto. */
   voiceReferenceId: string | null;
   voiceEngine: LuxVoiceEngine | null;
@@ -39,6 +41,7 @@ export const DEFAULT_LUX_SETTINGS: LuxSettings = {
   voiceReferenceId: null,
   voiceEngine: null,
   chatEnabled: true,
+  voiceVolume: 100,
 };
 
 export type SettingsCheck = { ok: true; value: LuxSettings } | { ok: false; field: keyof LuxSettings; message: string };
@@ -89,6 +92,13 @@ export function normalizeLuxSettings(input: Record<string, unknown>, base: LuxSe
     value.obsSize = input.obsSize;
   }
 
+  if (input.voiceVolume !== undefined) {
+    if (!isInt(input.voiceVolume) || input.voiceVolume < 0 || input.voiceVolume > 100) {
+      return { ok: false, field: 'voiceVolume', message: 'El volumen va de 0 a 100.' };
+    }
+    value.voiceVolume = input.voiceVolume;
+  }
+
   if (input.chatEnabled !== undefined) {
     if (typeof input.chatEnabled !== 'boolean') return { ok: false, field: 'chatEnabled', message: 'El chat de Lux es sí o no.' };
     value.chatEnabled = input.chatEnabled;
@@ -127,6 +137,7 @@ export function settingsFromRow(row: Record<string, unknown> | null): LuxSetting
     { memoryEnabled: row.memory_enabled },
     { obsSize: row.obs_size },
     { chatEnabled: row.chat_enabled },
+    { voiceVolume: row.voice_volume },
     // La voz va como pareja: o las dos columnas, o ninguna.
     { voiceReferenceId: row.voice_reference_id ?? null, voiceEngine: row.voice_engine ?? null },
   ];
@@ -149,6 +160,7 @@ export function rowFromSettings(profileId: string, value: LuxSettings): Record<s
     memory_enabled: value.memoryEnabled,
     obs_size: value.obsSize,
     chat_enabled: value.chatEnabled,
+    voice_volume: value.voiceVolume,
     voice_reference_id: value.voiceReferenceId,
     voice_engine: value.voiceEngine,
     updated_at: new Date().toISOString(),

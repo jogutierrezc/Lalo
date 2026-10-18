@@ -2209,6 +2209,8 @@
         }
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
+        // Volumen que eligió el streamer en Lux AI (0 a 100).
+        audio.volume = Math.min(1, Math.max(0, (typeof window.luxVolume === 'number' ? window.luxVolume : 100) / 100));
         // El analizador (boca) solo se conecta si el contexto ya está activo: suspendido, silenciaría el audio.
         const context = ensureContext();
         if (context.state === 'running') {
@@ -2288,6 +2290,7 @@
           }
           after = data.last;
           if (data.tts) window.luxTts = data.tts;
+          if (typeof data.volume === 'number') window.luxVolume = data.volume;
         } catch {
           // Sin conexión, se vuelve a intentar en el siguiente ciclo.
         }
@@ -2352,7 +2355,8 @@
       const onChat = (user, text, tags) => {
         if (text.startsWith('!s ')) {
           const spoken = text.slice(3).trim();
-          if (spoken) window.luxSpeak(spoken, 'normal', window.luxTts || {}, 'idle');
+          // Dice quién lo mandó: «Ana dice: hola». El texto va tal cual después.
+          if (spoken) window.luxSpeak(user + ' dice: ' + spoken, 'normal', window.luxTts || {}, 'idle');
           return;
         }
         if (text === '!lux' || text.startsWith('!lux ')) {

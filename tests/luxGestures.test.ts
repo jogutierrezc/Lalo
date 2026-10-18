@@ -45,12 +45,15 @@ describe('voz de TTS para el overlay', () => {
       async speechSince() {
         return [];
       },
+      async settingsRow() {
+        return null;
+      },
       async ttsVoice() {
         return { referenceId: 'voz_tts', engine: 'fish' };
       },
     } as unknown as LuxDb;
     const req: IntegrationRequest = { method: 'GET', headers: {}, query: { k: WIDGET_KEY }, body: undefined };
     const res = await handleLux('speech', req, { INTEGRATIONS_ENC_KEY: randomBytes(32).toString('base64url') }, { db: () => db });
-    expect(res.body).toEqual({ items: [], last: 7, tts: { referenceId: 'voz_tts', engine: 'fish' } });
+    expect(res.body).toMatchObject({ items: [], last: 7, tts: { referenceId: 'voz_tts', engine: 'fish' }, volume: 100 });
   });
 });

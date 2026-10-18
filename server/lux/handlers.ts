@@ -480,13 +480,15 @@ async function speech(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
     const afterRaw = req.query.after;
     if (afterRaw === undefined || afterRaw === '') {
       const tts = db.ttsVoice ? await db.ttsVoice(profile.id) : { referenceId: null, engine: null };
-      return { status: 200, body: { items: [], last: await db.latestSpeechId(profile.id), tts } };
+      const volume = settingsFromRow(await db.settingsRow(profile.id)).voiceVolume;
+      return { status: 200, body: { items: [], last: await db.latestSpeechId(profile.id), tts, volume } };
     }
     const after = Number(afterRaw);
     if (!Number.isInteger(after) || after < 0) return fail(400, 'bad_after', 'El parámetro after no es válido.');
     const items = profile.role === 'admin' || profile.luxEnabled ? await db.speechSince(profile.id, after) : [];
     const tts = db.ttsVoice ? await db.ttsVoice(profile.id) : { referenceId: null, engine: null };
-    return { status: 200, body: { items, last: items.length ? items[items.length - 1].id : after, tts } };
+    const volume = settingsFromRow(await db.settingsRow(profile.id)).voiceVolume;
+    return { status: 200, body: { items, last: items.length ? items[items.length - 1].id : after, tts, volume } };
   } catch (err) {
     return luxFailure(err, 'lux/speech');
   }

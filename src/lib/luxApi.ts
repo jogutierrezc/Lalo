@@ -114,6 +114,8 @@ export interface LuxSettingsView {
   obsSize: number;
   voiceReferenceId: string | null;
   voiceEngine: 'fish' | 'elevenlabs' | null;
+  /** Volumen de la voz en el overlay, de 0 a 100. */
+  voiceVolume: number;
 }
 
 /** Voz que Lux usa para hablar: la del catálogo elegida, o null para la voz por defecto. */
