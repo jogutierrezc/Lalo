@@ -11,6 +11,17 @@
 
 import type { CommandPermission, TwitchIOCommand, TwitchIOSettings } from '../../types/twitchio';
 import { LUX_BOT_VERSION } from '../../../server/lux/release';
+import { LUX_CHAT_WORD_DEFAULT, validateChatWord } from '../../../server/lux/chatCommands';
+
+/** Comando de Lux en el chat tal como lo guarda el panel de Mi AI. */
+export interface LuxChatSettings {
+  /** Palabra con la que el público llama a Lux (por defecto «lux»). */
+  word: string;
+  /** Si !lux sigue valiendo como alias de la palabra. */
+  alias: boolean;
+}
+
+export const DEFAULT_LUX_CHAT: LuxChatSettings = { word: LUX_CHAT_WORD_DEFAULT, alias: true };
 
 export const TOKEN_PLACEHOLDER = 'oauth:TU_TOKEN_AQUI';
 export const CHANNEL_PLACEHOLDER = 'TU_CANAL';
@@ -95,11 +106,15 @@ function commandHandler(command: TwitchIOCommand, index: number): string {
   return lines.join('\n');
 }
 
-export function buildPythonScript(settings: TwitchIOSettings): string {
+export function buildPythonScript(settings: TwitchIOSettings, lux: LuxChatSettings = DEFAULT_LUX_CHAT): string {
   const prefix = settings.prefix.trim() || '!';
   const channel = cleanChannel(settings.channel) || CHANNEL_PLACEHOLDER;
   const botName = settings.botUsername.trim() || 'LaloBot';
   const handlers = scriptCommands(settings.commands, prefix).map(commandHandler);
+  // El generador nunca escribe una palabra inválida: si llega una, vale la de por defecto.
+  const luxCheck = validateChatWord(lux.word);
+  const luxWord = luxCheck.ok ? luxCheck.word : LUX_CHAT_WORD_DEFAULT;
+  const luxAlias = lux.alias && luxWord !== LUX_CHAT_WORD_DEFAULT;
 
   return `"""
 Bot de chat para Lalo Stream Suite.
@@ -125,6 +140,9 @@ LALO_URL = "http://localhost:3001/api/twitchio/event"
 LUX_URL = "http://localhost:3001/api/lux/chat"
 LUX_KEY = "TU_CLAVE_OBS"
 LUX_BOT_VERSION = ${LUX_BOT_VERSION}
+# Palabra con la que el público habla con Lux en el chat (la eliges en Mi AI, con !lux de alias si quieres).
+LUX_WORD = ${pyString(luxWord)}
+LUX_ALIAS = ${luxAlias ? 'True' : 'False'}
 # Segundos que espera Lux antes de responder a un comando del chat.
 LUX_REPLY_DELAY = 30
 # Lux aprende del chat (si lo tienes activado en Lalo): cada media hora manda los mensajes juntos para resumirlos.
@@ -148,9 +166,22 @@ async def lux_post(payload):
             return await response.json(content_type=None)
 
 
+def lux_text(content):
+    """Si el mensaje va dirigido a Lux (!palabra, o !lux si el alias está activo), devuelve lo que escribió el espectador. Si no, None."""
+    head = content.lower()
+    words = [LUX_WORD]
+    if LUX_ALIAS and LUX_WORD != "lux":
+        words.append("lux")
+    for word in words:
+        call = PREFIX + word
+        if head == call or head.startswith(call + " "):
+            return content[len(call):].strip()
+    return None
+
+
 async def lux_ask(message, text):
     if not text:
-        await message.channel.send("@" + message.author.name + " escribe tu mensaje después de !lux.")
+        await message.channel.send("@" + message.author.name + " escribe tu mensaje después de " + PREFIX + LUX_WORD + ".")
         return
     try:
         data = await lux_post({"command": "ask", "viewer": message.author.name, "message": text})
@@ -238,8 +269,10 @@ class LaloBot(commands.Bot):
                 print(f"No se pudo avisar al panel de Lalo: {error}")
         if content == PREFIX + "luxon" or content == PREFIX + "luxoff":
             await lux_switch(message, content == PREFIX + "luxon")
-        elif content == PREFIX + "lux" or content.startswith(PREFIX + "lux "):
-            await lux_ask(message, content[len(PREFIX) + 3:].strip())
+        else:
+            text = lux_text(content)
+            if text is not None:
+                await lux_ask(message, text)
         await self.handle_commands(message)
 ${handlers.length ? `\n${handlers.join('\n\n')}\n` : ''}
 

@@ -123,6 +123,10 @@ export interface LuxSettingsView {
   voiceVolume: number;
   /** Lux aprende del chat (migración 0030). Apagado por defecto. */
   chatLearning: boolean;
+  /** Palabra de activación en el chat, en minúsculas (migración 0036). Por defecto «lux». */
+  chatWord: string;
+  /** Alias !lux activo cuando la palabra es otra (migración 0036). */
+  chatAlias: boolean;
 }
 
 /** Recuerdo de Lux tal como lo devuelve /api/lux/memory. */

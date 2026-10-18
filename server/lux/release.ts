@@ -7,7 +7,7 @@
  */
 
 /** Versión del script de Python que genera el estudio de TwitchIO. Súbela al cambiar sus comandos. */
-export const LUX_BOT_VERSION = 2;
+export const LUX_BOT_VERSION = 3;
 
 export const RELEASE_SETTING = 'lux_release';
 

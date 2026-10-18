@@ -5,6 +5,8 @@
  * pasa aquí no llega a la base de datos ni al modelo.
  */
 
+import { LUX_CHAT_WORD_DEFAULT, validateChatWord } from './chatCommands.js';
+
 export const LUX_LANGUAGES = ['es', 'en', 'pt'] as const;
 export type LuxLanguage = (typeof LUX_LANGUAGES)[number];
 
@@ -32,6 +34,10 @@ export interface LuxSettings {
   /** Voz del catálogo (reference_id) y su motor. Null: la voz por defecto. */
   voiceReferenceId: string | null;
   voiceEngine: LuxVoiceEngine | null;
+  /** Palabra con la que el público habla con Lux en el chat (migración 0036). */
+  chatWord: string;
+  /** Sigue valiendo !lux como alias de la palabra (migración 0036). */
+  chatAlias: boolean;
 }
 
 export const DEFAULT_LUX_SETTINGS: LuxSettings = {
@@ -45,6 +51,8 @@ export const DEFAULT_LUX_SETTINGS: LuxSettings = {
   chatEnabled: true,
   voiceVolume: 100,
   chatLearning: false,
+  chatWord: LUX_CHAT_WORD_DEFAULT,
+  chatAlias: true,
 };
 
 export type SettingsCheck = { ok: true; value: LuxSettings } | { ok: false; field: keyof LuxSettings; message: string };
@@ -112,6 +120,18 @@ export function normalizeLuxSettings(input: Record<string, unknown>, base: LuxSe
     value.chatLearning = input.chatLearning;
   }
 
+  if (input.chatWord !== undefined) {
+    if (typeof input.chatWord !== 'string') return { ok: false, field: 'chatWord', message: 'La palabra de activación tiene que ser texto.' };
+    const check = validateChatWord(input.chatWord);
+    if (!check.ok) return { ok: false, field: 'chatWord', message: check.message };
+    value.chatWord = check.word;
+  }
+
+  if (input.chatAlias !== undefined) {
+    if (typeof input.chatAlias !== 'boolean') return { ok: false, field: 'chatAlias', message: 'El alias !lux es sí o no.' };
+    value.chatAlias = input.chatAlias;
+  }
+
   if (input.voiceReferenceId !== undefined) {
     if (input.voiceReferenceId === null) {
       value.voiceReferenceId = null;
@@ -147,6 +167,8 @@ export function settingsFromRow(row: Record<string, unknown> | null): LuxSetting
     { chatEnabled: row.chat_enabled },
     { voiceVolume: row.voice_volume },
     { chatLearning: row.chat_learning },
+    { chatWord: row.chat_word },
+    { chatAlias: row.chat_alias },
     // La voz va como pareja: o las dos columnas, o ninguna.
     { voiceReferenceId: row.voice_reference_id ?? null, voiceEngine: row.voice_engine ?? null },
   ];
@@ -171,6 +193,8 @@ export function rowFromSettings(profileId: string, value: LuxSettings): Record<s
     chat_enabled: value.chatEnabled,
     voice_volume: value.voiceVolume,
     chat_learning: value.chatLearning,
+    chat_word: value.chatWord,
+    chat_alias: value.chatAlias,
     voice_reference_id: value.voiceReferenceId,
     voice_engine: value.voiceEngine,
     updated_at: new Date().toISOString(),

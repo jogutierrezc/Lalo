@@ -26,10 +26,13 @@ import {
   cleanChannel,
   cleanCommandName,
   fillTemplate,
+  LuxChatSettings,
   PIP_COMMAND,
   scriptCommands,
   TOKEN_PLACEHOLDER,
 } from '../components/bot/pythonScript';
+import { luxGetSettings } from '../lib/luxApi';
+import { rememberLuxBot } from '../lib/luxBotRecord';
 import '../styles/inicio-bot.css';
 
 const TOUR_ID = 'twitchio';
@@ -88,6 +91,8 @@ export const TwitchIOStudio: React.FC = () => {
   const [log, setLog] = useState<LogLine[]>([]);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [suiteChannel] = useState(() => loadSettings().channel.trim());
+  // Palabra de Lux para el chat (Mi AI). Hasta que llega, el script usa la de por defecto.
+  const [luxChat, setLuxChat] = useState<LuxChatSettings | null>(null);
 
   const logRef = useRef<HTMLUListElement | null>(null);
   const lineId = useRef(0);
@@ -98,7 +103,7 @@ export const TwitchIOStudio: React.FC = () => {
   const botName = twitchIOSettings.botUsername || 'LaloBot';
   const activeCount = commands.filter((command) => command.enabled).length;
   const inScript = scriptCommands(commands, prefix);
-  const script = buildPythonScript(twitchIOSettings);
+  const script = buildPythonScript(twitchIOSettings, luxChat ?? undefined);
 
   // Nombres repetidos: el bot solo puede atender al primero
   const names = commands.map((command) => cleanCommandName(command.name, prefix)).filter(Boolean);
@@ -117,6 +122,17 @@ export const TwitchIOStudio: React.FC = () => {
     },
     []
   );
+
+  // Palabra de Lux: si la cuenta no tiene Mi AI, el servidor responde con error y el script queda con «lux»
+  useEffect(() => {
+    let alive = true;
+    luxGetSettings().then((res) => {
+      if (alive && res.ok) setLuxChat({ word: res.data.chatWord, alias: res.data.chatAlias });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // La conversación de prueba queda siempre en la última línea
   useEffect(() => {
@@ -212,6 +228,8 @@ export const TwitchIOStudio: React.FC = () => {
     try {
       if (!navigator.clipboard) throw new Error('Portapapeles no disponible');
       await navigator.clipboard.writeText(script);
+      // Lo que se copió queda anotado: Mi AI avisa si luego cambia la palabra.
+      rememberLuxBot({ word: luxChat?.word ?? 'lux', alias: luxChat?.alias ?? true });
       setCopyState('copied');
       copyTimer.current = setTimeout(() => setCopyState('idle'), 2200);
     } catch {

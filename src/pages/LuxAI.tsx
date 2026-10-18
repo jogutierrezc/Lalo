@@ -19,6 +19,10 @@ import { LuxMemoryPanel } from '../components/lux/LuxMemoryPanel';
 import { LuxModelLibraryPanel } from '../components/lux/LuxModelLibrary';
 import { loadVoiceCatalogue } from '../lib/voicesCloud';
 import type { VoiceCatalogue } from '../lib/voicesLogic';
+import { loadTwitchIOSettings } from '../types/twitchio';
+import { validateChatWord } from '../../server/lux/chatCommands';
+import { LUX_BOT_VERSION } from '../../server/lux/release';
+import { luxChatKey, readLuxBot } from '../lib/luxBotRecord';
 import '../styles/integraciones.css';
 
 const DEFAULTS: LuxSettingsView = {
@@ -31,6 +35,8 @@ const DEFAULTS: LuxSettingsView = {
   voiceEngine: null,
   voiceVolume: 100,
   chatLearning: false,
+  chatWord: 'lux',
+  chatAlias: true,
 };
 const PERSONALITY_MAX = 600;
 const LANGUAGES: { value: LuxSettingsView['language']; label: string }[] = [
@@ -79,6 +85,13 @@ export const LuxAI: React.FC = () => {
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [commandCopied, setCommandCopied] = useState(false);
+  // Con qué palabra se copió el bot la última vez (solo en este navegador).
+  const [botRecord] = useState(() => readLuxBot());
+  // Prefijo y comandos del bot de TwitchIO: la palabra no puede tomar ninguno de sus comandos.
+  const [twitchIO] = useState(loadTwitchIOSettings);
+  const commandPrefix = twitchIO.prefix.trim() || '!';
+  const botCommandNames = twitchIO.commands.map((command) => command.name.trim().toLowerCase()).filter(Boolean);
 
   const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState('');
@@ -128,6 +141,12 @@ export const LuxAI: React.FC = () => {
   }, [enabled]);
 
   const dirty = saved !== null && !sameSettings(saved, draft);
+  const wordCheck = validateChatWord(draft.chatWord, botCommandNames);
+  // El bot copiado no coincide con lo guardado (o es de una versión anterior): hay que volver a copiarlo.
+  const botStale =
+    saved !== null &&
+    botRecord !== null &&
+    (luxChatKey(botRecord.word, botRecord.alias) !== luxChatKey(saved.chatWord, saved.chatAlias) || botRecord.version < LUX_BOT_VERSION);
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   // La clave k es la de OBS del streamer (la misma de la pestaña Cuenta): el overlay la usa para el tope de voz.
   const keyPart = profile?.widget_key ? `&k=${encodeURIComponent(profile.widget_key)}` : '';
@@ -153,11 +172,17 @@ export const LuxAI: React.FC = () => {
     setBusy(true);
     setSaveError(null);
     setSaveNote(null);
+    const previous = saved;
     const res = await luxSaveSettings(draft);
     if (res.ok) {
       setSaved(res.data);
       setDraft(res.data);
-      setSaveNote('Ajustes guardados.');
+      const commandChanged = previous !== null && luxChatKey(previous.chatWord, previous.chatAlias) !== luxChatKey(res.data.chatWord, res.data.chatAlias);
+      setSaveNote(
+        commandChanged && previous
+          ? `Ajustes guardados. Vuelve a copiar el script del bot en el estudio de TwitchIO: hasta entonces, el bot antiguo sigue con !${commandPrefix}${previous.chatWord}.`
+          : 'Ajustes guardados.'
+      );
     } else {
       setSaveError(res.message);
     }
@@ -171,6 +196,16 @@ export const LuxAI: React.FC = () => {
       setTimeout(() => setCopied(false), 1600);
     } catch {
       setSaveError('No se pudo copiar. Selecciona la dirección y cópiala a mano.');
+    }
+  };
+
+  const copyCommand = async () => {
+    try {
+      await navigator.clipboard?.writeText(`${commandPrefix}${wordCheck.ok ? wordCheck.word : draft.chatWord}`);
+      setCommandCopied(true);
+      setTimeout(() => setCommandCopied(false), 1600);
+    } catch {
+      setSaveError('No se pudo copiar el comando. Escríbelo a mano.');
     }
   };
 
@@ -277,6 +312,53 @@ export const LuxAI: React.FC = () => {
                     onChange={(e) => update('personality', e.target.value)}
                   />
                 </Field>
+              </section>
+
+              <section className="cab-mod grid gap-4" aria-labelledby="lux-command">
+                <h2 id="lux-command" className="text-base font-semibold">
+                  Comando de activación
+                </h2>
+                <Field label="Palabra para hablar con Lux" htmlFor="lux-chat-word" hint="De 2 a 20 letras o números, sin espacios. Por defecto: lux.">
+                  <input
+                    id="lux-chat-word"
+                    className="cab-inp"
+                    maxLength={40}
+                    value={draft.chatWord}
+                    disabled={busy || saved === null}
+                    aria-invalid={!wordCheck.ok}
+                    aria-describedby={wordCheck.ok ? undefined : 'lux-chat-word-error'}
+                    onChange={(e) => update('chatWord', e.target.value)}
+                  />
+                </Field>
+                {wordCheck.ok ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="cab-hint" aria-live="polite">
+                      Los viewers escriben <strong>{`${commandPrefix}${wordCheck.word}`}</strong> para hablar con tu personaje.
+                    </p>
+                    <button type="button" className="cab-btn2 cab-btn-sm" onClick={copyCommand}>
+                      {commandCopied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+                      {commandCopied ? 'Comando copiado' : 'Copiar comando'}
+                    </button>
+                  </div>
+                ) : (
+                  <p id="lux-chat-word-error" className="cab-error" role="alert">
+                    {wordCheck.message}
+                  </p>
+                )}
+                {wordCheck.ok && wordCheck.word !== 'lux' && (
+                  <Toggle
+                    label={`Seguir aceptando ${commandPrefix}lux`}
+                    checked={draft.chatAlias}
+                    disabled={busy || saved === null}
+                    onChange={(next) => update('chatAlias', next)}
+                  />
+                )}
+                <p className="cab-hint">Si cambias la palabra, vuelve a copiar el script del bot en el estudio de TwitchIO. El bot antiguo sigue con la palabra anterior hasta entonces.</p>
+                {botStale && (
+                  <p className="cab-note" role="status">
+                    El bot que copiaste no usa tu comando actual o es de una versión anterior. Vuelve a copiar el script del bot en el estudio de TwitchIO.
+                  </p>
+                )}
               </section>
 
               <section className="cab-mod grid gap-4" aria-labelledby="lux-replies">
@@ -392,7 +474,7 @@ export const LuxAI: React.FC = () => {
               </section>
 
               <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className="cab-btn2" disabled={busy || !dirty} onClick={save}>
+                <button type="button" className="cab-btn2" disabled={busy || !dirty || !wordCheck.ok} onClick={save}>
                   Guardar ajustes
                 </button>
                 {dirty && <span className="cab-hint">Hay cambios sin guardar.</span>}
