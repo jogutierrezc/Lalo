@@ -127,6 +127,11 @@ LUX_KEY = "TU_CLAVE_OBS"
 LUX_BOT_VERSION = ${LUX_BOT_VERSION}
 # Segundos que espera Lux antes de responder a un comando del chat.
 LUX_REPLY_DELAY = 30
+# Lux aprende del chat (si lo tienes activado en Lalo): cada media hora manda los mensajes juntos para resumirlos.
+# Los mensajes se guardan solo en la memoria de este script y se borran al enviarlos.
+LUX_DIGEST_EVERY = 1800
+LUX_LINES_MAX = 200
+lux_lines = []
 
 
 def fill(text, user=""):
@@ -183,6 +188,23 @@ async def check_lux_version():
         print("Hay una versión nueva de los comandos de Lux: " + str(data.get("note") or "") + ". Vuelve a generar el script en el estudio de TwitchIO.")
 
 
+async def lux_digest_loop():
+    while True:
+        await asyncio.sleep(LUX_DIGEST_EVERY)
+        try:
+            status = await lux_post({"command": "learn_status"})
+            if not status.get("learning"):
+                lux_lines.clear()
+                continue
+            if not status.get("ready") or not lux_lines:
+                continue
+            batch = list(lux_lines)
+            lux_lines.clear()
+            await lux_post({"command": "digest", "messages": batch})
+        except (aiohttp.ClientError, ValueError) as error:
+            print("No se pudo enviar el resumen del chat a Lux: " + str(error))
+
+
 class LaloBot(commands.Bot):
     def __init__(self):
         super().__init__(token=TOKEN, prefix=PREFIX, initial_channels=[CHANNEL])
@@ -190,6 +212,7 @@ class LaloBot(commands.Bot):
     async def event_ready(self):
         print(f"{BOT_NAME} listo en #{CHANNEL}")
         await check_lux_version()
+        asyncio.ensure_future(lux_digest_loop())
 
     async def event_channel_joined(self, channel):
         if WELCOME and channel.name == CHANNEL:
@@ -199,6 +222,10 @@ class LaloBot(commands.Bot):
         if message.echo:
             return
         content = message.content or ""
+        if content and not content.startswith(PREFIX):
+            lux_lines.append({"viewer": message.author.name, "text": content[:300]})
+            if len(lux_lines) > LUX_LINES_MAX:
+                del lux_lines[0]
         if content.startswith(PREFIX + "s "):
             text = content.split(" ", 1)[1]
             try:

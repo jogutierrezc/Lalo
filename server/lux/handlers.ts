@@ -18,13 +18,26 @@ import { MigrationMissingError, type Env } from '../integrations/store.js';
 /** Como failureOf, pero el aviso de migración nombra las de Lux (0023 a 0025), no la de integraciones. */
 function luxFailure(err: unknown, where: string): IntegrationResult {
   if (err instanceof MigrationMissingError) {
-    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023, 0024 o 0025) en Supabase.');
+    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023 a 0031) en Supabase.');
   }
   return failureOf(err, where);
 }
 import { MODEL_SETTING, PROVIDER_SETTING, activeModel, activeProvider, isKeyFor, keyState, readApiKey, saveApiKey } from './keyVault.js';
 import { LUX_MAX_INPUT, buildLuxMessages } from './prompt.js';
-import { supabaseLuxDb, type LuxDb } from './luxDb.js';
+import { supabaseLuxDb, type LuxDb, type LuxMemoryDb } from './luxDb.js';
+import {
+  ADMIN_UPLOAD_MAX_BYTES,
+  DIGEST_MAX_ITEMS,
+  MEMORY_SAVED_MAX,
+  MEMORY_USED_IN_REPLY,
+  expiresAtFor,
+  normalizeAdminMemory,
+  normalizeMemoryEdit,
+  normalizeNewMemory,
+  screenMemory,
+  splitIntoMemories,
+} from './memory.js';
+import { DIGEST_MIN_GAP_MS, buildDigestMessages, keepDigestItems, normalizeDigestLines, parseDigest } from './digest.js';
 import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, type LuxProvider, type NvidiaFetch } from './nvidia.js';
 import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSettings } from './settings.js';
 import { parseEmotion } from './emotion.js';
@@ -34,14 +47,25 @@ import { detectSongRequest, normalizeSong, songForChat } from './song.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 
-export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat', 'release', 'speech'] as const;
+export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat', 'release', 'speech', 'memory', 'admin-memory'] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
 /** Las respuestas a un comando del chat esperan este tiempo antes de sonar y de aparecer en el chat. */
-export const LUX_REPLY_DELAY_MS = 30_000;
+export const LUX_REPLY_DELAY_MS = 5_000;
 
-const MEMORY_LIMIT = 20;
+const MEMORY_LIMIT = MEMORY_USED_IN_REPLY;
 const VIEWER_MAX = 40;
+/** UUID de un recuerdo (rutas de edición y borrado) o de una cuenta (ruta del administrador). */
+const MEMORY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MEMORY_METHODS = ['memoryList', 'memoryGet', 'memoryInsert', 'memoryUpdate', 'memoryDelete', 'memoryPrune'] as const;
+
+/** La base de datos con las escrituras de memoria, o null si la versión del almacén no las tiene (las pruebas sin ellas). */
+function memoryApi(db: LuxDb): LuxMemoryDb | null {
+  return MEMORY_METHODS.every((name) => typeof db[name] === 'function') ? (db as LuxMemoryDb) : null;
+}
+
+/** Clave de app_settings con la hora del último resumen del chat de un streamer. */
+const digestKey = (profileId: string): string => `lux_digest:${profileId}`;
 
 export interface LuxDeps {
   fetch: NvidiaFetch;
@@ -342,6 +366,66 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
       await db.saveSettingsRow(rowFromSettings(profile.id, { ...current, chatEnabled: value }));
       return { status: 200, body: { chatEnabled: value } };
     }
+    // Resumen del chat (C2). El bot pregunta primero: solo manda mensajes si el streamer tiene el aprendizaje activado.
+    if (raw.command === 'learn_status' || raw.command === 'digest') {
+      const allowed = profile.role === 'admin' || profile.luxEnabled;
+      const learning = allowed && current.chatLearning;
+      const last = await db.setting(digestKey(profile.id));
+      const lastMs = last && Number.isFinite(Number(last)) ? Number(last) : null;
+      const nowMs = (deps.now ?? Date.now)();
+      const waitMs = lastMs === null ? 0 : Math.max(0, DIGEST_MIN_GAP_MS - (nowMs - lastMs));
+
+      if (raw.command === 'learn_status') {
+        return { status: 200, body: { learning, ready: learning && waitMs === 0, waitSeconds: Math.ceil(waitMs / 1000) } };
+      }
+      if (!allowed) return { status: 200, body: { skipped: 'lux_disabled' } };
+      if (!current.chatLearning) return { status: 200, body: { skipped: 'learning_off' } };
+      if (waitMs > 0) return { status: 200, body: { skipped: 'too_soon', waitSeconds: Math.ceil(waitMs / 1000) } };
+
+      const lines = normalizeDigestLines(raw.messages);
+      if (lines.length === 0) return { status: 200, body: { skipped: 'no_chat' } };
+      const api = memoryApi(db);
+      if (!api) return fail(503, 'not_configured', 'Al servidor le faltan las funciones de memoria de Lux.');
+
+      const nowIso = new Date(nowMs).toISOString();
+      await api.memoryPrune(profile.id, nowIso);
+      const existing = await api.memoryList(profile.id);
+      const room = MEMORY_SAVED_MAX - existing.length;
+      if (room <= 0) return { status: 200, body: { skipped: 'memory_full' } };
+
+      const target = await activeProvider(db);
+      const apiKey = await readApiKey(env, db, target);
+      if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
+      const model = await activeModel(db, target);
+
+      // Se marca antes de llamar al modelo: un fallo no provoca reintentos seguidos.
+      await db.putSetting(digestKey(profile.id), String(nowMs));
+      // Los mensajes crudos solo viven en esta llamada: no se guardan ni se devuelven.
+      const text = await nvidiaChat({
+        baseUrl: LUX_PROVIDERS[target].baseUrl,
+        apiKey,
+        model,
+        messages: buildDigestMessages(lines, existing.slice(0, MEMORY_LIMIT).map((item) => item.content)),
+        maxTokens: 700,
+        fetch: deps.fetch,
+      });
+      const found = parseDigest(text);
+      const kept = keepDigestItems(found).slice(0, Math.min(DIGEST_MAX_ITEMS, room));
+      if (kept.length > 0) {
+        await api.memoryInsert(
+          profile.id,
+          kept.map((item) => ({
+            kind: item.kind,
+            subject: item.subject,
+            content: item.content,
+            pinned: false,
+            source: 'chat' as const,
+            expiresAt: expiresAtFor(item.kind, false, nowMs),
+          }))
+        );
+      }
+      return { status: 200, body: { learned: kept.length, discarded: found.length - kept.length } };
+    }
     if (raw.command !== 'ask') return fail(400, 'bad_command', 'Comando no admitido.');
 
     if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
@@ -498,6 +582,188 @@ async function speech(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
   }
 }
 
+/**
+ * Memoria del streamer (pestaña Memoria). GET lista sus recuerdos. POST con `op`
+ * crea, edita o borra. El dueño es siempre quien hace la petición (su sesión): el
+ * id de perfil nunca viene del cuerpo, y cada cambio filtra por ese dueño. El
+ * navegador no escribe en la base de datos: todo pasa por aquí.
+ */
+async function memory(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  const method = req.method.toUpperCase();
+  if (method !== 'GET' && method !== 'POST') return fail(405, 'method', 'Esta ruta admite GET (lista) y POST (crear, editar o borrar).');
+  const caller = await deps.auth(req, env);
+  if (isFail(caller)) return caller;
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const api = memoryApi(db);
+  if (!api) return fail(503, 'not_configured', 'Al servidor le faltan las funciones de memoria de Lux.');
+
+  try {
+    const profile = await db.profile(caller.id);
+    if (!profile) return fail(403, 'no_profile', 'No se encontró tu perfil.');
+    if (profile.role !== 'admin' && !profile.luxEnabled) return fail(403, 'lux_disabled', 'Lux no está activado para tu cuenta.');
+    const owner = profile.id;
+    const nowMs = (deps.now ?? Date.now)();
+
+    if (method === 'GET') {
+      await api.memoryPrune(owner, new Date(nowMs).toISOString());
+      const items = await api.memoryList(owner);
+      const ajustes = settingsFromRow(await db.settingsRow(owner));
+      return {
+        status: 200,
+        body: {
+          memories: items,
+          saved: items.length,
+          savedMax: MEMORY_SAVED_MAX,
+          usedInReply: ajustes.memoryEnabled ? Math.min(items.length, MEMORY_USED_IN_REPLY) : 0,
+          usedMax: MEMORY_USED_IN_REPLY,
+          memoryEnabled: ajustes.memoryEnabled,
+        },
+      };
+    }
+
+    const raw = bodyOf(req);
+    if (raw.op === 'create') {
+      const check = normalizeNewMemory(raw);
+      if (!check.ok) return fail(400, 'bad_memory', check.message, { field: check.field });
+      const items = await api.memoryList(owner);
+      if (items.length >= MEMORY_SAVED_MAX) {
+        return fail(409, 'memory_full', `Lux ya tiene ${MEMORY_SAVED_MAX} recuerdos guardados. Borra alguno para añadir más.`);
+      }
+      await api.memoryInsert(owner, [
+        { kind: check.value.kind, subject: null, content: check.value.content, pinned: false, source: 'manual', expiresAt: expiresAtFor(check.value.kind, false, nowMs) },
+      ]);
+      return { status: 200, body: { ok: true } };
+    }
+
+    if (raw.op === 'update' || raw.op === 'delete') {
+      const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+      if (!MEMORY_ID.test(id)) return fail(400, 'bad_id', 'El recuerdo no es válido.');
+
+      // Lo que escribe el administrador (source 'admin') no lo edita ni lo borra el streamer: se ve, nada más.
+      const edit = raw.op === 'update' ? normalizeMemoryEdit(raw) : null;
+      if (edit && !edit.ok) return fail(400, 'bad_memory', edit.message, { field: edit.field });
+      const current = await api.memoryGet(owner, id);
+      if (!current) return fail(404, 'memory_not_found', 'Ese recuerdo no existe.');
+      if (current.source === 'admin') return fail(403, 'admin_memory', ADMIN_MEMORY_LOCKED);
+
+      if (!edit) {
+        const removed = await api.memoryDelete(owner, id);
+        return removed ? { status: 200, body: { ok: true } } : fail(404, 'memory_not_found', 'Ese recuerdo no existe.');
+      }
+
+      const patch: { content?: string; pinned?: boolean; expiresAt?: string | null } = {};
+      if (edit.value.content !== undefined) patch.content = edit.value.content;
+      if (edit.value.pinned !== undefined) {
+        patch.pinned = edit.value.pinned;
+        // Fijar quita la caducidad; desfijar un recuerdo del chat le da 30 días desde ahora.
+        patch.expiresAt = expiresAtFor(current.kind, edit.value.pinned, nowMs);
+      }
+      const changed = await api.memoryUpdate(owner, id, patch);
+      return changed ? { status: 200, body: { ok: true } } : fail(404, 'memory_not_found', 'Ese recuerdo no existe.');
+    }
+
+    return fail(400, 'bad_op', 'Operación no admitida.');
+  } catch (err) {
+    return luxFailure(err, 'lux/memory');
+  }
+}
+
+const ADMIN_MEMORY_LOCKED = 'Ese recuerdo lo puso el administrador. Solo él puede cambiarlo.';
+
+/**
+ * Memoria que escribe el administrador en la ficha de una cuenta de streamer (portal
+ * admin). El administrador es quien llama (sesión, rol 'admin'); la cuenta destino va en
+ * el cuerpo porque el admin actúa sobre ella. Solo toca recuerdos con source 'admin'.
+ *
+ *   list    lista los recuerdos de la cuenta (todos, para ver el cupo)
+ *   split   parte un texto (pegado o de un archivo) en recuerdos y marca los que no se pueden guardar
+ *   save    guarda una lista de recuerdos ya revisada (dato o estilo, sin caducidad)
+ *   update  cambia el texto de uno de los suyos
+ *   delete  borra uno de los suyos
+ */
+async function adminMemory(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  if (req.method.toUpperCase() !== 'POST') return fail(405, 'method', 'Esta ruta solo admite POST.');
+  const denied = await requireAdmin(req, env, deps);
+  if (denied) return denied;
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const api = memoryApi(db);
+  if (!api) return fail(503, 'not_configured', 'Al servidor le faltan las funciones de memoria de Lux.');
+
+  const raw = bodyOf(req);
+  const target = typeof raw.profile === 'string' ? raw.profile.trim() : '';
+  // Basta con que sea un texto corto: que la cuenta exista lo dice la búsqueda de abajo.
+  if (!target || target.length > 64) return fail(400, 'bad_profile', 'La cuenta no es válida.');
+
+  try {
+    const profile = await db.profile(target);
+    if (!profile) return fail(404, 'profile_not_found', 'Esa cuenta no existe.');
+    if (profile.role === 'admin') return fail(400, 'not_streamer', 'Solo se guarda memoria en cuentas de streamer.');
+    const nowMs = (deps.now ?? Date.now)();
+
+    if (raw.op === 'list') {
+      const items = await api.memoryList(target);
+      return { status: 200, body: { memories: items, saved: items.length, savedMax: MEMORY_SAVED_MAX } };
+    }
+
+    if (raw.op === 'split') {
+      const text = typeof raw.text === 'string' ? raw.text : '';
+      if (new TextEncoder().encode(text).length > ADMIN_UPLOAD_MAX_BYTES) {
+        return fail(400, 'file_too_big', `El texto pesa más de ${ADMIN_UPLOAD_MAX_BYTES / 1024} KB. Divídelo en partes más pequeñas.`);
+      }
+      const chunks = splitIntoMemories(text).map((content) => ({ content, blocked: screenMemory(content) }));
+      if (chunks.length === 0) return fail(400, 'empty_text', 'No hay texto que convertir en recuerdos.');
+      const items = await api.memoryList(target);
+      return { status: 200, body: { chunks, saved: items.length, savedMax: MEMORY_SAVED_MAX, room: Math.max(0, MEMORY_SAVED_MAX - items.length) } };
+    }
+
+    if (raw.op === 'save') {
+      if (raw.kind !== 'fact' && raw.kind !== 'style') return fail(400, 'bad_memory', 'El tipo tiene que ser dato o estilo.', { field: 'kind' });
+      if (!Array.isArray(raw.items) || raw.items.length === 0) return fail(400, 'bad_memory', 'No hay recuerdos que guardar.', { field: 'items' });
+      if (raw.items.length > MEMORY_SAVED_MAX) return fail(400, 'too_many', `De una vez se pueden guardar hasta ${MEMORY_SAVED_MAX} recuerdos.`);
+      const rows = [];
+      for (let index = 0; index < raw.items.length; index++) {
+        const check = normalizeAdminMemory({ kind: raw.kind, content: raw.items[index] });
+        if (!check.ok) return fail(400, 'bad_memory', `Recuerdo ${index + 1}: ${check.message}`, { field: check.field, index });
+        rows.push({ kind: check.value.kind, subject: null, content: check.value.content, pinned: false, source: 'admin' as const, expiresAt: expiresAtFor(check.value.kind, false, nowMs, 'admin') });
+      }
+      const items = await api.memoryList(target);
+      const room = Math.max(0, MEMORY_SAVED_MAX - items.length);
+      if (rows.length > room) {
+        const message = room > 0 ? `Solo caben ${room} recuerdos más (máximo ${MEMORY_SAVED_MAX} por streamer).` : `Esta cuenta ya tiene ${MEMORY_SAVED_MAX} recuerdos. Borra alguno para añadir más.`;
+        return fail(409, 'memory_full', message, { room });
+      }
+      await api.memoryInsert(target, rows);
+      return { status: 200, body: { ok: true, saved: rows.length } };
+    }
+
+    if (raw.op === 'update' || raw.op === 'delete') {
+      const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+      if (!MEMORY_ID.test(id)) return fail(400, 'bad_id', 'El recuerdo no es válido.');
+      // Solo los del administrador: los de la cuenta (chat o manuales) no se tocan desde aquí.
+      const current = await api.memoryGet(target, id);
+      if (!current || current.source !== 'admin') return fail(404, 'memory_not_found', 'Ese recuerdo no existe.');
+
+      if (raw.op === 'delete') {
+        const removed = await api.memoryDelete(target, id);
+        return removed ? { status: 200, body: { ok: true } } : fail(404, 'memory_not_found', 'Ese recuerdo no existe.');
+      }
+      const edit = normalizeMemoryEdit({ content: raw.content });
+      if (!edit.ok) return fail(400, 'bad_memory', edit.message, { field: edit.field });
+      const content = edit.value.content ?? '';
+      const reason = screenMemory(content);
+      if (reason) return fail(400, 'bad_memory', `Ese texto no se puede guardar: contiene ${reason}.`, { field: 'content' });
+      const changed = await api.memoryUpdate(target, id, { content });
+      return changed ? { status: 200, body: { ok: true } } : fail(404, 'memory_not_found', 'Ese recuerdo no existe.');
+    }
+
+    return fail(400, 'bad_op', 'Operación no admitida.');
+  } catch (err) {
+    return luxFailure(err, 'lux/admin-memory');
+  }
+}
+
 /** Entrada única de Lux. `overrides` solo lo usan las pruebas. */
 export async function handleLux(action: LuxAction, req: IntegrationRequest, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<IntegrationResult> {
   const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
@@ -522,5 +788,9 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return release(req, env, deps);
     case 'speech':
       return speech(req, env, deps);
+    case 'memory':
+      return memory(req, env, deps);
+    case 'admin-memory':
+      return adminMemory(req, env, deps);
   }
 }

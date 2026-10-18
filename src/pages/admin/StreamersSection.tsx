@@ -8,6 +8,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { UsageMeter } from '../../components/UsageMeter';
+import { StreamerMemory } from './StreamerMemory';
 import {
   adminHref,
   filterProfiles,
@@ -465,6 +466,10 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                   </span>
                 </div>
                 </>
+              )}
+
+              {selected.status === 'active' && (
+                <StreamerMemory key={selected.profile_id} profileId={selected.profile_id} name={profileName(selected)} />
               )}
 
               {selected.status === 'active' && voices && (

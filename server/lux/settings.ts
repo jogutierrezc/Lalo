@@ -27,6 +27,8 @@ export interface LuxSettings {
   chatEnabled: boolean;
   /** Volumen de la voz en el overlay, de 0 a 100 (migración 0028). */
   voiceVolume: number;
+  /** Lux aprende del chat: resume cada media hora y guarda recuerdos del chat. Apagado por defecto (migración 0030). */
+  chatLearning: boolean;
   /** Voz del catálogo (reference_id) y su motor. Null: la voz por defecto. */
   voiceReferenceId: string | null;
   voiceEngine: LuxVoiceEngine | null;
@@ -42,6 +44,7 @@ export const DEFAULT_LUX_SETTINGS: LuxSettings = {
   voiceEngine: null,
   chatEnabled: true,
   voiceVolume: 100,
+  chatLearning: false,
 };
 
 export type SettingsCheck = { ok: true; value: LuxSettings } | { ok: false; field: keyof LuxSettings; message: string };
@@ -104,6 +107,11 @@ export function normalizeLuxSettings(input: Record<string, unknown>, base: LuxSe
     value.chatEnabled = input.chatEnabled;
   }
 
+  if (input.chatLearning !== undefined) {
+    if (typeof input.chatLearning !== 'boolean') return { ok: false, field: 'chatLearning', message: 'Aprender del chat es sí o no.' };
+    value.chatLearning = input.chatLearning;
+  }
+
   if (input.voiceReferenceId !== undefined) {
     if (input.voiceReferenceId === null) {
       value.voiceReferenceId = null;
@@ -138,6 +146,7 @@ export function settingsFromRow(row: Record<string, unknown> | null): LuxSetting
     { obsSize: row.obs_size },
     { chatEnabled: row.chat_enabled },
     { voiceVolume: row.voice_volume },
+    { chatLearning: row.chat_learning },
     // La voz va como pareja: o las dos columnas, o ninguna.
     { voiceReferenceId: row.voice_reference_id ?? null, voiceEngine: row.voice_engine ?? null },
   ];
@@ -161,6 +170,7 @@ export function rowFromSettings(profileId: string, value: LuxSettings): Record<s
     obs_size: value.obsSize,
     chat_enabled: value.chatEnabled,
     voice_volume: value.voiceVolume,
+    chat_learning: value.chatLearning,
     voice_reference_id: value.voiceReferenceId,
     voice_engine: value.voiceEngine,
     updated_at: new Date().toISOString(),

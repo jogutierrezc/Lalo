@@ -30,12 +30,12 @@ function db(profile: LuxProfile, speech: LuxSpeechRow[]) {
   } as unknown as LuxDb;
 }
 
-describe('retraso de 30 segundos', () => {
-  it('el valor es 30 segundos', () => {
-    expect(LUX_REPLY_DELAY_MS).toBe(30_000);
+describe('retraso de 5 segundos', () => {
+  it('el valor es 5 segundos', () => {
+    expect(LUX_REPLY_DELAY_MS).toBe(5_000);
   });
 
-  it('una respuesta a un comando del chat se marca para dentro de 30 s', async () => {
+  it('una respuesta a un comando del chat se marca para dentro de 5 s', async () => {
     const speech: LuxSpeechRow[] = [];
     const profile: LuxProfile = { id: 'p1', role: 'streamer', luxEnabled: true };
     const env = { INTEGRATIONS_ENC_KEY: VAULT.toString('base64url') };

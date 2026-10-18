@@ -900,7 +900,7 @@
       showExpression('normal');
     }
 
-    // playAfter: hora ISO a partir de la que puede sonar (las respuestas a comandos esperan 30 s).
+    // playAfter: hora ISO a partir de la que puede sonar (las respuestas a comandos esperan 5 s).
     const speak = (text, emotion, voice, gesture, playAfter) => {
       const clean = String(text || '').trim().slice(0, 500);
       if (!clean) return;

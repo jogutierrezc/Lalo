@@ -10,6 +10,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
+import { MEMORY_SAVED_MAX, type LuxMemoryKind, type LuxMemorySource } from './memory.js';
 
 export interface LuxProfile {
   id: string;
@@ -54,7 +55,44 @@ export interface LuxSpeechItem {
   playAfter: string | null;
 }
 
-export interface LuxDb {
+/** Un recuerdo tal como lo ve el streamer en la pestaña Memoria. */
+export interface LuxMemoryItem {
+  id: string;
+  kind: LuxMemoryKind;
+  subject: string | null;
+  content: string;
+  pinned: boolean;
+  source: LuxMemorySource;
+  createdAt: string;
+  /** Hora ISO de caducidad, o null si no caduca. */
+  expiresAt: string | null;
+}
+
+export interface LuxMemoryWrite {
+  kind: LuxMemoryKind;
+  subject: string | null;
+  content: string;
+  pinned: boolean;
+  source: LuxMemorySource;
+  expiresAt: string | null;
+}
+
+/** Escrituras de la memoria. Solo el servidor las hace (clave de servicio); cada una filtra por el dueño. */
+export interface LuxMemoryDb {
+  /** Hasta MEMORY_SAVED_MAX recuerdos del streamer, fijados primero y luego los más recientes. */
+  memoryList(profileId: string): Promise<LuxMemoryItem[]>;
+  /** Un recuerdo del streamer, o null si no existe o es de otro. */
+  memoryGet(profileId: string, id: string): Promise<LuxMemoryItem | null>;
+  memoryInsert(profileId: string, rows: LuxMemoryWrite[]): Promise<void>;
+  /** true si la fila era del streamer y se cambió. */
+  memoryUpdate(profileId: string, id: string, patch: { content?: string; pinned?: boolean; expiresAt?: string | null }): Promise<boolean>;
+  /** true si la fila era del streamer y se borró. */
+  memoryDelete(profileId: string, id: string): Promise<boolean>;
+  /** Borra los recuerdos del chat caducados y sin fijar. */
+  memoryPrune(profileId: string, nowIso: string): Promise<void>;
+}
+
+export interface LuxDb extends Partial<LuxMemoryDb> {
   /** Valor de app_settings, o null si no existe. */
   setting(key: string): Promise<string | null>;
   /** Escribe el valor; con null, borra la clave. */
@@ -85,6 +123,21 @@ function check(error: { code?: string; message: string } | null): void {
   if (!error) return;
   if (MISSING_CODES.includes(error.code ?? '')) throw new MigrationMissingError();
   throw new Error(`Supabase: ${error.code ?? 'error'}`);
+}
+
+const MEMORY_COLUMNS = 'id, kind, subject, content, pinned, source, created_at, expires_at';
+
+function memoryFromRow(row: Record<string, unknown>): LuxMemoryItem {
+  return {
+    id: String(row.id),
+    kind: row.kind as LuxMemoryKind,
+    subject: (row.subject as string | null) ?? null,
+    content: String(row.content),
+    pinned: row.pinned === true,
+    source: row.source === 'chat' ? 'chat' : row.source === 'admin' ? 'admin' : 'manual',
+    createdAt: String(row.created_at),
+    expiresAt: (row.expires_at as string | null) ?? null,
+  };
 }
 
 export function supabaseLuxDb(env: Env): LuxDb | null {
@@ -125,10 +178,12 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     },
 
     async memories(profileId, limit) {
+      // Los caducados no llegan al modelo aunque la limpieza aún no los haya borrado.
       const { data, error } = await db
         .from('lux_memories')
         .select('kind, subject, content, pinned, created_at')
         .eq('profile_id', profileId)
+        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
         .order('pinned', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -215,6 +270,60 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
 
     async saveSettingsRow(row) {
       const { error } = await db.from('lux_settings').upsert(row, { onConflict: 'profile_id' });
+      check(error);
+    },
+
+    async memoryList(profileId) {
+      const { data, error } = await db
+        .from('lux_memories')
+        .select(MEMORY_COLUMNS)
+        .eq('profile_id', profileId)
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(MEMORY_SAVED_MAX);
+      check(error);
+      return ((data ?? []) as Array<Record<string, unknown>>).map(memoryFromRow);
+    },
+
+    async memoryGet(profileId, id) {
+      const { data, error } = await db.from('lux_memories').select(MEMORY_COLUMNS).eq('id', id).eq('profile_id', profileId).maybeSingle();
+      check(error);
+      return data ? memoryFromRow(data as Record<string, unknown>) : null;
+    },
+
+    async memoryInsert(profileId, rows) {
+      const { error } = await db.from('lux_memories').insert(
+        rows.map((row) => ({
+          profile_id: profileId,
+          kind: row.kind,
+          subject: row.subject,
+          content: row.content,
+          pinned: row.pinned,
+          source: row.source,
+          expires_at: row.expiresAt,
+        }))
+      );
+      check(error);
+    },
+
+    async memoryUpdate(profileId, id, patch) {
+      const change: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (patch.content !== undefined) change.content = patch.content;
+      if (patch.pinned !== undefined) change.pinned = patch.pinned;
+      if (patch.expiresAt !== undefined) change.expires_at = patch.expiresAt;
+      const { data, error } = await db.from('lux_memories').update(change).eq('id', id).eq('profile_id', profileId).select('id');
+      check(error);
+      return (data ?? []).length > 0;
+    },
+
+    async memoryDelete(profileId, id) {
+      const { data, error } = await db.from('lux_memories').delete().eq('id', id).eq('profile_id', profileId).select('id');
+      check(error);
+      return (data ?? []).length > 0;
+    },
+
+    async memoryPrune(profileId, nowIso) {
+      const { error } = await db.from('lux_memories').delete().eq('profile_id', profileId).eq('pinned', false).lt('expires_at', nowIso);
       check(error);
     },
   };

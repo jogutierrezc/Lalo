@@ -116,6 +116,132 @@ export interface LuxSettingsView {
   voiceEngine: 'fish' | 'elevenlabs' | null;
   /** Volumen de la voz en el overlay, de 0 a 100. */
   voiceVolume: number;
+  /** Lux aprende del chat (migración 0030). Apagado por defecto. */
+  chatLearning: boolean;
+}
+
+/** Recuerdo de Lux tal como lo devuelve /api/lux/memory. */
+export type LuxMemoryKind = 'fact' | 'style' | 'viewer' | 'event';
+
+export interface LuxMemory {
+  id: string;
+  kind: LuxMemoryKind;
+  subject: string | null;
+  content: string;
+  pinned: boolean;
+  /** 'admin': lo escribió el administrador desde la ficha de la cuenta (migración 0031). */
+  source: 'manual' | 'chat' | 'admin';
+  createdAt: string;
+  expiresAt: string | null;
+}
+
+export interface LuxMemoryList {
+  memories: LuxMemory[];
+  saved: number;
+  savedMax: number;
+  /** Recuerdos que se envían al modelo en cada respuesta. */
+  usedInReply: number;
+  usedMax: number;
+  memoryEnabled: boolean;
+}
+
+export async function luxMemories(): Promise<ApiOutcome<LuxMemoryList>> {
+  const res = await call('/api/lux/memory', 'GET');
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    data: {
+      memories: (res.data.memories ?? []) as LuxMemory[],
+      saved: Number(res.data.saved ?? 0),
+      savedMax: Number(res.data.savedMax ?? 100),
+      usedInReply: Number(res.data.usedInReply ?? 0),
+      usedMax: Number(res.data.usedMax ?? 20),
+      memoryEnabled: res.data.memoryEnabled === true,
+    },
+  };
+}
+
+/** Crear, editar o borrar. Todo pasa por el servidor: el navegador no escribe en la base de datos. */
+export async function luxCreateMemory(kind: 'fact' | 'style', content: string): Promise<ApiOutcome<null>> {
+  const res = await call('/api/lux/memory', 'POST', { op: 'create', kind, content });
+  if (!res.ok) return res;
+  return { ok: true, data: null };
+}
+
+export async function luxUpdateMemory(id: string, patch: { content?: string; pinned?: boolean }): Promise<ApiOutcome<null>> {
+  const res = await call('/api/lux/memory', 'POST', { op: 'update', id, ...patch });
+  if (!res.ok) return res;
+  return { ok: true, data: null };
+}
+
+export async function luxDeleteMemory(id: string): Promise<ApiOutcome<null>> {
+  const res = await call('/api/lux/memory', 'POST', { op: 'delete', id });
+  if (!res.ok) return res;
+  return { ok: true, data: null };
+}
+
+/*
+ * Memoria que escribe el administrador en la ficha de una cuenta (portal admin).
+ * Ruta /api/lux/admin-memory: el servidor comprueba que quien llama es admin.
+ */
+
+const ADMIN_MEMORY = '/api/lux/admin-memory';
+
+/** Trozo de un texto pegado o subido. `blocked` dice por qué no se puede guardar (filtro de memory.ts), o null. */
+export interface LuxSplitChunk {
+  content: string;
+  blocked: string | null;
+}
+
+export interface LuxAdminMemoryList {
+  memories: LuxMemory[];
+  saved: number;
+  savedMax: number;
+}
+
+export async function luxAdminMemories(profileId: string): Promise<ApiOutcome<LuxAdminMemoryList>> {
+  const res = await call(ADMIN_MEMORY, 'POST', { op: 'list', profile: profileId });
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    data: {
+      memories: (res.data.memories ?? []) as LuxMemory[],
+      saved: Number(res.data.saved ?? 0),
+      savedMax: Number(res.data.savedMax ?? 100),
+    },
+  };
+}
+
+/** Parte el texto en recuerdos (el servidor). Nada se guarda todavía. */
+export async function luxAdminSplit(profileId: string, text: string): Promise<ApiOutcome<{ chunks: LuxSplitChunk[]; room: number }>> {
+  const res = await call(ADMIN_MEMORY, 'POST', { op: 'split', profile: profileId, text });
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    data: {
+      chunks: (res.data.chunks ?? []) as LuxSplitChunk[],
+      room: Number(res.data.room ?? 0),
+    },
+  };
+}
+
+/** Guarda recuerdos del administrador: dato o estilo, sin caducidad. */
+export async function luxAdminSave(profileId: string, kind: 'fact' | 'style', items: string[]): Promise<ApiOutcome<null>> {
+  const res = await call(ADMIN_MEMORY, 'POST', { op: 'save', profile: profileId, kind, items });
+  if (!res.ok) return res;
+  return { ok: true, data: null };
+}
+
+export async function luxAdminUpdate(profileId: string, id: string, content: string): Promise<ApiOutcome<null>> {
+  const res = await call(ADMIN_MEMORY, 'POST', { op: 'update', profile: profileId, id, content });
+  if (!res.ok) return res;
+  return { ok: true, data: null };
+}
+
+export async function luxAdminDelete(profileId: string, id: string): Promise<ApiOutcome<null>> {
+  const res = await call(ADMIN_MEMORY, 'POST', { op: 'delete', profile: profileId, id });
+  if (!res.ok) return res;
+  return { ok: true, data: null };
 }
 
 /** Voz que Lux usa para hablar: la del catálogo elegida, o null para la voz por defecto. */

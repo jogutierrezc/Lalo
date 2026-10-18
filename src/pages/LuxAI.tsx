@@ -15,6 +15,7 @@ import { SuiteNav } from '../components/SuiteNav';
 import { Field, Range, Toggle } from '../components/studio/StudioKit';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { luxAsk, luxGetSettings, luxSaveSettings, type LuxSettingsView, type LuxVoice } from '../lib/luxApi';
+import { LuxMemoryPanel } from '../components/lux/LuxMemoryPanel';
 import { loadVoiceCatalogue } from '../lib/voicesCloud';
 import type { VoiceCatalogue } from '../lib/voicesLogic';
 import '../styles/integraciones.css';
@@ -28,6 +29,7 @@ const DEFAULTS: LuxSettingsView = {
   voiceReferenceId: null,
   voiceEngine: null,
   voiceVolume: 100,
+  chatLearning: false,
 };
 const PERSONALITY_MAX = 600;
 const LANGUAGES: { value: LuxSettingsView['language']; label: string }[] = [
@@ -76,6 +78,7 @@ export const LuxAI: React.FC = () => {
   const [viewer, setViewer] = useState('');
   const [catalogue, setCatalogue] = useState<VoiceCatalogue | null>(null);
   const [speakOverlay, setSpeakOverlay] = useState(true);
+  const [tab, setTab] = useState<'ajustes' | 'memoria'>('ajustes');
 
   useEffect(() => {
     let alive = true;
@@ -185,6 +188,18 @@ export const LuxAI: React.FC = () => {
             <p className="cab-hint">El administrador la activa desde Streamers. Cuando lo haga, aquí podrás configurarla.</p>
           </section>
         ) : (
+          <div className="grid gap-5">
+            <div className="cab-seg" role="group" aria-label="Secciones de Lux AI">
+              <button type="button" aria-pressed={tab === 'ajustes'} onClick={() => setTab('ajustes')}>
+                Ajustes
+              </button>
+              <button type="button" aria-pressed={tab === 'memoria'} onClick={() => setTab('memoria')}>
+                Memoria
+              </button>
+            </div>
+            {tab === 'memoria' ? (
+              <LuxMemoryPanel />
+            ) : (
           <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
             <div className="grid gap-5">
               {loadError && (
@@ -278,6 +293,15 @@ export const LuxAI: React.FC = () => {
                   disabled={busy || saved === null}
                   onChange={(next) => update('memoryEnabled', next)}
                 />
+                <Toggle
+                  label="Lux aprende del chat"
+                  checked={draft.chatLearning}
+                  disabled={busy || saved === null}
+                  onChange={(next) => update('chatLearning', next)}
+                />
+                <p className="cab-hint">
+                  Apagado por defecto. Cada media hora Lux resume el chat y guarda algunos recuerdos (espectadores habituales, fechas, sucesos). Los mensajes no se guardan, y apagarlo no borra lo que ya aprendió.
+                </p>
               </section>
 
               <section className="cab-mod grid gap-4" aria-labelledby="lux-overlay">
@@ -415,6 +439,8 @@ export const LuxAI: React.FC = () => {
                 </p>
               </section>
             </div>
+          </div>
+            )}
           </div>
         )}
       </div>
