@@ -29,6 +29,8 @@ import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, t
 import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSettings } from './settings.js';
 import { parseEmotion } from './emotion.js';
 import { detectIntent, gestureFor } from './intent.js';
+import { buildSongMessages } from './prompt.js';
+import { detectSongRequest, normalizeSong, songForChat } from './song.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 
@@ -343,37 +345,50 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
     const memories = current.memoryEnabled ? await db.memories(profile.id, MEMORY_LIMIT) : [];
     const intent = detectIntent(message);
 
+    const topic = detectSongRequest(message);
+    const turn = {
+      viewer,
+      message,
+      memories,
+      personality: current.personality,
+      language: current.language,
+      replyMax: current.replyMax,
+      intent,
+    };
     const text = await nvidiaChat({
       baseUrl: LUX_PROVIDERS[target].baseUrl,
       apiKey,
       model,
-      messages: buildLuxMessages({
-        viewer,
-        message,
-        memories,
-        personality: current.personality,
-        language: current.language,
-        replyMax: current.replyMax,
-        intent,
-      }),
-      maxTokens: Math.ceil(current.replyMax / 2) + 40,
+      messages: topic !== null ? buildSongMessages(turn, topic) : buildLuxMessages(turn),
+      maxTokens: topic !== null ? 260 : Math.ceil(current.replyMax / 2) + 40,
       fetch: deps.fetch,
     });
-    const { text: spoken, emotion } = parseEmotion(text);
-    const reply = (spoken || '…').slice(0, current.replyMax);
+    const isSong = topic !== null;
+    const lyrics = isSong ? normalizeSong(text) : '';
+    const parsed = isSong ? { text: lyrics, emotion: 'normal' } : parseEmotion(text);
+    const emotion = parsed.emotion;
+    const reply = isSong ? songForChat(lyrics) || '…' : (parsed.text || '…').slice(0, current.replyMax);
+    // Solo ElevenLabs canta: con otra voz, Lux responde con la letra en el chat y sin canto.
+    const canSing = isSong && current.voiceEngine === 'elevenlabs';
 
     await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply, model }).catch(() => {
       console.error('[Lalo lux] no se pudo guardar el registro de la respuesta del chat');
     });
     // En directo, lo que Lux responde en el chat también se oye en OBS.
-    await enqueueSpeech(db, profile.id, reply, emotion, gestureFor(message, intent), current);
+    if (isSong) {
+      if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'dance', current);
+    } else {
+      await enqueueSpeech(db, profile.id, reply, emotion, gestureFor(message, intent), current);
+    }
     return {
       status: 200,
       body: {
         reply,
         emotion,
         intent,
-        gesture: gestureFor(message, intent),
+        gesture: isSong ? 'dance' : gestureFor(message, intent),
+        song: isSong,
+        note: isSong && !canSing ? 'sing_needs_elevenlabs' : undefined,
         model,
         voice: { referenceId: current.voiceReferenceId, engine: current.voiceEngine },
       },

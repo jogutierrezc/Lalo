@@ -11,6 +11,7 @@ import type { ChatMessage } from './nvidia.js';
 import type { LuxMemoryRow } from './luxDb.js';
 import { EMOTION_INSTRUCTION } from './emotion.js';
 import { intentGuidance, type LuxIntent } from './intent.js';
+import { songGuidance } from './song.js';
 
 export const LUX_MAX_INPUT = 500;
 
@@ -29,6 +30,17 @@ export interface LuxTurn {
 }
 
 const LANGUAGE_NAMES = { es: 'español', en: 'inglés', pt: 'portugués' } as const;
+
+/** Mensajes para una canción: letra original con cada verso en [canta]. Sin etiqueta de emoción. */
+export function buildSongMessages(turn: LuxTurn, topic: string): ChatMessage[] {
+  const lines = [PLACEHOLDER_SYSTEM];
+  if (turn.personality) lines.push(`Personalidad del personaje: ${turn.personality}`);
+  lines.push(songGuidance(topic, LANGUAGE_NAMES[turn.language ?? 'es']));
+  return [
+    { role: 'system', content: lines.join('\n') },
+    { role: 'user', content: `${turn.viewer ? `${turn.viewer}: ` : ''}${turn.message}` },
+  ];
+}
 
 export function buildLuxMessages(turn: LuxTurn): ChatMessage[] {
   const lines = [PLACEHOLDER_SYSTEM];
