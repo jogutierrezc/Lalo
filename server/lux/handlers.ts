@@ -11,7 +11,7 @@
  *   test        POST  (admin)  una petición mínima con la clave y el modelo por defecto
  *   characters  GET/POST (admin)  catálogo de personajes y su asignación a cada streamer
  *   character   GET   (streamer con Lux activo, o admin)  su personaje activo, su modelo y el consumo del mes
- *   mascota-model GET (overlay, con la clave de OBS)  el archivo GLB del personaje de la cuenta, solo si es suyo
+ *   mascota-model GET (overlay, con la clave de OBS)  el GLB del modelo efectivo de la cuenta (effectiveModel.ts); ?m=<id> opcional, debe coincidir
  *   character-model POST (admin)  sube (presign + complete), quita el modelo 3D de un personaje
  *   model-library GET/POST  biblioteca de modelos: el creador sube, envía a revisión, quita y elige el suyo;
  *                 el administrador aprueba (con la licencia confirmada) o rechaza
@@ -55,11 +55,11 @@ import {
   characterView,
   isModelAvatar,
   normalizeCharacterInput,
-  overlayView,
   pickCharacter,
   visibleCharacters,
   type LuxCharacter,
 } from './characters.js';
+import { effectiveModel, overlayViewFor, type EffectiveModel } from './effectiveModel.js';
 import { fetchPrivateModel, isModelKey, type ModelBytes } from './mascotaModel.js';
 import { MODEL_MESSAGES, checkModelFile, defaultModelFiles, newModelKey, retryStaleKeys, MODEL_MAX_BYTES, MODEL_MIME, MODEL_UPLOAD_SECONDS, type ModelFiles } from './characterModel.js';
 import { licenseNoticeFor } from './characters.js';
@@ -198,6 +198,21 @@ async function requireAdmin(req: IntegrationRequest, env: Env, deps: LuxDeps): P
 async function characterFor(db: LuxDb, profile: LuxProfile): Promise<LuxCharacter> {
   const list = db.characters ? await db.characters() : [];
   return pickCharacter(visibleCharacters(list, profile.id), profile.luxCharacterId ?? null);
+}
+
+/**
+ * Modelo 3D efectivo de la cuenta para su personaje (effectiveModel.ts). Solo consulta la
+ * biblioteca si la cuenta eligió un modelo. El elegido cuenta si lo ve (biblioteca
+ * compartida, suyo o de Riot); si no, cae al modelo propio del personaje.
+ */
+async function effectiveFor(db: LuxDb, profile: LuxProfile, character: LuxCharacter): Promise<EffectiveModel | null> {
+  let chosen: LibraryModel | null = null;
+  if (profile.luxModelId) {
+    const characters = db.characters ? await db.characters() : [];
+    const rows = db.libraryModels ? await db.libraryModels() : [];
+    chosen = visibleTo([...riotModels(characters), ...rows], profile.id).find((model) => model.id === profile.luxModelId) ?? null;
+  }
+  return effectiveModel(character, profile.id, chosen);
 }
 
 /** Tope mensual de créditos del plan. Null = sin tope (solo en las pruebas, sin la función). Sin plan, cero. */
@@ -959,12 +974,13 @@ async function mascotaModel(req: IntegrationRequest, env: Env, deps: LuxDeps): P
     const profile = await db.profileByWidgetKey(widgetKey);
     if (!profile) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
     if (profile.role !== 'admin' && !profile.luxEnabled) return fail(403, 'lux_disabled', 'Lux no está activado para tu cuenta.');
-    const character = await characterFor(db, profile);
-    const key = character.modelKey;
-    if (!isModelAvatar(character.avatar) || !key || character.ownerProfileId !== profile.id) {
-      return fail(404, 'no_model', 'Este personaje no tiene un modelo propio para esta cuenta.');
+    // Solo el modelo efectivo de esta cuenta. Si el overlay pide otro id (?m=), 404: así la caché del navegador no mezcla modelos.
+    const effective = await effectiveFor(db, profile, await characterFor(db, profile));
+    const asked = req.query.m;
+    if (!effective || (asked !== undefined && asked !== effective.id)) {
+      return fail(404, 'no_model', 'Esta cuenta no tiene un modelo 3D para su personaje.');
     }
-    const read = await (deps.modelBytes ?? fetchPrivateModel)(env, key);
+    const read = await (deps.modelBytes ?? fetchPrivateModel)(env, effective.modelKey);
     if (!read.ok) {
       if (read.reason === 'not_configured') return fail(503, 'models_bucket', 'Falta el bucket privado de modelos en el servidor.', { missing: read.missing });
       if (read.reason === 'missing') return fail(404, 'model_missing', 'El archivo del modelo no está en el almacenamiento.');
@@ -1307,7 +1323,9 @@ async function speech(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
   try {
     const profile = await db.profileByWidgetKey(widgetKey);
     if (!profile) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
-    const character = overlayView(await characterFor(db, profile));
+    // El avatar que recibe el overlay es el del modelo efectivo (elegido o propio); sin modelo, el del personaje.
+    const found = await characterFor(db, profile);
+    const character = overlayViewFor(found, await effectiveFor(db, profile, found));
     const afterRaw = req.query.after;
     if (afterRaw === undefined || afterRaw === '') {
       const tts = db.ttsVoice ? await db.ttsVoice(profile.id) : { referenceId: null, engine: null };

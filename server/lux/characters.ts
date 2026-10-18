@@ -15,9 +15,8 @@ import type { Check } from './memory.js';
 /** Avatares de dibujo fijo que existen. «lux» es el personaje de siempre. */
 export const LUX_AVATARS = ['lux'] as const;
 /**
- * Modelos GLB disponibles, en forma de avatar «glb:<id>». Copia de MODEL_AVATAR_IDS de
- * public/lux/mascota/logic.js (el overlay lo usa en el navegador); tests/luxMascota.test.ts
- * comprueba que las dos listas sean iguales.
+ * Modelos GLB que el administrador puede poner a un personaje, en forma de avatar «glb:<id>».
+ * El overlay no tiene lista: recibe el id que decide el servidor (effectiveModel.ts).
  */
 export const LUX_MODEL_AVATAR_IDS = ['warwick'] as const;
 const MODEL_AVATAR = /^glb:([a-z0-9][a-z0-9-]{0,39})$/;

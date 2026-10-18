@@ -66,21 +66,17 @@ export const GESTURE_CLIP = {
   arms_up: 'Laugh',
 };
 
-/** Modelos GLB que existen (el avatar «glb:<id>» tiene que ser uno de estos). */
-export const MODEL_AVATAR_IDS = ['warwick'];
+/**
+ * Avatar «glb:<id>»: el id lo decide el servidor (modelo elegido o propio del personaje).
+ * El overlay no tiene lista de modelos: solo comprueba el formato.
+ */
+const MODEL_AVATAR = /^glb:([a-z0-9-]{1,64})$/;
 
-const MODEL_AVATAR = /^glb:([a-z0-9][a-z0-9-]{0,39})$/;
-
-/** true si el avatar es un modelo GLB (glb:<id>) y ese id existe. */
-export function isModelAvatar(avatar) {
-  if (typeof avatar !== 'string') return false;
-  const match = MODEL_AVATAR.exec(avatar);
-  return match !== null && MODEL_AVATAR_IDS.includes(match[1]);
-}
-
-/** Id del modelo de un avatar glb:<id>, o null si no es un avatar de modelo válido. */
+/** Id del modelo de un avatar glb:<id>, o null si no es un avatar de modelo con formato válido. */
 export function modelIdOf(avatar) {
-  return isModelAvatar(avatar) ? MODEL_AVATAR.exec(avatar)[1] : null;
+  if (typeof avatar !== 'string') return null;
+  const match = MODEL_AVATAR.exec(avatar);
+  return match ? match[1] : null;
 }
 
 /** Emoción del mapa para lo que manda el servidor. Desconocida = neutra. */

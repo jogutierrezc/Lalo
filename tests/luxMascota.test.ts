@@ -11,7 +11,7 @@
  * La renderización real (WebGL, OBS, audio) no se prueba aquí.
  */
 
-import { existsSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, openSync, readFileSync, readSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
@@ -25,11 +25,9 @@ import {
   FPS_IDLE,
   GESTURE_CLIP,
   MASCOTA_CLIPS,
-  MODEL_AVATAR_IDS,
   SPEAKING_CLIP,
   activeClip,
   frameIntervalMs,
-  isModelAvatar as isModelAvatarJs,
   jawOpening,
   modelIdOf,
   renderFps,
@@ -171,11 +169,23 @@ describe('avatar: «lux» o «glb:<id>»', () => {
     expect(isModelAvatar(null)).toBe(false);
   });
 
-  it('la lista de modelos del servidor es la misma que la del overlay', () => {
-    expect([...LUX_MODEL_AVATAR_IDS]).toEqual([...MODEL_AVATAR_IDS]);
-    expect(isModelAvatarJs('glb:warwick')).toBe(true);
+  it('el overlay no tiene lista fija de modelos: acepta cualquier id con formato válido', () => {
     expect(modelIdOf('glb:warwick')).toBe('warwick');
-    expect(modelIdOf('lux')).toBeNull();
+    expect(modelIdOf('glb:00000000-0000-4000-8000-0000000000a1')).toBe('00000000-0000-4000-8000-0000000000a1');
+    expect(modelIdOf('glb:' + 'a'.repeat(64))).toBe('a'.repeat(64));
+    for (const bad of ['lux', 'glb:', 'glb:' + 'a'.repeat(65), 'glb:Warwick', 'glb:../x', 'glb:warwick ', 'GLB:warwick', null, undefined, 3]) {
+      expect(modelIdOf(bad as string)).toBeNull();
+    }
+  });
+
+  it('el fichero del overlay y su lógica no contienen la lista fija de modelos', () => {
+    const root = join(__dirname, '..', 'public', 'lux');
+    const overlay = readFileSync(join(root, 'overlay.html'), 'utf8');
+    const logic = readFileSync(join(root, 'mascota', 'logic.js'), 'utf8');
+    for (const source of [overlay, logic]) {
+      expect(source).not.toContain('MODEL_AVATAR_IDS');
+      expect(source).not.toContain("'warwick'");
+    }
   });
 
   it('el administrador puede elegir Lux y el modelo', () => {

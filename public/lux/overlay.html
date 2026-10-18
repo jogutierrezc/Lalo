@@ -745,8 +745,9 @@
         mats.hairLight.color.copy(base).offsetHSL(0, 0, 0.08);
         mats.hairDeep.color.copy(base).offsetHSL(0, 0, -0.1);
       }
-      // Avatar «glb:<id>»: el personaje es el modelo GLB (Mascota 2). Cualquier otro avatar vuelve a Lux.
-      if (typeof character.avatar === 'string' && character.avatar.startsWith('glb:')) mascotaShow();
+      // Avatar «glb:<id>»: el id lo decide el servidor (modelo elegido o propio). El overlay no tiene lista: solo valida el formato.
+      const modelMatch = typeof character.avatar === 'string' ? /^glb:([a-z0-9-]{1,64})$/.exec(character.avatar) : null;
+      if (modelMatch) mascotaShow(modelMatch[1]);
       else mascotaHide();
     };
 
@@ -823,7 +824,10 @@
     // Mascota 2 (modelo GLB) y Lux no se dibujan a la vez: con la mascota activa, el bucle de Lux se detiene.
     let mascotaActive = false;
     let mascota = null;
-    let mascotaLoading = null;
+    let mascotaId = null;      // id del modelo cargado o cargándose (el de su avatar glb:<id>)
+    let mascotaWant = null;    // id del modelo que el servidor pide ahora
+    let mascotaLoading = null; // promesa de la carga de mascotaId
+    let mascotaFailed = null;  // { id, at }: el modelo que falló no se reintenta durante MASCOTA_RETRY_MS
     let luxLoopRunning = false;
     const clock = new THREE.Clock();
     let nextBlink = 3;
@@ -854,7 +858,9 @@
 
     // ---------- 9b. Mascota 2: modelo GLB del personaje (solo si el avatar es glb:<id>) ----------
     const mascotaCanvas = document.getElementById('mascota-c');
-    const MODEL_URL = '/api/lux/mascota-model?k=' + encodeURIComponent(widgetKey);
+    // La URL lleva el id del modelo: así la caché del navegador guarda cada modelo por separado.
+    const MASCOTA_RETRY_MS = 30000;
+    const modelUrlFor = (modelId) => '/api/lux/mascota-model?k=' + encodeURIComponent(widgetKey) + '&m=' + encodeURIComponent(modelId);
     const fps60 = params.get('fps') === '60';
     // Destello de pantalla para el baile (A3). La vibración es del canvas de la mascota.
     const fxLayer = document.createElement('div');
@@ -864,20 +870,40 @@
       shake() { if (typeof gsap !== 'undefined') gsap.fromTo(mascotaCanvas, { x: -8 }, { x: 0, duration: 0.45, ease: 'elastic.out(1, 0.3)' }); },
       flash() { if (typeof gsap !== 'undefined') gsap.fromTo(fxLayer, { opacity: 0.6 }, { opacity: 0, duration: 0.5, ease: 'power2.out' }); }
     };
-    function mascotaLoad() {
+    function mascotaLoad(modelId) {
       return import('/lux/mascota/mascota.js')
-        .then((m) => m.createMascota({ canvas: mascotaCanvas, modelUrl: MODEL_URL, fps60, reduceMotion, effects: reduceMotion ? null : mascotaEffects }))
+        .then((m) => m.createMascota({ canvas: mascotaCanvas, modelUrl: modelUrlFor(modelId), fps60, reduceMotion, effects: reduceMotion ? null : mascotaEffects }))
         .catch((err) => { console.warn('[Lux] Mascota 2 no se pudo cargar:', err && err.message); return null; });
     }
-    function mascotaShow() {
-      if (mascotaActive) return;
-      mascotaActive = true;
-      canvas.style.display = 'none';
-      Object.assign(mascotaCanvas.style, { width: `${percent}vh`, height: `${percent}vh`, transform: 'none' });
-      if (typeof gsap !== 'undefined') gsap.set(mascotaCanvas, { xPercent: -50 });
-      if (!mascotaLoading) mascotaLoading = mascotaLoad().then((api) => { mascota = api; return api; });
+    // Pide el modelo «modelId». Si cambia el modelo, libera el anterior (dispose) y carga el nuevo; si falla, vuelve a Lux.
+    function mascotaShow(modelId) {
+      if (mascotaActive && mascotaWant === modelId) return;
+      mascotaWant = modelId;
+      const wasActive = mascotaActive;
+      if (mascotaId !== modelId) {
+        if (mascota) { mascota.dispose(); mascota = null; }
+        const recentlyFailed = mascotaFailed !== null && mascotaFailed.id === modelId && Date.now() - mascotaFailed.at < MASCOTA_RETRY_MS;
+        if (recentlyFailed) {
+          mascotaId = null; // sin modelo cargado: el siguiente aviso lo vuelve a intentar cuando pase el plazo
+          mascotaLoading = Promise.resolve(null);
+        } else {
+          mascotaId = modelId;
+          mascotaLoading = mascotaLoad(modelId).then((api) => {
+            if (mascotaId !== modelId) { if (api) api.dispose(); return null; } // ya se pidió otro modelo
+            if (api) mascota = api;
+            else { mascotaFailed = { id: modelId, at: Date.now() }; mascotaId = null; }
+            return api;
+          });
+        }
+      }
+      if (!wasActive) {
+        mascotaActive = true;
+        canvas.style.display = 'none';
+        Object.assign(mascotaCanvas.style, { width: `${percent}vh`, height: `${percent}vh`, transform: 'none' });
+        if (typeof gsap !== 'undefined') gsap.set(mascotaCanvas, { xPercent: -50 });
+      }
       mascotaLoading.then((api) => {
-        if (!mascotaActive) return;
+        if (!mascotaActive || mascotaWant !== modelId) return;
         if (api) api.enter();
         else mascotaHide(true);
       });

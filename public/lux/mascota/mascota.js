@@ -267,5 +267,30 @@ export async function createMascota({ canvas, modelUrl, fps60 = false, reduceMot
       mouth = Number(level) || 0;
     },
     resize,
+    /**
+     * Libera el modelo: deja de dibujar, para las animaciones y suelta geometrías, materiales,
+     * texturas y el renderer. No pierde el contexto WebGL del canvas (el siguiente modelo lo reusa).
+     */
+    dispose() {
+      visible = false;
+      stop();
+      window.removeEventListener('resize', resize);
+      if (gsap) gsap.killTweensOf([root.scale, root.position]);
+      mixer.stopAllAction();
+      mixer.uncacheRoot(gltf.scene);
+      scene.remove(root);
+      gltf.scene.traverse((node) => {
+        if (node.geometry) node.geometry.dispose();
+        const materials = Array.isArray(node.material) ? node.material : node.material ? [node.material] : [];
+        for (const material of materials) {
+          for (const value of Object.values(material)) {
+            if (value && value.isTexture) value.dispose();
+          }
+          material.dispose();
+        }
+      });
+      renderer.dispose();
+      canvas.style.display = 'none';
+    },
   };
 }
