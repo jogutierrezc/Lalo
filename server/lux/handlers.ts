@@ -12,6 +12,7 @@
  *   characters  GET/POST (admin)  catálogo de personajes y su asignación a cada streamer
  *   character   GET   (streamer con Lux activo, o admin)  su personaje activo, su modelo y el consumo del mes
  *   mascota-model GET (overlay, con la clave de OBS)  el archivo GLB del personaje de la cuenta, solo si es suyo
+ *   character-model POST (admin)  sube (presign + complete), quita el modelo 3D de un personaje
  *   reply       POST  (streamer con Lux activo, o admin)  genera una respuesta de Lux
  *   memory      GET/POST  memoria del personaje activo del streamer
  *   admin-memory POST (admin)  memoria que escribe el administrador en la ficha de la cuenta
@@ -57,7 +58,9 @@ import {
   visibleCharacters,
   type LuxCharacter,
 } from './characters.js';
-import { fetchPrivateModel, type ModelBytes } from './mascotaModel.js';
+import { fetchPrivateModel, isModelKey, type ModelBytes } from './mascotaModel.js';
+import { MODEL_MESSAGES, checkModelFile, defaultModelFiles, newModelKey, retryStaleKeys, MODEL_MAX_BYTES, MODEL_MIME, MODEL_UPLOAD_SECONDS, type ModelFiles } from './characterModel.js';
+import { licenseNoticeFor } from './characters.js';
 import {
   MODEL_CONFIG_SETTING,
   defaultModelProblem,
@@ -75,7 +78,7 @@ import {
 /** Como failureOf, pero el aviso de migración nombra las de Lux (0023 a 0032), no la de integraciones. */
 function luxFailure(err: unknown, where: string): IntegrationResult {
   if (err instanceof MigrationMissingError) {
-    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023 a 0032) en Supabase.');
+    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023 a 0034) en Supabase.');
   }
   return failureOf(err, where);
 }
@@ -97,6 +100,7 @@ export const LUX_ACTIONS = [
   'characters',
   'character',
   'mascota-model',
+  'character-model',
 ] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
@@ -130,6 +134,8 @@ export interface LuxDeps {
   db: (env: Env) => LuxDb | null;
   /** Lee el archivo del modelo de un personaje del bucket privado. Las pruebas pasan uno falso. */
   modelBytes?: (env: Env, key: string) => Promise<ModelBytes>;
+  /** Acceso a R2 para subir, confirmar y quitar el modelo del personaje. Las pruebas pasan uno falso. */
+  modelFiles?: ModelFiles;
   /** Tiempo de espera del chat por espectador. Las pruebas pasan uno propio. */
   cooldown?: LuxCooldown;
   now?: () => number;
@@ -561,7 +567,14 @@ async function character(req: IntegrationRequest, env: Env, deps: LuxDeps): Prom
     return {
       status: 200,
       body: {
-        character: { id: current.id, name: current.name, color: current.color, gestures: current.gestures, isDefault: current.isDefault },
+        character: {
+          id: current.id,
+          name: current.name,
+          color: current.color,
+          gestures: current.gestures,
+          isDefault: current.isDefault,
+          licenseNotice: licenseNoticeFor(current),
+        },
         model: choice.model,
         modelLabel: modelLabel(provider, choice.model),
         modelNote: choice.fellBack,
@@ -954,6 +967,111 @@ async function mascotaModel(req: IntegrationRequest, env: Env, deps: LuxDeps): P
 }
 
 /**
+ * Modelo 3D de un personaje (ficha del administrador). Solo el administrador: el rol
+ * sale de la sesión, nunca del cuerpo. Ops:
+ *   presign   { characterId, name, size }          autorización de subida firmada (900 s)
+ *   complete  { characterId, key, name, origin }   confirma la subida, guarda la clave y borra la anterior
+ *   remove    { characterId }                      quita el modelo
+ * Los archivos cuyo borrado falla quedan en model_stale_keys y se reintentan en la siguiente operación.
+ */
+async function characterModel(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  if (req.method.toUpperCase() !== 'POST') return fail(405, 'method', 'Esta ruta solo admite POST.');
+  const who = await deps.auth(req, env);
+  if (isFail(who)) return who;
+  if (who.role !== 'admin') return fail(403, 'not_admin', 'Solo para administradores.');
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const api = characterApi(db);
+  if (!api || typeof api.setCharacterModel !== 'function') {
+    return fail(503, 'not_configured', 'Al servidor le faltan las funciones de personajes de Lux (migración 0034).');
+  }
+  const files = deps.modelFiles ?? defaultModelFiles;
+  const nowMs = (deps.now ?? Date.now)();
+
+  const raw = bodyOf(req);
+  const op = raw.op;
+  if (op !== 'presign' && op !== 'complete' && op !== 'remove') return fail(400, 'bad_op', 'Operación no admitida.');
+  const id = typeof raw.characterId === 'string' ? raw.characterId.trim() : '';
+  if (!UUID.test(id)) return fail(400, 'bad_id', 'El personaje no es válido.');
+
+  try {
+    // Mismo alcance que el resto del catálogo: el administrador ve los personajes sin dueño y los suyos.
+    const list = visibleCharacters(await api.characters(), who.id);
+    const target = list.find((item) => item.id === id);
+    if (!target) return fail(404, 'character_not_found', 'Ese personaje no existe.');
+    if (!isModelAvatar(target.avatar)) return fail(400, 'not_model_avatar', 'Este personaje no usa un modelo 3D.');
+
+    if (op === 'presign') {
+      const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 200) : '';
+      const size = typeof raw.size === 'number' ? raw.size : NaN;
+      const check = checkModelFile({ name, size });
+      if (!check.ok) return fail(400, 'bad_file', check.message);
+      // Una subida pedida y no confirmada se da por abandonada: su archivo, si existe, se borra en el reintento.
+      const abandoned = target.modelPendingKey ? [target.modelPendingKey] : [];
+      const stale = await retryStaleKeys(files, env, [...(target.modelStaleKeys ?? []), ...abandoned]);
+      const key = newModelKey();
+      const uploadUrl = files.uploadUrl(env, key, size, new Date(nowMs));
+      if (!uploadUrl) return fail(503, 'models_bucket', MODEL_MESSAGES.notConfigured);
+      await api.setCharacterModel!(id, { modelPendingKey: key, modelStaleKeys: stale });
+      return { status: 200, body: { key, uploadUrl, expiresIn: MODEL_UPLOAD_SECONDS, headers: { 'Content-Type': MODEL_MIME } } };
+    }
+
+    if (op === 'complete') {
+      const key = typeof raw.key === 'string' ? raw.key : '';
+      if (!isModelKey(key) || key !== target.modelPendingKey) return fail(400, 'not_requested', MODEL_MESSAGES.notRequested);
+      const origin = raw.origin === 'riot' || raw.origin === 'propio' ? raw.origin : null;
+      if (!origin) return fail(400, 'bad_origin', MODEL_MESSAGES.origin);
+      const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 200) : 'modelo.glb';
+
+      // Tamaño real, preguntado a R2: no vale el que diga el navegador.
+      const head = await files.head(env, key);
+      if (head === 'not_configured') return fail(503, 'models_bucket', MODEL_MESSAGES.notConfigured);
+      if (head === 'missing' || head === 'error') return fail(502, 'upload_failed', MODEL_MESSAGES.upload);
+      if (head.bytes <= 0 || head.bytes > MODEL_MAX_BYTES) {
+        const stale = await retryStaleKeys(files, env, target.modelStaleKeys ?? []);
+        const gone = await files.remove(env, key);
+        await api.setCharacterModel!(id, { modelPendingKey: null, modelStaleKeys: gone ? stale : [...stale, key] });
+        return fail(400, 'bad_file', head.bytes > MODEL_MAX_BYTES ? MODEL_MESSAGES.tooBig : MODEL_MESSAGES.empty);
+      }
+
+      // Reemplazo: la fila apunta ya al archivo nuevo; el anterior se borra después.
+      const previous = target.modelKey;
+      const stale = await retryStaleKeys(files, env, target.modelStaleKeys ?? []);
+      await api.setCharacterModel!(id, {
+        modelKey: key,
+        modelOrigin: origin,
+        modelFileName: name,
+        modelFileBytes: head.bytes,
+        modelUploadedAt: new Date(nowMs).toISOString(),
+        modelPendingKey: null,
+        modelStaleKeys: stale,
+      });
+      if (previous && previous !== key && !(await files.remove(env, previous))) {
+        await api.setCharacterModel!(id, { modelStaleKeys: [...stale, previous] });
+      }
+      return { status: 200, body: { ok: true, modelFile: { name, bytes: head.bytes, uploadedAt: new Date(nowMs).toISOString() } } };
+    }
+
+    // remove: se borra el archivo actual; si no se puede, queda anotado para reintentar.
+    const stale = await retryStaleKeys(files, env, [...(target.modelStaleKeys ?? []), ...(target.modelPendingKey ? [target.modelPendingKey] : [])]);
+    let left = stale;
+    if (target.modelKey && !(await files.remove(env, target.modelKey))) left = [...stale, target.modelKey];
+    await api.setCharacterModel!(id, {
+      modelKey: null,
+      modelOrigin: null,
+      modelFileName: null,
+      modelFileBytes: null,
+      modelUploadedAt: null,
+      modelPendingKey: null,
+      modelStaleKeys: left,
+    });
+    return { status: 200, body: { ok: true } };
+  } catch (err) {
+    return luxFailure(err, 'lux/character-model');
+  }
+}
+
+/**
  * Lo nuevo que Lux tiene que decir en el overlay. Sin `after`, solo devuelve el último id:
  * así el overlay no repite frases viejas al abrirse. Se autoriza con la clave de OBS.
  * Cada respuesta lleva el personaje activo (avatar, color y gestos): el overlay se pinta con él.
@@ -1224,5 +1342,7 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return character(req, env, deps);
     case 'mascota-model':
       return mascotaModel(req, env, deps);
+    case 'character-model':
+      return characterModel(req, env, deps);
   }
 }

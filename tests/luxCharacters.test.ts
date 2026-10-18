@@ -320,7 +320,7 @@ describe('asignación de personaje por streamer', () => {
 
     const res = await handleLux('speech', request('GET', undefined, { k: WIDGET_KEY }), env, { db: () => w.db, now: () => NOW });
     expect(res.status).toBe(200);
-    expect(res.body.character).toEqual({ avatar: 'lux', color: '#22aaff', gestures: ['wave'] });
+    expect(res.body.character).toEqual({ avatar: 'lux', licenseNotice: null, color: '#22aaff', gestures: ['wave'] });
   });
 });
 

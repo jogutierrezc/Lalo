@@ -9,11 +9,14 @@
   <style>
     html, body { margin: 0; background: transparent; overflow: hidden; }
     canvas { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); pointer-events: none; }
+    /* Aviso de licencia (Riot Games): letra pequeña en el pie. Solo aparece si el personaje lo lleva. */
+    #lux-license { position: fixed; left: 0; right: 0; bottom: 4px; margin: 0; padding: 0 12px; text-align: center; font: 10px/1.3 system-ui, sans-serif; color: rgba(255,255,255,0.72); text-shadow: 0 1px 2px rgba(0,0,0,0.85); pointer-events: none; display: none; }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
   <canvas id="mascota-c" style="display:none"></canvas>
+  <p id="lux-license" role="note"></p>
   <script>
     // =========================================================================
     // Lux · overlay de OBS (fuente de navegador, fondo transparente).
@@ -730,6 +733,12 @@
     let allowedGestures = null;
     const applyCharacter = (character) => {
       if (Array.isArray(character.gestures)) allowedGestures = new Set(character.gestures);
+      // Aviso de licencia de Riot Games: el texto lo manda el servidor, tal cual, y solo se muestra si viene.
+      const license = document.getElementById('lux-license');
+      if (license) {
+        license.textContent = typeof character.licenseNotice === 'string' ? character.licenseNotice : '';
+        license.style.display = license.textContent ? 'block' : 'none';
+      }
       if (typeof character.color === 'string' && /^#[0-9a-f]{6}$/i.test(character.color)) {
         const base = new THREE.Color(character.color);
         mats.hairMain.color.copy(base);

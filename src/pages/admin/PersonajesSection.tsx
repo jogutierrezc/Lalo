@@ -24,6 +24,7 @@ import {
   type LuxModelRow,
   type LuxProviderModels,
 } from '../../lib/luxApi';
+import { ModeloPersonajeBlock } from './ModeloPersonajeBlock';
 
 /** Borrador del formulario: un personaje nuevo (id null) o uno existente. model '' = modelo por defecto. */
 interface Draft {
@@ -151,6 +152,8 @@ export const PersonajesSection: React.FC = () => {
 
   const activeModels = catalog?.models ?? [];
   const pickable = activeModels.filter((model) => model.enabled || model.isDefault);
+  // Fila del personaje que se edita: su bloque de modelo 3D sale de aquí.
+  const draftRow = draft?.id ? catalog?.characters.find((character) => character.id === draft.id) : undefined;
 
   return (
     <div className="grid gap-5">
@@ -325,6 +328,16 @@ export const PersonajesSection: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {draft.avatar.startsWith('glb:') && (
+              <div className="grid gap-3 border-t border-current/10 pt-4">
+                {draft.id === null ? (
+                  <p className="cab-hint">Guarda el personaje para subir su modelo 3D.</p>
+                ) : (
+                  draftRow && <ModeloPersonajeBlock key={draftRow.id} character={draftRow} onChanged={load} />
+                )}
+              </div>
+            )}
 
             <fieldset className="grid gap-2">
               <legend className="cab-label">Gestos en el overlay</legend>

@@ -58,6 +58,37 @@ export interface LuxCharacter {
    * Nunca sale en las respuestas: characterView() la quita.
    */
   modelKey: string | null;
+  /** Origen del modelo: 'riot' obliga a mostrar el aviso de licencia (migración 0034). */
+  modelOrigin?: LuxModelOrigin | null;
+  /** Datos del archivo actual que muestra la ficha. Null si no hay modelo subido. */
+  modelFile?: LuxModelFile | null;
+  /** Clave dada para una subida pendiente de confirmar. Interna: characterView() la quita. */
+  modelPendingKey?: string | null;
+  /** Archivos viejos de R2 pendientes de borrar. Interna: characterView() la quita. */
+  modelStaleKeys?: string[];
+}
+
+/** Origen del modelo GLB: de Riot Games (con aviso) o propio de quien lo subió. */
+export const MODEL_ORIGINS = ['riot', 'propio'] as const;
+export type LuxModelOrigin = (typeof MODEL_ORIGINS)[number];
+
+/** Archivo del modelo que la ficha muestra. Nombre, tamaño y fecha pueden faltar en modelos subidos por terminal. */
+export interface LuxModelFile {
+  name: string | null;
+  bytes: number | null;
+  uploadedAt: string | null;
+}
+
+/**
+ * Aviso de licencia de Riot Games. El texto es EXACTO: lo pide la licencia y no se
+ * cambia. Se muestra en la ficha del admin, en el panel del streamer y en el pie del overlay.
+ */
+export const RIOT_NOTICE =
+  'was created under Riot Games\'s "Legal Jibber Jabber" policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.';
+
+/** Aviso que debe verse con este personaje, o null. Solo si usa un modelo de Riot que tiene archivo. */
+export function licenseNoticeFor(character: Pick<LuxCharacter, 'avatar' | 'modelKey' | 'modelOrigin'>): string | null {
+  return character.modelOrigin === 'riot' && character.modelKey !== null && isModelAvatar(character.avatar) ? RIOT_NOTICE : null;
 }
 
 /** Lo que el administrador escribe para crear o editar un personaje. */
@@ -153,10 +184,13 @@ export function visibleCharacters(list: LuxCharacter[], profileId: string | null
   return list.filter((character) => !character.ownerProfileId || character.ownerProfileId === profileId);
 }
 
-/** Quita lo que no debe salir del servidor (la clave del modelo). */
-export function characterView(character: LuxCharacter): Omit<LuxCharacter, 'modelKey'> {
-  const { modelKey: _hidden, ...view } = character;
-  return view;
+/**
+ * Lo que sale del servidor: sin las claves de R2 (modelo, subida pendiente y borrados
+ * pendientes), con el aviso de licencia que corresponde.
+ */
+export function characterView(character: LuxCharacter): Omit<LuxCharacter, 'modelKey' | 'modelPendingKey' | 'modelStaleKeys'> & { licenseNotice: string | null } {
+  const { modelKey: _hidden, modelPendingKey: _pending, modelStaleKeys: _stale, ...view } = character;
+  return { ...view, modelOrigin: character.modelOrigin ?? null, modelFile: character.modelFile ?? null, licenseNotice: licenseNoticeFor(character) };
 }
 
 /**
@@ -169,6 +203,6 @@ export function pickCharacter(list: LuxCharacter[], assignedId: string | null | 
 }
 
 /** Lo que ve el overlay del personaje: solo lo que dibuja, nada del modelo ni del catálogo. */
-export function overlayView(character: LuxCharacter): { avatar: LuxAvatar; color: string; gestures: LuxGestureId[] } {
-  return { avatar: character.avatar, color: character.color, gestures: character.gestures };
+export function overlayView(character: LuxCharacter): { avatar: LuxAvatar; color: string; gestures: LuxGestureId[]; licenseNotice: string | null } {
+  return { avatar: character.avatar, color: character.color, gestures: character.gestures, licenseNotice: licenseNoticeFor(character) };
 }

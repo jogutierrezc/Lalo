@@ -11,7 +11,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { MEMORY_SAVED_MAX, type LuxMemoryKind, type LuxMemorySource } from './memory.js';
-import type { LuxAvatar, LuxCharacter, LuxGestureId } from './characters.js';
+import type { LuxAvatar, LuxCharacter, LuxGestureId, LuxModelOrigin } from './characters.js';
 
 export interface LuxProfile {
   id: string;
@@ -149,6 +149,8 @@ export interface LuxDb extends Partial<LuxMemoryDb> {
   streamers?(): Promise<Array<{ id: string; label: string }>>;
   /** Borra un personaje que no sea el por defecto. true si existía. */
   deleteCharacter?(id: string): Promise<boolean>;
+  /** Estado del modelo 3D de un personaje (migración 0034). Opcional en las pruebas. */
+  setCharacterModel?(id: string, patch: LuxCharacterModelPatch): Promise<void>;
   /** Hace que este personaje sea el único por defecto. */
   makeDefaultCharacter?(id: string): Promise<void>;
   /** Asigna el personaje a la cuenta; null vuelve al personaje por defecto. */
@@ -172,7 +174,19 @@ function check(error: { code?: string; message: string } | null): void {
 }
 
 const MEMORY_COLUMNS = 'id, kind, subject, content, pinned, source, created_at, expires_at';
-const CHARACTER_COLUMNS = 'id, name, avatar, color, gestures, model, is_default, owner_profile_id, model_key';
+const CHARACTER_COLUMNS =
+  'id, name, avatar, color, gestures, model, is_default, owner_profile_id, model_key, model_origin, model_file_name, model_file_bytes, model_uploaded_at, model_pending_key, model_stale_keys';
+
+/** Cambios del estado del modelo: solo los campos presentes se escriben. */
+export interface LuxCharacterModelPatch {
+  modelKey?: string | null;
+  modelOrigin?: LuxModelOrigin | null;
+  modelFileName?: string | null;
+  modelFileBytes?: number | null;
+  modelUploadedAt?: string | null;
+  modelPendingKey?: string | null;
+  modelStaleKeys?: string[];
+}
 
 function memoryFromRow(row: Record<string, unknown>): LuxMemoryItem {
   return {
@@ -198,6 +212,16 @@ function characterFromRow(row: Record<string, unknown>): LuxCharacter {
     isDefault: row.is_default === true,
     ownerProfileId: (row.owner_profile_id as string | null) ?? null,
     modelKey: (row.model_key as string | null) ?? null,
+    modelOrigin: (row.model_origin as LuxModelOrigin | null) ?? null,
+    modelFile: row.model_key
+      ? {
+          name: (row.model_file_name as string | null) ?? null,
+          bytes: row.model_file_bytes === null || row.model_file_bytes === undefined ? null : Number(row.model_file_bytes),
+          uploadedAt: (row.model_uploaded_at as string | null) ?? null,
+        }
+      : null,
+    modelPendingKey: (row.model_pending_key as string | null) ?? null,
+    modelStaleKeys: Array.isArray(row.model_stale_keys) ? row.model_stale_keys.map(String) : [],
   };
 }
 
@@ -460,6 +484,21 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
       const { data, error } = await db.from('lux_characters').delete().eq('id', id).eq('is_default', false).select('id');
       check(error);
       return (data ?? []).length > 0;
+    },
+
+    async setCharacterModel(id, patch) {
+      // Solo se escriben los campos que vienen en el parche; el resto de la fila queda igual.
+      const change: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (patch.modelKey !== undefined) change.model_key = patch.modelKey;
+      if (patch.modelOrigin !== undefined) change.model_origin = patch.modelOrigin;
+      if (patch.modelFileName !== undefined) change.model_file_name = patch.modelFileName;
+      if (patch.modelFileBytes !== undefined) change.model_file_bytes = patch.modelFileBytes;
+      if (patch.modelUploadedAt !== undefined) change.model_uploaded_at = patch.modelUploadedAt;
+      if (patch.modelPendingKey !== undefined) change.model_pending_key = patch.modelPendingKey;
+      if (patch.modelStaleKeys !== undefined) change.model_stale_keys = patch.modelStaleKeys;
+      const { data, error } = await db.from('lux_characters').update(change).eq('id', id).select('id');
+      check(error);
+      if ((data ?? []).length === 0) throw new Error('Supabase: character_not_found');
     },
 
     async makeDefaultCharacter(id) {

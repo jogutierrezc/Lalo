@@ -328,6 +328,12 @@ export interface LuxCharacterRow {
   isDefault: boolean;
   /** Cuenta dueña (solo ella lo ve), o null si es para todas. */
   ownerProfileId: string | null;
+  /** Origen del modelo 3D: 'riot' (lleva aviso de licencia) o 'propio'. Null sin modelo. */
+  modelOrigin?: 'riot' | 'propio' | null;
+  /** Archivo del modelo que muestra la ficha. Null si no hay modelo subido. */
+  modelFile?: { name: string | null; bytes: number | null; uploadedAt: string | null } | null;
+  /** Aviso de licencia que debe verse con este personaje, o null. Texto exacto del servidor. */
+  licenseNotice?: string | null;
 }
 
 /** Cuenta que puede ser dueña de un personaje (selector del panel). */
@@ -415,7 +421,7 @@ export async function luxModelSet(provider: LuxProviderId, model: string, patch:
 
 /** Lo que ve el streamer de su personaje: nombre, modelo que usa, aviso y consumo del mes. */
 export interface LuxCharacterView {
-  character: { id: string; name: string; color: string; gestures: string[]; isDefault: boolean };
+  character: { id: string; name: string; color: string; gestures: string[]; isDefault: boolean; licenseNotice?: string | null };
   model: string;
   modelLabel: string;
   /** Por qué no usa el modelo de su personaje: 'budget' (tope del plan) o 'disabled'. Null si lo usa. */

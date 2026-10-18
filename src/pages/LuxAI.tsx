@@ -247,6 +247,11 @@ export const LuxAI: React.FC = () => {
                         {CHARACTER_NOTE[character.modelNote]}
                       </p>
                     )}
+                    {character.character.licenseNotice && (
+                      <p className="cab-hint" role="note">
+                        {character.character.licenseNotice}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <p className="cab-hint">Leyendo tu personaje.</p>
