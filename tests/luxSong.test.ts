@@ -122,3 +122,18 @@ describe('canción en el chat', () => {
     expect(speech).toHaveLength(0);
   });
 });
+
+describe('canción desde el panel', () => {
+  it('el panel genera la letra y, con speak y voz de ElevenLabs, la manda a OBS para cantarse', async () => {
+    const { db, speech } = memoryDb('elevenlabs');
+    const res = await handleLux('reply', request({ message: 'canta sobre el café', speak: true }), env(), {
+      auth: async () => ({ id: 'p1', role: 'streamer', status: 'active' }),
+      db: () => db,
+      fetch: fakeFetch(),
+    });
+    expect(res.body).toMatchObject({ song: true, gesture: 'dance' });
+    expect(String(res.body.reply)).not.toContain('[canta]');
+    expect(speech).toHaveLength(1);
+    expect(speech[0].text.startsWith('[canta] ')).toBe(true);
+  });
+});

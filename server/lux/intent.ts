@@ -45,17 +45,19 @@ export function intentGuidance(intent: LuxIntent): string {
 }
 
 /** Gestos que entiende el overlay. Los tres últimos los pide el espectador en el mensaje. */
-export type LuxGesture = 'bow' | 'pride' | 'shrug' | 'nod' | 'idle' | 'wave' | 'spin' | 'dance';
+export type LuxGesture = 'bow' | 'pride' | 'shrug' | 'nod' | 'idle' | 'wave' | 'spin' | 'dance' | 'jump' | 'sing';
 
 const DANCE = /\b(baila|bailar|bailes|dance|dancing|danza|dança|dançar)\b/i;
 const SPIN = /\b(gira|girar|da una vuelta|vuelta|spin|turn around|rode|rodar|gire)\b/i;
 const WAVE = /\b(saluda|saludar|saludo|agita|wave|waving|hi there|acena|acenar|saluda con la mano)\b/i;
+const JUMP = /\b(salta|saltar|salto|jump|brinca|brincar)\b/i;
 
-/** Gesto que pide el mensaje (baila, gira, saluda), o null si no pide ninguno. */
-export function detectGestureRequest(message: string): 'dance' | 'spin' | 'wave' | null {
+/** Gesto que pide el mensaje (baila, gira, saluda, salta), o null si no pide ninguno. */
+export function detectGestureRequest(message: string): 'dance' | 'spin' | 'wave' | 'jump' | null {
   if (DANCE.test(message)) return 'dance';
   if (SPIN.test(message)) return 'spin';
   if (WAVE.test(message)) return 'wave';
+  if (JUMP.test(message)) return 'jump';
   return null;
 }
 

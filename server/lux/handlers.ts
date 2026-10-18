@@ -258,38 +258,52 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
     const ajustes: LuxSettings = settingsFromRow(await db.settingsRow(profile.id));
     const memories = ajustes.memoryEnabled ? await db.memories(profile.id, MEMORY_LIMIT) : [];
 
+    const topic = detectSongRequest(message);
+    const turn = {
+      viewer,
+      message,
+      memories,
+      personality: ajustes.personality,
+      language: ajustes.language,
+      replyMax: ajustes.replyMax,
+      intent,
+    };
     const text = await nvidiaChat({
       baseUrl: LUX_PROVIDERS[target].baseUrl,
       apiKey,
       model,
-      messages: buildLuxMessages({
-        viewer,
-        message,
-        memories,
-        personality: ajustes.personality,
-        language: ajustes.language,
-        replyMax: ajustes.replyMax,
-        intent,
-      }),
-      maxTokens: Math.ceil(ajustes.replyMax / 2) + 40,
+      messages: topic !== null ? buildSongMessages(turn, topic) : buildLuxMessages(turn),
+      maxTokens: topic !== null ? 260 : Math.ceil(ajustes.replyMax / 2) + 40,
       fetch: deps.fetch,
     });
-    const { text: spoken, emotion } = parseEmotion(text);
-    const clipped = (spoken || '…').slice(0, ajustes.replyMax);
+    const isSong = topic !== null;
+    const lyrics = isSong ? normalizeSong(text) : '';
+    const parsed = isSong ? { text: lyrics, emotion: 'normal' } : parseEmotion(text);
+    const emotion = parsed.emotion;
+    const clipped = isSong ? songForChat(lyrics) || '…' : (parsed.text || '…').slice(0, ajustes.replyMax);
+    const canSing = isSong && ajustes.voiceEngine === 'elevenlabs';
 
     // Registro de la respuesta: si falla, la respuesta igualmente se entrega.
     await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply: clipped, model }).catch(() => {
       console.error('[Lalo lux] no se pudo guardar el registro de la respuesta');
     });
     // Desde el panel solo se manda a OBS si el streamer lo pide (botón «Hablar en el overlay»).
-    if (raw.speak === true) await enqueueSpeech(db, profile.id, clipped, emotion, gestureFor(message, intent), ajustes);
+    if (raw.speak === true) {
+      if (isSong) {
+        if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'dance', ajustes);
+      } else {
+        await enqueueSpeech(db, profile.id, clipped, emotion, gestureFor(message, intent), ajustes);
+      }
+    }
     return {
       status: 200,
       body: {
         reply: clipped,
         emotion,
         intent,
-        gesture: gestureFor(message, intent),
+        gesture: isSong ? 'dance' : gestureFor(message, intent),
+        song: isSong,
+        note: isSong && !canSing ? 'sing_needs_elevenlabs' : undefined,
         model,
         voice: { referenceId: ajustes.voiceReferenceId, engine: ajustes.voiceEngine },
       },

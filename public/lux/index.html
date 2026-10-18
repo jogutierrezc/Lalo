@@ -1553,7 +1553,7 @@
     // ---------- Movimiento suave y caché del rostro (overlay y panel) ----------
 
     // Valores vivos de la pose. GSAP los anima; applyLivePose los lleva a los pivotes del 3D.
-    const live = { hx: 0, hy: 0, hz: 0, bx: 0, by: 0, bz: 0, lax: 0, lay: 0, laz: 0, rax: 0, ray: 0, raz: 0, gx: 0, gz: 0, gnx: 0, gy: 0, gax: 0, grx: 0, gra: 0 };
+    const live = { hx: 0, hy: 0, hz: 0, bx: 0, by: 0, bz: 0, lax: 0, lay: 0, laz: 0, rax: 0, ray: 0, raz: 0, gx: 0, gz: 0, gnx: 0, gy: 0, gax: 0, grx: 0, gra: 0, jy: 0 };
 
     // g* son desplazamientos de gesto encima de la pose de la emoción (saludar, girar, bailar).
     function applyLivePose() {
@@ -1598,6 +1598,19 @@
           .to(live, { gra: 0, grx: 0, duration: 0.4, ease: 'power2.inOut' }),
       // Da una vuelta completa sobre sí mismo.
       spin: () => gsap.timeline().to(live, { gy: Math.PI * 2, duration: 1.8, ease: 'power2.inOut' }).set(live, { gy: 0 }),
+      // Salta: sube, cae con rebote y se aplasta un poco al tocar el suelo.
+      jump: () =>
+        gsap
+          .timeline()
+          .to(live, { jy: 0.42, duration: 0.3, ease: 'power2.out' })
+          .to(live, { jy: 0, duration: 0.28, ease: 'power2.in' })
+          .to(live, { jy: 0.12, duration: 0.14, yoyo: true, repeat: 1, ease: 'power2.out' }),
+      // Canta: balancea la cabeza, el torso y los brazos al ritmo de la letra.
+      sing: () =>
+        gsap
+          .timeline()
+          .to(live, { gz: 0.1, gnx: 0.06, gax: -0.25, duration: 0.6, yoyo: true, repeat: 3, ease: 'sine.inOut' })
+          .to(live, { gz: 0, gnx: 0, gax: 0, duration: 0.35, ease: 'power2.inOut' }),
       // Baila: levanta los brazos y balancea el torso de lado a lado.
       dance: () =>
         gsap
@@ -2027,7 +2040,7 @@
         const t = clock.getElapsedTime();
 
         // Flotación suave Chibi 3D
-        bodyPivot.position.y = Math.sin(t * 2.4) * 0.045;
+        bodyPivot.position.y = Math.sin(t * 2.4) * 0.045 + live.jy;
         headPivot.rotation.z = live.hz + live.gz + Math.sin(t * 1.8) * 0.025;
 
         // Si las partículas mágicas están activas, hacerlas girar suavemente
@@ -2179,6 +2192,8 @@
       }
 
       async function playOne(text, emotion, voice, gesture) {
+        // El gesto arranca al recibir la frase, no al sonar: así se ve aunque la voz falle.
+        playGesture(gesture);
         showExpression(emotion);
         let blob;
         try {
@@ -2208,8 +2223,6 @@
             // Sin analizador, el personaje habla igual con la expresión de la emoción.
           }
         }
-        // El gesto empieza justo cuando suena la frase.
-        playGesture(gesture);
         await new Promise((resolve) => {
           audio.addEventListener('ended', resolve, { once: true });
           audio.addEventListener('error', resolve, { once: true });
@@ -2247,6 +2260,9 @@
       // Para probar desde la consola: window.luxSpeak('Hola', 'feliz')
       window.luxSpeak = (text, emotion, voice, gesture) => speak(text, emotion, voice, gesture);
       window.luxGesture = (name) => playGesture(name);
+      // Prueba: ?overlay=1&demo=jump hace el gesto al cargar (para revisar el movimiento sin chat).
+      const demo = params.get('demo');
+      if (demo) window.addEventListener('load', () => setTimeout(() => playGesture(demo), 400));
     })();
   </script>
 
