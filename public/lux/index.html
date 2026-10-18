@@ -1987,16 +1987,38 @@
         document.documentElement.style.background = 'transparent';
         document.body.style.background = 'transparent';
         document.body.style.margin = '0';
+        // Tamaño como porcentaje de la altura de la pantalla: ?overlay=1&size=30 (por defecto 40, entre 10 y 100).
+        const percent = Math.min(Math.max(Number(new URLSearchParams(location.search).get('size')) || 40, 10), 100);
+        const side = `${percent}vh`;
         Object.assign(canvas.style, {
           position: 'fixed',
-          top: '0',
+          bottom: '0',
           left: '50%',
-          width: '100vh',
-          height: '100vh',
+          width: side,
+          height: side,
           transform: 'translateX(-50%)',
           pointerEvents: 'none',
         });
-        window.addEventListener('load', () => setRenderBackground('transparent'));
+        // Encuadre que cabe entero: la cámara se aleja hasta que el personaje (con 12% de margen) entra en el cuadrado.
+        const fitCharacterInView = () => {
+          const box = new THREE.Box3().setFromObject(scene);
+          if (box.isEmpty()) return;
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          const halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+          const halfExtent = (Math.max(size.x, size.y) / 2) * 1.12;
+          document.documentElement.dataset.diag = JSON.stringify({ size, center, min: box.min, max: box.max, kids: scene.children.map((c) => `${c.type}:${c.name || ''}:${c.visible}`), rect: canvas.getBoundingClientRect().toJSON(), vh: innerHeight, vw: innerWidth });
+          camState.theta = 0;
+          camState.phi = 1.48;
+          camState.targetY = center.y;
+          camState.radius = halfExtent / halfTan;
+          updateCameraTransform();
+          renderer.render(scene, camera);
+        };
+        window.addEventListener('load', () => {
+          setRenderBackground('transparent');
+          fitCharacterInView();
+        });
       }
 
       window.addEventListener('message', (event) => {

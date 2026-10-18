@@ -351,6 +351,14 @@ export const Account: React.FC = () => {
                   Se actualiza cada vez que una fuente de navegador de OBS lee tu configuración con tu clave.
                 </span>
               </div>
+              {profile.lux_enabled && (
+                <div className="cab-field">
+                  <span className="cab-label">Lux (personaje IA)</span>
+                  <span>Activo</span>
+                  <span className="cab-hint">Fuente de navegador de OBS para el personaje, con fondo transparente:</span>
+                  <code className="cab-mono">{`${window.location.origin}/lux/index.html?overlay=1`}</code>
+                </div>
+              )}
               {profile.elevenlabs_enabled && (
                 <div className="cab-field">
                   <span className="cab-label">Voces ElevenLabs</span>
