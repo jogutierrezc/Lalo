@@ -12,7 +12,7 @@ import {
   fetchAllAcceptances,
   fetchInvites,
   fetchPlans,
-  fetchProfileMeta,
+  fetchProfileMetaWithLux,
   fetchRedemptions,
   rpc,
   type ProfileMeta,
@@ -83,7 +83,7 @@ export function useAdminData(): AdminData {
         fetchInvites(),
         // Estas lecturas solo enriquecen la vista: si fallan, la consola sigue
         fetchRedemptions().catch(() => []),
-        fetchProfileMeta().catch(() => []),
+        fetchProfileMetaWithLux().catch(() => []),
         fetchAllAcceptances().catch(() => null),
         fetchAdminUsageReport().catch(() => null),
       ]);

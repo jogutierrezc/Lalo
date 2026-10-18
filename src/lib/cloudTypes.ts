@@ -54,6 +54,8 @@ export interface ProfileRow {
   onboarded_at?: string | null;
   /** Desde 0018: el administrador le activó ElevenLabs. */
   elevenlabs_enabled?: boolean;
+  /** Desde 0023: el administrador activó Lux (personaje con IA) para la cuenta. */
+  lux_enabled?: boolean;
   /** Desde 0018: cuándo cerró el aviso de invitación a ElevenLabs. */
   elevenlabs_invite_seen_at?: string | null;
   /** Desde 0019: última vez que una fuente de OBS consultó su llave. */
@@ -326,6 +328,7 @@ export interface RpcArgs {
   admin_set_default_voice: { p_voice: string };
   admin_set_elevenlabs: { p_profile: string; p_enabled: boolean };
   admin_set_elevenlabs_limit: { p_profile: string; p_daily_chars: number };
+  admin_set_lux: { p_profile: string; p_enabled: boolean };
   eleven_active_slot: Record<string, never>;
   admin_set_eleven_active_slot: { p_slot: number };
   admin_set_streamer_voice: { p_profile: string; p_reference_id: string; p_engine: 'fish' | 'elevenlabs' };
@@ -349,6 +352,7 @@ export interface RpcResult {
   admin_set_profile: ProfileRow;
   admin_set_elevenlabs: ProfileRow;
   admin_set_elevenlabs_limit: ProfileRow;
+  admin_set_lux: ProfileRow;
   eleven_active_slot: number;
   admin_set_eleven_active_slot: number;
   admin_set_streamer_voice: null;

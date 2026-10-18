@@ -237,8 +237,20 @@ export async function fetchRedemptions(): Promise<InviteRedemptionRow[]> {
 
 export type ProfileMeta = Pick<
   ProfileRow,
-  'id' | 'invite_code_id' | 'created_at' | 'last_seen_at' | 'elevenlabs_enabled' | 'last_widget_at' | 'elevenlabs_daily_chars'
+  'id' | 'invite_code_id' | 'created_at' | 'last_seen_at' | 'elevenlabs_enabled' | 'last_widget_at' | 'elevenlabs_daily_chars' | 'lux_enabled'
 >;
+
+/**
+ * Mismos datos que fetchProfileMeta más el interruptor de Lux (0023). Va en una
+ * consulta aparte: si la migración aún no está aplicada, no afecta al resto.
+ */
+export async function fetchProfileMetaWithLux(): Promise<ProfileMeta[]> {
+  const rows = await fetchProfileMeta();
+  const { data, error } = await client().from('profiles').select('id, lux_enabled');
+  if (error || !data) return rows;
+  const flags = new Map((data as { id: string; lux_enabled: boolean | null }[]).map((row) => [row.id, row.lux_enabled === true]));
+  return rows.map((row) => ({ ...row, lux_enabled: flags.get(row.id) ?? false }));
+}
 
 /** Datos de cada perfil que admin_overview no trae: última visita, alta, pulso de OBS y ElevenLabs. */
 export async function fetchProfileMeta(): Promise<ProfileMeta[]> {

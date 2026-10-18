@@ -170,6 +170,7 @@ export default defineConfig({
       '/api/kofi': `http://localhost:${process.env.PORT || 3001}`,
       '/api/riot': `http://localhost:${process.env.PORT || 3001}`,
       '/api/integrations': `http://localhost:${process.env.PORT || 3001}`,
+      '/api/lux': `http://localhost:${process.env.PORT || 3001}`,
     },
     watch: {
       ignored: ['**/*.mp3', '**/*.wav', '**/dist/**', '**/.git/**', '**/.claude/**', '**/test_*'],

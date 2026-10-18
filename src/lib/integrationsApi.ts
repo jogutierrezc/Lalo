@@ -23,7 +23,7 @@ const NO_SERVER = 'El servidor de Lalo no respondió. En local hace falta arranc
 const fallo = (code: string, message: string, missing: string[] = []): ApiOutcome<never> => ({ ok: false, code, message, missing });
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
 
-async function call(path: string, method: 'GET' | 'POST', body?: Record<string, unknown>): Promise<ApiOutcome<Record<string, unknown>>> {
+export async function call(path: string, method: 'GET' | 'POST', body?: Record<string, unknown>): Promise<ApiOutcome<Record<string, unknown>>> {
   if (!supabase) return fallo('no_cloud', 'Este despliegue no tiene la nube encendida: no hay cuentas que conectar.');
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;

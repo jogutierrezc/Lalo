@@ -25,7 +25,7 @@ import { routeFromRequest } from '../server/apiRoute.js';
 const first = (value: unknown): string => (Array.isArray(value) ? String(value[0] ?? '') : typeof value === 'string' ? value : '');
 
 export default async function handler(req: any, res: any): Promise<void> {
-  const route = routeFromRequest(req, ['spotify', 'kofi', 'riot', 'integrations']);
+  const route = routeFromRequest(req, ['spotify', 'kofi', 'riot', 'integrations', 'lux']);
   let [group, part] = route.split('/');
   const path = String(req.url ?? '').split('?')[0];
   if (group === 'kofi' || (!group && path.includes('/api/kofi/'))) {

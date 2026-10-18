@@ -12,6 +12,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ServiceCard, type CardTone } from '../../components/integraciones/ServiceCard';
 import { integrationsServerStatus, type IntegrationsServerStatus } from '../../lib/integrationsApi';
+import { luxSaveKey, luxSetModel, luxStatus, luxTest, type LuxStatus } from '../../lib/luxApi';
 import { adminHref, storageHealth, type StorageHealth } from '../../lib/adminLogic';
 import { rpc } from '../../lib/cloud';
 import type { AdminData } from './useAdminData';
@@ -34,6 +35,63 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
   const [elevenSlot, setElevenSlot] = useState<1 | 2 | null>(null);
   const [elevenSlotProblem, setElevenSlotProblem] = useState<string | null>(null);
   const [elevenSlotBusy, setElevenSlotBusy] = useState(false);
+  const [lux, setLux] = useState<LuxStatus | null>(null);
+  const [luxProblem, setLuxProblem] = useState<string | null>(null);
+  const [luxInput, setLuxInput] = useState('');
+  const [luxBusy, setLuxBusy] = useState(false);
+  const [luxNote, setLuxNote] = useState<string | null>(null);
+
+  const refreshLux = useCallback(async () => {
+    const res = await luxStatus();
+    if (res.ok) {
+      setLux(res.data);
+      setLuxProblem(null);
+    } else {
+      setLuxProblem(res.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshLux();
+  }, [refreshLux]);
+
+  // La clave pasa por el servidor y no se conserva en el estado: al guardar se vacía el campo.
+  const saveLuxKey = async (value: string) => {
+    setLuxBusy(true);
+    setLuxNote(null);
+    const res = await luxSaveKey(value);
+    setLuxInput('');
+    if (res.ok) {
+      setLuxProblem(null);
+      setLuxNote(value ? 'Clave guardada.' : 'Clave borrada.');
+      await refreshLux();
+    } else {
+      setLuxProblem(res.message);
+    }
+    setLuxBusy(false);
+  };
+
+  const changeLuxModel = async (model: string) => {
+    setLuxBusy(true);
+    setLuxNote(null);
+    const res = await luxSetModel(model);
+    if (res.ok) {
+      setLuxProblem(null);
+      setLuxNote(`Modelo cambiado a ${res.data.model}. Prueba la conexión para confirmar que responde.`);
+      await refreshLux();
+    } else {
+      setLuxProblem(res.message);
+    }
+    setLuxBusy(false);
+  };
+
+  const testLux = async () => {
+    setLuxBusy(true);
+    setLuxNote(null);
+    const res = await luxTest();
+    setLuxNote(res.ok ? `Respuesta correcta de ${res.data.model} en ${res.data.latencyMs} ms.` : res.message);
+    setLuxBusy(false);
+  };
 
   const refresh = useCallback(async () => {
     setLoad({ kind: 'loading' });
@@ -208,6 +266,78 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
               : 'Sin datos del servidor.'}{' '}
             Las voces de ElevenLabs pertenecen a la cuenta de su clave: al cambiar de clave, las voces creadas con la otra dejan de encontrarse hasta importarlas de nuevo.
           </p>
+        </ServiceCard>
+
+        <ServiceCard
+          mark="NV"
+          name="NVIDIA (Lux)"
+          status={lux ? (lux.configured ? 'Configurada' : 'Sin clave') : luxProblem ? 'Sin datos' : 'Comprobando'}
+          tone={lux ? (lux.configured && lux.vault ? 'on' : 'warn') : luxProblem ? 'warn' : undefined}
+          adminOnly
+        >
+          <p>Modelo de lenguaje del personaje Lux, a través de build.nvidia.com. Pega aquí la clave: el servidor la guarda cifrada y nunca vuelve a mostrarla.</p>
+          {luxProblem && <p className="cab-note">{luxProblem}</p>}
+          {lux && !lux.vault && (
+            <p className="cab-error" role="alert">
+              Falta INTEGRATIONS_ENC_KEY en el servidor: no se puede guardar la clave.
+            </p>
+          )}
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="cab-field">
+              <label className="cab-label" htmlFor="adm-lux-key">
+                Clave de NVIDIA
+              </label>
+              <input
+                id="adm-lux-key"
+                type="password"
+                className="cab-inp"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={lux?.configured ? 'Guardada · escribe una nueva para cambiarla' : 'nvapi-…'}
+                value={luxInput}
+                disabled={luxBusy}
+                onChange={(e) => setLuxInput(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="cab-btn2 cab-btn-sm"
+              disabled={luxBusy || !lux?.vault || luxInput.trim() === ''}
+              onClick={() => saveLuxKey(luxInput.trim())}
+            >
+              Guardar clave
+            </button>
+            <button type="button" className="cab-btn2 cab-btn-sm" disabled={luxBusy || !lux?.configured} onClick={testLux}>
+              Probar conexión
+            </button>
+            {lux?.configured && (
+              <button type="button" className="cab-btn2 cab-btn-sm" disabled={luxBusy} onClick={() => saveLuxKey('')}>
+                Borrar clave
+              </button>
+            )}
+          </div>
+          {luxNote && <p className="cab-note" role="status">{luxNote}</p>}
+          {lux && lux.models.length > 0 && (
+            <div className="cab-field">
+              <label className="cab-label" htmlFor="adm-lux-model">
+                Modelo
+              </label>
+              <select
+                id="adm-lux-model"
+                className="cab-inp"
+                value={lux.model}
+                disabled={luxBusy}
+                onChange={(e) => changeLuxModel(e.target.value)}
+              >
+                {lux.models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <p className="cab-hint">Cada streamer activa a Lux desde su ficha en «Streamers».</p>
         </ServiceCard>
 
         <ServiceCard mark="R2" name="Cloudflare R2" status={data.storageLoading ? 'Comprobando' : r2.label} tone={data.storageLoading ? undefined : r2.tone} adminOnly>

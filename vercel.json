@@ -13,6 +13,7 @@
     { "source": "/api/kofi/:id", "destination": "/api/integraciones?g=kofi&a=hook&id=:id" },
     { "source": "/api/riot/:action", "destination": "/api/integraciones?g=riot&a=:action" },
     { "source": "/api/integrations/:action", "destination": "/api/integraciones?g=integrations&a=:action" },
+    { "source": "/api/lux/:action", "destination": "/api/integraciones?g=lux&a=:action" },
     { "source": "/api/health", "destination": "/api/version?health=1" },
     { "source": "/api/obs/reload", "destination": "/api/version" },
     { "source": "/api/(.*)", "destination": "/api/$1" },

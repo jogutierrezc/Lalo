@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chibi Lux 3D - Generador de Imágenes y Hoja de Expresiones 3D</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #090a14;
+      color: #f8fafc;
+      overflow-x: hidden;
+    }
+    .tft-bg-grid {
+      background-color: #161430;
+      background-image: 
+        radial-gradient(circle at 50% 35%, rgba(99, 102, 241, 0.22) 0%, rgba(15, 13, 38, 0.92) 75%),
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 24px 24px, 24px 24px;
+    }
+    .checkerboard-bg {
+      background-color: #1e293b;
+      background-image: 
+        linear-gradient(45deg, #0f172a 25%, transparent 25%), 
+        linear-gradient(-45deg, #0f172a 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #0f172a 75%), 
+        linear-gradient(-45deg, transparent 75%, #0f172a 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+    .tft-banner-gradient {
+      background: linear-gradient(90deg, #fbbf24 0%, #f43f5e 52%, #9333ea 100%);
+    }
+    /* Scrollbar estilizado */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-400 selection:text-slate-950">
+
+  <!-- HEADER PRINCIPAL -->
+  <header class="sticky top-0 z-40 border-b border-amber-500/20 bg-slate-950/85 backdrop-blur-xl px-4 sm:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl tft-banner-gradient p-0.5 shadow-lg shadow-rose-500/20 flex items-center justify-center">
+          <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-black text-amber-400 text-lg">
+            3D
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-xl font-black tracking-tight bg-gradient-to-r from-amber-200 via-amber-400 to-rose-400 bg-clip-text text-transparent">
+              CHIBI LUX 3D • GENERADOR DE IMÁGENES PNG
+            </h1>
+            <span class="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-400/30 rounded-full">
+              10 Expresiones 3D
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Renderizado Three.js en tiempo real a imágenes PNG listas para guardar o exportar en lámina</p>
+        </div>
+      </div>
+
+      <!-- Controles Globales de Exportación -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <!-- Selector Fondo -->
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+          <button id="bg-studio-btn" onclick="setRenderBackground('studio')" class="px-3 py-1.5 rounded-lg font-semibold transition bg-indigo-600 text-white shadow">
+            Fondo Estudio TFT
+          </button>
+          <button id="bg-alpha-btn" onclick="setRenderBackground('transparent')" class="px-3 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white">
+            PNG Transparente
+          </button>
+        </div>
+
+        <!-- Selector Encuadre -->
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+          <button id="cam-full-btn" onclick="setFramingMode('full')" class="px-2.5 py-1.5 rounded-lg font-semibold transition bg-slate-800 text-amber-300">
+            Cuerpo Completo
+          </button>
+          <button id="cam-closeup-btn" onclick="setFramingMode('closeup')" class="px-2.5 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white">
+            Primer Plano (Rostro + Busto)
+          </button>
+        </div>
+
+        <!-- Botón Descargar Lámina Completa -->
+        <button onclick="generateAndDownloadSpriteSheet()" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold tft-banner-gradient text-white shadow-lg shadow-rose-500/25 hover:brightness-110 active:scale-95 transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          <span>Descargar Lámina Completa (PNG)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 space-y-8 flex-1">
+
+    <!-- SECCIÓN 1: GALERÍA DE LAS 10 IMÁGENES 3D RENDERIZADAS (FOCO PRINCIPAL) -->
+    <section class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-4 bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4">
+        <div class="flex items-center gap-3">
+          <span class="flex h-3 w-3 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              Galería de Imágenes 3D Generadas (10 Expresiones en PNG)
+            </h2>
+            <p class="text-xs text-slate-400">
+              Cada tarjeta contiene una imagen <code class="text-amber-300 font-mono">&lt;img&gt;</code> PNG real renderizada desde el modelo 3D. Puedes hacer <strong>clic derecho → Guardar imagen como...</strong> o usar el botón de descarga.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="renderAllExpressionsToGallery()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Regenerar las 10 Imágenes 3D
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid de 10 Imágenes PNG -->
+      <div id="snapshots-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <!-- Se puebla automáticamente al iniciar con las 10 capturas PNG 3D -->
+      </div>
+    </section>
+
+    <!-- SECCIÓN 2: ESTUDIO 3D INTERACTIVO Y CÁMARA PERSONALIZADA -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      
+      <!-- Visor 3D en Tiempo Real -->
+      <div class="lg:col-span-5 flex flex-col bg-slate-900/90 border border-amber-500/30 rounded-2xl overflow-hidden shadow-2xl">
+        <div class="px-4 py-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-300">Estudio 3D en Vivo (Cámara Interactiva)</h3>
+          </div>
+          <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" id="idle-anim-toggle" checked onchange="toggleLiveAnimation(this.checked)" class="rounded accent-amber-400">
+            <span>Animar Flotación</span>
+          </label>
+        </div>
+
+        <!-- Contenedor del Canvas WebGL -->
+        <div id="live-viewport-wrapper" class="relative w-full aspect-square tft-bg-grid flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing">
+          <canvas id="three-canvas" class="w-full h-full block"></canvas>
+
+          <!-- Overlay Controles de Cámara -->
+          <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+            <span id="live-expr-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-950/85 text-amber-300 border border-amber-400/40 backdrop-blur-md">
+              1. Normal / Idle
+            </span>
+            <button onclick="resetCameraAngle()" class="pointer-events-auto px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-950/80 hover:bg-slate-800 text-slate-200 border border-slate-700 backdrop-blur-md transition">
+              Restaurar Ángulo
+            </button>
+          </div>
+        </div>
+
+        <!-- Pie de visor con botón para re-capturar galería desde este ángulo -->
+        <div class="p-4 bg-slate-950/90 border-t border-slate-800 flex flex-col gap-2.5">
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            💡 <strong>Tip:</strong> Arrastra con el ratón o el dedo para girar a Chibi Lux 3D y usa la rueda para hacer zoom. Cuando encuentres tu ángulo favorito, pulsa el botón de abajo:
+          </p>
+          <button onclick="renderAllExpressionsFromCurrentAngle()" class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 transition flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Re-capturar las 10 Imágenes desde este Ángulo
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel Derecho: Selector de Expresiones en Vivo + Previsualización de Lámina -->
+      <div class="lg:col-span-7 flex flex-col justify-between bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-5">
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">
+              Probar Expresiones en el Modelo 3D
+            </h3>
+            <span class="text-xs text-slate-400">Cambia la cara 3D, pose de manos y báculo</span>
+          </div>
+
+          <div id="live-expression-buttons" class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            <!-- Botones generados dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Detalles técnicos del rig 3D actual -->
+        <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Expresión Seleccionada</span>
+            <p id="detail-name" class="text-sm font-bold text-amber-300 mt-0.5">Normal / Idle</p>
+            <p id="detail-tag" class="text-xs text-slate-400 mt-0.5">Sosteniendo Báculo Luminoso</p>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Pose Corporal 3D</span>
+            <p id="detail-pose" class="text-xs text-slate-200 mt-1 font-medium">Báculo diagonal + Mano izquierda abierta</p>
+          </div>
+          <div class="flex items-center justify-end">
+            <button onclick="downloadSingleSnapshot(activeExpressionIndex)" class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Descargar esta Captura PNG
+            </button>
+          </div>
+        </div>
+
+        <!-- Mini Vista Previa de la Lámina Completa (Character Sheet) -->
+        <div class="bg-slate-950/90 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div class="space-y-1 text-center sm:text-left">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
+              Todo en una sola imagen
+            </span>
+            <h4 class="text-sm font-extrabold text-white">Lámina Oficial "CHIBI LUX - 10 EXPRESIONES 3D"</h4>
+            <p class="text-xs text-slate-400">
+              Genera un póster PNG en alta resolución (2400 × 1350 px) con las 10 poses 3D etiquetadas y listas para compartir o usar como referencia.
+            </p>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
+            <button onclick="openSheetModal()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 transition whitespace-nowrap">
+              Ver Lámina en Pantalla
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- MODAL PARA VER Y GUARDAR LA LÁMINA COMPLETA (CHARACTER SHEET) -->
+  <div id="sheet-modal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="text-sm sm:text-base font-bold text-amber-300">Lámina Completa 3D (Clic derecho en la imagen para guardar o usa el botón)</h3>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="downloadGeneratedSheet()" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition">
+            Descargar PNG (2400×1350)
+          </button>
+          <button onclick="closeSheetModal()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="p-4 overflow-auto flex-1 flex items-center justify-center bg-slate-950/60">
+        <img id="sheet-preview-img" alt="Lámina Chibi Lux 3D" class="max-w-full h-auto rounded-lg border border-slate-800 shadow-xl" />
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICACIÓN TOAST -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-amber-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-extrabold shadow-2xl transition-all duration-300 transform translate-y-20 opacity-0 pointer-events-none flex items-center gap-2">
+    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+    <span id="toast-text">Imágenes 3D generadas correctamente</span>
+  </div>
+
+  <script>
+    // ============================================================================
+    // 1. DEFINICIÓN DE LAS 10 EXPRESIONES Y POSES 3D DE CHIBI LUX
+    // ============================================================================
+    const EXPRESSIONS = [
+      {
+        id: 'normal',
+        code: '01_normal_idle',
+        name: 'Normal / Idle',
+        badge: 'Reposo / Base',
+        poseLabel: 'Báculo de Luz diagonal + Sonrisa serena',
+        leftEye: 'open',
+        rightEye: 'open',
+        mouth: 'smile',
+        brows: 'neutral',
+        blush: 0.45,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [0.03, 0.08, -0.02],
+          leftArmRot: [0.25, 0.1, 0.48],
+          rightArmRot: [-0.35, -0.2, -0.42],
+          bodyTilt: [0, -0.08, 0]
+        }
+      },
+      {
+        id: 'habla',
+        code: '02_hablando_ia',
+        name: 'Habla / Explicando',
+        badge: 'Asistente IA',
+        poseLabel: 'Articulando respuesta + Gesto conversacional',
+        leftEye: 'open',
+        rightEye: 'open',
+        mouth: 'talk',
+        brows: 'talk',
+        blush: 0.45,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [-0.02, -0.1, 0.04],
+          leftArmRot: [-0.45, 0.25, 0.65],
+          rightArmRot: [-0.25, -0.15, -0.35],
+          bodyTilt: [0, 0.06, 0]
+        }
+      },
+      {
+        id: 'emocionada',
+        code: '03_emocionada_pulgares',
+        name: 'Emocionada (Pulgares)',
+        badge: 'Pose Icónica TFT',
+        poseLabel: 'Doble Pulgar Arriba 👍👍 + Gran sonrisa abierta',
+        leftEye: 'big',
+        rightEye: 'big',
+        mouth: 'big_happy',
+        brows: 'high',
+        blush: 0.75,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: true,
+          showStaff: false,
+          staffGlow: false,
+          headRot: [-0.06, 0.0, -0.04],
+          leftArmRot: [-0.85, 0.35, 0.55],
+          rightArmRot: [-0.85, -0.35, -0.55],
+          bodyTilt: [-0.04, 0, 0.02]
+        }
+      },
+      {
+        id: 'grita',
+        code: '04_grita_chispa_final',
+        name: 'Grita / ¡Demacia!',
+        badge: 'Ultimate / Alerta',
+        poseLabel: 'Grito energético + Báculo sobrecargado',
+        leftEye: 'determined',
+        rightEye: 'determined',
+        mouth: 'scream',
+        brows: 'angry',
+        blush: 0.35,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: true,
+          headRot: [-0.08, 0.12, 0.0],
+          leftArmRot: [-0.7, 0.2, 0.85],
+          rightArmRot: [-0.75, -0.2, -0.7],
+          bodyTilt: [0.06, -0.1, 0]
+        }
+      },
+      {
+        id: 'feliz',
+        code: '05_feliz_ojos_cerrados',
+        name: 'Feliz (^ ^)',
+        badge: 'Dulce / Ternura',
+        poseLabel: 'Ojos arqueados felices + Mejillas sonrojadas',
+        leftEye: 'arc_happy',
+        rightEye: 'arc_happy',
+        mouth: 'sweet_smile',
+        brows: 'high',
+        blush: 0.8,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [0.04, -0.08, 0.08],
+          leftArmRot: [-0.2, 0.3, 0.35],
+          rightArmRot: [-0.3, -0.2, -0.35],
+          bodyTilt: [0, 0.05, 0.03]
+        }
+      },
+      {
+        id: 'alegre',
+        code: '06_alegre_guino',
+        name: 'Alegre / Guiño ;)',
+        badge: 'Carismática',
+        poseLabel: 'Guiño cómplice + Pulgar arriba',
+        leftEye: 'open',
+        rightEye: 'wink',
+        mouth: 'big_happy',
+        brows: 'wink',
+        blush: 0.7,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: true,
+          showStaff: false,
+          staffGlow: false,
+          headRot: [0.02, 0.12, -0.09],
+          leftArmRot: [-0.8, 0.3, 0.5],
+          rightArmRot: [-0.8, -0.3, -0.5],
+          bodyTilt: [0, -0.08, -0.03]
+        }
+      },
+      {
+        id: 'triste',
+        code: '07_triste_llorosa',
+        name: 'Triste / Disculpa',
+        badge: 'Error / Empatía',
+        poseLabel: 'Ojos llorosos brillantes + Cabeza baja',
+        leftEye: 'sad_teary',
+        rightEye: 'sad_teary',
+        mouth: 'sad',
+        brows: 'sad',
+        blush: 0.3,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [0.16, -0.06, -0.05],
+          leftArmRot: [0.35, -0.15, 0.22],
+          rightArmRot: [0.25, 0.15, -0.25],
+          bodyTilt: [0.06, 0.04, 0]
+        }
+      },
+      {
+        id: 'molesta',
+        code: '08_molesta_pout',
+        name: 'Molesta / Puchero',
+        badge: 'Enfado Chibi',
+        poseLabel: 'Cejas fruncidas + Pout + Marca de enojo anime',
+        leftEye: 'angry',
+        rightEye: 'angry',
+        mouth: 'pout',
+        brows: 'angry',
+        blush: 0.85,
+        sweat: false,
+        angerVein: true,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: false,
+          staffGlow: false,
+          headRot: [0.08, -0.14, 0.05],
+          leftArmRot: [-0.35, -0.4, 0.55],
+          rightArmRot: [-0.35, 0.4, -0.55],
+          bodyTilt: [-0.04, 0.12, 0]
+        }
+      },
+      {
+        id: 'sorprendida',
+        code: '09_sorprendida_asombro',
+        name: 'Sorprendida (!)',
+        badge: 'Asombro / Dato',
+        poseLabel: 'Ojos abiertos + Boca en O + Gota anime',
+        leftEye: 'shock',
+        rightEye: 'shock',
+        mouth: 'o_mouth',
+        brows: 'high',
+        blush: 0.4,
+        sweat: true,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [-0.07, 0.05, -0.03],
+          leftArmRot: [-0.6, 0.1, 0.75],
+          rightArmRot: [-0.45, -0.1, -0.55],
+          bodyTilt: [-0.05, -0.04, 0]
+        }
+      },
+      {
+        id: 'magica',
+        code: '10_feliz_magica_estelar',
+        name: 'Feliz Mágica ✨',
+        badge: 'Éxito / Estelar',
+        poseLabel: 'Ojos con estrellas doradas + Pulgares + Aura',
+        leftEye: 'big',
+        rightEye: 'big',
+        mouth: 'big_happy',
+        brows: 'high',
+        blush: 0.85,
+        sweat: false,
+        angerVein: false,
+        starEyes: true,
+        pose: {
+          thumbsUp: true,
+          showStaff: true,
+          staffGlow: true,
+          headRot: [-0.05, -0.06, 0.06],
+          leftArmRot: [-0.9, 0.35, 0.6],
+          rightArmRot: [-0.9, -0.35, -0.6],
+          bodyTilt: [-0.03, 0.05, 0.02]
+        }
+      }
+    ];
+
+    // Estado de la aplicación
+    let activeExpressionIndex = 0;
+    let renderBgMode = 'studio'; // 'studio' | 'transparent'
+    let framingMode = 'full';    // 'full' | 'closeup'
+    let isLiveAnimating = true;
+    const capturedDataUrls = new Array(EXPRESSIONS.length).fill('');
+
+    // ============================================================================
+    // 2. GENERADOR DE TEXTURA FACIAL DE ALTA RESOLUCIÓN (CANVAS 2D -> 3D MESH)
+    // ============================================================================
+    const faceCanvas = document.createElement('canvas');
+    faceCanvas.width = 1024;
+    faceCanvas.height = 1024;
+    const fCtx = faceCanvas.getContext('2d');
+
+    function drawStarShape(ctx, cx, cy, spikes, outerR, innerR, color) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.translate(cx, cy);
+      ctx.moveTo(0, -outerR);
+      for (let i = 0; i < spikes; i++) {
+        ctx.rotate(Math.PI / spikes);
+        ctx.lineTo(0, -innerR);
+        ctx.rotate(Math.PI / spikes);
+        ctx.lineTo(0, -outerR);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.shadowColor = '#fde047';
+      ctx.shadowBlur = 15;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawChibiEye(ctx, cx, cy, eyeType, isRight, hasStar) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (isRight) ctx.scale(-1, 1);
+
+      if (eyeType === 'arc_happy') {
+        // Ojo cerrado arqueado feliz (^ ^) fiel al arte de Chibi Lux
+        ctx.strokeStyle = '#3b1d14';
+        ctx.lineWidth = 22;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-78, 18);
+        ctx.quadraticCurveTo(0, -68, 78, 12);
+        ctx.stroke();
+
+        // Pestaña lateral
+        ctx.lineWidth = 15;
+        ctx.beginPath();
+        ctx.moveTo(-68, 10);
+        ctx.lineTo(-92, 26);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
+      if (eyeType === 'wink') {
+        // Ojo guiñado alegre (^-~)
+        ctx.strokeStyle = '#3b1d14';
+        ctx.lineWidth = 22;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-80, 12);
+        ctx.quadraticCurveTo(0, -52, 78, 20);
+        ctx.stroke();
+
+        ctx.lineWidth = 14;
+        ctx.beginPath();
+        ctx.moveTo(-62, 5);
+        ctx.lineTo(-90, -8);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
+      // Dimensiones del ojo abierto según emoción
+      const rx = (eyeType === 'big') ? 86 : (eyeType === 'shock' ? 84 : 80);
+      const ry = (eyeType === 'big') ? 105 : (eyeType === 'shock' ? 104 : 96);
+
+      // Sombra suave de cuenca superior
+      ctx.fillStyle = 'rgba(180, 105, 78, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(0, -6, rx + 8, ry + 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Esclerótica blanca
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.clip();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-rx - 10, -ry - 10, (rx + 10) * 2, (ry + 10) * 2);
+
+      // Iris azul zafiro a celeste luminoso (Estilo TFT Chibi Lux)
+      const irisScale = (eyeType === 'shock') ? 0.78 : 0.88;
+      const irx = rx * irisScale;
+      const iry = ry * irisScale;
+
+      const irisGrad = ctx.createLinearGradient(0, -iry, 0, iry);
+      irisGrad.addColorStop(0.0, '#0c2461');
+      irisGrad.addColorStop(0.32, '#1e3799');
+      irisGrad.addColorStop(0.68, '#0984e3');
+      irisGrad.addColorStop(1.0, '#74b9ff');
+
+      ctx.fillStyle = irisGrad;
+      ctx.beginPath();
+      ctx.ellipse(4, 6, irx, iry, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Anillo inferior brillante celeste
+      ctx.strokeStyle = '#a3e635';
+      const glowGrad = ctx.createRadialGradient(4, iry * 0.45, 5, 4, iry * 0.35, irx * 0.85);
+      glowGrad.addColorStop(0, 'rgba(125, 211, 252, 0.95)');
+      glowGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.ellipse(4, iry * 0.3, irx * 0.75, iry * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pupila central profunda
+      const pupScale = (eyeType === 'shock') ? 0.34 : 0.46;
+      ctx.fillStyle = '#081338';
+      ctx.beginPath();
+      ctx.ellipse(4, 8, irx * pupScale, iry * pupScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Brillos especulares anime (Highlights blancos grandes)
+      ctx.fillStyle = '#ffffff';
+      // Brillo principal superior izquierdo
+      ctx.beginPath();
+      ctx.ellipse(-26, -30, 24, 29, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Brillo secundario inferior derecho
+      ctx.beginPath();
+      ctx.arc(32, 34, 13, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Punto extra de brillo superior derecho
+      ctx.beginPath();
+      ctx.arc(30, -24, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Si es modo estelar, dibujar estrella dorada brillante en el centro
+      if (hasStar) {
+        drawStarShape(ctx, 4, 10, 4, 38, 13, '#fef08a');
+      }
+
+      // Si está triste, agregar lágrimas brillantes acumuladas abajo
+      if (eyeType === 'sad_teary') {
+        const tearGrad = ctx.createLinearGradient(0, 45, 0, ry);
+        tearGrad.addColorStop(0, 'rgba(186, 230, 253, 0.3)');
+        tearGrad.addColorStop(1, 'rgba(56, 189, 248, 0.85)');
+        ctx.fillStyle = tearGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, ry - 18, rx * 0.9, 28, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Burbujas blancas de lágrima
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(-32, ry - 18, 9, 0, Math.PI * 2);
+        ctx.arc(26, ry - 15, 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Si está molesta o gritando, inclinar el párpado superior
+      if (eyeType === 'angry' || eyeType === 'determined') {
+        ctx.fillStyle = '#fbd4c0';
+        ctx.beginPath();
+        ctx.moveTo(-rx - 20, -ry - 20);
+        ctx.lineTo(rx + 20, -ry - 20);
+        ctx.lineTo(rx + 20, 8);
+        ctx.lineTo(-rx - 20, -45);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.restore(); // Fin del clip de la esclerótica
+
+      // Pestaña superior gruesa marrón oscuro/negro estilo Chibi Lux
+      ctx.strokeStyle = '#361912';
+      ctx.lineWidth = 24;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (eyeType === 'angry' || eyeType === 'determined') {
+        ctx.moveTo(-rx - 10, -38);
+        ctx.quadraticCurveTo(0, -28, rx + 8, 10);
+      } else if (eyeType === 'sad_teary') {
+        ctx.moveTo(-rx - 10, 10);
+        ctx.quadraticCurveTo(0, -ry - 4, rx + 8, -24);
+      } else {
+        ctx.arc(0, 6, rx + 3, Math.PI * 1.12, Math.PI * 1.88);
+      }
+      ctx.stroke();
+
+      // Punta alada exterior de la pestaña
+      ctx.fillStyle = '#361912';
+      ctx.beginPath();
+      ctx.moveTo(-rx + 4, -28);
+      ctx.lineTo(-rx - 26, -44);
+      ctx.lineTo(-rx - 6, -8);
+      ctx.closePath();
+      ctx.fill();
+
+      // Línea sutil de párpado inferior
+      ctx.strokeStyle = 'rgba(124, 58, 45, 0.65)';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.arc(0, 6, rx, Math.PI * 0.22, Math.PI * 0.78);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function updateFaceTexture(expr) {
+      const W = faceCanvas.width;
+      const H = faceCanvas.height;
+      // Limpiar con transparencia total para que el decal curvo se funda sobre la piel 3D
+      fCtx.clearRect(0, 0, W, H);
+
+      // 1. Rubor de mejillas (Blush rosado cálido en las mejillas)
+      const blushAlpha = expr.blush || 0.5;
+      const drawBlush = (bx, by) => {
+        const bg = fCtx.createRadialGradient(bx, by, 6, bx, by, 92);
+        bg.addColorStop(0, `rgba(251, 113, 133, ${ Math.min(0.95, blushAlpha + 0.15) })`);
+        bg.addColorStop(0.6, `rgba(251, 113, 133, ${ blushAlpha * 0.55 })`);
+        bg.addColorStop(1, 'rgba(251, 113, 133, 0)');
+        fCtx.fillStyle = bg;
+        fCtx.beginPath();
+        fCtx.ellipse(bx, by, 92, 54, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        // Rayitas tiernas de rubor anime cuando el rubor es alto
+        if (blushAlpha >= 0.65) {
+          fCtx.strokeStyle = 'rgba(225, 29, 72, 0.65)';
+          fCtx.lineWidth = 6;
+          fCtx.lineCap = 'round';
+          for (let i = -1; i <= 1; i++) {
+            fCtx.beginPath();
+            fCtx.moveTo(bx + i * 22 - 9, by + 12);
+            fCtx.lineTo(bx + i * 22 + 9, by - 12);
+            fCtx.stroke();
+          }
+        }
+      };
+      drawBlush(235, 590);
+      drawBlush(789, 590);
+
+      // 2. Ojos Izquierdo y Derecho grandes y expresivos centrados en la malla frontal (+Z)
+      drawChibiEye(fCtx, 298, 455, expr.leftEye, false, expr.starEyes);
+      drawChibiEye(fCtx, 726, 455, expr.rightEye, true, expr.starEyes);
+
+      // 3. Cejas doradas/castañas expresivas (ubicadas debajo del flequillo para visibilidad 100%)
+      const drawBrow = (bx, by, isRight) => {
+        fCtx.save();
+        fCtx.translate(bx, by);
+        if (isRight) fCtx.scale(-1, 1);
+
+        fCtx.strokeStyle = '#85420e';
+        fCtx.lineWidth = 18;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+
+        if (expr.brows === 'angry') {
+          fCtx.moveTo(-74, -16);
+          fCtx.quadraticCurveTo(0, 8, 70, 38);
+        } else if (expr.brows === 'sad') {
+          fCtx.moveTo(-74, 28);
+          fCtx.quadraticCurveTo(0, 6, 70, -18);
+        } else if (expr.brows === 'high') {
+          fCtx.moveTo(-74, -8);
+          fCtx.quadraticCurveTo(0, -46, 72, -6);
+        } else if (expr.brows === 'talk') {
+          const offset = isRight ? -18 : 0;
+          fCtx.moveTo(-74, 4 + offset);
+          fCtx.quadraticCurveTo(0, -30 + offset, 72, 4 + offset);
+        } else if (expr.brows === 'wink') {
+          const offset = isRight ? 12 : -8;
+          fCtx.moveTo(-74, 4 + offset);
+          fCtx.quadraticCurveTo(0, -28 + offset, 72, 6 + offset);
+        } else {
+          fCtx.moveTo(-74, 6);
+          fCtx.quadraticCurveTo(0, -28, 72, 8);
+        }
+        fCtx.stroke();
+        fCtx.restore();
+      };
+      drawBrow(298, 285, false);
+      drawBrow(726, 285, true);
+
+      // 4. Sombra sutil bajo la nariz 3D dedicada (la nariz 3D está en y = -0.08 -> canvas y ≈ 596)
+      fCtx.fillStyle = 'rgba(180, 95, 70, 0.45)';
+      fCtx.beginPath();
+      fCtx.ellipse(512, 602, 10, 6, 0, 0, Math.PI * 2);
+      fCtx.fill();
+
+      // 5. Boca según la expresión
+      fCtx.save();
+      fCtx.translate(512, 695);
+
+      if (expr.mouth === 'smile') {
+        fCtx.strokeStyle = '#9e3324';
+        fCtx.lineWidth = 13;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-52, -8);
+        fCtx.quadraticCurveTo(0, 28, 52, -8);
+        fCtx.stroke();
+
+      } else if (expr.mouth === 'sweet_smile') {
+        fCtx.strokeStyle = '#9e3324';
+        fCtx.lineWidth = 14;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-60, -12);
+        fCtx.quadraticCurveTo(0, 36, 60, -12);
+        fCtx.stroke();
+
+      } else if (expr.mouth === 'big_happy') {
+        // Gran boca abierta feliz como las poses laterales del arte de Chibi Lux
+        fCtx.beginPath();
+        fCtx.moveTo(-105, -24);
+        fCtx.quadraticCurveTo(0, -8, 105, -24);
+        fCtx.bezierCurveTo(112, 86, -112, 86, -105, -24);
+        fCtx.closePath();
+        fCtx.save();
+        fCtx.clip();
+
+        // Fondo cavidad oral rojo coral oscuro
+        fCtx.fillStyle = '#992626';
+        fCtx.fillRect(-120, -35, 240, 135);
+
+        // Lengua rosada cálida abajo
+        fCtx.fillStyle = '#ff7676';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 54, 78, 44, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        // Dientes superiores blancos brillantes
+        fCtx.fillStyle = '#ffffff';
+        fCtx.fillRect(-100, -28, 200, 24);
+        fCtx.restore();
+
+        // Contorno de labios
+        fCtx.strokeStyle = '#731c1c';
+        fCtx.lineWidth = 10;
+        fCtx.stroke();
+
+      } else if (expr.mouth === 'talk') {
+        // Boca articulando palabras
+        fCtx.beginPath();
+        fCtx.moveTo(-62, -14);
+        fCtx.quadraticCurveTo(0, -22, 62, -14);
+        fCtx.bezierCurveTo(68, 56, -68, 56, -62, -14);
+        fCtx.closePath();
+        fCtx.fillStyle = '#992323';
+        fCtx.fill();
+
+        fCtx.fillStyle = '#ff8585';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 24, 42, 20, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        fCtx.strokeStyle = '#6e1717';
+        fCtx.lineWidth = 10;
+        fCtx.stroke();
+
+      } else if (expr.mouth === 'scream') {
+        // Boca gritando con energía
+        fCtx.beginPath();
+        fCtx.moveTo(-82, -22);
+        fCtx.quadraticCurveTo(0, -38, 82, -22);
+        fCtx.bezierCurveTo(100, 78, -100, 78, -82, -22);
+        fCtx.closePath();
+        fCtx.save();
+        fCtx.clip();
+
+        fCtx.fillStyle = '#731414';
+        fCtx.fillRect(-110, -45, 220, 135);
+
+        fCtx.fillStyle = '#fb7185';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 50, 64, 36, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        fCtx.fillStyle = '#ffffff';
+        fCtx.fillRect(-78, -30, 156, 22);
+        fCtx.restore();
+
+        fCtx.strokeStyle = '#4c0d0d';
+        fCtx.lineWidth = 11;
+        fCtx.stroke();
+
+      } else if (expr.mouth === 'sad') {
+        fCtx.strokeStyle = '#8c2323';
+        fCtx.lineWidth = 13;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-50, 22);
+        fCtx.quadraticCurveTo(0, -16, 50, 22);
+        fCtx.stroke();
+
+      } else if (expr.mouth === 'pout') {
+        // Puchero ondulado tierno
+        fCtx.strokeStyle = '#8c2323';
+        fCtx.lineWidth = 13;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-44, 12);
+        fCtx.quadraticCurveTo(-15, -10, 0, 8);
+        fCtx.quadraticCurveTo(15, -10, 44, 12);
+        fCtx.stroke();
+
+      } else if (expr.mouth === 'o_mouth') {
+        fCtx.fillStyle = '#8c2020';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 8, 32, 40, 0, 0, Math.PI * 2);
+        fCtx.fill();
+        fCtx.strokeStyle = '#5e1212';
+        fCtx.lineWidth = 9;
+        fCtx.stroke();
+      }
+      fCtx.restore();
+
+      // 6. Iconos expresivos anime (Gota de sudor / Marca de vena de enojo)
+      if (expr.sweat) {
+        fCtx.save();
+        fCtx.translate(855, 325);
+        fCtx.fillStyle = '#7dd3fc';
+        fCtx.strokeStyle = '#0284c7';
+        fCtx.lineWidth = 7;
+        fCtx.beginPath();
+        fCtx.moveTo(0, -46);
+        fCtx.bezierCurveTo(34, 0, 38, 38, 0, 46);
+        fCtx.bezierCurveTo(-38, 38, -34, 0, 0, -46);
+        fCtx.fill();
+        fCtx.stroke();
+        fCtx.restore();
+      }
+
+      if (expr.angerVein) {
+        fCtx.save();
+        fCtx.translate(830, 265);
+        fCtx.strokeStyle = '#ef4444';
+        fCtx.lineWidth = 12;
+        fCtx.lineCap = 'round';
+        const drawVeinCorner = (rot) => {
+          fCtx.save();
+          fCtx.rotate(rot);
+          fCtx.beginPath();
+          fCtx.moveTo(-32, -11);
+          fCtx.quadraticCurveTo(-11, -11, -11, -32);
+          fCtx.stroke();
+          fCtx.restore();
+        };
+        drawVeinCorner(0);
+        drawVeinCorner(Math.PI * 0.5);
+        drawVeinCorner(Math.PI);
+        drawVeinCorner(Math.PI * 1.5);
+        fCtx.restore();
+      }
+
+      if (faceTexture) {
+        faceTexture.needsUpdate = true;
+      }
+    }
+
+    // ============================================================================
+    // 3. ESCENA THREE.JS Y CONSTRUCCIÓN DEL MODELO 3D DE CHIBI LUX
+    // ============================================================================
+    const canvas = document.getElementById('three-canvas');
+    const renderer = new THREE.WebGLRenderer({
+      canvas: canvas,
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true
+    });
+    renderer.setSize(640, 640, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+
+    const scene = new THREE.Scene();
+
+    // Fondo estudio TFT en Canvas 2D para cuando renderBgMode === 'studio'
+    function createStudioBackgroundTexture() {
+      const bgC = document.createElement('canvas');
+      bgC.width = 1024;
+      bgC.height = 1024;
+      const bCtx = bgC.getContext('2d');
+
+      const grad = bCtx.createRadialGradient(512, 420, 60, 512, 512, 680);
+      grad.addColorStop(0, '#2e265e');
+      grad.addColorStop(0.55, '#191636');
+      grad.addColorStop(1, '#0d0b1e');
+      bCtx.fillStyle = grad;
+      bCtx.fillRect(0, 0, 1024, 1024);
+
+      // Rejilla sutil geométrica de fondo
+      bCtx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+      bCtx.lineWidth = 2;
+      for (let i = 0; i < 1024; i += 64) {
+        bCtx.beginPath(); bCtx.moveTo(i, 0); bCtx.lineTo(i, 1024); bCtx.stroke();
+        bCtx.beginPath(); bCtx.moveTo(0, i); bCtx.lineTo(1024, i); bCtx.stroke();
+      }
+
+      // Halo circular suave detrás de Chibi Lux
+      const halo = bCtx.createRadialGradient(512, 430, 20, 512, 430, 320);
+      halo.addColorStop(0, 'rgba(251, 191, 36, 0.16)');
+      halo.addColorStop(1, 'rgba(251, 191, 36, 0)');
+      bCtx.fillStyle = halo;
+      bCtx.beginPath();
+      bCtx.arc(512, 430, 320, 0, Math.PI * 2);
+      bCtx.fill();
+
+      const tex = new THREE.CanvasTexture(bgC);
+      tex.encoding = THREE.sRGBEncoding;
+      return tex;
+    }
+
+    const studioBgTexture = createStudioBackgroundTexture();
+    scene.background = studioBgTexture;
+
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+
+    // Iluminación de estudio de 3 puntos para resaltado Chibi 3D
+    const ambientLight = new THREE.AmbientLight(0xfff5eb, 0.85);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfffbeb, 0.85);
+    keyLight.position.set(3.5, 5.5, 5.5);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
+    fillLight.position.set(-4, 2, 3);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.PointLight(0xfbbf24, 0.9, 10);
+    rimLight.position.set(0, 3.2, -3.0);
+    scene.add(rimLight);
+
+    // Textura de rostro proyectada en la parte frontal de la cabeza 3D
+    const faceTexture = new THREE.CanvasTexture(faceCanvas);
+    faceTexture.encoding = THREE.sRGBEncoding;
+    faceTexture.anisotropy = 4;
+
+    // Materiales 3D de Chibi Lux
+    const mats = {
+      skin: new THREE.MeshStandardMaterial({ color: 0xfbd4c0, roughness: 0.62, metalness: 0.02 }),
+      face: new THREE.MeshBasicMaterial({
+        map: faceTexture,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -4
+      }),
+      hairMain: new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.38, metalness: 0.12 }),
+      hairLight: new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.32, metalness: 0.15 }),
+      hairDeep: new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.45, metalness: 0.08 }),
+      armorSilver: new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.28, metalness: 0.75 }),
+      armorGold: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.25, metalness: 0.82 }),
+      clothNavy: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.1 }),
+      skirtWhite: new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.5, metalness: 0.08 }),
+      frillPink: new THREE.MeshStandardMaterial({ color: 0xfce7f3, roughness: 0.55, metalness: 0.05 }),
+      gloveWhite: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5, metalness: 0.05 }),
+      rubyGem: new THREE.MeshStandardMaterial({
+        color: 0xe11d48,
+        emissive: 0x9f1239,
+        emissiveIntensity: 0.5,
+        roughness: 0.15,
+        metalness: 0.3
+      }),
+      magicOrb: new THREE.MeshStandardMaterial({
+        color: 0xfef08a,
+        emissive: 0xfacc15,
+        emissiveIntensity: 0.9,
+        roughness: 0.1
+      })
+    };
+
+    // Grupo Raíz del Personaje
+    const luxRoot = new THREE.Group();
+    scene.add(luxRoot);
+
+    const bodyPivot = new THREE.Group();
+    luxRoot.add(bodyPivot);
+
+    // --- A. CABEZA CHIBI 3D (Proporción grande y expresiva) ---
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 1.32, 0);
+    bodyPivot.add(headPivot);
+
+    // Elipsoide principal de la cabeza: SphereGeometry(0.82, 48, 36) escalada por (1.06, 0.98, 1.0)
+    const headGeo = new THREE.SphereGeometry(0.82, 48, 36);
+    headGeo.scale(1.06, 0.98, 1.0);
+    const headBaseMesh = new THREE.Mesh(headGeo, mats.skin);
+    headPivot.add(headBaseMesh);
+
+    // Nariz 3D dedicada en el frente del rostro (+Z)
+    const noseGeo = new THREE.SphereGeometry(0.038, 16, 16);
+    const noseMesh = new THREE.Mesh(noseGeo, mats.skin);
+    noseMesh.position.set(0, -0.08, 0.835);
+    headPivot.add(noseMesh);
+
+    // Orejitas Chibi 3D a los lados
+    const earGeo = new THREE.SphereGeometry(0.16, 20, 20);
+    earGeo.scale(0.55, 1.0, 0.7);
+    const leftEar = new THREE.Mesh(earGeo, mats.skin);
+    leftEar.position.set(-0.86, -0.05, 0.05);
+    leftEar.rotation.set(0, -0.25, 0.15);
+    headPivot.add(leftEar);
+
+    const rightEar = new THREE.Mesh(earGeo, mats.skin);
+    rightEar.position.set(0.86, -0.05, 0.05);
+    rightEar.rotation.set(0, 0.25, -0.15);
+    headPivot.add(rightEar);
+
+    // Malla facial frontal curvada proyectada exactamente sobre el elipsoide en +Z
+    const facePlaneGeo = new THREE.PlaneGeometry(1.18, 0.96, 40, 40);
+    const facePosAttr = facePlaneGeo.attributes.position;
+    const rx = 0.82 * 1.06;
+    const ry = 0.82 * 0.98;
+    const rz = 0.82;
+    for (let i = 0; i < facePosAttr.count; i++) {
+      const vx = facePosAttr.getX(i);
+      const vy = facePosAttr.getY(i);
+      const term = Math.max(0.05, 1 - (vx * vx) / (rx * rx) - (vy * vy) / (ry * ry));
+      const vz = rz * Math.sqrt(term) + 0.018;
+      facePosAttr.setZ(i, vz);
+    }
+    facePlaneGeo.computeVertexNormals();
+    const facePatchMesh = new THREE.Mesh(facePlaneGeo, mats.face);
+    facePatchMesh.renderOrder = 2;
+    headPivot.add(facePatchMesh);
+
+    // --- B. CABELLO RUBIO DORADO CON VOLUMEN Y FLEQUILLO CURVO (SIN OCLUIR EL ROSTRO) ---
+    const hairGroup = new THREE.Group();
+    headPivot.add(hairGroup);
+
+    // Casquete superior voluminoso desplazado ligeramente hacia atrás/arriba para despejar la cara
+    const domeGeo = new THREE.SphereGeometry(0.89, 40, 40);
+    domeGeo.scale(1.09, 1.02, 1.05);
+    const domeMesh = new THREE.Mesh(domeGeo, mats.hairMain);
+    domeMesh.position.set(0, 0.16, -0.14);
+    hairGroup.add(domeMesh);
+
+    // Función auxiliar para crear mechones curvados suaves en 3D usando TubeGeometry
+    function createHairStrand(points, radiusTop, radiusMid, radiusTip, mat) {
+      const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+      const tubularSegments = 28;
+      const radialSegments = 14;
+      const geo = new THREE.TubeGeometry(curve, tubularSegments, radiusMid, radialSegments, false);
+
+      // Escalar los anillos del tubo para que se afine en la punta y tenga volumen en el centro
+      const pos = geo.attributes.position;
+      const center = new THREE.Vector3();
+      for (let i = 0; i <= tubularSegments; i++) {
+        const t = i / tubularSegments;
+        curve.getPointAt(t, center);
+        let scale = (1 - t) * (radiusTop / radiusMid) + Math.sin(t * Math.PI) * 0.85;
+        if (t > 0.7) {
+          scale *= (1 - (t - 0.7) / 0.3);
+        }
+        for (let j = 0; j <= radialSegments; j++) {
+          const idx = i * (radialSegments + 1) + j;
+          const vx = pos.getX(idx) - center.x;
+          const vy = pos.getY(idx) - center.y;
+          const vz = pos.getZ(idx) - center.z;
+          pos.setXYZ(idx, center.x + vx * scale, center.y + vy * scale * 0.68, center.z + vz * scale);
+        }
+      }
+      geo.computeVertexNormals();
+      return new THREE.Mesh(geo, mat);
+    }
+
+    // 1. Gran Flequillo Principal de Chibi Lux (se mantiene en la frente alta y > 0.38 y barre hacia la sien derecha |x| > 0.52)
+    const mainSweepBang = createHairStrand([
+      [-0.32, 0.90, 0.32],
+      [-0.04, 0.74, 0.72],
+      [0.38, 0.56, 0.78],
+      [0.74, 0.28, 0.64],
+      [0.98, 0.02, 0.40]
+    ], 0.26, 0.30, 0.02, mats.hairLight);
+    hairGroup.add(mainSweepBang);
+
+    // 2. Segundo mechón superpuesto en la parte alta de la frente (y > 0.42)
+    const midSweepBang = createHairStrand([
+      [-0.40, 0.94, 0.18],
+      [-0.12, 0.78, 0.68],
+      [0.26, 0.62, 0.76],
+      [0.64, 0.40, 0.68]
+    ], 0.20, 0.24, 0.02, mats.hairMain);
+    hairGroup.add(midSweepBang);
+
+    // 3. Flequillo lateral izquierdo que enmarca la sien izquierda (|x| > 0.52 cuando baja de y = 0.34)
+    const leftSideBang = createHairStrand([
+      [-0.30, 0.88, 0.28],
+      [-0.64, 0.62, 0.62],
+      [-0.84, 0.28, 0.58],
+      [-1.00, 0.00, 0.42]
+    ], 0.24, 0.28, 0.02, mats.hairMain);
+    hairGroup.add(leftSideBang);
+
+    // 4. Mechones largos traseros y sobre los hombros (melenita ondulada dorada de Lux)
+    const backStrandsData = [
+      // Izquierda frontal sobre el hombro
+      [[-0.78, 0.25, 0.15], [-0.92, -0.25, 0.12], [-0.88, -0.72, 0.18], [-1.04, -0.96, 0.25]],
+      [[-0.84, 0.15, -0.10], [-1.02, -0.38, -0.05], [-0.95, -0.88, 0.05], [-0.82, -1.08, 0.12]],
+      // Derecha frontal sobre el hombro
+      [[0.78, 0.25, 0.15], [0.92, -0.25, 0.12], [0.88, -0.72, 0.18], [1.04, -0.96, 0.25]],
+      [[0.84, 0.15, -0.10], [1.02, -0.38, -0.05], [0.95, -0.88, 0.05], [0.82, -1.08, 0.12]],
+      // Parte trasera amplia
+      [[-0.55, 0.35, -0.55], [-0.72, -0.35, -0.55], [-0.68, -0.95, -0.35], [-0.55, -1.15, -0.20]],
+      [[0.55, 0.35, -0.55], [0.72, -0.35, -0.55], [0.68, -0.95, -0.35], [0.55, -1.15, -0.20]],
+      [[0.0, 0.40, -0.68], [0.0, -0.35, -0.68], [0.0, -0.98, -0.45], [0.0, -1.18, -0.25]]
+    ];
+    backStrandsData.forEach((pts, idx) => {
+      const mat = idx % 2 === 0 ? mats.hairMain : mats.hairDeep;
+      hairGroup.add(createHairStrand(pts, 0.32, 0.36, 0.04, mat));
+    });
+
+    // Diadema / Banda oscura sutil en la coronilla como en el modelo 3D oficial
+    const headbandGeo = new THREE.TorusGeometry(0.86, 0.045, 12, 40, Math.PI * 0.85);
+    const headbandMesh = new THREE.Mesh(headbandGeo, mats.clothNavy);
+    headbandMesh.position.set(0, 0.34, -0.05);
+    headbandMesh.rotation.set(0.35, 0, Math.PI * 0.075);
+    hairGroup.add(headbandMesh);
+
+    // --- C. TORSO, ARMADURA DEMACIANA Y FALDÓN ---
+    const torsoGroup = new THREE.Group();
+    torsoGroup.position.set(0, 0.15, 0);
+    bodyPivot.add(torsoGroup);
+
+    // Cuello
+    const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.28, 20), mats.skin);
+    neckMesh.position.set(0, 0.34, 0);
+    torsoGroup.add(neckMesh);
+
+    // Pechera plateada con corte en V
+    const chestArmor = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.23, 0.48, 24), mats.armorSilver);
+    chestArmor.scale.set(1.12, 1, 0.82);
+    chestArmor.position.set(0, 0.06, 0);
+    torsoGroup.add(chestArmor);
+
+    // Cuello azul marino interno y ribete dorado en el pecho
+    const collarMesh = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 12, 28), mats.armorGold);
+    collarMesh.rotation.x = Math.PI * 0.55;
+    collarMesh.position.set(0, 0.27, 0.03);
+    torsoGroup.add(collarMesh);
+
+    // Filigrana dorada frontal en V en el peto
+    const chestTrimV = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), mats.armorGold);
+    chestTrimV.scale.set(1.1, 1.4, 0.35);
+    chestTrimV.position.set(0, 0.02, 0.20);
+    torsoGroup.add(chestTrimV);
+
+    // Hombreras redondeadas con gemas rubí y volantes blanco-rosados (Fiel al arte de Chibi Lux)
+    function createPauldron(side) {
+      const pGroup = new THREE.Group();
+      pGroup.position.set(side * 0.38, 0.19, 0.04);
+      pGroup.rotation.z = -side * 0.32;
+
+      // Placa de hombrera plateada
+      const plate = new THREE.Mesh(new THREE.SphereGeometry(0.18, 20, 20), mats.armorSilver);
+      plate.scale.set(1.15, 0.78, 0.95);
+      pGroup.add(plate);
+
+      // Marco dorado de la gema
+      const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 12, 24), mats.armorGold);
+      bezel.position.set(side * 0.03, 0.0, 0.15);
+      pGroup.add(bezel);
+
+      // Gema rubí carmesí brillante
+      const gem = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16), mats.rubyGem);
+      gem.scale.set(1.0, 0.85, 0.6);
+      gem.position.set(side * 0.03, 0.0, 0.16);
+      pGroup.add(gem);
+
+      // Volantes / Plumas blanco-rosadas bajo la hombrera
+      for (let i = -1; i <= 1; i++) {
+        const frill = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.16, 10), mats.frillPink);
+        frill.position.set(side * 0.08 + i * 0.05, -0.10, 0.05 + i * 0.03);
+        frill.rotation.z = side * 0.5 + i * 0.2;
+        frill.rotation.x = Math.PI;
+        pGroup.add(frill);
+      }
+      return pGroup;
+    }
+    torsoGroup.add(createPauldron(-1));
+    torsoGroup.add(createPauldron(1));
+
+    // Cinturón dorado con escudo frontal
+    const beltRing = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.038, 12, 28), mats.armorGold);
+    beltRing.rotation.x = Math.PI * 0.5;
+    beltRing.scale.set(1.12, 0.85, 1);
+    beltRing.position.set(0, -0.16, 0);
+    torsoGroup.add(beltRing);
+
+    const beltCrest = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.24, 4), mats.armorGold);
+    beltCrest.rotation.x = Math.PI;
+    beltCrest.scale.set(1.1, 1, 0.4);
+    beltCrest.position.set(0, -0.25, 0.22);
+    torsoGroup.add(beltCrest);
+
+    // Faldón de batalla blanco con bordes dorados
+    const skirtGroup = new THREE.Group();
+    skirtGroup.position.set(0, -0.20, 0);
+    torsoGroup.add(skirtGroup);
+
+    const skirtCone = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.56, 0.42, 28, 1, true), mats.skirtWhite);
+    skirtCone.scale.set(1.12, 1, 0.88);
+    skirtCone.position.set(0, -0.16, 0);
+    skirtGroup.add(skirtCone);
+
+    const skirtGoldRim = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.032, 12, 36), mats.armorGold);
+    skirtGoldRim.rotation.x = Math.PI * 0.5;
+    skirtGoldRim.scale.set(1.12, 0.88, 1);
+    skirtGoldRim.position.set(0, -0.36, 0);
+    skirtGroup.add(skirtGoldRim);
+
+    // Piernitas Chibi y botas plateadas/doradas
+    function createLeg(side) {
+      const leg = new THREE.Group();
+      leg.position.set(side * 0.16, -0.42, 0);
+      leg.rotation.z = -side * 0.06;
+
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.085, 0.36, 16), mats.clothNavy);
+      thigh.position.set(0, -0.12, 0);
+      leg.add(thigh);
+
+      const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.075, 0.28, 16), mats.armorSilver);
+      boot.position.set(0, -0.36, 0.02);
+      leg.add(boot);
+
+      const bootToe = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 16), mats.armorGold);
+      bootToe.scale.set(0.95, 0.75, 1.3);
+      bootToe.position.set(0, -0.49, 0.05);
+      leg.add(bootToe);
+
+      return leg;
+    }
+    torsoGroup.add(createLeg(-1));
+    torsoGroup.add(createLeg(1));
+
+    // --- D. BRAZOS Y MANOS INTERCAMBIABLES (NORMAL VS PULGARES ARRIBA 👍) ---
+    function createChibiArm(side) {
+      const armPivot = new THREE.Group();
+      armPivot.position.set(side * 0.36, 0.14, 0.04);
+
+      // Manga azul marino con brazalete dorado
+      const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.075, 0.38, 16), mats.clothNavy);
+      sleeve.position.set(0, -0.18, 0);
+      armPivot.add(sleeve);
+
+      const cuffGold = new THREE.Mesh(new THREE.TorusGeometry(0.082, 0.02, 10, 20), mats.armorGold);
+      cuffGold.rotation.x = Math.PI * 0.5;
+      cuffGold.position.set(0, -0.30, 0);
+      armPivot.add(cuffGold);
+
+      // Grupo de Mano Normal (abierta / sosteniendo)
+      const normalHand = new THREE.Group();
+      normalHand.position.set(0, -0.42, 0.02);
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 16), mats.gloveWhite);
+      palm.scale.set(1.0, 1.1, 0.78);
+      normalHand.add(palm);
+
+      const thumbOpen = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.028, 0.11, 10), mats.gloveWhite);
+      thumbOpen.position.set(-side * 0.08, 0.02, 0.05);
+      thumbOpen.rotation.z = side * 0.7;
+      normalHand.add(thumbOpen);
+      armPivot.add(normalHand);
+
+      // Grupo de Mano PULGAR ARRIBA 👍 (Grande y expresiva como en el banner de Chibi Lux)
+      const thumbsUpHand = new THREE.Group();
+      thumbsUpHand.position.set(0, -0.42, 0.10);
+
+      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.145, 20, 20), mats.gloveWhite);
+      fist.scale.set(1.05, 0.95, 0.92);
+      thumbsUpHand.add(fist);
+
+      // Dedos doblados en el puño
+      for (let f = -1.5; f <= 1.5; f += 1) {
+        const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.14, 10), mats.gloveWhite);
+        finger.rotation.z = Math.PI * 0.5;
+        finger.position.set(side * 0.02, f * 0.045, 0.11);
+        thumbsUpHand.add(finger);
+      }
+
+      // Pulgar grande levantado hacia arriba
+      const bigThumb = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.054, 0.22, 14), mats.gloveWhite);
+      bigThumb.position.set(-side * 0.05, 0.17, 0.03);
+      bigThumb.rotation.z = side * 0.22;
+      thumbsUpHand.add(bigThumb);
+
+      const thumbTip = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 12), mats.gloveWhite);
+      thumbTip.position.set(-side * 0.075, 0.27, 0.03);
+      thumbsUpHand.add(thumbTip);
+
+      armPivot.add(thumbsUpHand);
+
+      return { armPivot, normalHand, thumbsUpHand };
+    }
+
+    const leftArmObj = createChibiArm(-1);
+    const rightArmObj = createChibiArm(1);
+    torsoGroup.add(leftArmObj.armPivot);
+    torsoGroup.add(rightArmObj.armPivot);
+
+    // --- E. BÁCULO RADIANTE DE LUX (VARA DORADA CON ESPIRAL Y NÚCLEO DE LUZ) ---
+    const staffGroup = new THREE.Group();
+    staffGroup.position.set(0.0, -0.05, -0.22);
+    staffGroup.rotation.z = -0.92; // Diagonal detrás/al lado como en el splash art
+    torsoGroup.add(staffGroup);
+
+    // Asta larga plateada/azul
+    const rodMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 2.75, 16), mats.armorSilver);
+    staffGroup.add(rodMesh);
+
+    // Cinta en espiral dorada en el cabezal del báculo
+    const spiralRibbon = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 10, 24), mats.armorGold);
+    spiralRibbon.position.set(0, -0.82, 0);
+    spiralRibbon.rotation.x = 0.6;
+    staffGroup.add(spiralRibbon);
+
+    // Cabezal dorado inferior-izquierdo (horquilla doble curva)
+    function createStaffHead(yPos, dir) {
+      const head = new THREE.Group();
+      head.position.set(0, yPos, 0);
+
+      const prong1 = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.035, 12, 28, Math.PI * 1.15), mats.armorGold);
+      prong1.rotation.z = dir > 0 ? -Math.PI * 0.08 : Math.PI * 0.92;
+      head.add(prong1);
+
+      const coreOrb = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16), mats.magicOrb);
+      head.add(coreOrb);
+
+      return { head, coreOrb };
+    }
+    const staffHeadBottom = createStaffHead(-1.28, -1);
+    const staffHeadTop = createStaffHead(1.28, 1);
+    staffGroup.add(staffHeadBottom.head);
+    staffGroup.add(staffHeadTop.head);
+
+    // Partículas de estrellas mágicas 3D flotantes (visibles en Ultimate / Modo Mágico)
+    const magicParticlesGroup = new THREE.Group();
+    bodyPivot.add(magicParticlesGroup);
+    const starPositions = [
+      [-1.25, 1.75, 0.3], [1.28, 1.65, 0.35], [-1.15, 0.55, 0.4], [1.18, 0.45, 0.4], [0, 2.42, -0.2]
+    ];
+    starPositions.forEach(p => {
+      const starMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0), mats.magicOrb);
+      starMesh.scale.set(1, 1.35, 0.35);
+      starMesh.position.set(...p);
+      magicParticlesGroup.add(starMesh);
+    });
+
+    // ============================================================================
+    // 4. CONTROL DE CÁMARA ORBITAL PERSONALIZADO (RATÓN + TÁCTIL)
+    // ============================================================================
+    const camState = {
+      theta: 0.0,       // Rotación horizontal
+      phi: 1.48,        // Ángulo vertical
+      radius: 4.55,     // Distancia
+      targetY: 0.78     // Altura del objetivo
+    };
+
+    function updateCameraTransform() {
+      const sinP = Math.sin(camState.phi);
+      const cosP = Math.cos(camState.phi);
+      const sinT = Math.sin(camState.theta);
+      const cosT = Math.cos(camState.theta);
+
+      camera.position.set(
+        camState.radius * sinP * sinT,
+        camState.targetY + camState.radius * cosP,
+        camState.radius * sinP * cosT
+      );
+      camera.lookAt(0, camState.targetY, 0);
+    }
+
+    function applyFramingPreset() {
+      if (framingMode === 'closeup') {
+        camState.radius = 2.85;
+        camState.targetY = 1.25;
+      } else {
+        camState.radius = 4.45;
+        camState.targetY = 0.80;
+      }
+      updateCameraTransform();
+    }
+
+    function resetCameraAngle() {
+      camState.theta = 0.0;
+      camState.phi = 1.48;
+      applyFramingPreset();
+    }
+
+    // Eventos de ratón y táctiles sobre el canvas 3D
+    let isDragging = false;
+    let prevPointer = { x: 0, y: 0 };
+
+    canvas.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      prevPointer = { x: e.clientX, y: e.clientY };
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevPointer.x;
+      const dy = e.clientY - prevPointer.y;
+      prevPointer = { x: e.clientX, y: e.clientY };
+
+      camState.theta -= dx * 0.008;
+      camState.phi = Math.max(0.85, Math.min(2.05, camState.phi - dy * 0.008));
+      updateCameraTransform();
+    });
+
+    canvas.addEventListener('pointerup', () => { isDragging = false; });
+    canvas.addEventListener('pointercancel', () => { isDragging = false; });
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      camState.radius = Math.max(2.4, Math.min(6.8, camState.radius + e.deltaY * 0.0025));
+      updateCameraTransform();
+    }, { passive: false });
+
+    // ============================================================================
+    // 5. APLICAR EXPRESIÓN Y POSE AL MODELO 3D
+    // ============================================================================
+    function applyExpressionTo3DModel(index) {
+      const expr = EXPRESSIONS[index];
+
+      // 1. Pintar la textura de rostro 2D en alta resolución y actualizar el material 3D
+      updateFaceTexture(expr);
+
+      // 2. Rotación de cabeza y torso
+      headPivot.rotation.set(...expr.pose.headRot);
+      bodyPivot.rotation.set(...expr.pose.bodyTilt);
+      bodyPivot.position.y = 0;
+
+      // 3. Brazos y manos (Normal vs Pulgares Arriba 👍)
+      leftArmObj.armPivot.rotation.set(...expr.pose.leftArmRot);
+      rightArmObj.armPivot.rotation.set(...expr.pose.rightArmRot);
+
+      const useThumbs = Boolean(expr.pose.thumbsUp);
+      leftArmObj.normalHand.visible = !useThumbs;
+      rightArmObj.normalHand.visible = !useThumbs;
+      leftArmObj.thumbsUpHand.visible = useThumbs;
+      rightArmObj.thumbsUpHand.visible = useThumbs;
+
+      // 4. Báculo de Luz y partículas estelares
+      staffGroup.visible = Boolean(expr.pose.showStaff);
+      magicParticlesGroup.visible = Boolean(expr.pose.staffGlow || expr.starEyes);
+      mats.magicOrb.emissiveIntensity = expr.pose.staffGlow ? 1.5 : 0.8;
+    }
+
+    function selectLiveExpression(index) {
+      activeExpressionIndex = index;
+      const expr = EXPRESSIONS[index];
+      applyExpressionTo3DModel(index);
+
+      // Actualizar UI del estudio en vivo
+      document.getElementById('live-expr-badge').textContent = `${index + 1}. ${expr.name}`;
+      document.getElementById('detail-name').textContent = expr.name;
+      document.getElementById('detail-tag').textContent = expr.badge;
+      document.getElementById('detail-pose').textContent = expr.poseLabel;
+
+      // Resaltar botón activo
+      document.querySelectorAll('.expr-selector-btn').forEach((btn, i) => {
+        if (i === index) {
+          btn.className = 'expr-selector-btn px-3 py-2 rounded-xl text-xs font-bold transition border bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-500/20';
+        } else {
+          btn.className = 'expr-selector-btn px-3 py-2 rounded-xl text-xs font-semibold transition border bg-slate-950/80 text-slate-300 border-slate-800 hover:border-amber-500/40 hover:text-white';
+        }
+      });
+
+      // Resaltar tarjeta en la galería
+      document.querySelectorAll('.snapshot-card').forEach((card, i) => {
+        if (i === index) {
+          card.classList.add('ring-2', 'ring-amber-400');
+        } else {
+          card.classList.remove('ring-2', 'ring-amber-400');
+        }
+      });
+    }
+
+    // ============================================================================
+    // 6. CAPTURA AUTOMÁTICA DE LAS 10 IMÁGENES PNG DESDE EL MOTOR 3D
+    // ============================================================================
+    function renderAllExpressionsToGallery(keepCustomAngle = false) {
+      const savedIndex = activeExpressionIndex;
+
+      if (!keepCustomAngle) {
+        resetCameraAngle();
+      } else {
+        updateCameraTransform();
+      }
+
+      // Configurar el fondo según el modo elegido (Estudio TFT o Transparente Alpha)
+      if (renderBgMode === 'transparent') {
+        scene.background = null;
+        renderer.setClearColor(0x000000, 0);
+      } else {
+        scene.background = studioBgTexture;
+      }
+
+      // Recorrer las 10 expresiones, renderizar el fotograma 3D y extraer el PNG DataURL
+      EXPRESSIONS.forEach((expr, idx) => {
+        applyExpressionTo3DModel(idx);
+        renderer.render(scene, camera);
+        capturedDataUrls[idx] = renderer.domElement.toDataURL('image/png');
+      });
+
+      // Construir las tarjetas visuales con etiquetas <img> reales
+      buildGalleryCardsDOM();
+
+      // Restaurar la expresión activa en el visor en vivo
+      selectLiveExpression(savedIndex);
+    }
+
+    function renderAllExpressionsFromCurrentAngle() {
+      renderAllExpressionsToGallery(true);
+      showToast('¡10 imágenes PNG re-capturadas desde tu ángulo actual!');
+    }
+
+    function buildGalleryCardsDOM() {
+      const grid = document.getElementById('snapshots-grid');
+      grid.innerHTML = '';
+
+      const bgClass = renderBgMode === 'transparent' ? 'checkerboard-bg' : 'tft-bg-grid';
+
+      EXPRESSIONS.forEach((expr, idx) => {
+        const card = document.createElement('div');
+        card.className = `snapshot-card bg-slate-900/90 border border-slate-800 hover:border-amber-400/60 rounded-2xl overflow-hidden flex flex-col transition duration-200 shadow-xl group`;
+
+        card.innerHTML = `
+          <div onclick="selectLiveExpression(${idx})" class="relative aspect-square w-full ${bgClass} cursor-pointer overflow-hidden flex items-center justify-center">
+            <img 
+              src="${capturedDataUrls[idx]}" 
+              alt="Chibi Lux 3D - ${expr.name}" 
+              title="Clic derecho -> Guardar imagen como... (${expr.name})"
+              class="w-full h-full object-contain group-hover:scale-105 transition duration-300"
+            />
+            <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-950/80 text-amber-300 border border-amber-400/30 backdrop-blur-sm">
+              #${idx + 1} • ${expr.badge}
+            </span>
+          </div>
+          <div class="p-3 bg-slate-950/90 border-t border-slate-800/80 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <h4 class="text-xs font-extrabold text-white truncate">${expr.name}</h4>
+              <p class="text-[10px] text-slate-400 truncate">${expr.poseLabel}</p>
+            </div>
+            <button 
+              onclick="downloadSingleSnapshot(${idx})" 
+              title="Descargar PNG de ${expr.name}"
+              class="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 border border-amber-500/40 transition flex items-center gap-1"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span>PNG</span>
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    // Descargar una expresión individual en PNG
+    function downloadSingleSnapshot(index) {
+      const expr = EXPRESSIONS[index];
+      const dataUrl = capturedDataUrls[index];
+      if (!dataUrl) return;
+
+      const link = document.createElement('a');
+      link.download = `chibi_lux_3d_${expr.code}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(`Descargado: chibi_lux_3d_${expr.code}.png`);
+    }
+
+    // Cambiar entre Fondo Estudio TFT y Fondo Transparente Alpha
+    function setRenderBackground(mode) {
+      renderBgMode = mode;
+      const studioBtn = document.getElementById('bg-studio-btn');
+      const alphaBtn = document.getElementById('bg-alpha-btn');
+      const viewportWrapper = document.getElementById('live-viewport-wrapper');
+
+      if (mode === 'studio') {
+        studioBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition bg-indigo-600 text-white shadow';
+        alphaBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+        viewportWrapper.classList.remove('checkerboard-bg');
+        viewportWrapper.classList.add('tft-bg-grid');
+      } else {
+        alphaBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition bg-indigo-600 text-white shadow';
+        studioBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+        viewportWrapper.classList.remove('tft-bg-grid');
+        viewportWrapper.classList.add('checkerboard-bg');
+      }
+
+      renderAllExpressionsToGallery(true);
+      showToast(mode === 'transparent' ? 'Modo PNG Transparente (Alpha) activado' : 'Modo Fondo Estudio TFT activado');
+    }
+
+    // Cambiar entre Cuerpo Completo y Primer Plano del Rostro
+    function setFramingMode(mode) {
+      framingMode = mode;
+      const fullBtn = document.getElementById('cam-full-btn');
+      const closeBtn = document.getElementById('cam-closeup-btn');
+
+      if (mode === 'full') {
+        fullBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition bg-slate-800 text-amber-300';
+        closeBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+      } else {
+        closeBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition bg-slate-800 text-amber-300';
+        fullBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+      }
+
+      applyFramingPreset();
+      renderAllExpressionsToGallery(true);
+      showToast(mode === 'closeup' ? 'Encuadre: Primer Plano de Expresiones' : 'Encuadre: Cuerpo Completo Chibi 3D');
+    }
+
+    // ============================================================================
+    // 7. GENERADOR DE LÁMINA COMPLETA (CHARACTER SHEET 2400x1350 PNG)
+    // ============================================================================
+    let latestSheetDataUrl = '';
+
+    async function buildSpriteSheetCanvas() {
+      const sheetCanvas = document.createElement('canvas');
+      sheetCanvas.width = 2400;
+      sheetCanvas.height = 1350;
+      const sCtx = sheetCanvas.getContext('2d');
+
+      // 1. Marco exterior crema/dorado estilo Teamfight Tactics Concept Art
+      sCtx.fillStyle = '#fef3c7';
+      sCtx.fillRect(0, 0, 2400, 1350);
+
+      // 2. Fondo principal índigo oscuro
+      const bgGrad = sCtx.createLinearGradient(0, 24, 0, 1140);
+      bgGrad.addColorStop(0, '#181538');
+      bgGrad.addColorStop(1, '#0e0c24');
+      sCtx.fillStyle = bgGrad;
+      sCtx.fillRect(24, 24, 2352, 1110);
+
+      // Cuadrícula decorativa de fondo
+      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      sCtx.lineWidth = 2;
+      for (let x = 40; x < 2360; x += 60) {
+        sCtx.beginPath(); sCtx.moveTo(x, 24); sCtx.lineTo(x, 1134); sCtx.stroke();
+      }
+      for (let y = 40; y < 1134; y += 60) {
+        sCtx.beginPath(); sCtx.moveTo(24, y); sCtx.lineTo(2376, y); sCtx.stroke();
+      }
+
+      // 3. Cargar y dibujar las 10 capturas 3D en una cuadrícula de 5 columnas x 2 filas
+      const loadImage = (src) => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = src;
+      });
+
+      const images = await Promise.all(capturedDataUrls.map(url => loadImage(url)));
+
+      const cols = 5;
+      const cardW = 436;
+      const cardH = 495;
+      const gapX = 28;
+      const gapY = 32;
+      const startX = 54;
+      const startY = 52;
+
+      images.forEach((img, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const x = startX + col * (cardW + gapX);
+        const y = startY + row * (cardH + gapY);
+        const expr = EXPRESSIONS[idx];
+
+        // Fondo de tarjeta
+        sCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        sCtx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+        sCtx.lineWidth = 3;
+        sCtx.beginPath();
+        sCtx.roundRect(x, y, cardW, cardH, 20);
+        sCtx.fill();
+        sCtx.stroke();
+
+        // Dibujar el render 3D
+        sCtx.save();
+        sCtx.beginPath();
+        sCtx.roundRect(x + 8, y + 8, cardW - 16, cardH - 86, 14);
+        sCtx.clip();
+        sCtx.drawImage(img, x + 8, y + 8, cardW - 16, cardH - 86);
+        sCtx.restore();
+
+        // Etiqueta inferior de cada expresión
+        sCtx.fillStyle = '#090a14';
+        sCtx.beginPath();
+        sCtx.roundRect(x + 4, y + cardH - 74, cardW - 8, 70, [0, 0, 16, 16]);
+        sCtx.fill();
+
+        sCtx.fillStyle = '#fbbf24';
+        sCtx.font = '800 22px Inter, sans-serif';
+        sCtx.textAlign = 'center';
+        sCtx.fillText(`${idx + 1}. ${expr.name.toUpperCase()}`, x + cardW / 2, y + cardH - 40);
+
+        sCtx.fillStyle = '#94a3b8';
+        sCtx.font = '600 15px Inter, sans-serif';
+        sCtx.fillText(expr.badge, x + cardW / 2, y + cardH - 16);
+      });
+
+      // 4. Banner Inferior Oficial Estilo TFT (igual que la imagen de referencia)
+      // Bloque izquierdo negro
+      sCtx.fillStyle = '#110e24';
+      sCtx.fillRect(24, 1152, 410, 174);
+      sCtx.fillStyle = '#ffffff';
+      sCtx.font = '900 28px Inter, sans-serif';
+      sCtx.textAlign = 'center';
+      sCtx.fillText('AI AVATAR STUDIO', 229, 1230);
+      sCtx.fillStyle = '#fbbf24';
+      sCtx.font = '800 22px Inter, sans-serif';
+      sCtx.fillText('10 EXPRESIONES 3D', 229, 1268);
+
+      // Bloque central con gradiente naranja-rosa-púrpura
+      const bannerGrad = sCtx.createLinearGradient(452, 1152, 1948, 1326);
+      bannerGrad.addColorStop(0, '#fbbf24');
+      bannerGrad.addColorStop(0.5, '#f43f5e');
+      bannerGrad.addColorStop(1, '#7e22ce');
+      sCtx.fillStyle = bannerGrad;
+      sCtx.fillRect(452, 1152, 1496, 174);
+
+      sCtx.fillStyle = '#ffffff';
+      sCtx.shadowColor = 'rgba(0,0,0,0.45)';
+      sCtx.shadowBlur = 12;
+      sCtx.font = '900 68px Inter, sans-serif';
+      sCtx.fillText('CHIBI LUX', 1200, 1242);
+      sCtx.shadowBlur = 0;
+
+      sCtx.fillStyle = '#fde047';
+      sCtx.font = '800 26px Inter, sans-serif';
+      sCtx.fillText('MODELO 3D • HOJA DE EXPRESIONES', 1200, 1288);
+
+      // Bloque derecho negro con "3D"
+      sCtx.fillStyle = '#110e24';
+      sCtx.fillRect(1966, 1152, 410, 174);
+      sCtx.fillStyle = '#fbbf24';
+      sCtx.font = '900 42px Inter, sans-serif';
+      sCtx.fillText('3D', 2171, 1254);
+
+      latestSheetDataUrl = sheetCanvas.toDataURL('image/png');
+      return latestSheetDataUrl;
+    }
+
+    async function openSheetModal() {
+      const url = await buildSpriteSheetCanvas();
+      document.getElementById('sheet-preview-img').src = url;
+      document.getElementById('sheet-modal').classList.remove('hidden');
+    }
+
+    function closeSheetModal() {
+      document.getElementById('sheet-modal').classList.add('hidden');
+    }
+
+    async function generateAndDownloadSpriteSheet() {
+      const url = await buildSpriteSheetCanvas();
+      document.getElementById('sheet-preview-img').src = url;
+      document.getElementById('sheet-modal').classList.remove('hidden');
+      downloadGeneratedSheet();
+    }
+
+    function downloadGeneratedSheet() {
+      if (!latestSheetDataUrl) return;
+      const link = document.createElement('a');
+      link.download = 'Chibi_Lux_3D_Hoja_10_Expresiones.png';
+      link.href = latestSheetDataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('¡Lámina completa de 10 expresiones 3D descargada en PNG!');
+    }
+
+    // ============================================================================
+    // 8. BUCLE DE ANIMACIÓN EN VIVO E INICIALIZACIÓN DE INTERFAZ
+    // ============================================================================
+    function toggleLiveAnimation(enabled) {
+      isLiveAnimating = enabled;
+      if (!enabled) {
+        applyExpressionTo3DModel(activeExpressionIndex);
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-text').textContent = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 2800);
+    }
+
+    function initButtonsUI() {
+      const btnContainer = document.getElementById('live-expression-buttons');
+      btnContainer.innerHTML = '';
+
+      EXPRESSIONS.forEach((expr, idx) => {
+        const btn = document.createElement('button');
+        btn.onclick = () => selectLiveExpression(idx);
+        btn.innerHTML = `
+          <div class="truncate">${idx + 1}. ${expr.name.split('/')[0].trim()}</div>
+          <div class="text-[10px] opacity-75 font-normal truncate">${expr.badge}</div>
+        `;
+        btnContainer.appendChild(btn);
+      });
+    }
+
+    const clock = new THREE.Clock();
+    function animateLoop() {
+      requestAnimationFrame(animateLoop);
+
+      if (isLiveAnimating) {
+        const t = clock.getElapsedTime();
+        const basePose = EXPRESSIONS[activeExpressionIndex].pose;
+
+        // Flotación suave Chibi 3D
+        bodyPivot.position.y = Math.sin(t * 2.4) * 0.045;
+        headPivot.rotation.z = basePose.headRot[2] + Math.sin(t * 1.8) * 0.025;
+
+        // Si las partículas mágicas están activas, hacerlas girar suavemente
+        if (magicParticlesGroup.visible) {
+          magicParticlesGroup.children.forEach((star, i) => {
+            star.rotation.y = t * 2.5 + i;
+            star.position.y += Math.sin(t * 3 + i) * 0.0015;
+          });
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    window.onload = function () {
+      initButtonsUI();
+      resetCameraAngle();
+      // Generar inmediatamente las 10 imágenes PNG reales al cargar la página
+      renderAllExpressionsToGallery(false);
+      animateLoop();
+    };
+  </script>
+
+  <script>
+    // Lux en OBS: ?overlay=1 deja solo el personaje sobre fondo transparente.
+    // La página de Lalo cambia la expresión con:
+    //   iframe.contentWindow.postMessage({ type: 'lux:expression', id: 'normal' }, location.origin)
+    // (también acepta { index: 0..9 }). Solo se aceptan mensajes del mismo origen.
+    (function () {
+      const overlay = new URLSearchParams(location.search).get('overlay') === '1';
+
+      if (overlay) {
+        const canvas = document.getElementById('three-canvas');
+        // Mover el canvas no destruye el contexto WebGL: solo cambia dónde está en el DOM.
+        document.body.appendChild(canvas);
+        Array.from(document.body.children).forEach((el) => {
+          if (el !== canvas && el.tagName !== 'SCRIPT') el.style.display = 'none';
+        });
+        document.documentElement.style.background = 'transparent';
+        document.body.style.background = 'transparent';
+        document.body.style.margin = '0';
+        Object.assign(canvas.style, {
+          position: 'fixed',
+          top: '0',
+          left: '50%',
+          width: '100vh',
+          height: '100vh',
+          transform: 'translateX(-50%)',
+          pointerEvents: 'none',
+        });
+        window.addEventListener('load', () => setRenderBackground('transparent'));
+      }
+
+      window.addEventListener('message', (event) => {
+        if (event.origin !== location.origin) return;
+        const data = event.data;
+        if (!data || data.type !== 'lux:expression') return;
+        const index = typeof data.index === 'number' ? data.index : EXPRESSIONS.findIndex((item) => item.id === data.id);
+        if (index >= 0 && index < EXPRESSIONS.length) applyExpressionTo3DModel(index);
+      });
+    })();
+  </script>
+</body>
+</html>

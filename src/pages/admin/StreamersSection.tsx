@@ -107,6 +107,19 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
     }
   };
 
+  const setLux = async (id: string, enabled: boolean) => {
+    setBusy(true);
+    try {
+      await rpc('admin_set_lux', { p_profile: id, p_enabled: enabled });
+      setError(null);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cambiar Lux en la cuenta.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const setElevenLimit = async (id: string, chars: number) => {
     setBusy(true);
     try {
@@ -377,6 +390,21 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
               </div>
 
               {selected.status === 'active' && (
+                <>
+                <div className="cab-field">
+                  <span className="cab-label">Lux (personaje IA)</span>
+                  <button
+                    type="button"
+                    className="cab-btn2 cab-btn-sm"
+                    aria-pressed={Boolean(selectedMeta?.lux_enabled)}
+                    disabled={busy}
+                    onClick={() => setLux(selected.profile_id, !selectedMeta?.lux_enabled)}
+                  >
+                    {selectedMeta?.lux_enabled ? 'Activado · Desactivar' : 'Activar para esta cuenta'}
+                  </button>
+                  <span className="cab-hint">Lux responde con NVIDIA. La clave la pone el administrador en Integraciones.</span>
+                </div>
+
                 <div className="cab-field">
                   <span className="cab-label">Voces ElevenLabs</span>
                   <button
@@ -436,6 +464,7 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                     Al activarlo, el streamer ve las voces de ElevenLabs visibles. Si supera el tope diario, Lalo pasa automáticamente a Fish Audio ese día.
                   </span>
                 </div>
+                </>
               )}
 
               {selected.status === 'active' && voices && (

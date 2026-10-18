@@ -17,6 +17,7 @@ import { RIOT_ACTIONS, handleRiot, type RiotAction } from './riotRoutes.js';
 import { readSpotifyConfig, redirectUri } from './spotify.js';
 import { SPOTIFY_ACTIONS, SPOTIFY_SEATS, handleSpotify, type SpotifyAction } from './spotifyRoutes.js';
 import { elevenKeySlot } from '../elevenlabs.js';
+import { LUX_ACTIONS, handleLux, type LuxAction } from '../lux/handlers.js';
 import { missingSupabase, type Env } from './store.js';
 
 /** Estado del servidor para la consola del administrador. Solo dice qué variables faltan, nunca su valor. */
@@ -73,6 +74,7 @@ export async function handleIntegration(
     return handleKofiHook(part, req, env, deps);
   }
   if (group === 'riot' && RIOT_ACTIONS.includes(part as RiotAction)) return handleRiot(part as RiotAction, req, env, deps);
+  if (group === 'lux' && LUX_ACTIONS.includes(part as LuxAction)) return handleLux(part as LuxAction, req, env);
   if (group === 'integrations' && part === 'status') return adminStatus(req, env, deps);
   return fail(404, 'not_found', 'Ruta no encontrada.');
 }
