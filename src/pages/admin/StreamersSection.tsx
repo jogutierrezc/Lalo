@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { UsageMeter } from '../../components/UsageMeter';
 import { StreamerMemory } from './StreamerMemory';
+import { LuxCharacterField } from './LuxCharacterField';
 import {
   adminHref,
   filterProfiles,
@@ -393,7 +394,7 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
               {selected.status === 'active' && (
                 <>
                 <div className="cab-field">
-                  <span className="cab-label">Lux (personaje IA)</span>
+                  <span className="cab-label">Mi AI (personaje IA)</span>
                   <button
                     type="button"
                     className="cab-btn2 cab-btn-sm"
@@ -403,8 +404,10 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                   >
                     {selectedMeta?.lux_enabled ? 'Activado · Desactivar' : 'Activar para esta cuenta'}
                   </button>
-                  <span className="cab-hint">Lux responde con NVIDIA. La clave la pone el administrador en Integraciones.</span>
+                  <span className="cab-hint">Mi AI responde con el proveedor de Integraciones (NVIDIA o Mistral). La clave la pone el administrador.</span>
                 </div>
+
+                {selectedMeta?.lux_enabled && <LuxCharacterField key={selected.profile_id} profileId={selected.profile_id} />}
 
                 <div className="cab-field">
                   <span className="cab-label">Voces ElevenLabs</span>

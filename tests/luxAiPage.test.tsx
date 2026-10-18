@@ -23,6 +23,7 @@ vi.mock('../src/lib/luxApi', () => ({
   luxGetSettings: () => new Promise(() => {}),
   luxSaveSettings: () => new Promise(() => {}),
   luxAsk: () => new Promise(() => {}),
+  luxCharacterView: () => new Promise(() => {}),
 }));
 
 import { LuxAI } from '../src/pages/LuxAI';
@@ -31,7 +32,7 @@ describe('panel de Lux AI', () => {
   it('sin Lux activada para la cuenta, dice cómo activarla y no muestra controles', () => {
     session.profile = { id: 'p1', role: 'streamer', lux_enabled: false };
     const html = renderToStaticMarkup(<LuxAI />);
-    expect(html).toContain('Lux no está activado para tu cuenta');
+    expect(html).toContain('Mi AI no está activada para tu cuenta');
     expect(html).not.toContain('Guardar ajustes');
   });
 

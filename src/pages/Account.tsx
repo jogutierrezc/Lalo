@@ -353,7 +353,7 @@ export const Account: React.FC = () => {
               </div>
               {profile.lux_enabled && (
                 <div className="cab-field">
-                  <span className="cab-label">Lux (personaje IA)</span>
+                  <span className="cab-label">Mi AI (personaje IA)</span>
                   <span>Activo</span>
                   <span className="cab-hint">Fuente de navegador de OBS para el personaje, con fondo transparente:</span>
                   <code className="cab-mono">{`${window.location.origin}/lux/overlay.html?overlay=1`}</code>

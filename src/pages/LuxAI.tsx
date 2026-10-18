@@ -14,7 +14,7 @@ import { Check, Copy, Send } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { Field, Range, Toggle } from '../components/studio/StudioKit';
 import { useCloudSession } from '../hooks/useCloudSession';
-import { luxAsk, luxGetSettings, luxSaveSettings, type LuxSettingsView, type LuxVoice } from '../lib/luxApi';
+import { luxAsk, luxCharacterView, luxGetSettings, luxSaveSettings, type LuxCharacterView, type LuxSettingsView, type LuxVoice } from '../lib/luxApi';
 import { LuxMemoryPanel } from '../components/lux/LuxMemoryPanel';
 import { loadVoiceCatalogue } from '../lib/voicesCloud';
 import type { VoiceCatalogue } from '../lib/voicesLogic';
@@ -59,6 +59,12 @@ const parseVoice = (value: string): { referenceId: string | null; engine: LuxSet
 
 const sameSettings = (a: LuxSettingsView, b: LuxSettingsView): boolean => JSON.stringify(a) === JSON.stringify(b);
 
+/** Aviso del personaje cuando no usa su modelo (ver server/lux/models.ts). */
+const CHARACTER_NOTE: Record<NonNullable<LuxCharacterView['modelNote']>, string> = {
+  budget: 'Has llegado al tope de créditos de tu plan este mes: Mi AI usa el modelo por defecto hasta el mes siguiente.',
+  disabled: 'El modelo de tu personaje ya no está disponible: Mi AI usa el modelo por defecto.',
+};
+
 export const LuxAI: React.FC = () => {
   const { profile } = useCloudSession();
   const enabled = profile?.lux_enabled === true || profile?.role === 'admin';
@@ -79,6 +85,7 @@ export const LuxAI: React.FC = () => {
   const [catalogue, setCatalogue] = useState<VoiceCatalogue | null>(null);
   const [speakOverlay, setSpeakOverlay] = useState(true);
   const [tab, setTab] = useState<'ajustes' | 'memoria'>('ajustes');
+  const [character, setCharacter] = useState<LuxCharacterView | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -102,6 +109,17 @@ export const LuxAI: React.FC = () => {
       } else {
         setLoadError(res.message);
       }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    luxCharacterView().then((res) => {
+      if (alive && res.ok) setCharacter(res.data);
     });
     return () => {
       alive = false;
@@ -184,12 +202,12 @@ export const LuxAI: React.FC = () => {
 
         {!enabled ? (
           <section className="cab-mod">
-            <h2 className="text-base font-semibold">Lux no está activado para tu cuenta</h2>
+            <h2 className="text-base font-semibold">Mi AI no está activada para tu cuenta</h2>
             <p className="cab-hint">El administrador la activa desde Streamers. Cuando lo haga, aquí podrás configurarla.</p>
           </section>
         ) : (
           <div className="grid gap-5">
-            <div className="cab-seg" role="group" aria-label="Secciones de Lux AI">
+            <div className="cab-seg" role="group" aria-label="Secciones de Mi AI">
               <button type="button" aria-pressed={tab === 'ajustes'} onClick={() => setTab('ajustes')}>
                 Ajustes
               </button>
@@ -207,6 +225,34 @@ export const LuxAI: React.FC = () => {
                   No se pudieron leer tus ajustes: {loadError}
                 </p>
               )}
+
+              <section className="cab-mod grid gap-3" aria-labelledby="lux-character">
+                <h2 id="lux-character" className="text-base font-semibold">
+                  Tu personaje
+                </h2>
+                {character ? (
+                  <>
+                    <p className="flex items-center gap-2 text-sm">
+                      <span className="inline-block h-3 w-3 rounded-full" style={{ background: character.character.color }} aria-hidden />
+                      <strong>{character.character.name}</strong>
+                    </p>
+                    <p className="cab-hint">Modelo: {character.modelLabel}</p>
+                    {character.usage.budget !== null && (
+                      <p className="cab-hint">
+                        Créditos este mes: {character.usage.credits} de {character.usage.budget} del plan.
+                      </p>
+                    )}
+                    {character.modelNote && (
+                      <p className="cab-note" role="status">
+                        {CHARACTER_NOTE[character.modelNote]}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="cab-hint">Leyendo tu personaje.</p>
+                )}
+                <p className="cab-hint">El administrador asigna el personaje. Lo que Mi AI recuerda es de ese personaje.</p>
+              </section>
 
               <section className="cab-mod grid gap-4" aria-labelledby="lux-personality">
                 <h2 id="lux-personality" className="text-base font-semibold">
@@ -423,7 +469,7 @@ export const LuxAI: React.FC = () => {
                 <ul className="grid gap-2 text-sm">
                   <li className="flex items-center gap-2">
                     <Check size={16} aria-hidden className={enabled ? 'text-emerald-400' : 'opacity-40'} />
-                    Lux está activada para tu cuenta
+                    Mi AI está activada para tu cuenta
                   </li>
                   <li className="flex items-center gap-2">
                     <Check size={16} aria-hidden className={saved !== null && !dirty ? 'text-emerald-400' : 'opacity-40'} />
@@ -435,7 +481,7 @@ export const LuxAI: React.FC = () => {
                   </li>
                 </ul>
                 <p className="cab-hint">
-                  Si una prueba falla, el mensaje dice por qué: falta la clave de NVIDIA, el modelo no responde o tu cuenta no tiene Lux.
+                  Si una prueba falla, el mensaje dice por qué: falta la clave del proveedor de IA, el modelo no responde o tu cuenta no tiene Mi AI.
                 </p>
               </section>
             </div>

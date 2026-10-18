@@ -34,6 +34,8 @@ export interface PlanRow {
   max_file_bytes: number;
   max_files: number;
   is_default: boolean;
+  /** Tope mensual de créditos de Mi AI (migración 0032). */
+  lux_monthly_credits?: number;
 }
 
 export interface ProfileRow {

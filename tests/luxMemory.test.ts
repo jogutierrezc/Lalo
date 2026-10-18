@@ -36,9 +36,14 @@ const asUser = (id: string, role = 'streamer') => async () => ({ id, role, statu
 const notLoggedIn = async () => fail(401, 'no_session', 'Hay que iniciar sesión.');
 
 /** Almacén en memoria con la misma forma que el de Supabase: cada operación filtra por el dueño. */
-type Stored = LuxMemoryItem & { profileId: string };
+type Stored = LuxMemoryItem & { profileId: string; characterId: string };
 
-function fakeDb(seed: { profiles?: LuxProfile[]; widgetKeys?: Record<string, string>; memories?: Stored[] } = {}) {
+/** Sin catálogo de personajes, la base de datos usa el «Lux» incorporado. */
+const LUX_CHARACTER = 'lux-default';
+
+function fakeDb(
+  seed: { profiles?: LuxProfile[]; widgetKeys?: Record<string, string>; memories?: Array<Omit<Stored, 'characterId'> & { characterId?: string }> } = {}
+) {
   const profiles = new Map((seed.profiles ?? []).map((p) => [p.id, p]));
   const keys = new Map(Object.entries(seed.widgetKeys ?? {}));
   const settings = new Map<string, string>();
@@ -46,7 +51,7 @@ function fakeDb(seed: { profiles?: LuxProfile[]; widgetKeys?: Record<string, str
   const replies: unknown[] = [];
   const pruned: Array<{ owner: string; nowIso: string }> = [];
   // El dueño va aparte de la fila que ve el streamer (profileId no forma parte de LuxMemoryItem).
-  const memories: Stored[] = (seed.memories ?? []).map((m) => ({ ...m }));
+  const memories: Stored[] = (seed.memories ?? []).map((m) => ({ ...m, characterId: m.characterId ?? LUX_CHARACTER }));
 
   const db: LuxDb = {
     async setting(key) {
@@ -75,17 +80,17 @@ function fakeDb(seed: { profiles?: LuxProfile[]; widgetKeys?: Record<string, str
     async saveSettingsRow(row) {
       rows.set(String(row.profile_id), row);
     },
-    async memoryList(owner) {
+    async memoryList(owner, characterId) {
       return memories
-        .filter((m) => m.profileId === owner)
+        .filter((m) => m.profileId === owner && m.characterId === characterId)
         .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.createdAt.localeCompare(a.createdAt))
         .slice(0, MEMORY_SAVED_MAX)
-        .map(({ profileId: _owner, ...item }) => item);
+        .map(({ profileId: _owner, characterId: _character, ...item }) => item);
     },
-    async memoryGet(owner, id) {
-      const found = memories.find((m) => m.profileId === owner && m.id === id);
+    async memoryGet(owner, characterId, id) {
+      const found = memories.find((m) => m.profileId === owner && m.characterId === characterId && m.id === id);
       if (!found) return null;
-      const { profileId: _owner, ...item } = found;
+      const { profileId: _owner, characterId: _character, ...item } = found;
       return item;
     },
     async memoryInsert(owner, rowsIn) {
@@ -93,6 +98,7 @@ function fakeDb(seed: { profiles?: LuxProfile[]; widgetKeys?: Record<string, str
         memories.push({
           id: randomUUID(),
           profileId: owner,
+          characterId: row.characterId,
           kind: row.kind,
           subject: row.subject,
           content: row.content,
@@ -103,16 +109,16 @@ function fakeDb(seed: { profiles?: LuxProfile[]; widgetKeys?: Record<string, str
         });
       }
     },
-    async memoryUpdate(owner, id, patch) {
-      const found = memories.find((m) => m.profileId === owner && m.id === id);
+    async memoryUpdate(owner, characterId, id, patch) {
+      const found = memories.find((m) => m.profileId === owner && m.characterId === characterId && m.id === id);
       if (!found) return false;
       if (patch.content !== undefined) found.content = patch.content;
       if (patch.pinned !== undefined) found.pinned = patch.pinned;
       if (patch.expiresAt !== undefined) found.expiresAt = patch.expiresAt;
       return true;
     },
-    async memoryDelete(owner, id) {
-      const index = memories.findIndex((m) => m.profileId === owner && m.id === id);
+    async memoryDelete(owner, characterId, id) {
+      const index = memories.findIndex((m) => m.profileId === owner && m.characterId === characterId && m.id === id);
       if (index < 0) return false;
       memories.splice(index, 1);
       return true;

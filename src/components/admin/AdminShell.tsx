@@ -27,6 +27,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
+  Sparkles,
   Ticket,
   Users,
   X,
@@ -53,6 +54,7 @@ import { StreamersSection } from '../../pages/admin/StreamersSection';
 import { VocesSection } from '../../pages/admin/VocesSection';
 import { AccesoSection } from '../../pages/admin/AccesoSection';
 import { IntegracionesSection } from '../../pages/admin/IntegracionesSection';
+import { PersonajesSection } from '../../pages/admin/PersonajesSection';
 import '../../styles/admin.css';
 
 const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> = {
@@ -62,6 +64,7 @@ const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> =
   limites: Gauge,
   almacenamiento: HardDrive,
   voces: Mic,
+  personajes: Sparkles,
   streamers: Users,
   integraciones: Plug,
   acceso: KeyRound,
@@ -273,6 +276,7 @@ export const AdminShell: React.FC = () => {
           {section === 'limites' && <LimitesSection data={data} />}
           {section === 'almacenamiento' && <AlmacenamientoSection data={data} />}
           {section === 'voces' && <VocesSection data={data} />}
+          {section === 'personajes' && <PersonajesSection />}
           {section === 'streamers' && <StreamersSection data={data} ownId={profile?.id ?? null} />}
           {section === 'integraciones' && <IntegracionesSection data={data} />}
           {section === 'acceso' && <AccesoSection />}

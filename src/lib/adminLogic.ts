@@ -26,6 +26,7 @@ export type AdminSection =
   | 'limites'
   | 'almacenamiento'
   | 'voces'
+  | 'personajes'
   | 'streamers'
   | 'integraciones'
   | 'acceso';
@@ -37,6 +38,7 @@ export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'limites', label: 'Límites' },
   { id: 'almacenamiento', label: 'Almacenamiento' },
   { id: 'voces', label: 'Voces' },
+  { id: 'personajes', label: 'Personajes' },
   { id: 'streamers', label: 'Streamers' },
   { id: 'integraciones', label: 'Integraciones' },
   { id: 'acceso', label: 'Mi acceso' },

@@ -77,6 +77,12 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
               onCommit={(value) => savePlan(plan, { max_file_bytes: value * MB })}
             />
             <PlanNumber label="Número de archivos" value={plan.max_files} onCommit={(value) => savePlan(plan, { max_files: value })} />
+            <PlanNumber
+              label="Créditos de Mi AI al mes"
+              value={plan.lux_monthly_credits ?? 0}
+              onCommit={(value) => savePlan(plan, { lux_monthly_credits: value })}
+            />
+            <p className="cab-hint">Mi AI cuenta los créditos de cada respuesta con un modelo de pago. Si la cuenta llega al tope, sus personajes usan el modelo por defecto hasta el mes siguiente. Cero: sin modelos de pago.</p>
             <p className="cab-hint">
               {split
                 ? `Con el espacio que aún no has prometido (${formatBytes(split.free)}) caben ${accountsThatFit(split.free, plan.storage_limit_bytes)} cuentas ${plan.name} más.`

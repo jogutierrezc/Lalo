@@ -724,8 +724,22 @@
     };
     GESTURES.cheer = GESTURES.arms_up;
 
+    // Personaje activo (lo manda el servidor con cada respuesta): gestos permitidos y color del pelo.
+    // Sin personaje (o sin gestos en la lista), todos los gestos están permitidos.
+    let allowedGestures = null;
+    const applyCharacter = (character) => {
+      if (Array.isArray(character.gestures)) allowedGestures = new Set(character.gestures);
+      if (typeof character.color === 'string' && /^#[0-9a-f]{6}$/i.test(character.color)) {
+        const base = new THREE.Color(character.color);
+        mats.hairMain.color.copy(base);
+        mats.hairLight.color.copy(base).offsetHSL(0, 0, 0.08);
+        mats.hairDeep.color.copy(base).offsetHSL(0, 0, -0.1);
+      }
+    };
+
     function playGesture(name) {
       if (reduceMotion || !GESTURES[name]) return;
+      if (allowedGestures && !allowedGestures.has(name)) return;
       if (gestureTween) gestureTween.kill();
       gestureTween = GESTURES[name]();
       gestureTween.eventCallback('onUpdate', applyLivePose);
@@ -938,6 +952,7 @@
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
+        if (data.character) applyCharacter(data.character);
         if (after !== null) for (const item of data.items || []) speak(item.text, item.emotion, item.voice, item.gesture, item.playAfter);
         after = data.last;
         if (data.tts) window.luxTts = data.tts;

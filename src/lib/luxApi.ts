@@ -11,6 +11,10 @@ import { call, type ApiOutcome } from './integrationsApi';
 export interface LuxModelOption {
   id: string;
   label: string;
+  /** Habilitado en el catálogo del administrador (migración 0032). Sin el dato, se considera habilitado. */
+  enabled?: boolean;
+  /** Créditos por respuesta. */
+  cost?: number;
 }
 
 export type LuxProviderId = 'nvidia' | 'mistral';
@@ -65,8 +69,9 @@ export async function luxSetProvider(provider: LuxProviderId): Promise<ApiOutcom
   return { ok: true, data: { provider: res.data.provider === 'mistral' ? 'mistral' : 'nvidia' } };
 }
 
-export async function luxSetModel(model: string): Promise<ApiOutcome<{ model: string }>> {
-  const res = await call('/api/lux/model', 'POST', { model });
+/** Modelo por defecto de un proveedor (sin proveedor, el activo). Debe estar habilitado y ser gratis. */
+export async function luxSetModel(model: string, provider?: LuxProviderId): Promise<ApiOutcome<{ model: string }>> {
+  const res = await call('/api/lux/model', 'POST', provider ? { model, provider } : { model });
   if (!res.ok) return res;
   return { ok: true, data: { model: String(res.data.model ?? model) } };
 }
@@ -289,4 +294,123 @@ export async function luxAsk(
       voice: { referenceId: voice.referenceId ?? null, engine: voice.engine ?? null },
     },
   };
+}
+
+/*
+ * Mi AI: personajes, modelos y créditos (migración 0032). El catálogo lo gestiona
+ * solo el administrador (ruta /api/lux/characters y /api/lux/models); el streamer
+ * solo lee su personaje activo (/api/lux/character).
+ */
+
+/** Gestos que el overlay reproduce, con el nombre que ve el administrador. */
+export const LUX_GESTURE_LABELS: Record<string, string> = {
+  wave: 'Saludar',
+  spin: 'Girar',
+  dance: 'Bailar',
+  jump: 'Saltar',
+  sing: 'Cantar',
+  bow: 'Reverencia',
+  ult: 'Ultimate',
+  pride: 'Orgullo',
+  nod: 'Asentir',
+  shrug: 'Encogerse',
+  arms_up: 'Brazos arriba',
+};
+
+export interface LuxCharacterRow {
+  id: string;
+  name: string;
+  avatar: string;
+  color: string;
+  gestures: string[];
+  /** Modelo propio del personaje, o null para el modelo por defecto. */
+  model: string | null;
+  isDefault: boolean;
+}
+
+export interface LuxModelRow extends LuxModelOption {
+  enabled: boolean;
+  cost: number;
+  isDefault: boolean;
+}
+
+export interface LuxCharacterCatalog {
+  characters: LuxCharacterRow[];
+  gestures: string[];
+  provider: LuxProviderId;
+  providerLabel: string;
+  /** Modelos del proveedor activo, con su estado (los que puede elegir un personaje). */
+  models: LuxModelRow[];
+  defaultModel: string;
+  /** Solo con ?profile=: el personaje asignado a la cuenta, el que usa de verdad y su consumo. */
+  assigned?: string | null;
+  resolved?: string;
+  usage?: LuxUsage;
+}
+
+export interface LuxUsage {
+  /** Créditos gastados este mes. */
+  credits: number;
+  /** Tope mensual del plan, o null si no hay tope. */
+  budget: number | null;
+}
+
+export async function luxCharacters(profileId?: string): Promise<ApiOutcome<LuxCharacterCatalog>> {
+  const path = profileId ? `/api/lux/characters?profile=${encodeURIComponent(profileId)}` : '/api/lux/characters';
+  const res = await call(path, 'GET');
+  if (!res.ok) return res;
+  const d = res.data;
+  return {
+    ok: true,
+    data: {
+      characters: (d.characters ?? []) as LuxCharacterRow[],
+      gestures: (d.gestures ?? []) as string[],
+      provider: d.provider === 'mistral' ? 'mistral' : 'nvidia',
+      providerLabel: String(d.providerLabel ?? ''),
+      models: (d.models ?? []) as LuxModelRow[],
+      defaultModel: String(d.defaultModel ?? ''),
+      assigned: profileId ? ((d.assigned as string | null) ?? null) : undefined,
+      resolved: profileId ? String(d.resolved ?? '') : undefined,
+      usage: profileId ? (d.usage as LuxUsage) : undefined,
+    },
+  };
+}
+
+/** Escrituras del catálogo: op create | update | delete | default | assign, con los campos de cada una. */
+export async function luxCharacterWrite(body: Record<string, unknown>): Promise<ApiOutcome<Record<string, unknown>>> {
+  return call('/api/lux/characters', 'POST', body);
+}
+
+export interface LuxProviderModels {
+  id: LuxProviderId;
+  label: string;
+  defaultModel: string;
+  models: LuxModelRow[];
+}
+
+export async function luxModels(): Promise<ApiOutcome<{ providers: LuxProviderModels[]; costMax: number }>> {
+  const res = await call('/api/lux/models', 'GET');
+  if (!res.ok) return res;
+  return { ok: true, data: { providers: (res.data.providers ?? []) as LuxProviderModels[], costMax: Number(res.data.costMax ?? 0) } };
+}
+
+/** Cambia un modelo: habilitarlo, deshabilitarlo o ponerle coste. */
+export async function luxModelSet(provider: LuxProviderId, model: string, patch: { enabled?: boolean; cost?: number }): Promise<ApiOutcome<Record<string, unknown>>> {
+  return call('/api/lux/models', 'POST', { provider, model, ...patch });
+}
+
+/** Lo que ve el streamer de su personaje: nombre, modelo que usa, aviso y consumo del mes. */
+export interface LuxCharacterView {
+  character: { id: string; name: string; color: string; gestures: string[]; isDefault: boolean };
+  model: string;
+  modelLabel: string;
+  /** Por qué no usa el modelo de su personaje: 'budget' (tope del plan) o 'disabled'. Null si lo usa. */
+  modelNote: 'budget' | 'disabled' | null;
+  usage: LuxUsage;
+}
+
+export async function luxCharacterView(): Promise<ApiOutcome<LuxCharacterView>> {
+  const res = await call('/api/lux/character', 'GET');
+  if (!res.ok) return res;
+  return { ok: true, data: res.data as unknown as LuxCharacterView };
 }
