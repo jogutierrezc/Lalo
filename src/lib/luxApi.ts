@@ -143,9 +143,11 @@ export async function luxSaveSettings(patch: Partial<LuxSettingsView>): Promise<
 /** Prueba: un mensaje al modelo con los ajustes guardados. */
 export async function luxAsk(
   message: string,
-  viewer?: string
+  viewer?: string,
+  speak?: boolean
 ): Promise<ApiOutcome<{ reply: string; emotion: string; intent: string; gesture: string; model: string; voice: LuxVoice }>> {
-  const res = await call('/api/lux/reply', 'POST', { message, viewer: viewer || undefined });
+  // speak: que la respuesta también se oiga en el overlay de OBS (lo encola el servidor).
+  const res = await call('/api/lux/reply', 'POST', { message, viewer: viewer || undefined, speak });
   if (!res.ok) return res;
   const voice = (res.data.voice ?? {}) as LuxVoice;
   return {

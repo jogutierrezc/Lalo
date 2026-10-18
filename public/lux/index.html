@@ -2233,6 +2233,36 @@
   </script>
 
   <script>
+    // Lux en OBS: consulta con la clave de OBS lo que tiene que decir y lo reproduce.
+    // Funciona en la fuente de navegador de OBS sin ninguna pestaña abierta: la frase llega por el servidor.
+    (function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get('overlay') !== '1' || !params.get('k')) return;
+      const key = params.get('k');
+      let after = null;
+      const poll = async () => {
+        try {
+          const url = '/api/lux/speech?k=' + encodeURIComponent(key) + (after === null ? '' : '&after=' + after);
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          // La primera consulta solo fija el punto de partida: no repite frases de antes.
+          if (after !== null) {
+            for (const item of data.items || []) {
+              window.luxSpeak(item.text, item.emotion, item.voice, item.gesture);
+            }
+          }
+          after = data.last;
+        } catch {
+          // Sin conexión, se vuelve a intentar en el siguiente ciclo.
+        }
+      };
+      poll();
+      setInterval(poll, 1500);
+    })();
+  </script>
+
+  <script>
     // Actualizaciones de Lux: el overlay consulta la versión publicada y se recarga sola al cambiar.
     // Así una actualización de comandos o del personaje llega a OBS sin tocar la fuente.
     (function () {

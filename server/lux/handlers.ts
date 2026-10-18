@@ -32,7 +32,7 @@ import { INTENT_GESTURE, detectIntent } from './intent.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 
-export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat', 'release'] as const;
+export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat', 'release', 'speech'] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
 const MEMORY_LIMIT = 20;
@@ -279,6 +279,8 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
     await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply: clipped, model }).catch(() => {
       console.error('[Lalo lux] no se pudo guardar el registro de la respuesta');
     });
+    // Desde el panel solo se manda a OBS si el streamer lo pide (botón «Hablar en el overlay»).
+    if (raw.speak === true) await enqueueSpeech(db, profile.id, clipped, emotion, INTENT_GESTURE[intent], ajustes);
     return {
       status: 200,
       body: {
@@ -363,6 +365,8 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
     await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply, model }).catch(() => {
       console.error('[Lalo lux] no se pudo guardar el registro de la respuesta del chat');
     });
+    // En directo, lo que Lux responde en el chat también se oye en OBS.
+    await enqueueSpeech(db, profile.id, reply, emotion, INTENT_GESTURE[intent], current);
     return {
       status: 200,
       body: {
@@ -409,6 +413,54 @@ async function release(req: IntegrationRequest, env: Env, deps: LuxDeps): Promis
   }
 }
 
+/**
+ * Encola lo que Lux dice para el overlay de OBS. El overlay lo lee con su clave de OBS.
+ * Se limpia lo que tenga más de diez minutos, para que la tabla no crezca sin fin.
+ */
+async function enqueueSpeech(db: LuxDb, profileId: string, text: string, emotion: string, gesture: string, s: LuxSettings): Promise<void> {
+  if (!db.insertSpeech) return;
+  await db
+    .insertSpeech({
+      profile_id: profileId,
+      text,
+      emotion,
+      gesture,
+      voice_reference_id: s.voiceReferenceId,
+      voice_engine: s.voiceEngine,
+    })
+    .catch(() => console.error('[Lalo lux] no se pudo encolar la voz para el overlay'));
+  if (db.pruneSpeech) {
+    await db.pruneSpeech(profileId, new Date(Date.now() - 10 * 60_000).toISOString()).catch(() => undefined);
+  }
+}
+
+/**
+ * Lo nuevo que Lux tiene que decir en el overlay. Sin `after`, solo devuelve el último id:
+ * así el overlay no repite frases viejas al abrirse. Se autoriza con la clave de OBS.
+ */
+async function speech(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  if (req.method.toUpperCase() !== 'GET') return fail(405, 'method', 'Esta ruta solo admite GET.');
+  const db = deps.db(env);
+  if (!db || !db.profileByWidgetKey || !db.speechSince || !db.latestSpeechId) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const widgetKey = (req.query.k ?? '').trim();
+  if (!widgetKey || widgetKey.length > 128) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
+
+  try {
+    const profile = await db.profileByWidgetKey(widgetKey);
+    if (!profile) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
+    const afterRaw = req.query.after;
+    if (afterRaw === undefined || afterRaw === '') {
+      return { status: 200, body: { items: [], last: await db.latestSpeechId(profile.id) } };
+    }
+    const after = Number(afterRaw);
+    if (!Number.isInteger(after) || after < 0) return fail(400, 'bad_after', 'El parámetro after no es válido.');
+    const items = profile.role === 'admin' || profile.luxEnabled ? await db.speechSince(profile.id, after) : [];
+    return { status: 200, body: { items, last: items.length ? items[items.length - 1].id : after } };
+  } catch (err) {
+    return luxFailure(err, 'lux/speech');
+  }
+}
+
 /** Entrada única de Lux. `overrides` solo lo usan las pruebas. */
 export async function handleLux(action: LuxAction, req: IntegrationRequest, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<IntegrationResult> {
   const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
@@ -431,5 +483,7 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return chat(req, env, deps);
     case 'release':
       return release(req, env, deps);
+    case 'speech':
+      return speech(req, env, deps);
   }
 }

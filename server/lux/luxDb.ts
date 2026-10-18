@@ -33,6 +33,23 @@ export interface LuxReplyRow {
   model: string;
 }
 
+export interface LuxSpeechRow {
+  profile_id: string;
+  text: string;
+  emotion: string;
+  gesture: string;
+  voice_reference_id: string | null;
+  voice_engine: string | null;
+}
+
+export interface LuxSpeechItem {
+  id: number;
+  text: string;
+  emotion: string;
+  gesture: string;
+  voice: { referenceId: string | null; engine: string | null };
+}
+
 export interface LuxDb {
   /** Valor de app_settings, o null si no existe. */
   setting(key: string): Promise<string | null>;
@@ -46,6 +63,11 @@ export interface LuxDb {
   settingsRow(profileId: string): Promise<Record<string, unknown> | null>;
   /** Perfil por su clave de OBS (widget_key). Lo usa el chat, que no tiene sesión. Opcional en las pruebas. */
   profileByWidgetKey?(widgetKey: string): Promise<LuxProfile | null>;
+  /** Frases pendientes para el overlay de OBS (migración 0027). Opcionales en las pruebas. */
+  insertSpeech?(row: LuxSpeechRow): Promise<void>;
+  speechSince?(profileId: string, afterId: number): Promise<LuxSpeechItem[]>;
+  latestSpeechId?(profileId: string): Promise<number>;
+  pruneSpeech?(profileId: string, beforeIso: string): Promise<void>;
   saveSettingsRow(row: Record<string, unknown>): Promise<void>;
 }
 
@@ -114,6 +136,46 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
 
     async insertReply(row) {
       const { error } = await db.from('lux_replies').insert(row);
+      check(error);
+    },
+
+    async insertSpeech(row) {
+      const { error } = await db.from('lux_speech').insert(row);
+      check(error);
+    },
+
+    async speechSince(profileId, afterId) {
+      const { data, error } = await db
+        .from('lux_speech')
+        .select('id, text, emotion, gesture, voice_reference_id, voice_engine')
+        .eq('profile_id', profileId)
+        .gt('id', afterId)
+        .order('id', { ascending: true })
+        .limit(20);
+      check(error);
+      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        id: Number(row.id),
+        text: String(row.text),
+        emotion: String(row.emotion),
+        gesture: String(row.gesture),
+        voice: { referenceId: (row.voice_reference_id as string | null) ?? null, engine: (row.voice_engine as string | null) ?? null },
+      }));
+    },
+
+    async latestSpeechId(profileId) {
+      const { data, error } = await db
+        .from('lux_speech')
+        .select('id')
+        .eq('profile_id', profileId)
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      check(error);
+      return data ? Number((data as { id: number }).id) : 0;
+    },
+
+    async pruneSpeech(profileId, beforeIso) {
+      const { error } = await db.from('lux_speech').delete().eq('profile_id', profileId).lt('created_at', beforeIso);
       check(error);
     },
 

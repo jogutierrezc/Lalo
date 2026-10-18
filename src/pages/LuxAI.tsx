@@ -156,13 +156,12 @@ export const LuxAI: React.FC = () => {
     setTurns((current) => [...current, { id, viewer: viewer.trim() || 'Espectador', text }]);
     setMessage('');
     setBusy(true);
-    const res = await luxAsk(text, viewer.trim());
+    const res = await luxAsk(text, viewer.trim(), speakOverlay);
     setTurns((current) =>
       current.map((turn) =>
         turn.id === id ? (res.ok ? { ...turn, reply: res.data.reply, emotion: res.data.emotion } : { ...turn, error: res.message }) : turn
       )
     );
-    if (res.ok && speakOverlay) sendToOverlay(res.data.reply, res.data.emotion, res.data.voice, res.data.gesture);
     setBusy(false);
   };
 
@@ -351,7 +350,7 @@ export const LuxAI: React.FC = () => {
 
                 <div className="grid gap-2">
                   <div className="flex flex-wrap items-center gap-3">
-                    <Toggle label="Hablar en el overlay" checked={speakOverlay} disabled={busy} onChange={setSpeakOverlay} />
+                    <Toggle label="Hablar en OBS" checked={speakOverlay} disabled={busy} onChange={setSpeakOverlay} />
                     <button type="button" className="cab-btn2 cab-btn-sm" disabled={busy} onClick={listenOverlay}>
                       Escuchar la voz
                     </button>
