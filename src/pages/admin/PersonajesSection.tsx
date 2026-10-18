@@ -32,6 +32,10 @@ interface Draft {
   color: string;
   gestures: string[];
   model: string;
+  /** Avatar: 'lux' o 'glb:<id>' (modelo propio). */
+  avatar: string;
+  /** Cuenta dueña del personaje; '' = para todas las cuentas. */
+  owner: string;
 }
 
 const COLOR_DEFAULT = '#f59e0b';
@@ -42,7 +46,12 @@ const draftOf = (character: LuxCharacterRow): Draft => ({
   color: character.color,
   gestures: [...character.gestures],
   model: character.model ?? '',
+  avatar: character.avatar,
+  owner: character.ownerProfileId ?? '',
 });
+
+/** Nombre legible de un avatar. Mascota 2 es el modelo GLB con dueña. */
+const avatarLabel = (avatar: string): string => (avatar.startsWith('glb:') ? 'Mascota 2 (modelo propio)' : 'Lux (dibujo)');
 
 /** Etiqueta de un modelo en una lista: nombre, coste en créditos y si es el por defecto. */
 const modelOptionLabel = (model: LuxModelRow): string => {
@@ -97,6 +106,8 @@ export const PersonajesSection: React.FC = () => {
       color: draft.color,
       gestures: draft.gestures,
       model: draft.model || null,
+      avatar: draft.avatar,
+      ownerProfileId: draft.owner || null,
     });
     setBusy(false);
     if (res.ok) {
@@ -170,7 +181,7 @@ export const PersonajesSection: React.FC = () => {
             disabled={busy}
             onClick={() => {
               setDraftError(null);
-              setDraft({ id: null, name: '', color: COLOR_DEFAULT, gestures: [...(catalog?.gestures ?? Object.keys(LUX_GESTURE_LABELS))], model: '' });
+              setDraft({ id: null, name: '', color: COLOR_DEFAULT, gestures: [...(catalog?.gestures ?? Object.keys(LUX_GESTURE_LABELS))], model: '', avatar: 'lux', owner: '' });
             }}
           >
             Nuevo personaje
@@ -278,6 +289,43 @@ export const PersonajesSection: React.FC = () => {
               </div>
             </div>
 
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="cab-field">
+                <label className="cab-label" htmlFor="adm-char-avatar">
+                  Avatar
+                </label>
+                <select
+                  id="adm-char-avatar"
+                  className="cab-inp"
+                  value={draft.avatar}
+                  disabled={busy}
+                  onChange={(e) => setDraft({ ...draft, avatar: e.target.value, owner: e.target.value.startsWith('glb:') ? draft.owner : '' })}
+                >
+                  {(catalog?.avatars ?? ['lux']).map((avatar) => (
+                    <option key={avatar} value={avatar}>
+                      {avatarLabel(avatar)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {draft.avatar.startsWith('glb:') && (
+                <div className="cab-field">
+                  <label className="cab-label" htmlFor="adm-char-owner">
+                    Cuenta dueña (única que lo ve)
+                  </label>
+                  <select id="adm-char-owner" className="cab-inp" value={draft.owner} disabled={busy} onChange={(e) => setDraft({ ...draft, owner: e.target.value })}>
+                    <option value="">Elegir cuenta</option>
+                    {(catalog?.owners ?? []).map((owner) => (
+                      <option key={owner.id} value={owner.id}>
+                        {owner.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="cab-hint">Ninguna otra cuenta ve este personaje ni su modelo.</span>
+                </div>
+              )}
+            </div>
+
             <fieldset className="grid gap-2">
               <legend className="cab-label">Gestos en el overlay</legend>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -300,7 +348,7 @@ export const PersonajesSection: React.FC = () => {
               </div>
             </fieldset>
 
-            <p className="cab-hint">El avatar es Lux por defecto. Subir avatares nuevos llegará en otra versión.</p>
+            <p className="cab-hint">Lux es el avatar por defecto. Mascota 2 usa un modelo propio que solo sirve a su cuenta dueña.</p>
 
             {draftError && (
               <p className="cab-error" role="alert">

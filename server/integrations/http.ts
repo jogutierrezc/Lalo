@@ -24,6 +24,8 @@ export interface IntegrationResult {
   redirect?: string;
   /** Cabeceras Set-Cookie. */
   cookies?: string[];
+  /** Respuesta binaria (p. ej. un modelo GLB). Con valor, se manda este cuerpo en lugar de `body`. */
+  raw?: { contentType: string; body: Uint8Array; cacheControl?: string };
 }
 
 export interface Caller {

@@ -92,6 +92,8 @@ export interface LuxCharacterWrite {
   color: string;
   gestures: LuxGestureId[];
   model: string | null;
+  /** Cuenta dueña (migración 0033), o null para todas. */
+  ownerProfileId: string | null;
 }
 
 /**
@@ -143,6 +145,8 @@ export interface LuxDb extends Partial<LuxMemoryDb> {
   characters?(): Promise<LuxCharacter[]>;
   /** Crea (sin id) o edita (con id) un personaje. Devuelve su id. */
   saveCharacter?(row: LuxCharacterWrite): Promise<string>;
+  /** Cuentas de streamer que pueden ser dueñas de un personaje (id y nombre para el selector). */
+  streamers?(): Promise<Array<{ id: string; label: string }>>;
   /** Borra un personaje que no sea el por defecto. true si existía. */
   deleteCharacter?(id: string): Promise<boolean>;
   /** Hace que este personaje sea el único por defecto. */
@@ -168,7 +172,7 @@ function check(error: { code?: string; message: string } | null): void {
 }
 
 const MEMORY_COLUMNS = 'id, kind, subject, content, pinned, source, created_at, expires_at';
-const CHARACTER_COLUMNS = 'id, name, avatar, color, gestures, model, is_default';
+const CHARACTER_COLUMNS = 'id, name, avatar, color, gestures, model, is_default, owner_profile_id, model_key';
 
 function memoryFromRow(row: Record<string, unknown>): LuxMemoryItem {
   return {
@@ -187,11 +191,13 @@ function characterFromRow(row: Record<string, unknown>): LuxCharacter {
   return {
     id: String(row.id),
     name: String(row.name),
-    avatar: 'lux',
+    avatar: String(row.avatar) as LuxAvatar,
     color: String(row.color),
     gestures: (Array.isArray(row.gestures) ? row.gestures : []) as LuxGestureId[],
     model: (row.model as string | null) ?? null,
     isDefault: row.is_default === true,
+    ownerProfileId: (row.owner_profile_id as string | null) ?? null,
+    modelKey: (row.model_key as string | null) ?? null,
   };
 }
 
@@ -426,6 +432,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         color: row.color,
         gestures: row.gestures,
         model: row.model,
+        owner_profile_id: row.ownerProfileId,
         updated_at: new Date().toISOString(),
       };
       if (row.id) {
@@ -437,6 +444,15 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
       const { data, error } = await db.from('lux_characters').insert(change).select('id').single();
       check(error);
       return String((data as { id: string }).id);
+    },
+
+    async streamers() {
+      const { data, error } = await db.from('profiles').select('id, display_name, twitch_login').eq('role', 'streamer').order('display_name');
+      check(error);
+      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        id: String(row.id),
+        label: String(row.display_name || row.twitch_login || row.id),
+      }));
     },
 
     async deleteCharacter(id) {

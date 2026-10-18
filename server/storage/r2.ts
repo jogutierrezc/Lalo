@@ -120,6 +120,11 @@ export function headObject(config: R2Config, key: string): Promise<Response> {
   return signedFetch(config, 'HEAD', key);
 }
 
+/** Lee un objeto con firma del servidor. El bucket no tiene que ser público: nunca sale una URL. */
+export function getObject(config: R2Config, key: string): Promise<Response> {
+  return signedFetch(config, 'GET', key);
+}
+
 export function deleteObject(config: R2Config, key: string): Promise<Response> {
   return signedFetch(config, 'DELETE', key);
 }

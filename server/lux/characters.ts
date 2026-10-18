@@ -12,9 +12,26 @@
 
 import type { Check } from './memory.js';
 
-/** Avatares que existen hoy. Subir avatares nuevos no entra en esta versión. */
+/** Avatares de dibujo fijo que existen. «lux» es el personaje de siempre. */
 export const LUX_AVATARS = ['lux'] as const;
-export type LuxAvatar = (typeof LUX_AVATARS)[number];
+/**
+ * Modelos GLB disponibles, en forma de avatar «glb:<id>». Copia de MODEL_AVATAR_IDS de
+ * public/lux/mascota/logic.js (el overlay lo usa en el navegador); tests/luxMascota.test.ts
+ * comprueba que las dos listas sean iguales.
+ */
+export const LUX_MODEL_AVATAR_IDS = ['warwick'] as const;
+const MODEL_AVATAR = /^glb:([a-z0-9][a-z0-9-]{0,39})$/;
+export type LuxAvatar = (typeof LUX_AVATARS)[number] | `glb:${string}`;
+
+/** true si el avatar es un modelo GLB con un id que existe. */
+export function isModelAvatar(avatar: unknown): avatar is `glb:${string}` {
+  if (typeof avatar !== 'string') return false;
+  const match = MODEL_AVATAR.exec(avatar);
+  return match !== null && (LUX_MODEL_AVATAR_IDS as readonly string[]).includes(match[1]);
+}
+
+/** Avatares que el administrador puede elegir: los de dibujo y los modelos GLB. */
+export const LUX_AVATAR_CHOICES: string[] = [...LUX_AVATARS, ...LUX_MODEL_AVATAR_IDS.map((id) => `glb:${id}`)];
 
 /** Gestos que el overlay sabe reproducir (public/lux/overlay.html, GESTURES). */
 export const LUX_GESTURES = ['wave', 'spin', 'dance', 'jump', 'sing', 'bow', 'ult', 'pride', 'nod', 'shrug', 'arms_up'] as const;
@@ -34,6 +51,13 @@ export interface LuxCharacter {
   /** Id del modelo propio, o null para el modelo por defecto del proveedor. */
   model: string | null;
   isDefault: boolean;
+  /** Cuenta dueña del personaje. Null = visible para todas las cuentas. Con dueño, solo ella lo ve y lo usa. */
+  ownerProfileId: string | null;
+  /**
+   * Clave del archivo del modelo en el bucket privado (solo el servidor la conoce).
+   * Nunca sale en las respuestas: characterView() la quita.
+   */
+  modelKey: string | null;
 }
 
 /** Lo que el administrador escribe para crear o editar un personaje. */
@@ -43,6 +67,8 @@ export interface LuxCharacterInput {
   color: string;
   gestures: LuxGestureId[];
   model: string | null;
+  /** Cuenta dueña (null = para todas). Solo la fija el administrador. */
+  ownerProfileId: string | null;
 }
 
 /**
@@ -57,9 +83,12 @@ export const BUILTIN_CHARACTER: LuxCharacter = {
   gestures: [...LUX_GESTURES],
   model: null,
   isDefault: true,
+  ownerProfileId: null,
+  modelKey: null,
 };
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isGesture = (value: unknown): value is LuxGestureId => (LUX_GESTURES as readonly string[]).includes(value as string);
 
 /**
@@ -74,7 +103,8 @@ export function normalizeCharacterInput(input: Record<string, unknown>): Check<L
   }
 
   const avatar = input.avatar ?? 'lux';
-  if (!(LUX_AVATARS as readonly unknown[]).includes(avatar)) return { ok: false, field: 'avatar', message: 'Ese avatar no existe.' };
+  const knownAvatar = (LUX_AVATARS as readonly unknown[]).includes(avatar) || isModelAvatar(avatar);
+  if (!knownAvatar) return { ok: false, field: 'avatar', message: 'Ese avatar no existe.' };
 
   const color = input.color ?? DEFAULT_CHARACTER_COLOR;
   if (typeof color !== 'string' || !HEX_COLOR.test(color)) return { ok: false, field: 'color', message: 'El color tiene que ser hexadecimal, como #f59e0b.' };
@@ -90,6 +120,18 @@ export function normalizeCharacterInput(input: Record<string, unknown>): Check<L
     model = input.model.trim();
   }
 
+  let ownerProfileId: string | null = null;
+  if (input.ownerProfileId !== undefined && input.ownerProfileId !== null && input.ownerProfileId !== '') {
+    if (typeof input.ownerProfileId !== 'string' || !UUID.test(input.ownerProfileId)) {
+      return { ok: false, field: 'owner', message: 'La cuenta dueña no es válida.' };
+    }
+    ownerProfileId = input.ownerProfileId.toLowerCase();
+  }
+  // Un modelo GLB es de una cuenta: sin dueño no se puede asignar a nadie.
+  if (isModelAvatar(avatar) && ownerProfileId === null) {
+    return { ok: false, field: 'owner', message: 'Un personaje con modelo propio tiene que tener una cuenta dueña.' };
+  }
+
   return {
     ok: true,
     value: {
@@ -98,8 +140,23 @@ export function normalizeCharacterInput(input: Record<string, unknown>): Check<L
       color: color.toLowerCase(),
       gestures: [...new Set(gestures as LuxGestureId[])],
       model,
+      ownerProfileId,
     },
   };
+}
+
+/**
+ * Personajes que una cuenta puede ver y usar: los sin dueño y los suyos. Un personaje
+ * de otra cuenta no aparece ni se puede asignar, y su modelo nunca se sirve.
+ */
+export function visibleCharacters(list: LuxCharacter[], profileId: string | null | undefined): LuxCharacter[] {
+  return list.filter((character) => !character.ownerProfileId || character.ownerProfileId === profileId);
+}
+
+/** Quita lo que no debe salir del servidor (la clave del modelo). */
+export function characterView(character: LuxCharacter): Omit<LuxCharacter, 'modelKey'> {
+  const { modelKey: _hidden, ...view } = character;
+  return view;
 }
 
 /**

@@ -11,6 +11,7 @@
  *   test        POST  (admin)  una petición mínima con la clave y el modelo por defecto
  *   characters  GET/POST (admin)  catálogo de personajes y su asignación a cada streamer
  *   character   GET   (streamer con Lux activo, o admin)  su personaje activo, su modelo y el consumo del mes
+ *   mascota-model GET (overlay, con la clave de OBS)  el archivo GLB del personaje de la cuenta, solo si es suyo
  *   reply       POST  (streamer con Lux activo, o admin)  genera una respuesta de Lux
  *   memory      GET/POST  memoria del personaje activo del streamer
  *   admin-memory POST (admin)  memoria que escribe el administrador en la ficha de la cuenta
@@ -46,13 +47,17 @@ import { detectSongRequest, normalizeSong, songForChat } from './song.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 import {
-  LUX_AVATARS,
+  LUX_AVATAR_CHOICES,
   LUX_GESTURES,
+  characterView,
+  isModelAvatar,
   normalizeCharacterInput,
   overlayView,
   pickCharacter,
+  visibleCharacters,
   type LuxCharacter,
 } from './characters.js';
+import { fetchPrivateModel, type ModelBytes } from './mascotaModel.js';
 import {
   MODEL_CONFIG_SETTING,
   defaultModelProblem,
@@ -91,6 +96,7 @@ export const LUX_ACTIONS = [
   'admin-memory',
   'characters',
   'character',
+  'mascota-model',
 ] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
@@ -122,6 +128,8 @@ export interface LuxDeps {
   fetch: NvidiaFetch;
   auth: Auth;
   db: (env: Env) => LuxDb | null;
+  /** Lee el archivo del modelo de un personaje del bucket privado. Las pruebas pasan uno falso. */
+  modelBytes?: (env: Env, key: string) => Promise<ModelBytes>;
   /** Tiempo de espera del chat por espectador. Las pruebas pasan uno propio. */
   cooldown?: LuxCooldown;
   now?: () => number;
@@ -169,7 +177,7 @@ async function requireAdmin(req: IntegrationRequest, env: Env, deps: LuxDeps): P
 /** Personaje activo de la cuenta: el que asignó el administrador, o el que está por defecto. */
 async function characterFor(db: LuxDb, profile: LuxProfile): Promise<LuxCharacter> {
   const list = db.characters ? await db.characters() : [];
-  return pickCharacter(list, profile.luxCharacterId ?? null);
+  return pickCharacter(visibleCharacters(list, profile.id), profile.luxCharacterId ?? null);
 }
 
 /** Tope mensual de créditos del plan. Null = sin tope (solo en las pruebas, sin la función). Sin plan, cero. */
@@ -344,6 +352,8 @@ async function models(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
           color: character.color,
           gestures: character.gestures,
           model: null,
+          // Conserva la cuenta dueña: quitarla dejaría el personaje visible para todas.
+          ownerProfileId: character.ownerProfileId,
         });
         moved += 1;
       }
@@ -427,23 +437,27 @@ async function characterModelProblem(db: LuxDb, id: string | null): Promise<stri
 async function characters(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
   const method = req.method.toUpperCase();
   if (method !== 'GET' && method !== 'POST') return fail(405, 'method', 'Esta ruta admite GET (lista) y POST (crear, editar, borrar o asignar).');
-  const denied = await requireAdmin(req, env, deps);
-  if (denied) return denied;
+  const who = await deps.auth(req, env);
+  if (isFail(who)) return who;
+  if (who.role !== 'admin') return fail(403, 'not_admin', 'Solo para administradores.');
   const db = deps.db(env);
   if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
   const api = characterApi(db);
   if (!api) return fail(503, 'not_configured', 'Al servidor le faltan las funciones de personajes de Lux (migración 0032).');
 
   try {
-    const list = await api.characters();
+    // Lo que el administrador ve y edita: los personajes sin dueño y los suyos. Los de otra cuenta no salen.
+    const all = await api.characters();
+    const list = visibleCharacters(all, who.id);
 
     if (method === 'GET') {
       const provider = await activeProvider(db);
       const config = parseModelConfig(await db.setting(MODEL_CONFIG_SETTING));
       const defaultModel = await activeModel(db, provider);
       const body: Record<string, unknown> = {
-        characters: list,
-        avatars: LUX_AVATARS,
+        characters: list.map(characterView),
+        avatars: LUX_AVATAR_CHOICES,
+        owners: api.streamers ? await api.streamers() : [],
         gestures: LUX_GESTURES,
         provider,
         providerLabel: LUX_PROVIDERS[provider].label,
@@ -457,8 +471,10 @@ async function characters(req: IntegrationRequest, env: Env, deps: LuxDeps): Pro
         if (!profile) return fail(404, 'profile_not_found', 'Esa cuenta no existe.');
         if (profile.role === 'admin') return fail(400, 'not_streamer', 'Solo se asigna personaje a cuentas de streamer.');
         const nowMs = (deps.now ?? Date.now)();
+        const choosable = visibleCharacters(all, profile.id);
+        body.characters = choosable.map(characterView);
         body.assigned = profile.luxCharacterId ?? null;
-        body.resolved = pickCharacter(list, profile.luxCharacterId ?? null).id;
+        body.resolved = pickCharacter(choosable, profile.luxCharacterId ?? null).id;
         body.usage = await usageOf(db, profile, nowMs);
       }
       return { status: 200, body };
@@ -509,7 +525,7 @@ async function characters(req: IntegrationRequest, env: Env, deps: LuxDeps): Pro
       } else {
         const chosen = typeof raw.characterId === 'string' ? raw.characterId.trim() : '';
         if (!UUID.test(chosen)) return fail(400, 'bad_id', 'El personaje no es válido.');
-        if (!list.some((item) => item.id === chosen)) return fail(404, 'character_not_found', 'Ese personaje no existe.');
+        if (!visibleCharacters(all, profileId).some((item) => item.id === chosen)) return fail(404, 'character_not_found', 'Ese personaje no existe.');
         characterId = chosen;
       }
       await api.assignCharacter(profileId, characterId);
@@ -901,6 +917,43 @@ async function enqueueSpeech(db: LuxDb, profileId: string, text: string, emotion
 }
 
 /**
+ * Archivo GLB del personaje de la cuenta (Mascota 2). Lo pide el overlay con la clave de OBS.
+ * Solo se sirve si el personaje activo tiene modelo y su dueña es esta cuenta: a ninguna otra.
+ * El archivo sale del bucket privado; nunca se devuelve una URL.
+ */
+async function mascotaModel(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  if (req.method.toUpperCase() !== 'GET') return fail(405, 'method', 'Esta ruta solo admite GET.');
+  const db = deps.db(env);
+  if (!db || !db.profileByWidgetKey) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const widgetKey = (req.query.k ?? '').trim();
+  if (!widgetKey || widgetKey.length > 128) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
+
+  try {
+    const profile = await db.profileByWidgetKey(widgetKey);
+    if (!profile) return fail(401, 'bad_widget_key', 'La clave de OBS no es válida.');
+    if (profile.role !== 'admin' && !profile.luxEnabled) return fail(403, 'lux_disabled', 'Lux no está activado para tu cuenta.');
+    const character = await characterFor(db, profile);
+    const key = character.modelKey;
+    if (!isModelAvatar(character.avatar) || !key || character.ownerProfileId !== profile.id) {
+      return fail(404, 'no_model', 'Este personaje no tiene un modelo propio para esta cuenta.');
+    }
+    const read = await (deps.modelBytes ?? fetchPrivateModel)(env, key);
+    if (!read.ok) {
+      if (read.reason === 'not_configured') return fail(503, 'models_bucket', 'Falta el bucket privado de modelos en el servidor.', { missing: read.missing });
+      if (read.reason === 'missing') return fail(404, 'model_missing', 'El archivo del modelo no está en el almacenamiento.');
+      return fail(502, 'model_read', 'No se pudo leer el modelo del almacenamiento.');
+    }
+    return {
+      status: 200,
+      body: {},
+      raw: { contentType: 'model/gltf-binary', body: read.bytes, cacheControl: 'private, max-age=86400' },
+    };
+  } catch (err) {
+    return luxFailure(err, 'lux/model');
+  }
+}
+
+/**
  * Lo nuevo que Lux tiene que decir en el overlay. Sin `after`, solo devuelve el último id:
  * así el overlay no repite frases viejas al abrirse. Se autoriza con la clave de OBS.
  * Cada respuesta lleva el personaje activo (avatar, color y gestos): el overlay se pinta con él.
@@ -1169,5 +1222,7 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return characters(req, env, deps);
     case 'character':
       return character(req, env, deps);
+    case 'mascota-model':
+      return mascotaModel(req, env, deps);
   }
 }

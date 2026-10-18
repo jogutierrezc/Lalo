@@ -36,3 +36,6 @@ dist/
 # Variables de entorno locales (nunca al repositorio)
 .env
 .env.local
+
+# Modelo GLB de Mascota 2: material de terceros, nunca al repo
+Warwick/

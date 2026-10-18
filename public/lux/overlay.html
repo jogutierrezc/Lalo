@@ -13,6 +13,7 @@
 </head>
 <body>
   <canvas id="c"></canvas>
+  <canvas id="mascota-c" style="display:none"></canvas>
   <script>
     // =========================================================================
     // Lux · overlay de OBS (fuente de navegador, fondo transparente).
@@ -735,6 +736,9 @@
         mats.hairLight.color.copy(base).offsetHSL(0, 0, 0.08);
         mats.hairDeep.color.copy(base).offsetHSL(0, 0, -0.1);
       }
+      // Avatar «glb:<id>»: el personaje es el modelo GLB (Mascota 2). Cualquier otro avatar vuelve a Lux.
+      if (typeof character.avatar === 'string' && character.avatar.startsWith('glb:')) mascotaShow();
+      else mascotaHide();
     };
 
     function playGesture(name) {
@@ -807,10 +811,17 @@
     Object.assign(canvas.style, { width: `${percent}vh`, height: `${percent}vh` });
 
     // ---------- 9. Bucle ----------
+    // Mascota 2 (modelo GLB) y Lux no se dibujan a la vez: con la mascota activa, el bucle de Lux se detiene.
+    let mascotaActive = false;
+    let mascota = null;
+    let mascotaLoading = null;
+    let luxLoopRunning = false;
     const clock = new THREE.Clock();
     let nextBlink = 3;
     let blinking = false;
     function loop() {
+      if (mascotaActive) { luxLoopRunning = false; return; }
+      luxLoopRunning = true;
       requestAnimationFrame(loop);
       breathT = clock.getElapsedTime();
       if (!gestureTween || !gestureTween.isActive()) applyLivePose();
@@ -831,6 +842,59 @@
     frameCharacter();
     loop();
     if (params.get('demo')) setTimeout(() => playGesture(params.get('demo')), 400);
+
+    // ---------- 9b. Mascota 2: modelo GLB del personaje (solo si el avatar es glb:<id>) ----------
+    const mascotaCanvas = document.getElementById('mascota-c');
+    const MODEL_URL = '/api/lux/mascota-model?k=' + encodeURIComponent(widgetKey);
+    const fps60 = params.get('fps') === '60';
+    // Destello de pantalla para el baile (A3). La vibración es del canvas de la mascota.
+    const fxLayer = document.createElement('div');
+    Object.assign(fxLayer.style, { position: 'fixed', inset: '0', pointerEvents: 'none', opacity: '0', background: 'radial-gradient(circle at 50% 60%, rgba(255,255,255,0.5), rgba(255,255,255,0) 60%)' });
+    document.body.appendChild(fxLayer);
+    const mascotaEffects = {
+      shake() { if (typeof gsap !== 'undefined') gsap.fromTo(mascotaCanvas, { x: -8 }, { x: 0, duration: 0.45, ease: 'elastic.out(1, 0.3)' }); },
+      flash() { if (typeof gsap !== 'undefined') gsap.fromTo(fxLayer, { opacity: 0.6 }, { opacity: 0, duration: 0.5, ease: 'power2.out' }); }
+    };
+    function mascotaLoad() {
+      return import('/lux/mascota/mascota.js')
+        .then((m) => m.createMascota({ canvas: mascotaCanvas, modelUrl: MODEL_URL, fps60, reduceMotion, effects: reduceMotion ? null : mascotaEffects }))
+        .catch((err) => { console.warn('[Lux] Mascota 2 no se pudo cargar:', err && err.message); return null; });
+    }
+    function mascotaShow() {
+      if (mascotaActive) return;
+      mascotaActive = true;
+      canvas.style.display = 'none';
+      Object.assign(mascotaCanvas.style, { width: `${percent}vh`, height: `${percent}vh`, transform: 'none' });
+      if (typeof gsap !== 'undefined') gsap.set(mascotaCanvas, { xPercent: -50 });
+      if (!mascotaLoading) mascotaLoading = mascotaLoad().then((api) => { mascota = api; return api; });
+      mascotaLoading.then((api) => {
+        if (!mascotaActive) return;
+        if (api) api.enter();
+        else mascotaHide(true);
+      });
+    }
+    function mascotaHide(failed) {
+      if (!mascotaActive) return;
+      mascotaActive = false;
+      const back = () => {
+        if (mascotaActive) return;
+        canvas.style.display = '';
+        if (!luxLoopRunning) loop();
+      };
+      if (mascota && !failed) mascota.exit().then(back);
+      else { mascotaCanvas.style.display = 'none'; back(); }
+    }
+    // Quién recibe cada cosa de la voz: la mascota si está activa, Lux si no.
+    const actor = {
+      on() { return mascotaActive && mascota !== null; },
+      gesture(name) {
+        if (!actor.on()) return playGesture(name);
+        if (!allowedGestures || allowedGestures.has(name)) mascota.setGesture(name);
+      },
+      expression(id) { if (actor.on()) mascota.setEmotion(id); else showExpression(id); },
+      speaking(on) { if (actor.on()) mascota.setSpeaking(on); },
+      mouth(level) { if (actor.on()) mascota.setMouth(level); }
+    };
 
     // ---------- 10. Voz: cola, audio, boca y gesto al empezar ----------
     let audioContext = null;
@@ -861,7 +925,9 @@
           const s = (data[i] - 128) / 128;
           sum += s * s;
         }
-        const isOpen = Math.sqrt(sum / data.length) > 0.04;
+        const level = Math.sqrt(sum / data.length);
+        actor.mouth(level);
+        const isOpen = level > 0.04;
         if (isOpen !== open && now - last > 110) {
           open = isOpen;
           last = now;
@@ -873,8 +939,8 @@
     }
 
     async function playOne(text, emotion, voice, gesture) {
-      playGesture(gesture);
-      showExpression(emotion);
+      actor.gesture(gesture);
+      actor.expression(emotion);
       let blob;
       try {
         blob = await synthesize(text, voice);
@@ -882,7 +948,7 @@
         try {
           blob = await synthesize(text, {});
         } catch {
-          showExpression('normal');
+          actor.expression('normal');
           return;
         }
       }
@@ -902,6 +968,7 @@
           // Sin analizador, la voz suena igual con la expresión de la emoción.
         }
       }
+      actor.speaking(true);
       await new Promise((resolve) => {
         audio.addEventListener('ended', resolve, { once: true });
         audio.addEventListener('error', resolve, { once: true });
@@ -910,8 +977,9 @@
           resolve();
         });
       });
+      actor.speaking(false);
       URL.revokeObjectURL(url);
-      showExpression('normal');
+      actor.expression('normal');
     }
 
     // playAfter: hora ISO a partir de la que puede sonar (las respuestas a comandos esperan 5 s).
@@ -928,7 +996,7 @@
           if (Date.now() - readyAt > 20000) return null;
           return playOne(clean, mood, voice || {}, gesture);
         })
-        .catch(() => showExpression('normal'));
+        .catch(() => actor.expression('normal'));
     };
     window.luxSpeak = speak;
     window.luxGesture = playGesture;
@@ -939,7 +1007,7 @@
         const d = event.data;
         if (!d) return;
         if (d.type === 'speak') speak(d.text, d.emotion, d.voice, d.gesture);
-        if (d.type === 'gesture' && GESTURES[d.name]) playGesture(d.name);
+        if (d.type === 'gesture') actor.gesture(d.name);
       };
     }
 

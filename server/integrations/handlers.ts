@@ -90,7 +90,7 @@ interface NodeLikeRequest {
 }
 interface NodeLikeResponse {
   setHeader(name: string, value: string | string[]): unknown;
-  status(code: number): { json(body: unknown): unknown; end(): unknown };
+  status(code: number): { json(body: unknown): unknown; end(data?: Uint8Array): unknown };
 }
 
 const first = (value: unknown): string => (Array.isArray(value) ? String(value[0] ?? '') : typeof value === 'string' ? value : '');
@@ -119,6 +119,12 @@ export async function integrationNodeHandler(group: string, part: string, req: N
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Referrer-Policy', 'no-referrer');
   if (result.cookies?.length) res.setHeader('Set-Cookie', result.cookies);
+  if (result.raw) {
+    res.setHeader('Content-Type', result.raw.contentType);
+    res.setHeader('Cache-Control', result.raw.cacheControl ?? 'no-store');
+    res.status(result.status).end(result.raw.body);
+    return;
+  }
   if (result.redirect) {
     res.setHeader('Location', result.redirect);
     res.status(302).end();

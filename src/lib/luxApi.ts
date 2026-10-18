@@ -326,6 +326,14 @@ export interface LuxCharacterRow {
   /** Modelo propio del personaje, o null para el modelo por defecto. */
   model: string | null;
   isDefault: boolean;
+  /** Cuenta dueña (solo ella lo ve), o null si es para todas. */
+  ownerProfileId: string | null;
+}
+
+/** Cuenta que puede ser dueña de un personaje (selector del panel). */
+export interface LuxOwnerOption {
+  id: string;
+  label: string;
 }
 
 export interface LuxModelRow extends LuxModelOption {
@@ -336,6 +344,10 @@ export interface LuxModelRow extends LuxModelOption {
 
 export interface LuxCharacterCatalog {
   characters: LuxCharacterRow[];
+  /** Avatares que se pueden elegir: 'lux' y los modelos GLB ('glb:<id>'). */
+  avatars: string[];
+  /** Cuentas streamer que pueden ser dueñas de un personaje. */
+  owners: LuxOwnerOption[];
   gestures: string[];
   provider: LuxProviderId;
   providerLabel: string;
@@ -364,6 +376,8 @@ export async function luxCharacters(profileId?: string): Promise<ApiOutcome<LuxC
     ok: true,
     data: {
       characters: (d.characters ?? []) as LuxCharacterRow[],
+      avatars: (d.avatars ?? []) as string[],
+      owners: (d.owners ?? []) as LuxOwnerOption[],
       gestures: (d.gestures ?? []) as string[],
       provider: d.provider === 'mistral' ? 'mistral' : 'nvidia',
       providerLabel: String(d.providerLabel ?? ''),
