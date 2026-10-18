@@ -112,10 +112,10 @@ export const LuxAI: React.FC = () => {
   const answered = turns.some((turn) => turn.reply);
 
   // Manda una frase al overlay abierto en este navegador. Sin overlay abierto, nadie la oye.
-  const sendToOverlay = (text: string, emotion: string, voice: LuxVoice) => {
+  const sendToOverlay = (text: string, emotion: string, voice: LuxVoice, gesture?: string) => {
     if (typeof BroadcastChannel === 'undefined') return;
     const bus = new BroadcastChannel(LUX_BUS);
-    bus.postMessage({ type: 'speak', text, emotion, voice });
+    bus.postMessage({ type: 'speak', text, emotion, voice, gesture });
     bus.close();
   };
 
@@ -162,14 +162,14 @@ export const LuxAI: React.FC = () => {
         turn.id === id ? (res.ok ? { ...turn, reply: res.data.reply, emotion: res.data.emotion } : { ...turn, error: res.message }) : turn
       )
     );
-    if (res.ok && speakOverlay) sendToOverlay(res.data.reply, res.data.emotion, res.data.voice);
+    if (res.ok && speakOverlay) sendToOverlay(res.data.reply, res.data.emotion, res.data.voice, res.data.gesture);
     setBusy(false);
   };
 
   // Prueba de voz: una frase con la voz y la emoción elegidas, sin pasar por el modelo.
   const listenOverlay = () => {
     const voice: LuxVoice = { referenceId: draft.voiceReferenceId, engine: draft.voiceEngine };
-    sendToOverlay('Hola, soy Lux. Así suena mi voz.', 'feliz', voice);
+    sendToOverlay('Hola, soy Lux. Así suena mi voz.', 'feliz', voice, 'pride');
   };
 
   return (

@@ -10,6 +10,7 @@
 import type { ChatMessage } from './nvidia.js';
 import type { LuxMemoryRow } from './luxDb.js';
 import { EMOTION_INSTRUCTION } from './emotion.js';
+import { intentGuidance, type LuxIntent } from './intent.js';
 
 export const LUX_MAX_INPUT = 500;
 
@@ -23,6 +24,8 @@ export interface LuxTurn {
   personality?: string;
   language?: 'es' | 'en' | 'pt';
   replyMax?: number;
+  /** Intención social del mensaje (insulto, agradecimiento, cumplido...). */
+  intent?: LuxIntent;
 }
 
 const LANGUAGE_NAMES = { es: 'español', en: 'inglés', pt: 'portugués' } as const;
@@ -33,6 +36,10 @@ export function buildLuxMessages(turn: LuxTurn): ChatMessage[] {
   if (turn.language) lines.push(`Responde siempre en ${LANGUAGE_NAMES[turn.language]}.`);
   if (turn.replyMax) lines.push(`No superes ${turn.replyMax} caracteres.`);
   lines.push(EMOTION_INSTRUCTION);
+  if (turn.intent) {
+    const guidance = intentGuidance(turn.intent);
+    if (guidance) lines.push(guidance);
+  }
   const messages: ChatMessage[] = [{ role: 'system', content: lines.join('\n') }];
   if (turn.memories.length > 0) {
     const lines = turn.memories.map((memory) => `- (${memory.kind}${memory.subject ? `, ${memory.subject}` : ''}) ${memory.content}`);

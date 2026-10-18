@@ -28,6 +28,7 @@ import { supabaseLuxDb, type LuxDb } from './luxDb.js';
 import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, type LuxProvider, type NvidiaFetch } from './nvidia.js';
 import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSettings } from './settings.js';
 import { parseEmotion } from './emotion.js';
+import { INTENT_GESTURE, detectIntent } from './intent.js';
 
 export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config'] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
@@ -239,6 +240,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
       return fail(400, 'bad_message', `El mensaje tiene que tener entre 1 y ${LUX_MAX_INPUT} caracteres.`);
     }
     const viewer = typeof raw.viewer === 'string' && raw.viewer.trim() ? raw.viewer.trim().slice(0, VIEWER_MAX) : null;
+    const intent = detectIntent(message);
 
     const target = await activeProvider(db);
     const apiKey = await readApiKey(env, db, target);
@@ -258,6 +260,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
         personality: ajustes.personality,
         language: ajustes.language,
         replyMax: ajustes.replyMax,
+        intent,
       }),
       maxTokens: Math.ceil(ajustes.replyMax / 2) + 40,
       fetch: deps.fetch,
@@ -274,6 +277,8 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
       body: {
         reply: clipped,
         emotion,
+        intent,
+        gesture: INTENT_GESTURE[intent],
         model,
         voice: { referenceId: ajustes.voiceReferenceId, engine: ajustes.voiceEngine },
       },

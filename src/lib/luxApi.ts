@@ -124,7 +124,7 @@ export async function luxSaveSettings(patch: Partial<LuxSettingsView>): Promise<
 export async function luxAsk(
   message: string,
   viewer?: string
-): Promise<ApiOutcome<{ reply: string; emotion: string; model: string; voice: LuxVoice }>> {
+): Promise<ApiOutcome<{ reply: string; emotion: string; intent: string; gesture: string; model: string; voice: LuxVoice }>> {
   const res = await call('/api/lux/reply', 'POST', { message, viewer: viewer || undefined });
   if (!res.ok) return res;
   const voice = (res.data.voice ?? {}) as LuxVoice;
@@ -133,6 +133,8 @@ export async function luxAsk(
     data: {
       reply: String(res.data.reply ?? ''),
       emotion: String(res.data.emotion ?? 'normal'),
+      intent: String(res.data.intent ?? 'neutro'),
+      gesture: String(res.data.gesture ?? 'idle'),
       model: String(res.data.model ?? ''),
       voice: { referenceId: voice.referenceId ?? null, engine: voice.engine ?? null },
     },

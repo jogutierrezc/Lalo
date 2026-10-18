@@ -6,6 +6,7 @@
   <title>Chibi Lux 3D - Generador de Imágenes y Hoja de Expresiones 3D</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/gsap.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     body {
@@ -510,6 +511,9 @@
 
     // Estado de la aplicación
     let activeExpressionIndex = 0;
+    // Modo overlay (OBS): sin galería al cargar y con movimientos suaves. Respeta «reducir movimiento».
+    const overlayMode = new URLSearchParams(location.search).get('overlay') === '1';
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let renderBgMode = 'studio'; // 'studio' | 'transparent'
     let framingMode = 'full';    // 'full' | 'closeup'
     let isLiveAnimating = true;
@@ -1546,20 +1550,82 @@
     // ============================================================================
     // 5. APLICAR EXPRESIÓN Y POSE AL MODELO 3D
     // ============================================================================
+    // ---------- Movimiento suave y caché del rostro (overlay y panel) ----------
+
+    // Valores vivos de la pose. GSAP los anima; applyLivePose los lleva a los pivotes del 3D.
+    const live = { hx: 0, hy: 0, hz: 0, bx: 0, by: 0, bz: 0, lax: 0, lay: 0, laz: 0, rax: 0, ray: 0, raz: 0, gx: 0, gz: 0, gnx: 0 };
+
+    function applyLivePose() {
+      headPivot.rotation.set(live.hx + live.gnx, live.hy, live.hz + live.gz);
+      bodyPivot.rotation.set(live.bx + live.gx, live.by, live.bz);
+      leftArmObj.armPivot.rotation.set(live.lax, live.lay, live.laz);
+      rightArmObj.armPivot.rotation.set(live.rax, live.ray, live.raz);
+    }
+
+    let poseTween = null;
+    function tweenPose(pose) {
+      const to = {
+        hx: pose.headRot[0], hy: pose.headRot[1], hz: pose.headRot[2],
+        bx: pose.bodyTilt[0], by: pose.bodyTilt[1], bz: pose.bodyTilt[2],
+        lax: pose.leftArmRot[0], lay: pose.leftArmRot[1], laz: pose.leftArmRot[2],
+        rax: pose.rightArmRot[0], ray: pose.rightArmRot[1], raz: pose.rightArmRot[2],
+      };
+      if (poseTween) poseTween.kill();
+      poseTween = gsap.to(live, {
+        ...to,
+        duration: overlayMode && !reduceMotion ? 0.55 : 0,
+        ease: 'power3.out',
+        overwrite: 'auto',
+        onUpdate: applyLivePose,
+      });
+      applyLivePose();
+    }
+
+    // Gestos: desplazamientos encima de la pose de la emoción. Vuelven a la pose neutra.
+    let gestureTween = null;
+    const GESTURES = {
+      bow: () => gsap.timeline().to(live, { gx: 0.3, duration: 0.35, ease: 'power2.out' }).to(live, { gx: 0, duration: 0.6, ease: 'power2.inOut' }),
+      pride: () => gsap.timeline().to(live, { gz: 0.14, duration: 0.3, ease: 'back.out(1.6)' }).to(live, { gz: 0, duration: 0.5, ease: 'power2.inOut' }),
+      nod: () => gsap.timeline().to(live, { gnx: 0.12, duration: 0.18, yoyo: true, repeat: 3, ease: 'sine.inOut' }).to(live, { gnx: 0, duration: 0.2 }),
+      shrug: () => gsap.timeline().to(live, { gz: -0.1, duration: 0.25, ease: 'power2.out' }).to(live, { gz: 0, duration: 0.5, ease: 'power2.inOut' }),
+    };
+    function playGesture(name) {
+      if (reduceMotion || !GESTURES[name]) return;
+      if (gestureTween) gestureTween.kill();
+      gestureTween = GESTURES[name]();
+      gestureTween.eventCallback('onUpdate', applyLivePose);
+    }
+
+    // Caché de texturas de rostro: cada expresión se pinta una sola vez.
+    const faceCache = {};
+    function setFace(expr) {
+      if (!faceCache[expr.id]) {
+        updateFaceTexture(expr);
+        const copy = document.createElement('canvas');
+        copy.width = faceCanvas.width;
+        copy.height = faceCanvas.height;
+        copy.getContext('2d').drawImage(faceCanvas, 0, 0);
+        faceCache[expr.id] = copy;
+      }
+      faceTexture.image = faceCache[expr.id];
+      faceTexture.needsUpdate = true;
+    }
+
+    // La boca (habla) cambia solo la textura: no mueve la pose ni reinicia tweens.
+    function mouthTo(id) {
+      const index = EXPRESSIONS.findIndex((item) => item.id === id);
+      if (index >= 0) setFace(EXPRESSIONS[index]);
+    }
+
     function applyExpressionTo3DModel(index) {
       const expr = EXPRESSIONS[index];
 
-      // 1. Pintar la textura de rostro 2D en alta resolución y actualizar el material 3D
-      updateFaceTexture(expr);
+      // 1. Rostro: textura ya pintada (caché), sin redibujar el canvas de 1024 px en cada cambio
+      setFace(expr);
 
-      // 2. Rotación de cabeza y torso
-      headPivot.rotation.set(...expr.pose.headRot);
-      bodyPivot.rotation.set(...expr.pose.bodyTilt);
+      // 2. Cabeza, torso y brazos: se animan hacia la pose nueva con GSAP, sin saltos
       bodyPivot.position.y = 0;
-
-      // 3. Brazos y manos (Normal vs Pulgares Arriba 👍)
-      leftArmObj.armPivot.rotation.set(...expr.pose.leftArmRot);
-      rightArmObj.armPivot.rotation.set(...expr.pose.rightArmRot);
+      tweenPose(expr.pose);
 
       const useThumbs = Boolean(expr.pose.thumbsUp);
       leftArmObj.normalHand.visible = !useThumbs;
@@ -1942,11 +2008,10 @@
 
       if (isLiveAnimating) {
         const t = clock.getElapsedTime();
-        const basePose = EXPRESSIONS[activeExpressionIndex].pose;
 
         // Flotación suave Chibi 3D
         bodyPivot.position.y = Math.sin(t * 2.4) * 0.045;
-        headPivot.rotation.z = basePose.headRot[2] + Math.sin(t * 1.8) * 0.025;
+        headPivot.rotation.z = live.hz + live.gz + Math.sin(t * 1.8) * 0.025;
 
         // Si las partículas mágicas están activas, hacerlas girar suavemente
         if (magicParticlesGroup.visible) {
@@ -1964,7 +2029,9 @@
       initButtonsUI();
       resetCameraAngle();
       // Generar inmediatamente las 10 imágenes PNG reales al cargar la página
-      renderAllExpressionsToGallery(false);
+      // La galería de PNG (10 renders) solo hace falta en el panel: en OBS retrasaba el arranque y los movimientos.
+      if (!overlayMode) renderAllExpressionsToGallery(false);
+      else applyExpressionTo3DModel(0);
       animateLoop();
     };
   </script>
@@ -2087,14 +2154,14 @@
           if (nowOpen !== open && now - last > 110) {
             open = nowOpen;
             last = now;
-            showExpression(open ? 'habla' : emotion);
+            mouthTo(open ? 'habla' : emotion);
           }
           requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
       }
 
-      async function playOne(text, emotion, voice) {
+      async function playOne(text, emotion, voice, gesture) {
         showExpression(emotion);
         let blob;
         try {
@@ -2124,6 +2191,8 @@
             // Sin analizador, el personaje habla igual con la expresión de la emoción.
           }
         }
+        // El gesto empieza justo cuando suena la frase.
+        playGesture(gesture);
         await new Promise((resolve) => {
           audio.addEventListener('ended', resolve, { once: true });
           audio.addEventListener('error', resolve, { once: true });
@@ -2136,14 +2205,14 @@
         showExpression('normal');
       }
 
-      const speak = (text, emotion, voice) => {
+      const speak = (text, emotion, voice, gesture) => {
         const clean = String(text || '').trim().slice(0, 500);
         if (!clean) return;
         const mood = knownEmotion(emotion);
         const stamp = Date.now();
         // Una frase que esperó más de 20 s (audio bloqueado) se descarta: no suena de golpe, ya caducada.
         queue = queue
-          .then(() => (Date.now() - stamp > 20000 ? null : playOne(clean, mood, voice || {})))
+          .then(() => (Date.now() - stamp > 20000 ? null : playOne(clean, mood, voice || {}, gesture)))
           .catch(() => showExpression('normal'));
       };
 
@@ -2152,13 +2221,14 @@
         bus.onmessage = (event) => {
           const data = event.data;
           if (!data) return;
-          if (data.type === 'speak') speak(data.text, data.emotion, data.voice);
+          if (data.type === 'speak') speak(data.text, data.emotion, data.voice, data.gesture);
+          if (data.type === 'gesture' && GESTURES[data.name]) playGesture(data.name);
           if (data.type === 'emotion') showExpression(knownEmotion(data.id));
         };
       }
 
       // Para probar desde la consola: window.luxSpeak('Hola', 'feliz')
-      window.luxSpeak = (text, emotion, voice) => speak(text, emotion, voice);
+      window.luxSpeak = (text, emotion, voice, gesture) => speak(text, emotion, voice, gesture);
     })();
   </script>
 </body>
