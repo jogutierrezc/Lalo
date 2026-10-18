@@ -12,7 +12,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ServiceCard, type CardTone } from '../../components/integraciones/ServiceCard';
 import { integrationsServerStatus, type IntegrationsServerStatus } from '../../lib/integrationsApi';
-import { luxSaveKey, luxSetModel, luxSetProvider, luxStatus, luxTest, type LuxProviderId, type LuxStatus } from '../../lib/luxApi';
+import {
+  luxPublishRelease,
+  luxRelease,
+  luxSaveKey,
+  luxSetModel,
+  luxSetProvider,
+  luxStatus,
+  luxTest,
+  type LuxProviderId,
+  type LuxReleaseInfo,
+  type LuxStatus,
+} from '../../lib/luxApi';
 import { adminHref, storageHealth, type StorageHealth } from '../../lib/adminLogic';
 import { rpc } from '../../lib/cloud';
 import type { AdminData } from './useAdminData';
@@ -40,6 +51,8 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
   const [luxInput, setLuxInput] = useState('');
   // Proveedor al que va la clave que se pega. Es independiente del proveedor activo.
   const [luxKeyProvider, setLuxKeyProvider] = useState<LuxProviderId | null>(null);
+  const [release, setRelease] = useState<LuxReleaseInfo | null>(null);
+  const [releaseNote, setReleaseNote] = useState('');
   const [luxBusy, setLuxBusy] = useState(false);
   const [luxNote, setLuxNote] = useState<string | null>(null);
 
@@ -55,6 +68,9 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
 
   useEffect(() => {
     refreshLux();
+    luxRelease().then((res) => {
+      if (res.ok) setRelease(res.data);
+    });
   }, [refreshLux]);
 
   // La clave pasa por el servidor y no se conserva en el estado: al guardar se vacía el campo.
@@ -83,6 +99,20 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
       setLuxProblem(null);
       setLuxNote(`Modelo cambiado a ${res.data.model}. Prueba la conexión para confirmar que responde.`);
       await refreshLux();
+    } else {
+      setLuxProblem(res.message);
+    }
+    setLuxBusy(false);
+  };
+
+  const publishRelease = async () => {
+    setLuxBusy(true);
+    setLuxNote(null);
+    const res = await luxPublishRelease(releaseNote.trim());
+    if (res.ok) {
+      setRelease(res.data);
+      setReleaseNote('');
+      setLuxNote(`Actualización ${res.data.version} publicada. Los overlays de OBS se recargan solos en menos de un minuto.`);
     } else {
       setLuxProblem(res.message);
     }
@@ -382,6 +412,28 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
             )}
           </div>
           {luxNote && <p className="cab-note" role="status">{luxNote}</p>}
+          <div className="cab-field">
+            <label className="cab-label" htmlFor="adm-lux-release-note">
+              Publicar actualización para los streams
+            </label>
+            <input
+              id="adm-lux-release-note"
+              className="cab-inp"
+              maxLength={200}
+              placeholder="Qué cambió, por ejemplo: nuevos comandos de Lux"
+              value={releaseNote}
+              disabled={luxBusy}
+              onChange={(e) => setReleaseNote(e.target.value)}
+            />
+            <span className="cab-hint">
+              Versión publicada: {release ? release.version : '…'}
+              {release?.at ? ` · ${new Date(release.at).toLocaleString('es-ES')}` : ''}. Los overlays de OBS se recargan solos. Los bots avisan al
+              arrancar para que cada streamer regenere su script en el estudio de TwitchIO.
+            </span>
+          </div>
+          <button type="button" className="cab-btn2 cab-btn-sm" disabled={luxBusy} onClick={publishRelease}>
+            Publicar actualización
+          </button>
           {lux && lux.models.length > 0 && (
             <div className="cab-field">
               <label className="cab-label" htmlFor="adm-lux-model">

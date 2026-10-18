@@ -30,8 +30,9 @@ import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSetting
 import { parseEmotion } from './emotion.js';
 import { INTENT_GESTURE, detectIntent } from './intent.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
+import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 
-export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat'] as const;
+export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat', 'release'] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
 const MEMORY_LIMIT = 20;
@@ -379,6 +380,35 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
   }
 }
 
+/**
+ * Versión publicada de Lux. GET es público (lo leen el overlay y el bot); POST lo usa
+ * el administrador para publicar una actualización de comandos.
+ */
+async function release(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const method = req.method.toUpperCase();
+  if (method === 'GET') {
+    try {
+      const current = parseRelease(await db.setting(RELEASE_SETTING));
+      return { status: 200, body: { version: current.version, note: current.note, at: current.at } };
+    } catch (err) {
+      return luxFailure(err, 'lux/release');
+    }
+  }
+  if (method !== 'POST') return fail(405, 'method', 'Esta ruta admite GET y POST.');
+  const denied = await requireAdmin(req, env, deps);
+  if (denied) return denied;
+  try {
+    const note = typeof bodyOf(req).note === 'string' ? (bodyOf(req).note as string) : '';
+    const published = nextRelease(parseRelease(await db.setting(RELEASE_SETTING)), note, (deps.now ?? Date.now)());
+    await db.putSetting(RELEASE_SETTING, JSON.stringify(published));
+    return { status: 200, body: { version: published.version, note: published.note, at: published.at } };
+  } catch (err) {
+    return luxFailure(err, 'lux/release');
+  }
+}
+
 /** Entrada única de Lux. `overrides` solo lo usan las pruebas. */
 export async function handleLux(action: LuxAction, req: IntegrationRequest, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<IntegrationResult> {
   const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
@@ -399,5 +429,7 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return config(req, env, deps);
     case 'chat':
       return chat(req, env, deps);
+    case 'release':
+      return release(req, env, deps);
   }
 }

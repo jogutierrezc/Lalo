@@ -10,6 +10,7 @@
  */
 
 import type { CommandPermission, TwitchIOCommand, TwitchIOSettings } from '../../types/twitchio';
+import { LUX_BOT_VERSION } from '../../../server/lux/release';
 
 export const TOKEN_PLACEHOLDER = 'oauth:TU_TOKEN_AQUI';
 export const CHANNEL_PLACEHOLDER = 'TU_CANAL';
@@ -122,6 +123,7 @@ LALO_URL = "http://localhost:3001/api/twitchio/event"
 # Lux (personaje IA): la clave de OBS de tu panel de Lalo, en Cuenta.
 LUX_URL = "http://localhost:3001/api/lux/chat"
 LUX_KEY = "TU_CLAVE_OBS"
+LUX_BOT_VERSION = ${LUX_BOT_VERSION}
 
 
 def fill(text, user=""):
@@ -166,12 +168,24 @@ async def lux_switch(message, turn_on):
     await message.channel.send("Lux responderá en el chat." if turn_on else "Lux dejará de responder en el chat.")
 
 
+async def check_lux_version():
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(LUX_URL.replace("/chat", "/release")) as response:
+                data = await response.json(content_type=None)
+    except (aiohttp.ClientError, ValueError):
+        return
+    if int(data.get("version", 0)) > LUX_BOT_VERSION:
+        print("Hay una versión nueva de los comandos de Lux: " + str(data.get("note") or "") + ". Vuelve a generar el script en el estudio de TwitchIO.")
+
+
 class LaloBot(commands.Bot):
     def __init__(self):
         super().__init__(token=TOKEN, prefix=PREFIX, initial_channels=[CHANNEL])
 
     async def event_ready(self):
         print(f"{BOT_NAME} listo en #{CHANNEL}")
+        await check_lux_version()
 
     async def event_channel_joined(self, channel):
         if WELCOME and channel.name == CHANNEL:

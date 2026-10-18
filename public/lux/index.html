@@ -2231,5 +2231,27 @@
       window.luxSpeak = (text, emotion, voice, gesture) => speak(text, emotion, voice, gesture);
     })();
   </script>
+
+  <script>
+    // Actualizaciones de Lux: el overlay consulta la versión publicada y se recarga sola al cambiar.
+    // Así una actualización de comandos o del personaje llega a OBS sin tocar la fuente.
+    (function () {
+      if (new URLSearchParams(location.search).get('overlay') !== '1') return;
+      let known = null;
+      const checkRelease = async () => {
+        try {
+          const res = await fetch('/api/lux/release', { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (known === null) known = data.version;
+          else if (data.version !== known) location.reload();
+        } catch {
+          // Sin conexión no se recarga: se vuelve a intentar en el siguiente aviso.
+        }
+      };
+      checkRelease();
+      setInterval(checkRelease, 60000);
+    })();
+  </script>
 </body>
 </html>

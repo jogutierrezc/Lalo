@@ -85,6 +85,26 @@ export async function luxTest(): Promise<ApiOutcome<LuxTestResult>> {
   return { ok: true, data: { model: String(res.data.model ?? ''), latencyMs: Number(res.data.latencyMs ?? 0) } };
 }
 
+/** Versión publicada de Lux para los streams. */
+export interface LuxReleaseInfo {
+  version: number;
+  note: string;
+  at: string | null;
+}
+
+export async function luxRelease(): Promise<ApiOutcome<LuxReleaseInfo>> {
+  const res = await call('/api/lux/release', 'GET');
+  if (!res.ok) return res;
+  return { ok: true, data: { version: Number(res.data.version ?? 1), note: String(res.data.note ?? ''), at: (res.data.at as string) ?? null } };
+}
+
+/** Publica una actualización: los overlays se recargan y los bots avisan. */
+export async function luxPublishRelease(note: string): Promise<ApiOutcome<LuxReleaseInfo>> {
+  const res = await call('/api/lux/release', 'POST', { note });
+  if (!res.ok) return res;
+  return { ok: true, data: { version: Number(res.data.version ?? 1), note: String(res.data.note ?? ''), at: (res.data.at as string) ?? null } };
+}
+
 /** Ajustes de Lux del streamer (lux_settings, migración 0024). */
 export interface LuxSettingsView {
   personality: string;
