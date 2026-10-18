@@ -79,9 +79,17 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
             <PlanNumber label="Número de archivos" value={plan.max_files} onCommit={(value) => savePlan(plan, { max_files: value })} />
             <PlanNumber
               label="Créditos de Mi AI al mes"
+              min={0}
               value={plan.lux_monthly_credits ?? 0}
               onCommit={(value) => savePlan(plan, { lux_monthly_credits: value })}
             />
+            <PlanNumber
+              label="Modelos 3D propios de Mi AI"
+              min={0}
+              value={plan.lux_max_models ?? 0}
+              onCommit={(value) => savePlan(plan, { lux_max_models: value })}
+            />
+            <p className="cab-hint">Cuántos modelos 3D puede subir cada creador con su propia cuenta. Cero: ninguno. Los de la biblioteca compartida no cuentan.</p>
             <p className="cab-hint">Mi AI cuenta los créditos de cada respuesta con un modelo de pago. Si la cuenta llega al tope, sus personajes usan el modelo por defecto hasta el mes siguiente. Cero: sin modelos de pago.</p>
             <p className="cab-hint">
               {split
@@ -127,9 +135,10 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
   );
 };
 
-export const PlanNumber: React.FC<{ label: string; value: number; max?: number; onCommit: (value: number) => void }> = ({
+export const PlanNumber: React.FC<{ label: string; value: number; min?: number; max?: number; onCommit: (value: number) => void }> = ({
   label,
   value,
+  min = 1,
   max,
   onCommit,
 }) => {
@@ -144,13 +153,13 @@ export const PlanNumber: React.FC<{ label: string; value: number; max?: number; 
       <input
         id={id}
         type="number"
-        min={1}
+        min={min}
         max={max}
         className="cab-inp cab-mono w-28"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
-          const next = Math.max(1, Math.min(max ?? Number.MAX_SAFE_INTEGER, Math.round(Number(draft) || value)));
+          const next = Math.max(min, Math.min(max ?? Number.MAX_SAFE_INTEGER, Math.round(Number(draft) || value)));
           setDraft(String(next));
           if (next !== value) onCommit(next);
         }}

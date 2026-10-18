@@ -25,6 +25,7 @@ import {
   type LuxProviderModels,
 } from '../../lib/luxApi';
 import { ModeloPersonajeBlock } from './ModeloPersonajeBlock';
+import { BibliotecaModelos } from './BibliotecaModelos';
 
 /** Borrador del formulario: un personaje nuevo (id null) o uno existente. model '' = modelo por defecto. */
 interface Draft {
@@ -455,6 +456,8 @@ export const PersonajesSection: React.FC = () => {
           </div>
         ))}
       </section>
+
+      <BibliotecaModelos />
     </div>
   );
 };

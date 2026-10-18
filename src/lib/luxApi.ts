@@ -434,3 +434,54 @@ export async function luxCharacterView(): Promise<ApiOutcome<LuxCharacterView>> 
   if (!res.ok) return res;
   return { ok: true, data: res.data as unknown as LuxCharacterView };
 }
+
+// ---------- Biblioteca de modelos (migración 0035) ----------
+
+/** Estado de un modelo de creador. Los de Riot Games siempre están aprobados. */
+export type LuxReviewStatus = 'privado' | 'pendiente' | 'aprobado';
+
+/** Un modelo de la biblioteca o de la cuenta, sin claves del almacenamiento. */
+export interface LuxLibraryModel {
+  id: string;
+  name: string;
+  /** 'riot' = personaje de Riot Games (lleva aviso de licencia); 'creador' = subido por una cuenta. */
+  source: 'riot' | 'creador';
+  ownerProfileId: string | null;
+  fileName: string | null;
+  bytes: number | null;
+  uploadedAt: string | null;
+  reviewStatus: LuxReviewStatus;
+  licenseConfirmed: boolean;
+  /** Aviso de licencia de Riot Games (texto exacto del servidor), o null. */
+  licenseNotice: string | null;
+}
+
+export interface LuxModelLibrary {
+  /** Biblioteca compartida: modelos de Riot Games y los aprobados por el administrador. */
+  library: LuxLibraryModel[];
+  /** Los modelos propios de la cuenta, en cualquier estado de revisión. */
+  mine: LuxLibraryModel[];
+  /** Nº máximo de modelos propios del plan, cuántos tiene y cuántos le quedan. */
+  limit: number;
+  used: number;
+  left: number;
+  /** Modelo que eligió para su personaje, o null. */
+  chosen: string | null;
+  /** Solo el administrador: modelos de creadores pendientes de revisión o privados. */
+  review?: LuxLibraryModel[];
+  /** Solo el administrador: cuentas que pueden ser dueñas, para poner nombre a cada modelo. */
+  owners?: Array<{ id: string; label: string }>;
+}
+
+const MODEL_LIBRARY = '/api/lux/model-library';
+
+export async function luxModelLibrary(): Promise<ApiOutcome<LuxModelLibrary>> {
+  const res = await call(MODEL_LIBRARY, 'GET');
+  if (!res.ok) return res;
+  return { ok: true, data: res.data as unknown as LuxModelLibrary };
+}
+
+/** Operación sobre la biblioteca: enviar a revisión, quitar, aprobar, rechazar o elegir. */
+export function luxModelOp(body: Record<string, unknown>): Promise<ApiOutcome<Record<string, unknown>>> {
+  return call(MODEL_LIBRARY, 'POST', body);
+}

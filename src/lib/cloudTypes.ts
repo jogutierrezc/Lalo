@@ -36,6 +36,8 @@ export interface PlanRow {
   is_default: boolean;
   /** Tope mensual de créditos de Mi AI (migración 0032). */
   lux_monthly_credits?: number;
+  /** Nº máximo de modelos propios de Mi AI por creador (migración 0035). Null = ninguno. */
+  lux_max_models?: number | null;
 }
 
 export interface ProfileRow {

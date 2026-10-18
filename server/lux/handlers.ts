@@ -13,7 +13,9 @@
  *   character   GET   (streamer con Lux activo, o admin)  su personaje activo, su modelo y el consumo del mes
  *   mascota-model GET (overlay, con la clave de OBS)  el archivo GLB del personaje de la cuenta, solo si es suyo
  *   character-model POST (admin)  sube (presign + complete), quita el modelo 3D de un personaje
- *   reply       POST  (streamer con Lux activo, o admin)  genera una respuesta de Lux
+ *   model-library GET/POST  biblioteca de modelos: el creador sube, envía a revisión, quita y elige el suyo;
+ *                 el administrador aprueba (con la licencia confirmada) o rechaza
+ *   reply      POST  (streamer con Lux activo, o admin)  genera una respuesta de Lux
  *   memory      GET/POST  memoria del personaje activo del streamer
  *   admin-memory POST (admin)  memoria que escribe el administrador en la ficha de la cuenta
  *
@@ -25,7 +27,7 @@ import { defaultDeps, failureOf, fail, isFail, type Auth, type IntegrationReques
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { MODEL_SETTING, PROVIDER_SETTING, activeModel, activeProvider, isKeyFor, keyState, readApiKey, saveApiKey } from './keyVault.js';
 import { LUX_MAX_INPUT, buildLuxMessages } from './prompt.js';
-import { supabaseLuxDb, type LuxDb, type LuxMemoryDb, type LuxProfile } from './luxDb.js';
+import { supabaseLuxDb, type LuxDb, type LuxLibraryRow, type LuxMemoryDb, type LuxProfile } from './luxDb.js';
 import {
   ADMIN_UPLOAD_MAX_BYTES,
   DIGEST_MAX_ITEMS,
@@ -62,6 +64,17 @@ import { fetchPrivateModel, isModelKey, type ModelBytes } from './mascotaModel.j
 import { MODEL_MESSAGES, checkModelFile, defaultModelFiles, newModelKey, retryStaleKeys, MODEL_MAX_BYTES, MODEL_MIME, MODEL_UPLOAD_SECONDS, type ModelFiles } from './characterModel.js';
 import { licenseNoticeFor } from './characters.js';
 import {
+  canApprove,
+  canSubmit,
+  isShared,
+  libraryView,
+  modelLimitOf,
+  modelsLeft,
+  ownedWithFile,
+  visibleTo,
+  type LibraryModel,
+} from './modelLibrary.js';
+import {
   MODEL_CONFIG_SETTING,
   defaultModelProblem,
   listModels,
@@ -78,7 +91,7 @@ import {
 /** Como failureOf, pero el aviso de migración nombra las de Lux (0023 a 0032), no la de integraciones. */
 function luxFailure(err: unknown, where: string): IntegrationResult {
   if (err instanceof MigrationMissingError) {
-    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023 a 0034) en Supabase.');
+    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023 a 0035) en Supabase.');
   }
   return failureOf(err, where);
 }
@@ -101,6 +114,7 @@ export const LUX_ACTIONS = [
   'character',
   'mascota-model',
   'character-model',
+  'model-library',
 ] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
@@ -1071,6 +1085,213 @@ async function characterModel(req: IntegrationRequest, env: Env, deps: LuxDeps):
   }
 }
 
+// ---------- Biblioteca de modelos (migración 0035) ----------
+
+/** La base de datos con la biblioteca de modelos de los creadores, o null si falta la migración 0035. */
+type LibraryDb = LuxDb & Required<Pick<LuxDb, 'libraryModels' | 'libraryInsert' | 'libraryUpdate' | 'libraryDelete' | 'setProfileModel' | 'planModelLimit'>>;
+const LIBRARY_METHODS = ['libraryModels', 'libraryInsert', 'libraryUpdate', 'libraryDelete', 'setProfileModel', 'planModelLimit'] as const;
+function libraryApi(db: LuxDb): LibraryDb | null {
+  return LIBRARY_METHODS.every((name) => typeof db[name] === 'function') ? (db as LibraryDb) : null;
+}
+
+/** Modelos de Riot Games: los GLB de los personajes con model_origin 'riot'. Su id es el del personaje. */
+function riotModels(characters: LuxCharacter[]): LibraryModel[] {
+  return characters
+    .filter((character) => character.modelOrigin === 'riot' && character.modelKey)
+    .map((character) => {
+      const fileName = character.modelFile?.name ?? null;
+      return {
+        id: character.id,
+        name: fileName ? fileName.replace(/\.glb$/i, '').slice(0, 80) || character.name : character.name,
+        source: 'riot' as const,
+        ownerProfileId: null,
+        fileName,
+        bytes: character.modelFile?.bytes ?? null,
+        uploadedAt: character.modelFile?.uploadedAt ?? null,
+        reviewStatus: 'aprobado' as const,
+        licenseConfirmed: true,
+        modelKey: character.modelKey,
+      };
+    });
+}
+
+/**
+ * Antes de contar la cuota, borra lo que la cuenta dejó a medias: subidas pedidas y no
+ * confirmadas, y archivos cuyo borrado falló. Lo que no se puede borrar se vuelve a anotar.
+ */
+async function sweepAbandoned(api: LibraryDb, files: ModelFiles, env: Env, rows: LuxLibraryRow[], profileId: string): Promise<void> {
+  for (const row of rows) {
+    if (row.ownerProfileId !== profileId || row.modelKey !== null) continue;
+    const left = await retryStaleKeys(files, env, [...row.staleKeys, ...(row.pendingKey ? [row.pendingKey] : [])]);
+    if (left.length === 0) await api.libraryDelete(row.id);
+    else await api.libraryUpdate(row.id, { pendingKey: null, staleKeys: left });
+  }
+}
+
+/**
+ * Biblioteca de modelos. GET: lo que ve la cuenta (la biblioteca compartida, sus modelos
+ * y su cuota) y, al administrador, la cola de revisión. POST con `op`:
+ *   presign   { name, size }        autorización de subida para un modelo propio (cuenta con cuota)
+ *   complete  { id, key }           confirma la subida: mira el tamaño real en R2 y deja el modelo privado
+ *   submit    { id }                envía su modelo a revisión (privado -> pendiente)
+ *   remove    { id }                quita su modelo (el administrador puede quitar cualquiera)
+ *   approve   { id, licenseConfirmed: true }  (solo administrador) publica en la biblioteca
+ *   reject    { id }                (solo administrador) vuelve a privado
+ *   choose    { modelId | null }    elige el modelo de su personaje; solo entre los que ve
+ * El rol sale de la sesión, nunca del cuerpo. Los modelos de Riot Games no se suben ni se quitan aquí.
+ */
+async function modelLibrary(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  const method = req.method.toUpperCase();
+  if (method !== 'GET' && method !== 'POST') return fail(405, 'method', 'Esta ruta admite GET (biblioteca) y POST (subir, enviar, quitar, aprobar o elegir).');
+  const caller = await deps.auth(req, env);
+  if (isFail(caller)) return caller;
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  const api = libraryApi(db);
+  if (!api || !db.characters) return fail(503, 'not_configured', 'Al servidor le faltan las funciones de la biblioteca de modelos (migración 0035).');
+  const files = deps.modelFiles ?? defaultModelFiles;
+  const nowMs = (deps.now ?? Date.now)();
+  const admin = caller.role === 'admin';
+
+  try {
+    const profile = await db.profile(caller.id);
+    if (!profile) return fail(403, 'no_profile', 'No se encontró tu perfil.');
+    if (!admin && !profile.luxEnabled) return fail(403, 'lux_disabled', 'Lux no está activado para tu cuenta.');
+
+    const rows = await api.libraryModels();
+    const models: LibraryModel[] = [...riotModels(await db.characters()), ...rows];
+    const findOwn = (id: string): LuxLibraryRow | undefined => rows.find((row) => row.id === id && (row.ownerProfileId === profile.id || admin));
+
+    if (method === 'GET') {
+      const limit = modelLimitOf(profile.planId ? await api.planModelLimit(profile.planId) : null);
+      const mine = rows.filter((row) => row.ownerProfileId === profile.id && row.modelKey !== null);
+      const used = ownedWithFile(models, profile.id).length;
+      const visible = visibleTo(models, profile.id);
+      const body: Record<string, unknown> = {
+        library: models.filter(isShared).map(libraryView),
+        mine: mine.map(libraryView),
+        limit,
+        used,
+        left: modelsLeft(limit, used),
+        chosen: profile.luxModelId && visible.some((model) => model.id === profile.luxModelId) ? profile.luxModelId : null,
+      };
+      if (admin) {
+        body.review = rows.filter((row) => row.modelKey !== null && row.reviewStatus !== 'aprobado').map(libraryView);
+        body.owners = api.streamers ? await api.streamers() : [];
+      }
+      return { status: 200, body };
+    }
+
+    const raw = bodyOf(req);
+    const op = raw.op;
+    const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+
+    if (op === 'presign') {
+      const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 200) : '';
+      const size = typeof raw.size === 'number' ? raw.size : NaN;
+      const check = checkModelFile({ name, size });
+      if (!check.ok) return fail(400, 'bad_file', check.message);
+      await sweepAbandoned(api, files, env, rows, profile.id);
+      const limit = modelLimitOf(profile.planId ? await api.planModelLimit(profile.planId) : null);
+      const used = ownedWithFile(models, profile.id).length;
+      if (modelsLeft(limit, used) <= 0) {
+        const message = limit === 0 ? 'Tu plan no incluye modelos propios.' : `Tu plan admite ${limit} modelos propios. Quita uno para subir otro.`;
+        return fail(409, 'quota_reached', message);
+      }
+      const key = newModelKey();
+      const uploadUrl = files.uploadUrl(env, key, size, new Date(nowMs));
+      if (!uploadUrl) return fail(503, 'models_bucket', MODEL_MESSAGES.notConfigured);
+      const displayName = name.replace(/\.glb$/i, '').slice(0, 80) || 'Modelo';
+      const created = await api.libraryInsert({ ownerProfileId: profile.id, name: displayName, pendingKey: key });
+      return { status: 200, body: { id: created, key, uploadUrl, expiresIn: MODEL_UPLOAD_SECONDS, headers: { 'Content-Type': MODEL_MIME } } };
+    }
+
+    if (op === 'complete') {
+      const row = findOwn(id);
+      if (!row || row.ownerProfileId !== profile.id) return fail(404, 'model_not_found', 'Ese modelo no existe.');
+      const key = typeof raw.key === 'string' ? raw.key : '';
+      if (!isModelKey(key) || key !== row.pendingKey) return fail(400, 'not_requested', MODEL_MESSAGES.notRequested);
+
+      // Tamaño real, preguntado a R2: no vale el que diga el navegador.
+      const head = await files.head(env, key);
+      if (head === 'not_configured') return fail(503, 'models_bucket', MODEL_MESSAGES.notConfigured);
+      if (head === 'missing' || head === 'error') return fail(502, 'upload_failed', MODEL_MESSAGES.upload);
+      if (head.bytes <= 0 || head.bytes > MODEL_MAX_BYTES) {
+        const left = await retryStaleKeys(files, env, [...row.staleKeys, key]);
+        if (left.length === 0) await api.libraryDelete(row.id);
+        else await api.libraryUpdate(row.id, { pendingKey: null, staleKeys: left });
+        return fail(400, 'bad_file', head.bytes > MODEL_MAX_BYTES ? MODEL_MESSAGES.tooBig : MODEL_MESSAGES.empty);
+      }
+
+      const left = await retryStaleKeys(files, env, row.staleKeys);
+      const fileName = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 200) : null;
+      await api.libraryUpdate(row.id, {
+        modelKey: key,
+        pendingKey: null,
+        fileName,
+        bytes: head.bytes,
+        uploadedAt: new Date(nowMs).toISOString(),
+        staleKeys: left,
+        reviewStatus: 'privado',
+        licenseConfirmed: false,
+      });
+      return { status: 200, body: { ok: true } };
+    }
+
+    if (op === 'submit') {
+      const row = findOwn(id);
+      if (!row || row.ownerProfileId !== profile.id) return fail(404, 'model_not_found', 'Ese modelo no existe.');
+      const ready = canSubmit(row);
+      if (!ready.ok) return fail(409, 'not_submittable', ready.message);
+      if (row.reviewStatus === 'privado') await api.libraryUpdate(row.id, { reviewStatus: 'pendiente' });
+      return { status: 200, body: { ok: true, reviewStatus: 'pendiente' } };
+    }
+
+    if (op === 'remove') {
+      const row = findOwn(id);
+      if (!row) return fail(404, 'model_not_found', 'Ese modelo no existe.');
+      const keys = [...row.staleKeys, ...(row.modelKey ? [row.modelKey] : []), ...(row.pendingKey ? [row.pendingKey] : [])];
+      const left = await retryStaleKeys(files, env, keys);
+      // Si el archivo no se pudo borrar, la fila sigue con los archivos anotados para reintentar.
+      if (left.length === 0) await api.libraryDelete(row.id);
+      else await api.libraryUpdate(row.id, { modelKey: null, pendingKey: null, staleKeys: left, reviewStatus: 'privado', licenseConfirmed: false });
+      return { status: 200, body: { ok: true } };
+    }
+
+    if (op === 'approve' || op === 'reject') {
+      if (!admin) return fail(403, 'not_admin', 'Solo para administradores.');
+      const row = rows.find((item) => item.id === id);
+      if (!row) return fail(404, 'model_not_found', 'Ese modelo no existe.');
+      if (op === 'reject') {
+        await api.libraryUpdate(row.id, { reviewStatus: 'privado', licenseConfirmed: false });
+        return { status: 200, body: { ok: true, reviewStatus: 'privado' } };
+      }
+      const approval = canApprove(row, raw.licenseConfirmed);
+      if (!approval.ok) return fail(400, approval.code, approval.message);
+      await api.libraryUpdate(row.id, { reviewStatus: 'aprobado', licenseConfirmed: true });
+      return { status: 200, body: { ok: true, reviewStatus: 'aprobado' } };
+    }
+
+    if (op === 'choose') {
+      let chosen: string | null = null;
+      if (raw.modelId !== undefined && raw.modelId !== null && raw.modelId !== '') {
+        const wanted = typeof raw.modelId === 'string' ? raw.modelId.trim() : '';
+        if (!UUID.test(wanted)) return fail(400, 'bad_id', 'El modelo no es válido.');
+        if (!visibleTo(models, profile.id).some((model) => model.id === wanted)) {
+          return fail(404, 'model_not_found', 'Ese modelo no está disponible para tu cuenta.');
+        }
+        chosen = wanted;
+      }
+      await api.setProfileModel(profile.id, chosen);
+      return { status: 200, body: { chosen } };
+    }
+
+    return fail(400, 'bad_op', 'Operación no admitida.');
+  } catch (err) {
+    return luxFailure(err, 'lux/model-library');
+  }
+}
+
 /**
  * Lo nuevo que Lux tiene que decir en el overlay. Sin `after`, solo devuelve el último id:
  * así el overlay no repite frases viejas al abrirse. Se autoriza con la clave de OBS.
@@ -1344,5 +1565,7 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return mascotaModel(req, env, deps);
     case 'character-model':
       return characterModel(req, env, deps);
+    case 'model-library':
+      return modelLibrary(req, env, deps);
   }
 }

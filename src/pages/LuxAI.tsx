@@ -16,6 +16,7 @@ import { Field, Range, Toggle } from '../components/studio/StudioKit';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { luxAsk, luxCharacterView, luxGetSettings, luxSaveSettings, type LuxCharacterView, type LuxSettingsView, type LuxVoice } from '../lib/luxApi';
 import { LuxMemoryPanel } from '../components/lux/LuxMemoryPanel';
+import { LuxModelLibraryPanel } from '../components/lux/LuxModelLibrary';
 import { loadVoiceCatalogue } from '../lib/voicesCloud';
 import type { VoiceCatalogue } from '../lib/voicesLogic';
 import '../styles/integraciones.css';
@@ -258,6 +259,8 @@ export const LuxAI: React.FC = () => {
                 )}
                 <p className="cab-hint">El administrador asigna el personaje. Lo que Mi AI recuerda es de ese personaje.</p>
               </section>
+
+              <LuxModelLibraryPanel />
 
               <section className="cab-mod grid gap-4" aria-labelledby="lux-personality">
                 <h2 id="lux-personality" className="text-base font-semibold">

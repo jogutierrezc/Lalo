@@ -22,6 +22,7 @@ export type ModelOrigin = 'riot' | 'propio';
 export const MODEL_ORIGIN_LABEL: Record<ModelOrigin, string> = { riot: 'Riot Games', propio: 'Propio' };
 
 const ENDPOINT = '/api/lux/character-model';
+const LIBRARY_ENDPOINT = '/api/lux/model-library';
 
 /** Comprueba el archivo antes de subirlo. Devuelve el mensaje para el administrador, o null si vale. */
 export function checkModelFileForUpload(file: { name: string; size: number }): string | null {
@@ -82,6 +83,32 @@ export async function uploadCharacterModel(
   }
 
   const done = await call(ENDPOINT, 'POST', { op: 'complete', characterId, key, name: file.name, origin });
+  return done.ok ? { ok: true, data: null } : done;
+}
+
+/**
+ * Sube un modelo propio a la biblioteca de su cuenta (creador). Mismo flujo que el del
+ * administrador: autorización, envío directo a R2 y confirmación. Queda privado hasta
+ * que el administrador lo apruebe; el servidor cuenta la cuota del plan.
+ */
+export async function uploadLibraryModel(file: File, onProgress: (fraction: number) => void): Promise<ApiOutcome<null>> {
+  const problem = checkModelFileForUpload({ name: file.name, size: file.size });
+  if (problem) return { ok: false, code: 'bad_file', message: problem, missing: [] };
+
+  const asked = await call(LIBRARY_ENDPOINT, 'POST', { op: 'presign', name: file.name, size: file.size });
+  if (!asked.ok) return asked;
+  const id = String(asked.data.id ?? '');
+  const key = String(asked.data.key ?? '');
+  const uploadUrl = String(asked.data.uploadUrl ?? '');
+  const headers = (asked.data.headers ?? {}) as Record<string, string>;
+
+  try {
+    await sendToStorage(uploadUrl, headers, file, onProgress);
+  } catch {
+    return { ok: false, code: 'upload_failed', message: MODEL_UPLOAD_FAILED, missing: [] };
+  }
+
+  const done = await call(LIBRARY_ENDPOINT, 'POST', { op: 'complete', id, key, name: file.name });
   return done.ok ? { ok: true, data: null } : done;
 }
 

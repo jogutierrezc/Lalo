@@ -12,6 +12,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { MEMORY_SAVED_MAX, type LuxMemoryKind, type LuxMemorySource } from './memory.js';
 import type { LuxAvatar, LuxCharacter, LuxGestureId, LuxModelOrigin } from './characters.js';
+import type { LibraryModel, ReviewStatus } from './modelLibrary.js';
 
 export interface LuxProfile {
   id: string;
@@ -23,6 +24,8 @@ export interface LuxProfile {
   planId?: string | null;
   /** Personaje asignado por el administrador. Null = el personaje por defecto (migración 0032). */
   luxCharacterId?: string | null;
+  /** Modelo de la biblioteca que el creador eligió para su personaje (migración 0035). Null = ninguno. */
+  luxModelId?: string | null;
 }
 
 export interface LuxMemoryRow {
@@ -82,6 +85,27 @@ export interface LuxMemoryWrite {
   expiresAt: string | null;
   /** Personaje al que pertenece el recuerdo (migración 0032). */
   characterId: string;
+}
+
+/** Modelo de un creador tal como lo lee el servidor: además de lo que ve la biblioteca, sus claves internas. */
+export interface LuxLibraryRow extends LibraryModel {
+  /** Clave de una subida que aún no se confirmó. Interna. */
+  pendingKey: string | null;
+  /** Archivos cuyo borrado falló. Interna. */
+  staleKeys: string[];
+}
+
+/** Cambios de un modelo de creador: solo los campos presentes se escriben. */
+export interface LuxLibraryPatch {
+  name?: string;
+  fileName?: string | null;
+  bytes?: number | null;
+  uploadedAt?: string | null;
+  modelKey?: string | null;
+  pendingKey?: string | null;
+  staleKeys?: string[];
+  reviewStatus?: ReviewStatus;
+  licenseConfirmed?: boolean;
 }
 
 /** Lo que se guarda de un personaje (alta o edición). */
@@ -161,6 +185,19 @@ export interface LuxDb extends Partial<LuxMemoryDb> {
   usageThisMonth?(profileId: string, month: string): Promise<number>;
   /** Suma créditos al consumo del mes. */
   addUsage?(profileId: string, month: string, credits: number): Promise<void>;
+
+  /** Modelos propios de los creadores (migración 0035). Opcional en las pruebas. */
+  libraryModels?(): Promise<LuxLibraryRow[]>;
+  /** Crea un modelo sin archivo confirmado, con la clave de la subida pedida. Devuelve su id. */
+  libraryInsert?(row: { ownerProfileId: string; name: string; pendingKey: string }): Promise<string>;
+  /** Cambia un modelo. true si existía. */
+  libraryUpdate?(id: string, patch: LuxLibraryPatch): Promise<boolean>;
+  /** Borra un modelo (la fila, no el archivo). */
+  libraryDelete?(id: string): Promise<void>;
+  /** Modelo elegido por el creador para su personaje; null la quita. */
+  setProfileModel?(profileId: string, modelId: string | null): Promise<void>;
+  /** Nº máximo de modelos propios del plan (null si el plan no tiene valor o no existe). */
+  planModelLimit?(planId: string): Promise<number | null>;
 }
 
 // 42P01: la tabla no existe. 42703: columna inexistente. PGRST205 y PGRST202: lo mismo, dicho por PostgREST.
@@ -174,6 +211,7 @@ function check(error: { code?: string; message: string } | null): void {
 }
 
 const MEMORY_COLUMNS = 'id, kind, subject, content, pinned, source, created_at, expires_at';
+const LIBRARY_COLUMNS = 'id, owner_profile_id, name, file_name, file_bytes, model_key, pending_key, stale_keys, review_status, license_confirmed, uploaded_at';
 const CHARACTER_COLUMNS =
   'id, name, avatar, color, gestures, model, is_default, owner_profile_id, model_key, model_origin, model_file_name, model_file_bytes, model_uploaded_at, model_pending_key, model_stale_keys';
 
@@ -232,7 +270,25 @@ type ProfileRow = {
   elevenlabs_enabled: boolean | null;
   plan_id: string | null;
   lux_character_id: string | null;
+  lux_model_id: string | null;
 };
+
+function libraryFromRow(row: Record<string, unknown>): LuxLibraryRow {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    source: 'creador',
+    ownerProfileId: String(row.owner_profile_id),
+    fileName: (row.file_name as string | null) ?? null,
+    bytes: row.file_bytes === null || row.file_bytes === undefined ? null : Number(row.file_bytes),
+    uploadedAt: (row.uploaded_at as string | null) ?? null,
+    reviewStatus: row.review_status as ReviewStatus,
+    licenseConfirmed: row.license_confirmed === true,
+    modelKey: (row.model_key as string | null) ?? null,
+    pendingKey: (row.pending_key as string | null) ?? null,
+    staleKeys: Array.isArray(row.stale_keys) ? row.stale_keys.map(String) : [],
+  };
+}
 
 function profileFromRow(row: ProfileRow): LuxProfile {
   return {
@@ -242,10 +298,11 @@ function profileFromRow(row: ProfileRow): LuxProfile {
     elevenlabsEnabled: row.elevenlabs_enabled === true,
     planId: row.plan_id ?? null,
     luxCharacterId: row.lux_character_id ?? null,
+    luxModelId: row.lux_model_id ?? null,
   };
 }
 
-const PROFILE_COLUMNS = 'id, role, lux_enabled, elevenlabs_enabled, plan_id, lux_character_id';
+const PROFILE_COLUMNS = 'id, role, lux_enabled, elevenlabs_enabled, plan_id, lux_character_id, lux_model_id';
 
 export function supabaseLuxDb(env: Env): LuxDb | null {
   const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
@@ -530,6 +587,56 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     async addUsage(profileId, month, credits) {
       const { error } = await db.rpc('lux_add_usage', { p_profile: profileId, p_month: month, p_credits: credits });
       check(error);
+    },
+
+    async libraryModels() {
+      const { data, error } = await db.from('lux_models').select(LIBRARY_COLUMNS).order('created_at', { ascending: false });
+      check(error);
+      return ((data ?? []) as Array<Record<string, unknown>>).map(libraryFromRow);
+    },
+
+    async libraryInsert(row) {
+      const { data, error } = await db
+        .from('lux_models')
+        .insert({ owner_profile_id: row.ownerProfileId, name: row.name, pending_key: row.pendingKey, review_status: 'privado' })
+        .select('id')
+        .single();
+      check(error);
+      return String((data as { id: string }).id);
+    },
+
+    async libraryUpdate(id, patch) {
+      const change: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (patch.name !== undefined) change.name = patch.name;
+      if (patch.fileName !== undefined) change.file_name = patch.fileName;
+      if (patch.bytes !== undefined) change.file_bytes = patch.bytes;
+      if (patch.uploadedAt !== undefined) change.uploaded_at = patch.uploadedAt;
+      if (patch.modelKey !== undefined) change.model_key = patch.modelKey;
+      if (patch.pendingKey !== undefined) change.pending_key = patch.pendingKey;
+      if (patch.staleKeys !== undefined) change.stale_keys = patch.staleKeys;
+      if (patch.reviewStatus !== undefined) change.review_status = patch.reviewStatus;
+      if (patch.licenseConfirmed !== undefined) change.license_confirmed = patch.licenseConfirmed;
+      const { data, error } = await db.from('lux_models').update(change).eq('id', id).select('id');
+      check(error);
+      return (data ?? []).length > 0;
+    },
+
+    async libraryDelete(id) {
+      const { error } = await db.from('lux_models').delete().eq('id', id);
+      check(error);
+    },
+
+    async setProfileModel(profileId, modelId) {
+      const { error } = await db.from('profiles').update({ lux_model_id: modelId }).eq('id', profileId);
+      check(error);
+    },
+
+    async planModelLimit(planId) {
+      const { data, error } = await db.from('plans').select('lux_max_models').eq('id', planId).maybeSingle();
+      check(error);
+      if (!data) return null;
+      const value = (data as { lux_max_models: number | null }).lux_max_models;
+      return value === null || value === undefined ? null : Number(value);
     },
   };
 }
