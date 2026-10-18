@@ -37,6 +37,9 @@ import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 export const LUX_ACTIONS = ['status', 'key', 'model', 'provider', 'test', 'reply', 'config', 'chat', 'release', 'speech'] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
+/** Las respuestas a un comando del chat esperan este tiempo antes de sonar y de aparecer en el chat. */
+export const LUX_REPLY_DELAY_MS = 30_000;
+
 const MEMORY_LIMIT = 20;
 const VIEWER_MAX = 40;
 
@@ -290,7 +293,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
     // Desde el panel solo se manda a OBS si el streamer lo pide (botón «Hablar en el overlay»).
     if (raw.speak === true) {
       if (isSong) {
-        if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'dance', ajustes);
+        if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'sing', ajustes);
       } else {
         await enqueueSpeech(db, profile.id, clipped, emotion, gestureFor(message, intent), ajustes);
       }
@@ -301,7 +304,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
         reply: clipped,
         emotion,
         intent,
-        gesture: isSong ? 'dance' : gestureFor(message, intent),
+        gesture: isSong ? 'sing' : gestureFor(message, intent),
         song: isSong,
         note: isSong && !canSing ? 'sing_needs_elevenlabs' : undefined,
         model,
@@ -390,9 +393,9 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
     });
     // En directo, lo que Lux responde en el chat también se oye en OBS.
     if (isSong) {
-      if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'dance', current);
+      if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'sing', current, LUX_REPLY_DELAY_MS);
     } else {
-      await enqueueSpeech(db, profile.id, reply, emotion, gestureFor(message, intent), current);
+      await enqueueSpeech(db, profile.id, reply, emotion, gestureFor(message, intent), current, LUX_REPLY_DELAY_MS);
     }
     return {
       status: 200,
@@ -400,7 +403,7 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
         reply,
         emotion,
         intent,
-        gesture: isSong ? 'dance' : gestureFor(message, intent),
+        gesture: isSong ? 'sing' : gestureFor(message, intent),
         song: isSong,
         note: isSong && !canSing ? 'sing_needs_elevenlabs' : undefined,
         model,
@@ -446,7 +449,7 @@ async function release(req: IntegrationRequest, env: Env, deps: LuxDeps): Promis
  * Encola lo que Lux dice para el overlay de OBS. El overlay lo lee con su clave de OBS.
  * Se limpia lo que tenga más de diez minutos, para que la tabla no crezca sin fin.
  */
-async function enqueueSpeech(db: LuxDb, profileId: string, text: string, emotion: string, gesture: string, s: LuxSettings): Promise<void> {
+async function enqueueSpeech(db: LuxDb, profileId: string, text: string, emotion: string, gesture: string, s: LuxSettings, delayMs = 0): Promise<void> {
   if (!db.insertSpeech) return;
   await db
     .insertSpeech({
@@ -456,6 +459,7 @@ async function enqueueSpeech(db: LuxDb, profileId: string, text: string, emotion
       gesture,
       voice_reference_id: s.voiceReferenceId,
       voice_engine: s.voiceEngine,
+      play_after: delayMs > 0 ? new Date(Date.now() + delayMs).toISOString() : null,
     })
     .catch(() => console.error('[Lalo lux] no se pudo encolar la voz para el overlay'));
   if (db.pruneSpeech) {

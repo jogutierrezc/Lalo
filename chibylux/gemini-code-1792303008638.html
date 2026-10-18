@@ -1,0 +1,3057 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chibi Lux 3D - Generador de Imágenes, Expresiones y Animaciones 3D</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.7/gsap.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #090a14;
+      color: #f8fafc;
+      overflow-x: hidden;
+    }
+    .tft-bg-grid {
+      background-color: #161430;
+      background-image: 
+        radial-gradient(circle at 50% 35%, rgba(99, 102, 241, 0.22) 0%, rgba(15, 13, 38, 0.92) 75%),
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 24px 24px, 24px 24px;
+    }
+    .checkerboard-bg {
+      background-color: #1e293b;
+      background-image: 
+        linear-gradient(45deg, #0f172a 25%, transparent 25%), 
+        linear-gradient(-45deg, #0f172a 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #0f172a 75%), 
+        linear-gradient(-45deg, transparent 75%, #0f172a 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+    .tft-banner-gradient {
+      background: linear-gradient(90deg, #fbbf24 0%, #f43f5e 52%, #9333ea 100%);
+    }
+    /* Scrollbar estilizado */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-400 selection:text-slate-950">
+
+  <!-- HEADER PRINCIPAL -->
+  <header class="sticky top-0 z-40 border-b border-amber-500/20 bg-slate-950/85 backdrop-blur-xl px-4 sm:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl tft-banner-gradient p-0.5 shadow-lg shadow-rose-500/20 flex items-center justify-center">
+          <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-black text-amber-400 text-lg">
+            3D
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-xl font-black tracking-tight bg-gradient-to-r from-amber-200 via-amber-400 to-rose-400 bg-clip-text text-transparent">
+              CHIBI LUX 3D • RIG ARTICULADO Y GENERADOR PNG
+            </h1>
+            <span class="hidden sm:inline-block px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-300 border border-amber-400/30 rounded-full">
+              10 Expresiones + Coreografías 3D
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Esqueleto 3D articulado (hombros, codos, muñecas, caderas y rodillas) con baile, giros, saludos y exportación PNG</p>
+        </div>
+      </div>
+
+      <!-- Controles Globales de Exportación -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <!-- Selector Fondo -->
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+          <button id="bg-studio-btn" onclick="setRenderBackground('studio')" class="px-3 py-1.5 rounded-lg font-semibold transition bg-indigo-600 text-white shadow">
+            Fondo Estudio TFT
+          </button>
+          <button id="bg-alpha-btn" onclick="setRenderBackground('transparent')" class="px-3 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white">
+            PNG Transparente
+          </button>
+        </div>
+
+        <!-- Selector Encuadre -->
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+          <button id="cam-full-btn" onclick="setFramingMode('full')" class="px-2.5 py-1.5 rounded-lg font-semibold transition bg-slate-800 text-amber-300">
+            Cuerpo Completo
+          </button>
+          <button id="cam-closeup-btn" onclick="setFramingMode('closeup')" class="px-2.5 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white">
+            Primer Plano (Rostro + Busto)
+          </button>
+        </div>
+
+        <!-- Botón Descargar Lámina Completa -->
+        <button onclick="generateAndDownloadSpriteSheet()" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-extrabold tft-banner-gradient text-white shadow-lg shadow-rose-500/25 hover:brightness-110 active:scale-95 transition flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          <span>Descargar Lámina Completa (PNG)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 space-y-8 flex-1">
+
+    <!-- SECCIÓN 1: ESTUDIO 3D INTERACTIVO, GESTOS REALISTAS Y EXPRESIONES -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      
+      <!-- Visor 3D en Tiempo Real -->
+      <div class="lg:col-span-5 flex flex-col bg-slate-900/90 border border-amber-500/30 rounded-2xl overflow-hidden shadow-2xl">
+        <div class="px-4 py-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-amber-300">Estudio 3D en Vivo (Rig Articulado)</h3>
+          </div>
+          <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" id="idle-anim-toggle" checked onchange="toggleLiveAnimation(this.checked)" class="rounded accent-amber-400">
+            <span>Vida y Respiración</span>
+          </label>
+        </div>
+
+        <!-- Contenedor del Canvas WebGL -->
+        <div id="live-viewport-wrapper" class="relative w-full aspect-square tft-bg-grid flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing">
+          <canvas id="three-canvas" class="w-full h-full block"></canvas>
+
+          <!-- Overlay Controles de Cámara -->
+          <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+            <div class="flex items-center gap-1.5">
+              <span id="live-expr-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-slate-950/85 text-amber-300 border border-amber-400/40 backdrop-blur-md">
+                1. Normal / Idle
+              </span>
+              <span id="live-gesture-badge" class="hidden px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/90 text-white backdrop-blur-md shadow">
+                💃 Bailando
+              </span>
+            </div>
+            <button onclick="resetCameraAngle()" class="pointer-events-auto px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-950/80 hover:bg-slate-800 text-slate-200 border border-slate-700 backdrop-blur-md transition">
+              Restaurar Ángulo
+            </button>
+          </div>
+        </div>
+
+        <!-- Pie de visor con botón para re-capturar galería desde este ángulo -->
+        <div class="p-4 bg-slate-950/90 border-t border-slate-800 flex flex-col gap-2.5">
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            💡 <strong>Tip:</strong> Arrastra para girar a Chibi Lux 3D y usa la rueda para hacer zoom. Prueba los botones de <strong>Baile y Gestos</strong> a la derecha.
+          </p>
+          <button onclick="renderAllExpressionsFromCurrentAngle()" class="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 transition flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Re-capturar las 10 Imágenes desde este Ángulo
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel Derecho: Coreografías / Gestos Realistas + Selector de Expresiones -->
+      <div class="lg:col-span-7 flex flex-col justify-between bg-slate-900/70 border border-slate-800 rounded-2xl p-5 space-y-5">
+        
+        <!-- NUEVO: Panel de Coreografías, Baile y Gestos Realistas -->
+        <div class="bg-slate-950/85 border border-rose-500/30 rounded-2xl p-4 space-y-3 shadow-inner">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                Animación Corporal Completa
+              </span>
+              <h3 class="text-sm font-extrabold text-white">Coreografías, Baile y Gestos 3D</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1.5 text-xs text-amber-300 font-semibold cursor-pointer select-none">
+                <input type="checkbox" id="loop-dance-toggle" onchange="toggleContinuousDance(this.checked)" class="rounded accent-rose-500">
+                <span>Modo Baile Continuo (Loop)</span>
+              </label>
+              <button onclick="stopAllGestures()" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+                Detener Gesto
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <button onclick="triggerStudioGesture('dance')" class="gesture-btn px-3 py-2.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-rose-500 to-amber-500 hover:brightness-110 text-slate-950 shadow-md shadow-rose-500/20 transition flex items-center justify-center gap-1.5">
+              <span>💃</span> <span>Bailar</span>
+            </button>
+            <button onclick="triggerStudioGesture('arms_up')" class="gesture-btn px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-400/40 transition flex items-center justify-center gap-1.5">
+              <span>🙌</span> <span>Alzar Brazos</span>
+            </button>
+            <button onclick="triggerStudioGesture('wave')" class="gesture-btn px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-sky-300 border border-sky-400/40 transition flex items-center justify-center gap-1.5">
+              <span>👋</span> <span>Saludar</span>
+            </button>
+            <button onclick="triggerStudioGesture('spin')" class="gesture-btn px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-purple-300 border border-purple-400/40 transition flex items-center justify-center gap-1.5">
+              <span>🌀</span> <span>Girar 360°</span>
+            </button>
+            <button onclick="triggerStudioGesture('jump')" class="gesture-btn px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-emerald-400/40 transition flex items-center justify-center gap-1.5">
+              <span>⭐</span> <span>Saltar</span>
+            </button>
+            <button onclick="triggerStudioGesture('sing')" class="gesture-btn px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-800 transition flex items-center justify-center gap-1.5">
+              <span>🎤</span> <span>Cantar</span>
+            </button>
+            <button onclick="triggerStudioGesture('bow')" class="gesture-btn px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-800 transition flex items-center justify-center gap-1.5">
+              <span>🙇‍♀️</span> <span>Reverencia</span>
+            </button>
+            <button onclick="triggerStudioGesture('ult')" class="gesture-btn px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-amber-200 border border-slate-800 transition flex items-center justify-center gap-1.5">
+              <span>✨</span> <span>¡Demacia!</span>
+            </button>
+            <button onclick="triggerStudioGesture('pride')" class="gesture-btn px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-800 transition flex items-center justify-center gap-1.5">
+              <span>😤</span> <span>Orgullo</span>
+            </button>
+            <button onclick="triggerStudioGesture('shrug')" class="gesture-btn px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-800 transition flex items-center justify-center gap-1.5">
+              <span>🤷‍♀️</span> <span>Duda / Shrug</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Selector de Expresiones en el Modelo 3D -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">
+              10 Expresiones Faciales y Poses Base
+            </h3>
+            <span class="text-xs text-slate-400">Transición suave con articulación de hombros y codos</span>
+          </div>
+
+          <div id="live-expression-buttons" class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <!-- Botones generados dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Detalles técnicos del rig 3D actual -->
+        <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Expresión Seleccionada</span>
+            <p id="detail-name" class="text-sm font-bold text-amber-300 mt-0.5">Normal / Idle</p>
+            <p id="detail-tag" class="text-xs text-slate-400 mt-0.5">Sosteniendo Báculo Luminoso</p>
+          </div>
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Pose Corporal 3D</span>
+            <p id="detail-pose" class="text-xs text-slate-200 mt-1 font-medium">Báculo diagonal + Mano izquierda abierta</p>
+          </div>
+          <div class="flex items-center justify-end">
+            <button onclick="downloadSingleSnapshot(activeExpressionIndex)" class="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              Descargar esta Captura PNG
+            </button>
+          </div>
+        </div>
+
+        <!-- Mini Vista Previa de la Lámina Completa (Character Sheet) -->
+        <div class="bg-slate-950/90 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div class="space-y-1 text-center sm:text-left">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 uppercase">
+              Todo en una sola imagen
+            </span>
+            <h4 class="text-sm font-extrabold text-white">Lámina Oficial "CHIBI LUX - 10 EXPRESIONES 3D"</h4>
+            <p class="text-xs text-slate-400">
+              Genera un póster PNG en alta resolución (2400 × 1350 px) con las 10 poses 3D etiquetadas.
+            </p>
+          </div>
+          <div class="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
+            <button onclick="openSheetModal()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 transition whitespace-nowrap">
+              Ver Lámina en Pantalla
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- SECCIÓN 2: GALERÍA DE LAS 10 IMÁGENES 3D RENDERIZADAS -->
+    <section class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-4 bg-slate-900/70 border border-slate-800/90 rounded-2xl p-4">
+        <div class="flex items-center gap-3">
+          <span class="flex h-3 w-3 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <div>
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+              Galería de Imágenes 3D Generadas (10 Expresiones en PNG)
+            </h2>
+            <p class="text-xs text-slate-400">
+              Cada tarjeta contiene una imagen <code class="text-amber-300 font-mono">&lt;img&gt;</code> PNG real renderizada desde el modelo 3D. Puedes hacer <strong>clic derecho → Guardar imagen como...</strong> o usar el botón de descarga.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="renderAllExpressionsToGallery()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition flex items-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Regenerar las 10 Imágenes 3D
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid de 10 Imágenes PNG -->
+      <div id="snapshots-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <!-- Se puebla automáticamente al iniciar con las 10 capturas PNG 3D -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL PARA VER Y GUARDAR LA LÁMINA COMPLETA (CHARACTER SHEET) -->
+  <div id="sheet-modal" class="fixed inset-0 z-50 hidden bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="px-5 py-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div>
+          <h3 class="text-sm sm:text-base font-bold text-amber-300">Lámina Completa 3D (Clic derecho en la imagen para guardar o usa el botón)</h3>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="downloadGeneratedSheet()" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition">
+            Descargar PNG (2400×1350)
+          </button>
+          <button onclick="closeSheetModal()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="p-4 overflow-auto flex-1 flex items-center justify-center bg-slate-950/60">
+        <img id="sheet-preview-img" alt="Lámina Chibi Lux 3D" class="max-w-full h-auto rounded-lg border border-slate-800 shadow-xl" />
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFICACIÓN TOAST -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-amber-400 text-slate-950 px-4 py-2.5 rounded-xl text-xs font-extrabold shadow-2xl transition-all duration-300 transform translate-y-20 opacity-0 pointer-events-none flex items-center gap-2">
+    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+    <span id="toast-text">Imágenes 3D generadas correctamente</span>
+  </div>
+
+  <script>
+    // ============================================================================
+    // 1. DEFINICIÓN DE LAS 10 EXPRESIONES Y POSES 3D DE CHIBI LUX
+    // ============================================================================
+    const EXPRESSIONS = [
+      {
+        id: 'normal',
+        code: '01_normal_idle',
+        name: 'Normal / Idle',
+        badge: 'Reposo / Base',
+        poseLabel: 'Báculo de Luz diagonal + Sonrisa serena',
+        leftEye: 'open',
+        rightEye: 'open',
+        mouth: 'smile',
+        brows: 'neutral',
+        blush: 0.45,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [0.03, 0.08, -0.02],
+          leftArmRot: [0.22, 0.1, 0.45],
+          rightArmRot: [-0.32, -0.2, -0.40],
+          leftElbow: -0.25,
+          rightElbow: -0.30,
+          bodyTilt: [0, -0.08, 0]
+        }
+      },
+      {
+        id: 'habla',
+        code: '02_hablando_ia',
+        name: 'Habla / Explicando',
+        badge: 'Asistente IA',
+        poseLabel: 'Articulando respuesta + Gesto conversacional',
+        leftEye: 'open',
+        rightEye: 'open',
+        mouth: 'talk',
+        brows: 'talk',
+        blush: 0.45,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [-0.02, -0.1, 0.04],
+          leftArmRot: [-0.55, 0.25, 0.65],
+          rightArmRot: [-0.25, -0.15, -0.35],
+          leftElbow: -0.55,
+          rightElbow: -0.25,
+          bodyTilt: [0, 0.06, 0]
+        }
+      },
+      {
+        id: 'emocionada',
+        code: '03_emocionada_pulgares',
+        name: 'Emocionada (Pulgares)',
+        badge: 'Pose Icónica TFT',
+        poseLabel: 'Doble Pulgar Arriba 👍👍 + Gran sonrisa abierta',
+        leftEye: 'big',
+        rightEye: 'big',
+        mouth: 'big_happy',
+        brows: 'high',
+        blush: 0.75,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: true,
+          showStaff: false,
+          staffGlow: false,
+          headRot: [-0.06, 0.0, -0.04],
+          leftArmRot: [-0.85, 0.35, 0.55],
+          rightArmRot: [-0.85, -0.35, -0.55],
+          leftElbow: -0.45,
+          rightElbow: -0.45,
+          bodyTilt: [-0.04, 0, 0.02]
+        }
+      },
+      {
+        id: 'grita',
+        code: '04_grita_chispa_final',
+        name: 'Grita / ¡Demacia!',
+        badge: 'Ultimate / Alerta',
+        poseLabel: 'Grito energético + Báculo sobrecargado',
+        leftEye: 'determined',
+        rightEye: 'determined',
+        mouth: 'scream',
+        brows: 'angry',
+        blush: 0.35,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: true,
+          headRot: [-0.08, 0.12, 0.0],
+          leftArmRot: [-0.7, 0.2, 0.95],
+          rightArmRot: [-0.75, -0.2, -0.85],
+          leftElbow: -0.35,
+          rightElbow: -0.35,
+          bodyTilt: [0.06, -0.1, 0]
+        }
+      },
+      {
+        id: 'feliz',
+        code: '05_feliz_ojos_cerrados',
+        name: 'Feliz (^ ^)',
+        badge: 'Dulce / Ternura',
+        poseLabel: 'Ojos arqueados felices + Mejillas sonrojadas',
+        leftEye: 'arc_happy',
+        rightEye: 'arc_happy',
+        mouth: 'sweet_smile',
+        brows: 'high',
+        blush: 0.8,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [0.04, -0.08, 0.08],
+          leftArmRot: [-0.3, 0.3, 0.35],
+          rightArmRot: [-0.3, -0.2, -0.35],
+          leftElbow: -0.45,
+          rightElbow: -0.35,
+          bodyTilt: [0, 0.05, 0.03]
+        }
+      },
+      {
+        id: 'alegre',
+        code: '06_alegre_guino',
+        name: 'Alegre / Guiño ;)',
+        badge: 'Carismática',
+        poseLabel: 'Guiño cómplice + Pulgar arriba',
+        leftEye: 'open',
+        rightEye: 'wink',
+        mouth: 'big_happy',
+        brows: 'wink',
+        blush: 0.7,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: true,
+          showStaff: false,
+          staffGlow: false,
+          headRot: [0.02, 0.12, -0.09],
+          leftArmRot: [-0.8, 0.3, 0.5],
+          rightArmRot: [-0.8, -0.3, -0.5],
+          leftElbow: -0.4,
+          rightElbow: -0.4,
+          bodyTilt: [0, -0.08, -0.03]
+        }
+      },
+      {
+        id: 'triste',
+        code: '07_triste_llorosa',
+        name: 'Triste / Disculpa',
+        badge: 'Error / Empatía',
+        poseLabel: 'Ojos llorosos brillantes + Cabeza baja',
+        leftEye: 'sad_teary',
+        rightEye: 'sad_teary',
+        mouth: 'sad',
+        brows: 'sad',
+        blush: 0.3,
+        sweat: false,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [0.16, -0.06, -0.05],
+          leftArmRot: [0.25, -0.15, 0.22],
+          rightArmRot: [0.25, 0.15, -0.25],
+          leftElbow: -0.35,
+          rightElbow: -0.35,
+          bodyTilt: [0.06, 0.04, 0]
+        }
+      },
+      {
+        id: 'molesta',
+        code: '08_molesta_pout',
+        name: 'Molesta / Puchero',
+        badge: 'Enfado Chibi',
+        poseLabel: 'Cejas fruncidas + Puchero + Marca de enojo anime',
+        leftEye: 'angry',
+        rightEye: 'angry',
+        mouth: 'pout',
+        brows: 'angry',
+        blush: 0.85,
+        sweat: false,
+        angerVein: true,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: false,
+          staffGlow: false,
+          headRot: [0.08, -0.14, 0.05],
+          leftArmRot: [-0.35, -0.4, 0.55],
+          rightArmRot: [-0.35, 0.4, -0.55],
+          leftElbow: -0.65,
+          rightElbow: -0.65,
+          bodyTilt: [-0.04, 0.12, 0]
+        }
+      },
+      {
+        id: 'sorprendida',
+        code: '09_sorprendida_asombro',
+        name: 'Sorprendida (!)',
+        badge: 'Asombro / Dato',
+        poseLabel: 'Ojos abiertos + Boca en O + Gota anime',
+        leftEye: 'shock',
+        rightEye: 'shock',
+        mouth: 'o_mouth',
+        brows: 'high',
+        blush: 0.4,
+        sweat: true,
+        angerVein: false,
+        starEyes: false,
+        pose: {
+          thumbsUp: false,
+          showStaff: true,
+          staffGlow: false,
+          headRot: [-0.07, 0.05, -0.03],
+          leftArmRot: [-0.6, 0.1, 0.75],
+          rightArmRot: [-0.45, -0.1, -0.55],
+          leftElbow: -0.5,
+          rightElbow: -0.4,
+          bodyTilt: [-0.05, -0.04, 0]
+        }
+      },
+      {
+        id: 'magica',
+        code: '10_feliz_magica_estelar',
+        name: 'Feliz Mágica ✨',
+        badge: 'Éxito / Estelar',
+        poseLabel: 'Ojos con estrellas doradas + Pulgares + Aura',
+        leftEye: 'big',
+        rightEye: 'big',
+        mouth: 'big_happy',
+        brows: 'high',
+        blush: 0.85,
+        sweat: false,
+        angerVein: false,
+        starEyes: true,
+        pose: {
+          thumbsUp: true,
+          showStaff: true,
+          staffGlow: true,
+          headRot: [-0.05, -0.06, 0.06],
+          leftArmRot: [-0.9, 0.35, 0.6],
+          rightArmRot: [-0.9, -0.35, -0.6],
+          leftElbow: -0.4,
+          rightElbow: -0.4,
+          bodyTilt: [-0.03, 0.05, 0.02]
+        }
+      }
+    ];
+
+    // Estado de la aplicación
+    let activeExpressionIndex = 0;
+    const overlayMode = new URLSearchParams(location.search).get('overlay') === '1';
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let renderBgMode = 'studio'; // 'studio' | 'transparent'
+    let framingMode = 'full';    // 'full' | 'closeup'
+    let isLiveAnimating = true;
+    let continuousDanceLoop = false;
+    const capturedDataUrls = new Array(EXPRESSIONS.length).fill('');
+
+    // ============================================================================
+    // 2. GENERADOR DE TEXTURA FACIAL DE ALTA RESOLUCIÓN (CANVAS 2D -> 3D MESH)
+    // ============================================================================
+    const faceCanvas = document.createElement('canvas');
+    faceCanvas.width = 1024;
+    faceCanvas.height = 1024;
+    const fCtx = faceCanvas.getContext('2d');
+
+    function drawStarShape(ctx, cx, cy, spikes, outerR, innerR, color) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.translate(cx, cy);
+      ctx.moveTo(0, -outerR);
+      for (let i = 0; i < spikes; i++) {
+        ctx.rotate(Math.PI / spikes);
+        ctx.lineTo(0, -innerR);
+        ctx.rotate(Math.PI / spikes);
+        ctx.lineTo(0, -outerR);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.shadowColor = '#fde047';
+      ctx.shadowBlur = 15;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawChibiEye(ctx, cx, cy, eyeType, isRight, hasStar) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (isRight) ctx.scale(-1, 1);
+
+      if (eyeType === 'arc_happy') {
+        ctx.strokeStyle = '#3b1d14';
+        ctx.lineWidth = 22;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-78, 18);
+        ctx.quadraticCurveTo(0, -68, 78, 12);
+        ctx.stroke();
+
+        ctx.lineWidth = 15;
+        ctx.beginPath();
+        ctx.moveTo(-68, 10);
+        ctx.lineTo(-92, 26);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
+      if (eyeType === 'wink' || eyeType === 'blink_closed') {
+        ctx.strokeStyle = '#3b1d14';
+        ctx.lineWidth = 22;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        if (eyeType === 'blink_closed') {
+          ctx.moveTo(-78, 6);
+          ctx.quadraticCurveTo(0, 26, 78, 6);
+        } else {
+          ctx.moveTo(-80, 12);
+          ctx.quadraticCurveTo(0, -52, 78, 20);
+        }
+        ctx.stroke();
+
+        ctx.lineWidth = 14;
+        ctx.beginPath();
+        ctx.moveTo(-62, 5);
+        ctx.lineTo(-90, -8);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+
+      const rx = (eyeType === 'big') ? 86 : (eyeType === 'shock' ? 84 : 80);
+      const ry = (eyeType === 'big') ? 105 : (eyeType === 'shock' ? 104 : 96);
+
+      ctx.fillStyle = 'rgba(180, 105, 78, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(0, -6, rx + 8, ry + 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.clip();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-rx - 10, -ry - 10, (rx + 10) * 2, (ry + 10) * 2);
+
+      const irisScale = (eyeType === 'shock') ? 0.78 : 0.88;
+      const irx = rx * irisScale;
+      const iry = ry * irisScale;
+
+      const irisGrad = ctx.createLinearGradient(0, -iry, 0, iry);
+      irisGrad.addColorStop(0.0, '#0c2461');
+      irisGrad.addColorStop(0.32, '#1e3799');
+      irisGrad.addColorStop(0.68, '#0984e3');
+      irisGrad.addColorStop(1.0, '#74b9ff');
+
+      ctx.fillStyle = irisGrad;
+      ctx.beginPath();
+      ctx.ellipse(4, 6, irx, iry, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const glowGrad = ctx.createRadialGradient(4, iry * 0.45, 5, 4, iry * 0.35, irx * 0.85);
+      glowGrad.addColorStop(0, 'rgba(125, 211, 252, 0.95)');
+      glowGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = glowGrad;
+      ctx.beginPath();
+      ctx.ellipse(4, iry * 0.3, irx * 0.75, iry * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      const pupScale = (eyeType === 'shock') ? 0.34 : 0.46;
+      ctx.fillStyle = '#081338';
+      ctx.beginPath();
+      ctx.ellipse(4, 8, irx * pupScale, iry * pupScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(-26, -30, 24, 29, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(32, 34, 13, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(30, -24, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (hasStar) {
+        drawStarShape(ctx, 4, 10, 4, 38, 13, '#fef08a');
+      }
+
+      if (eyeType === 'sad_teary') {
+        const tearGrad = ctx.createLinearGradient(0, 45, 0, ry);
+        tearGrad.addColorStop(0, 'rgba(186, 230, 253, 0.3)');
+        tearGrad.addColorStop(1, 'rgba(56, 189, 248, 0.85)');
+        ctx.fillStyle = tearGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, ry - 18, rx * 0.9, 28, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(-32, ry - 18, 9, 0, Math.PI * 2);
+        ctx.arc(26, ry - 15, 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (eyeType === 'angry' || eyeType === 'determined') {
+        ctx.fillStyle = '#fbd4c0';
+        ctx.beginPath();
+        ctx.moveTo(-rx - 20, -ry - 20);
+        ctx.lineTo(rx + 20, -ry - 20);
+        ctx.lineTo(rx + 20, 8);
+        ctx.lineTo(-rx - 20, -45);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      ctx.strokeStyle = '#361912';
+      ctx.lineWidth = 24;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (eyeType === 'angry' || eyeType === 'determined') {
+        ctx.moveTo(-rx - 10, -38);
+        ctx.quadraticCurveTo(0, -28, rx + 8, 10);
+      } else if (eyeType === 'sad_teary') {
+        ctx.moveTo(-rx - 10, 10);
+        ctx.quadraticCurveTo(0, -ry - 4, rx + 8, -24);
+      } else {
+        ctx.arc(0, 6, rx + 3, Math.PI * 1.12, Math.PI * 1.88);
+      }
+      ctx.stroke();
+
+      ctx.fillStyle = '#361912';
+      ctx.beginPath();
+      ctx.moveTo(-rx + 4, -28);
+      ctx.lineTo(-rx - 26, -44);
+      ctx.lineTo(-rx - 6, -8);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(124, 58, 45, 0.65)';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.arc(0, 6, rx, Math.PI * 0.22, Math.PI * 0.78);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function updateFaceTexture(expr, forceBlink = false) {
+      const W = faceCanvas.width;
+      const H = faceCanvas.height;
+      fCtx.clearRect(0, 0, W, H);
+
+      const blushAlpha = expr.blush || 0.5;
+      const drawBlush = (bx, by) => {
+        const bg = fCtx.createRadialGradient(bx, by, 6, bx, by, 92);
+        bg.addColorStop(0, `rgba(251, 113, 133, ${ Math.min(0.95, blushAlpha + 0.15) })`);
+        bg.addColorStop(0.6, `rgba(251, 113, 133, ${ blushAlpha * 0.55 })`);
+        bg.addColorStop(1, 'rgba(251, 113, 133, 0)');
+        fCtx.fillStyle = bg;
+        fCtx.beginPath();
+        fCtx.ellipse(bx, by, 92, 54, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        if (blushAlpha >= 0.65) {
+          fCtx.strokeStyle = 'rgba(225, 29, 72, 0.65)';
+          fCtx.lineWidth = 6;
+          fCtx.lineCap = 'round';
+          for (let i = -1; i <= 1; i++) {
+            fCtx.beginPath();
+            fCtx.moveTo(bx + i * 22 - 9, by + 12);
+            fCtx.lineTo(bx + i * 22 + 9, by - 12);
+            fCtx.stroke();
+          }
+        }
+      };
+      drawBlush(235, 590);
+      drawBlush(789, 590);
+
+      const lEye = forceBlink ? 'blink_closed' : expr.leftEye;
+      const rEye = forceBlink ? 'blink_closed' : expr.rightEye;
+      drawChibiEye(fCtx, 298, 455, lEye, false, expr.starEyes);
+      drawChibiEye(fCtx, 726, 455, rEye, true, expr.starEyes);
+
+      const drawBrow = (bx, by, isRight) => {
+        fCtx.save();
+        fCtx.translate(bx, by);
+        if (isRight) fCtx.scale(-1, 1);
+
+        fCtx.strokeStyle = '#85420e';
+        fCtx.lineWidth = 18;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+
+        if (expr.brows === 'angry') {
+          fCtx.moveTo(-74, -16);
+          fCtx.quadraticCurveTo(0, 8, 70, 38);
+        } else if (expr.brows === 'sad') {
+          fCtx.moveTo(-74, 28);
+          fCtx.quadraticCurveTo(0, 6, 70, -18);
+        } else if (expr.brows === 'high') {
+          fCtx.moveTo(-74, -8);
+          fCtx.quadraticCurveTo(0, -46, 72, -6);
+        } else if (expr.brows === 'talk') {
+          const offset = isRight ? -18 : 0;
+          fCtx.moveTo(-74, 4 + offset);
+          fCtx.quadraticCurveTo(0, -30 + offset, 72, 4 + offset);
+        } else if (expr.brows === 'wink') {
+          const offset = isRight ? 12 : -8;
+          fCtx.moveTo(-74, 4 + offset);
+          fCtx.quadraticCurveTo(0, -28 + offset, 72, 6 + offset);
+        } else {
+          fCtx.moveTo(-74, 6);
+          fCtx.quadraticCurveTo(0, -28, 72, 8);
+        }
+        fCtx.stroke();
+        fCtx.restore();
+      };
+      drawBrow(298, 285, false);
+      drawBrow(726, 285, true);
+
+      fCtx.fillStyle = 'rgba(180, 95, 70, 0.45)';
+      fCtx.beginPath();
+      fCtx.ellipse(512, 602, 10, 6, 0, 0, Math.PI * 2);
+      fCtx.fill();
+
+      fCtx.save();
+      fCtx.translate(512, 695);
+
+      if (expr.mouth === 'smile') {
+        fCtx.strokeStyle = '#9e3324';
+        fCtx.lineWidth = 13;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-52, -8);
+        fCtx.quadraticCurveTo(0, 28, 52, -8);
+        fCtx.stroke();
+      } else if (expr.mouth === 'sweet_smile') {
+        fCtx.strokeStyle = '#9e3324';
+        fCtx.lineWidth = 14;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-60, -12);
+        fCtx.quadraticCurveTo(0, 36, 60, -12);
+        fCtx.stroke();
+      } else if (expr.mouth === 'big_happy') {
+        fCtx.beginPath();
+        fCtx.moveTo(-105, -24);
+        fCtx.quadraticCurveTo(0, -8, 105, -24);
+        fCtx.bezierCurveTo(112, 86, -112, 86, -105, -24);
+        fCtx.closePath();
+        fCtx.save();
+        fCtx.clip();
+
+        fCtx.fillStyle = '#992626';
+        fCtx.fillRect(-120, -35, 240, 135);
+
+        fCtx.fillStyle = '#ff7676';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 54, 78, 44, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        fCtx.fillStyle = '#ffffff';
+        fCtx.fillRect(-100, -28, 200, 24);
+        fCtx.restore();
+
+        fCtx.strokeStyle = '#731c1c';
+        fCtx.lineWidth = 10;
+        fCtx.stroke();
+      } else if (expr.mouth === 'talk') {
+        fCtx.beginPath();
+        fCtx.moveTo(-62, -14);
+        fCtx.quadraticCurveTo(0, -22, 62, -14);
+        fCtx.bezierCurveTo(68, 56, -68, 56, -62, -14);
+        fCtx.closePath();
+        fCtx.fillStyle = '#992323';
+        fCtx.fill();
+
+        fCtx.fillStyle = '#ff8585';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 24, 42, 20, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        fCtx.strokeStyle = '#6e1717';
+        fCtx.lineWidth = 10;
+        fCtx.stroke();
+      } else if (expr.mouth === 'scream') {
+        fCtx.beginPath();
+        fCtx.moveTo(-82, -22);
+        fCtx.quadraticCurveTo(0, -38, 82, -22);
+        fCtx.bezierCurveTo(100, 78, -100, 78, -82, -22);
+        fCtx.closePath();
+        fCtx.save();
+        fCtx.clip();
+
+        fCtx.fillStyle = '#731414';
+        fCtx.fillRect(-110, -45, 220, 135);
+
+        fCtx.fillStyle = '#fb7185';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 50, 64, 36, 0, 0, Math.PI * 2);
+        fCtx.fill();
+
+        fCtx.fillStyle = '#ffffff';
+        fCtx.fillRect(-78, -30, 156, 22);
+        fCtx.restore();
+
+        fCtx.strokeStyle = '#4c0d0d';
+        fCtx.lineWidth = 11;
+        fCtx.stroke();
+      } else if (expr.mouth === 'sad') {
+        fCtx.strokeStyle = '#8c2323';
+        fCtx.lineWidth = 13;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-50, 22);
+        fCtx.quadraticCurveTo(0, -16, 50, 22);
+        fCtx.stroke();
+      } else if (expr.mouth === 'pout') {
+        fCtx.strokeStyle = '#8c2323';
+        fCtx.lineWidth = 13;
+        fCtx.lineCap = 'round';
+        fCtx.beginPath();
+        fCtx.moveTo(-44, 12);
+        fCtx.quadraticCurveTo(-15, -10, 0, 8);
+        fCtx.quadraticCurveTo(15, -10, 44, 12);
+        fCtx.stroke();
+      } else if (expr.mouth === 'o_mouth') {
+        fCtx.fillStyle = '#8c2020';
+        fCtx.beginPath();
+        fCtx.ellipse(0, 8, 32, 40, 0, 0, Math.PI * 2);
+        fCtx.fill();
+        fCtx.strokeStyle = '#5e1212';
+        fCtx.lineWidth = 9;
+        fCtx.stroke();
+      }
+      fCtx.restore();
+
+      if (expr.sweat) {
+        fCtx.save();
+        fCtx.translate(855, 325);
+        fCtx.fillStyle = '#7dd3fc';
+        fCtx.strokeStyle = '#0284c7';
+        fCtx.lineWidth = 7;
+        fCtx.beginPath();
+        fCtx.moveTo(0, -46);
+        fCtx.bezierCurveTo(34, 0, 38, 38, 0, 46);
+        fCtx.bezierCurveTo(-38, 38, -34, 0, 0, -46);
+        fCtx.fill();
+        fCtx.stroke();
+        fCtx.restore();
+      }
+
+      if (expr.angerVein) {
+        fCtx.save();
+        fCtx.translate(830, 265);
+        fCtx.strokeStyle = '#ef4444';
+        fCtx.lineWidth = 12;
+        fCtx.lineCap = 'round';
+        const drawVeinCorner = (rot) => {
+          fCtx.save();
+          fCtx.rotate(rot);
+          fCtx.beginPath();
+          fCtx.moveTo(-32, -11);
+          fCtx.quadraticCurveTo(-11, -11, -11, -32);
+          fCtx.stroke();
+          fCtx.restore();
+        };
+        drawVeinCorner(0);
+        drawVeinCorner(Math.PI * 0.5);
+        drawVeinCorner(Math.PI);
+        drawVeinCorner(Math.PI * 1.5);
+        fCtx.restore();
+      }
+
+      if (faceTexture) {
+        faceTexture.needsUpdate = true;
+      }
+    }
+
+    // ============================================================================
+    // 3. ESCENA THREE.JS Y CONSTRUCCIÓN DEL RIG ARTICULADO 3D DE CHIBI LUX
+    // ============================================================================
+    const canvas = document.getElementById('three-canvas');
+    const renderer = new THREE.WebGLRenderer({
+      canvas: canvas,
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true
+    });
+    renderer.setSize(640, 640, false);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+
+    const scene = new THREE.Scene();
+
+    function createStudioBackgroundTexture() {
+      const bgC = document.createElement('canvas');
+      bgC.width = 1024;
+      bgC.height = 1024;
+      const bCtx = bgC.getContext('2d');
+
+      const grad = bCtx.createRadialGradient(512, 420, 60, 512, 512, 680);
+      grad.addColorStop(0, '#2e265e');
+      grad.addColorStop(0.55, '#191636');
+      grad.addColorStop(1, '#0d0b1e');
+      bCtx.fillStyle = grad;
+      bCtx.fillRect(0, 0, 1024, 1024);
+
+      bCtx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+      bCtx.lineWidth = 2;
+      for (let i = 0; i < 1024; i += 64) {
+        bCtx.beginPath(); bCtx.moveTo(i, 0); bCtx.lineTo(i, 1024); bCtx.stroke();
+        bCtx.beginPath(); bCtx.moveTo(0, i); bCtx.lineTo(1024, i); bCtx.stroke();
+      }
+
+      const halo = bCtx.createRadialGradient(512, 430, 20, 512, 430, 320);
+      halo.addColorStop(0, 'rgba(251, 191, 36, 0.16)');
+      halo.addColorStop(1, 'rgba(251, 191, 36, 0)');
+      bCtx.fillStyle = halo;
+      bCtx.beginPath();
+      bCtx.arc(512, 430, 320, 0, Math.PI * 2);
+      bCtx.fill();
+
+      const tex = new THREE.CanvasTexture(bgC);
+      tex.encoding = THREE.sRGBEncoding;
+      return tex;
+    }
+
+    const studioBgTexture = createStudioBackgroundTexture();
+    scene.background = studioBgTexture;
+
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+
+    const ambientLight = new THREE.AmbientLight(0xfff5eb, 0.85);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfffbeb, 0.85);
+    keyLight.position.set(3.5, 5.5, 5.5);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.45);
+    fillLight.position.set(-4, 2, 3);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.PointLight(0xfbbf24, 0.9, 10);
+    rimLight.position.set(0, 3.2, -3.0);
+    scene.add(rimLight);
+
+    const faceTexture = new THREE.CanvasTexture(faceCanvas);
+    faceTexture.encoding = THREE.sRGBEncoding;
+    faceTexture.anisotropy = 4;
+
+    const mats = {
+      skin: new THREE.MeshStandardMaterial({ color: 0xfbd4c0, roughness: 0.62, metalness: 0.02 }),
+      face: new THREE.MeshBasicMaterial({
+        map: faceTexture,
+        transparent: true,
+        depthTest: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -4
+      }),
+      hairMain: new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.38, metalness: 0.12 }),
+      hairLight: new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.32, metalness: 0.15 }),
+      hairDeep: new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.45, metalness: 0.08 }),
+      armorSilver: new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.28, metalness: 0.75 }),
+      armorGold: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.25, metalness: 0.82 }),
+      clothNavy: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.1 }),
+      skirtWhite: new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.5, metalness: 0.08, side: THREE.DoubleSide }),
+      frillPink: new THREE.MeshStandardMaterial({ color: 0xfce7f3, roughness: 0.55, metalness: 0.05 }),
+      gloveWhite: new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5, metalness: 0.05 }),
+      rubyGem: new THREE.MeshStandardMaterial({
+        color: 0xe11d48,
+        emissive: 0x9f1239,
+        emissiveIntensity: 0.5,
+        roughness: 0.15,
+        metalness: 0.3
+      }),
+      magicOrb: new THREE.MeshStandardMaterial({
+        color: 0xfef08a,
+        emissive: 0xfacc15,
+        emissiveIntensity: 0.9,
+        roughness: 0.1
+      })
+    };
+
+    // Grupo Raíz del Personaje
+    const luxRoot = new THREE.Group();
+    scene.add(luxRoot);
+
+    const bodyPivot = new THREE.Group();
+    luxRoot.add(bodyPivot);
+
+    // --- A. CABEZA CHIBI 3D ---
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 1.32, 0);
+    bodyPivot.add(headPivot);
+
+    const headGeo = new THREE.SphereGeometry(0.82, 48, 36);
+    headGeo.scale(1.06, 0.98, 1.0);
+    const headBaseMesh = new THREE.Mesh(headGeo, mats.skin);
+    headPivot.add(headBaseMesh);
+
+    const noseGeo = new THREE.SphereGeometry(0.038, 16, 16);
+    const noseMesh = new THREE.Mesh(noseGeo, mats.skin);
+    noseMesh.position.set(0, -0.08, 0.835);
+    headPivot.add(noseMesh);
+
+    const earGeo = new THREE.SphereGeometry(0.16, 20, 20);
+    earGeo.scale(0.55, 1.0, 0.7);
+    const leftEar = new THREE.Mesh(earGeo, mats.skin);
+    leftEar.position.set(-0.86, -0.05, 0.05);
+    leftEar.rotation.set(0, -0.25, 0.15);
+    headPivot.add(leftEar);
+
+    const rightEar = new THREE.Mesh(earGeo, mats.skin);
+    rightEar.position.set(0.86, -0.05, 0.05);
+    rightEar.rotation.set(0, 0.25, -0.15);
+    headPivot.add(rightEar);
+
+    const facePlaneGeo = new THREE.PlaneGeometry(1.18, 0.96, 40, 40);
+    const facePosAttr = facePlaneGeo.attributes.position;
+    const rx = 0.82 * 1.06;
+    const ry = 0.82 * 0.98;
+    const rz = 0.82;
+    for (let i = 0; i < facePosAttr.count; i++) {
+      const vx = facePosAttr.getX(i);
+      const vy = facePosAttr.getY(i);
+      const term = Math.max(0.05, 1 - (vx * vx) / (rx * rx) - (vy * vy) / (ry * ry));
+      const vz = rz * Math.sqrt(term) + 0.018;
+      facePosAttr.setZ(i, vz);
+    }
+    facePlaneGeo.computeVertexNormals();
+    const facePatchMesh = new THREE.Mesh(facePlaneGeo, mats.face);
+    facePatchMesh.renderOrder = 2;
+    headPivot.add(facePatchMesh);
+
+    // --- B. CABELLO RUBIO DORADO CON INERCIA SECUNDARIA ---
+    const hairGroup = new THREE.Group();
+    headPivot.add(hairGroup);
+
+    const domeGeo = new THREE.SphereGeometry(0.89, 40, 40);
+    domeGeo.scale(1.09, 1.02, 1.05);
+    const domeMesh = new THREE.Mesh(domeGeo, mats.hairMain);
+    domeMesh.position.set(0, 0.16, -0.14);
+    hairGroup.add(domeMesh);
+
+    function createHairStrand(points, radiusTop, radiusMid, radiusTip, mat) {
+      const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
+      const tubularSegments = 28;
+      const radialSegments = 14;
+      const geo = new THREE.TubeGeometry(curve, tubularSegments, radiusMid, radialSegments, false);
+
+      const pos = geo.attributes.position;
+      const center = new THREE.Vector3();
+      for (let i = 0; i <= tubularSegments; i++) {
+        const t = i / tubularSegments;
+        curve.getPointAt(t, center);
+        let scale = (1 - t) * (radiusTop / radiusMid) + Math.sin(t * Math.PI) * 0.85;
+        if (t > 0.7) {
+          scale *= (1 - (t - 0.7) / 0.3);
+        }
+        for (let j = 0; j <= radialSegments; j++) {
+          const idx = i * (radialSegments + 1) + j;
+          const vx = pos.getX(idx) - center.x;
+          const vy = pos.getY(idx) - center.y;
+          const vz = pos.getZ(idx) - center.z;
+          pos.setXYZ(idx, center.x + vx * scale, center.y + vy * scale * 0.68, center.z + vz * scale);
+        }
+      }
+      geo.computeVertexNormals();
+      return new THREE.Mesh(geo, mat);
+    }
+
+    const mainSweepBang = createHairStrand([
+      [-0.32, 0.90, 0.32],
+      [-0.04, 0.74, 0.72],
+      [0.38, 0.56, 0.78],
+      [0.74, 0.28, 0.64],
+      [0.98, 0.02, 0.40]
+    ], 0.26, 0.30, 0.02, mats.hairLight);
+    hairGroup.add(mainSweepBang);
+
+    const midSweepBang = createHairStrand([
+      [-0.40, 0.94, 0.18],
+      [-0.12, 0.78, 0.68],
+      [0.26, 0.62, 0.76],
+      [0.64, 0.40, 0.68]
+    ], 0.20, 0.24, 0.02, mats.hairMain);
+    hairGroup.add(midSweepBang);
+
+    const leftSideBang = createHairStrand([
+      [-0.30, 0.88, 0.28],
+      [-0.64, 0.62, 0.62],
+      [-0.84, 0.28, 0.58],
+      [-1.00, 0.00, 0.42]
+    ], 0.24, 0.28, 0.02, mats.hairMain);
+    hairGroup.add(leftSideBang);
+
+    // Grupo de mechones largos traseros con pivote propio para que se muevan con el baile/giros
+    const flowingHairPivot = new THREE.Group();
+    hairGroup.add(flowingHairPivot);
+
+    const backStrandsData = [
+      [[-0.78, 0.25, 0.15], [-0.92, -0.25, 0.12], [-0.88, -0.72, 0.18], [-1.04, -0.96, 0.25]],
+      [[-0.84, 0.15, -0.10], [-1.02, -0.38, -0.05], [-0.95, -0.88, 0.05], [-0.82, -1.08, 0.12]],
+      [[0.78, 0.25, 0.15], [0.92, -0.25, 0.12], [0.88, -0.72, 0.18], [1.04, -0.96, 0.25]],
+      [[0.84, 0.15, -0.10], [1.02, -0.38, -0.05], [0.95, -0.88, 0.05], [0.82, -1.08, 0.12]],
+      [[-0.55, 0.35, -0.55], [-0.72, -0.35, -0.55], [-0.68, -0.95, -0.35], [-0.55, -1.15, -0.20]],
+      [[0.55, 0.35, -0.55], [0.72, -0.35, -0.55], [0.68, -0.95, -0.35], [0.55, -1.15, -0.20]],
+      [[0.0, 0.40, -0.68], [0.0, -0.35, -0.68], [0.0, -0.98, -0.45], [0.0, -1.18, -0.25]]
+    ];
+    backStrandsData.forEach((pts, idx) => {
+      const mat = idx % 2 === 0 ? mats.hairMain : mats.hairDeep;
+      flowingHairPivot.add(createHairStrand(pts, 0.32, 0.36, 0.04, mat));
+    });
+
+    const headbandGeo = new THREE.TorusGeometry(0.86, 0.045, 12, 40, Math.PI * 0.85);
+    const headbandMesh = new THREE.Mesh(headbandGeo, mats.clothNavy);
+    headbandMesh.position.set(0, 0.34, -0.05);
+    headbandMesh.rotation.set(0.35, 0, Math.PI * 0.075);
+    hairGroup.add(headbandMesh);
+
+    // --- C. TORSO, CADERAS, FALDÓN Y PIERNAS ARTICULADAS ---
+    const torsoGroup = new THREE.Group();
+    torsoGroup.position.set(0, 0.15, 0);
+    bodyPivot.add(torsoGroup);
+
+    const neckMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.19, 0.28, 20), mats.skin);
+    neckMesh.position.set(0, 0.34, 0);
+    torsoGroup.add(neckMesh);
+
+    const chestArmor = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.23, 0.48, 24), mats.armorSilver);
+    chestArmor.scale.set(1.12, 1, 0.82);
+    chestArmor.position.set(0, 0.06, 0);
+    torsoGroup.add(chestArmor);
+
+    const collarMesh = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 12, 28), mats.armorGold);
+    collarMesh.rotation.x = Math.PI * 0.55;
+    collarMesh.position.set(0, 0.27, 0.03);
+    torsoGroup.add(collarMesh);
+
+    const chestTrimV = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), mats.armorGold);
+    chestTrimV.scale.set(1.1, 1.4, 0.35);
+    chestTrimV.position.set(0, 0.02, 0.20);
+    torsoGroup.add(chestTrimV);
+
+    function createPauldron(side) {
+      const pGroup = new THREE.Group();
+      pGroup.position.set(side * 0.38, 0.19, 0.04);
+      pGroup.rotation.z = -side * 0.32;
+
+      const plate = new THREE.Mesh(new THREE.SphereGeometry(0.18, 20, 20), mats.armorSilver);
+      plate.scale.set(1.15, 0.78, 0.95);
+      pGroup.add(plate);
+
+      const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 12, 24), mats.armorGold);
+      bezel.position.set(side * 0.03, 0.0, 0.15);
+      pGroup.add(bezel);
+
+      const gem = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16), mats.rubyGem);
+      gem.scale.set(1.0, 0.85, 0.6);
+      gem.position.set(side * 0.03, 0.0, 0.16);
+      pGroup.add(gem);
+
+      for (let i = -1; i <= 1; i++) {
+        const frill = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.16, 10), mats.frillPink);
+        frill.position.set(side * 0.08 + i * 0.05, -0.10, 0.05 + i * 0.03);
+        frill.rotation.z = side * 0.5 + i * 0.2;
+        frill.rotation.x = Math.PI;
+        pGroup.add(frill);
+      }
+      return pGroup;
+    }
+    const leftPauldron = createPauldron(-1);
+    const rightPauldron = createPauldron(1);
+    torsoGroup.add(leftPauldron);
+    torsoGroup.add(rightPauldron);
+
+    // Grupo de Cintura / Pelvis para balanceo de caderas en el baile
+    const pelvisGroup = new THREE.Group();
+    pelvisGroup.position.set(0, -0.16, 0);
+    torsoGroup.add(pelvisGroup);
+
+    const beltRing = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.038, 12, 28), mats.armorGold);
+    beltRing.rotation.x = Math.PI * 0.5;
+    beltRing.scale.set(1.12, 0.85, 1);
+    pelvisGroup.add(beltRing);
+
+    const beltCrest = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.24, 4), mats.armorGold);
+    beltCrest.rotation.x = Math.PI;
+    beltCrest.scale.set(1.1, 1, 0.4);
+    beltCrest.position.set(0, -0.09, 0.22);
+    pelvisGroup.add(beltCrest);
+
+    // Faldón de batalla con inercia
+    const skirtGroup = new THREE.Group();
+    skirtGroup.position.set(0, -0.04, 0);
+    pelvisGroup.add(skirtGroup);
+
+    const skirtCone = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.56, 0.42, 28, 1, true), mats.skirtWhite);
+    skirtCone.scale.set(1.12, 1, 0.88);
+    skirtCone.position.set(0, -0.16, 0);
+    skirtGroup.add(skirtCone);
+
+    const skirtGoldRim = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.032, 12, 36), mats.armorGold);
+    skirtGoldRim.rotation.x = Math.PI * 0.5;
+    skirtGoldRim.scale.set(1.12, 0.88, 1);
+    skirtGoldRim.position.set(0, -0.36, 0);
+    skirtGroup.add(skirtGoldRim);
+
+    // Piernas Articuladas (Cadera + Rodilla + Bota)
+    function createArticulatedLeg(side) {
+      const hipPivot = new THREE.Group();
+      hipPivot.position.set(side * 0.16, -0.26, 0);
+      hipPivot.rotation.z = -side * 0.05;
+
+      // Articulación esférica de cadera
+      const hipJoint = new THREE.Mesh(new THREE.SphereGeometry(0.095, 14, 14), mats.clothNavy);
+      hipPivot.add(hipJoint);
+
+      // Muslo superior
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.088, 0.24, 16), mats.clothNavy);
+      thigh.position.set(0, -0.12, 0);
+      hipPivot.add(thigh);
+
+      // Pivote de Rodilla
+      const kneePivot = new THREE.Group();
+      kneePivot.position.set(0, -0.24, 0);
+      hipPivot.add(kneePivot);
+
+      const kneeJoint = new THREE.Mesh(new THREE.SphereGeometry(0.086, 14, 14), mats.armorSilver);
+      kneePivot.add(kneeJoint);
+
+      // Bota / Espinilla
+      const boot = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.075, 0.26, 16), mats.armorSilver);
+      boot.position.set(0, -0.13, 0.01);
+      kneePivot.add(boot);
+
+      // Puntera dorada de la bota
+      const bootToe = new THREE.Mesh(new THREE.SphereGeometry(0.085, 16, 16), mats.armorGold);
+      bootToe.scale.set(0.95, 0.75, 1.32);
+      bootToe.position.set(0, -0.25, 0.045);
+      kneePivot.add(bootToe);
+
+      return { hipPivot, kneePivot, baseZ: -side * 0.05 };
+    }
+    const leftLegObj = createArticulatedLeg(-1);
+    const rightLegObj = createArticulatedLeg(1);
+    pelvisGroup.add(leftLegObj.hipPivot);
+    pelvisGroup.add(rightLegObj.hipPivot);
+
+    // --- D. BRAZOS ARTICULADOS EN 3 NIVELES (HOMBRO + CODO + MUÑECA/MANO) ---
+    function createChibiArm(side) {
+      // 1. Pivote de Hombro
+      const armPivot = new THREE.Group();
+      armPivot.position.set(side * 0.36, 0.14, 0.04);
+
+      const shoulderSphere = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 14), mats.clothNavy);
+      armPivot.add(shoulderSphere);
+
+      // Brazo superior (Hombro a Codo)
+      const upperArm = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.078, 0.20, 16), mats.clothNavy);
+      upperArm.position.set(0, -0.10, 0);
+      armPivot.add(upperArm);
+
+      // 2. Pivote de Codo (permite doblar el brazo con realismo al saludar, bailar o alzar los brazos)
+      const elbowPivot = new THREE.Group();
+      elbowPivot.position.set(0, -0.20, 0);
+      armPivot.add(elbowPivot);
+
+      const elbowSphere = new THREE.Mesh(new THREE.SphereGeometry(0.076, 14, 14), mats.clothNavy);
+      elbowPivot.add(elbowSphere);
+
+      // Antebrazo (Codo a Muñeca)
+      const forearm = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.074, 0.18, 16), mats.clothNavy);
+      forearm.position.set(0, -0.09, 0);
+      elbowPivot.add(forearm);
+
+      const cuffGold = new THREE.Mesh(new THREE.TorusGeometry(0.080, 0.02, 10, 20), mats.armorGold);
+      cuffGold.rotation.x = Math.PI * 0.5;
+      cuffGold.position.set(0, -0.13, 0);
+      elbowPivot.add(cuffGold);
+
+      // 3. Pivote de Muñeca (permite agitar la mano al saludar y orientar las palmas)
+      const wristPivot = new THREE.Group();
+      wristPivot.position.set(0, -0.21, 0.02);
+      elbowPivot.add(wristPivot);
+
+      // Mano Normal (abierta / expresiva)
+      const normalHand = new THREE.Group();
+      const palm = new THREE.Mesh(new THREE.SphereGeometry(0.105, 16, 16), mats.gloveWhite);
+      palm.scale.set(1.0, 1.12, 0.78);
+      normalHand.add(palm);
+
+      const thumbOpen = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.028, 0.11, 10), mats.gloveWhite);
+      thumbOpen.position.set(-side * 0.08, 0.02, 0.05);
+      thumbOpen.rotation.z = side * 0.7;
+      normalHand.add(thumbOpen);
+      wristPivot.add(normalHand);
+
+      // Mano PULGAR ARRIBA 👍
+      const thumbsUpHand = new THREE.Group();
+      thumbsUpHand.position.set(0, 0, 0.06);
+
+      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.145, 20, 20), mats.gloveWhite);
+      fist.scale.set(1.05, 0.95, 0.92);
+      thumbsUpHand.add(fist);
+
+      for (let f = -1.5; f <= 1.5; f += 1) {
+        const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.14, 10), mats.gloveWhite);
+        finger.rotation.z = Math.PI * 0.5;
+        finger.position.set(side * 0.02, f * 0.045, 0.11);
+        thumbsUpHand.add(finger);
+      }
+
+      const bigThumb = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.054, 0.22, 14), mats.gloveWhite);
+      bigThumb.position.set(-side * 0.05, 0.17, 0.03);
+      bigThumb.rotation.z = side * 0.22;
+      thumbsUpHand.add(bigThumb);
+
+      const thumbTip = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 12), mats.gloveWhite);
+      thumbTip.position.set(-side * 0.075, 0.27, 0.03);
+      thumbsUpHand.add(thumbTip);
+
+      wristPivot.add(thumbsUpHand);
+
+      return { armPivot, elbowPivot, wristPivot, normalHand, thumbsUpHand };
+    }
+
+    const leftArmObj = createChibiArm(-1);
+    const rightArmObj = createChibiArm(1);
+    torsoGroup.add(leftArmObj.armPivot);
+    torsoGroup.add(rightArmObj.armPivot);
+
+    // --- E. BÁCULO RADIANTE DE LUX ---
+    const staffGroup = new THREE.Group();
+    staffGroup.position.set(0.0, -0.05, -0.22);
+    staffGroup.rotation.z = -0.92;
+    torsoGroup.add(staffGroup);
+
+    const rodMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 2.75, 16), mats.armorSilver);
+    staffGroup.add(rodMesh);
+
+    const spiralRibbon = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 10, 24), mats.armorGold);
+    spiralRibbon.position.set(0, -0.82, 0);
+    spiralRibbon.rotation.x = 0.6;
+    staffGroup.add(spiralRibbon);
+
+    function createStaffHead(yPos, dir) {
+      const head = new THREE.Group();
+      head.position.set(0, yPos, 0);
+
+      const prong1 = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.035, 12, 28, Math.PI * 1.15), mats.armorGold);
+      prong1.rotation.z = dir > 0 ? -Math.PI * 0.08 : Math.PI * 0.92;
+      head.add(prong1);
+
+      const coreOrb = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16), mats.magicOrb);
+      head.add(coreOrb);
+
+      return { head, coreOrb };
+    }
+    const staffHeadBottom = createStaffHead(-1.28, -1);
+    const staffHeadTop = createStaffHead(1.28, 1);
+    staffGroup.add(staffHeadBottom.head);
+    staffGroup.add(staffHeadTop.head);
+
+    // Partículas de estrellas mágicas 3D flotantes
+    const magicParticlesGroup = new THREE.Group();
+    bodyPivot.add(magicParticlesGroup);
+    const starPositions = [
+      [-1.25, 1.75, 0.3], [1.28, 1.65, 0.35], [-1.15, 0.55, 0.4], [1.18, 0.45, 0.4], [0, 2.42, -0.2]
+    ];
+    starPositions.forEach(p => {
+      const starMesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.11, 0), mats.magicOrb);
+      starMesh.scale.set(1, 1.35, 0.35);
+      starMesh.position.set(...p);
+      magicParticlesGroup.add(starMesh);
+    });
+
+    // ============================================================================
+    // 4. CONTROL DE CÁMARA ORBITAL PERSONALIZADO (RATÓN + TÁCTIL)
+    // ============================================================================
+    const camState = {
+      theta: 0.0,
+      phi: 1.48,
+      radius: 4.55,
+      targetY: 0.78
+    };
+
+    function updateCameraTransform() {
+      const sinP = Math.sin(camState.phi);
+      const cosP = Math.cos(camState.phi);
+      const sinT = Math.sin(camState.theta);
+      const cosT = Math.cos(camState.theta);
+
+      camera.position.set(
+        camState.radius * sinP * sinT,
+        camState.targetY + camState.radius * cosP,
+        camState.radius * sinP * cosT
+      );
+      camera.lookAt(0, camState.targetY, 0);
+    }
+
+    function applyFramingPreset() {
+      if (framingMode === 'closeup') {
+        camState.radius = 2.85;
+        camState.targetY = 1.25;
+      } else {
+        camState.radius = 4.45;
+        camState.targetY = 0.80;
+      }
+      updateCameraTransform();
+    }
+
+    function resetCameraAngle() {
+      camState.theta = 0.0;
+      camState.phi = 1.48;
+      applyFramingPreset();
+    }
+
+    let isDragging = false;
+    let prevPointer = { x: 0, y: 0 };
+
+    canvas.addEventListener('pointerdown', (e) => {
+      isDragging = true;
+      prevPointer = { x: e.clientX, y: e.clientY };
+      canvas.setPointerCapture(e.pointerId);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevPointer.x;
+      const dy = e.clientY - prevPointer.y;
+      prevPointer = { x: e.clientX, y: e.clientY };
+
+      camState.theta -= dx * 0.008;
+      camState.phi = Math.max(0.85, Math.min(2.05, camState.phi - dy * 0.008));
+      updateCameraTransform();
+    });
+
+    canvas.addEventListener('pointerup', () => { isDragging = false; });
+    canvas.addEventListener('pointercancel', () => { isDragging = false; });
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      camState.radius = Math.max(2.4, Math.min(6.8, camState.radius + e.deltaY * 0.0025));
+      updateCameraTransform();
+    }, { passive: false });
+
+    // ============================================================================
+    // 5. MOTOR DE CINEMÁTICA Y GESTOS REALISTAS (BAILE, BRAZOS ARRIBA, GIRO, SALUDO)
+    // ============================================================================
+    const live = {
+      // Pose base de la expresión actual
+      hx: 0, hy: 0, hz: 0,
+      bx: 0, by: 0, bz: 0,
+      lax: 0, lay: 0, laz: 0,
+      rax: 0, ray: 0, raz: 0,
+      lex: -0.25, rex: -0.30,
+
+      // Offsets cinemáticos de Gestos y Coreografías (GSAP)
+      gx: 0, gy: 0, gz: 0,           // Inclinación/Giro extra del cuerpo
+      gnx: 0, gny: 0, gnz: 0,        // Cabeza (asentir, mirar, ladear)
+      tx: 0, jy: 0,                  // Desplazamiento lateral X y salto/sentadilla Y
+      hipZ: 0, hipY: 0,              // Balanceo de caderas (contrapposto)
+
+      // Articulación independiente de Brazo Izquierdo y Derecho (Hombro + Codo + Muñeca)
+      glax: 0, glay: 0, glaz: 0,     // Hombro izquierdo
+      grax: 0, gray: 0, graz: 0,     // Hombro derecho
+      glex: 0, glez: 0,              // Codo izquierdo
+      grex: 0, grez: 0,              // Codo derecho
+      glwx: 0, glwz: 0,              // Muñeca izquierda
+      grwx: 0, grwz: 0,              // Muñeca derecha (saludo realista)
+
+      // Articulación de Piernas (Cadera + Rodilla)
+      llx: 0, llz: 0, lkx: 0,        // Pierna y rodilla izquierda
+      rlx: 0, rlz: 0, rkx: 0,        // Pierna y rodilla derecha
+
+      // Secundarios (Falda, Báculo, Cabello)
+      skirtFlare: 0,
+      staffRotZ: 0
+    };
+
+    function resetGestureOffsets() {
+      const keys = [
+        'gx', 'gy', 'gz', 'gnx', 'gny', 'gnz', 'tx', 'jy', 'hipZ', 'hipY',
+        'glax', 'glay', 'glaz', 'grax', 'gray', 'graz',
+        'glex', 'glez', 'grex', 'grez', 'glwx', 'glwz', 'grwx', 'grwz',
+        'llx', 'llz', 'lkx', 'rlx', 'rlz', 'rkx', 'skirtFlare', 'staffRotZ'
+      ];
+      const resetObj = {};
+      keys.forEach(k => { resetObj[k] = 0; });
+      return resetObj;
+    }
+
+    function applyLivePose() {
+      // 1. Cabeza y Cuello
+      headPivot.rotation.set(
+        live.hx + live.gnx,
+        live.hy + live.gny,
+        live.hz + live.gnz
+      );
+
+      // 2. Cuerpo y Caderas
+      bodyPivot.position.x = live.tx;
+      bodyPivot.rotation.set(
+        live.bx + live.gx,
+        live.by + live.gy,
+        live.bz + live.gz
+      );
+
+      pelvisGroup.rotation.set(0, live.hipY, live.hipZ);
+
+      // 3. Brazos (Hombros + Hombreras que acompañan suavemente para no cortar la malla)
+      const totalLAZ = live.laz + live.glaz;
+      const totalRAZ = live.raz + live.graz;
+
+      leftArmObj.armPivot.rotation.set(
+        live.lax + live.glax,
+        live.lay + live.glay,
+        totalLAZ
+      );
+      rightArmObj.armPivot.rotation.set(
+        live.rax + live.grax,
+        live.ray + live.gray,
+        totalRAZ
+      );
+
+      // Hombreras reactivas cuando sube los brazos
+      leftPauldron.rotation.z = 0.32 + Math.max(0, totalLAZ - 0.45) * 0.42;
+      rightPauldron.rotation.z = -0.32 + Math.min(0, totalRAZ + 0.45) * 0.42;
+
+      // 4. Codos y Muñecas
+      leftArmObj.elbowPivot.rotation.set(live.lex + live.glex, 0, live.glez);
+      rightArmObj.elbowPivot.rotation.set(live.rex + live.grex, 0, live.grez);
+
+      leftArmObj.wristPivot.rotation.set(live.glwx, 0, live.glwz);
+      rightArmObj.wristPivot.rotation.set(live.grwx, 0, live.grwz);
+
+      // 5. Piernas y Rodillas
+      leftLegObj.hipPivot.rotation.set(live.llx, 0, leftLegObj.baseZ + live.llz - live.hipZ * 0.55);
+      leftLegObj.kneePivot.rotation.set(live.lkx, 0, 0);
+
+      rightLegObj.hipPivot.rotation.set(live.rlx, 0, rightLegObj.baseZ + live.rlz - live.hipZ * 0.55);
+      rightLegObj.kneePivot.rotation.set(live.rkx, 0, 0);
+
+      // 6. Faldón, Cabello y Báculo (Inercia Secundaria)
+      const flare = 1 + live.skirtFlare + Math.max(0, -live.jy * 0.45);
+      skirtGroup.scale.set(flare, 1, flare);
+      skirtGroup.rotation.z = -live.hipZ * 0.4 - live.gz * 0.35;
+      skirtGroup.rotation.x = -live.gx * 0.35;
+
+      flowingHairPivot.rotation.x = Math.max(-0.25, -live.gx * 0.4 + Math.max(0, -live.jy * 0.4));
+      flowingHairPivot.rotation.z = -live.gz * 0.45 - live.gnz * 0.3;
+
+      staffGroup.rotation.z = -0.92 + live.staffRotZ;
+    }
+
+    let poseTween = null;
+    function tweenPose(pose, instant = false) {
+      const to = {
+        hx: pose.headRot[0], hy: pose.headRot[1], hz: pose.headRot[2],
+        bx: pose.bodyTilt[0], by: pose.bodyTilt[1], bz: pose.bodyTilt[2],
+        lax: pose.leftArmRot[0], lay: pose.leftArmRot[1], laz: pose.leftArmRot[2],
+        rax: pose.rightArmRot[0], ray: pose.rightArmRot[1], raz: pose.rightArmRot[2],
+        lex: typeof pose.leftElbow === 'number' ? pose.leftElbow : -0.25,
+        rex: typeof pose.rightElbow === 'number' ? pose.rightElbow : -0.30
+      };
+      if (poseTween) poseTween.kill();
+      if (instant || reduceMotion) {
+        Object.assign(live, to);
+        applyLivePose();
+      } else {
+        poseTween = gsap.to(live, {
+          ...to,
+          duration: 0.48,
+          ease: 'power3.out',
+          overwrite: 'auto',
+          onUpdate: applyLivePose
+        });
+      }
+    }
+
+    // Catálogo de Coreografías y Gestos Realistas Multifase
+    let gestureTween = null;
+    const GESTURE_LABELS = {
+      dance: '💃 Bailando Coreografía',
+      arms_up: '🙌 ¡Brazos Arriba!',
+      cheer: '🙌 ¡Celebrando!',
+      wave: '👋 Saludando',
+      spin: '🌀 Giro 360°',
+      jump: '⭐ Saltando',
+      sing: '🎤 Cantando',
+      bow: '🙇‍♀️ Reverencia Demaciana',
+      ult: '✨ ¡Chispa Final!',
+      pride: '😤 Pose de Orgullo',
+      nod: '😌 Asintiendo',
+      shrug: '🤷‍♀️ Encogiéndose de hombros'
+    };
+
+    const GESTURES = {
+      // 1. SALUDAR DE VERDAD (Levanta el brazo derecho doblando el codo, ladea la cabeza y agita la muñeca/mano)
+      wave: () => {
+        const tl = gsap.timeline();
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          graz: -1.75,          // Levanta brazo derecho
+          grax: -0.45,          // Adelanta ligeramente el hombro
+          grez: -0.55,          // Dobla el codo hacia adentro de forma natural
+          grex: -0.35,
+          glaz: -0.15,          // Relaja brazo izquierdo
+          hipZ: 0.08,           // Descansa peso en la cadera
+          gnz: -0.10,           // Ladea la cabeza con ternura
+          gny: 0.08,
+          duration: 0.38,
+          ease: 'back.out(1.4)'
+        })
+        // Agita la mano y el antebrazo de lado a lado con realismo
+        .to(live, {
+          grwz: 0.42,
+          grez: -0.22,
+          gnz: -0.05,
+          jy: 0.03,
+          duration: 0.16,
+          yoyo: true,
+          repeat: 7,
+          ease: 'sine.inOut'
+        })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.42,
+          ease: 'power2.inOut'
+        });
+        return tl;
+      },
+
+      // 2. ALZAR LOS BRAZOS / CELEBRAR (Flexiona rodillas, sube ambos brazos bien alto y da saltitos agitando manos)
+      arms_up: () => {
+        const tl = gsap.timeline();
+        // Anticipación corta
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          jy: -0.09,
+          llx: -0.32, lkx: 0.62,
+          rlx: -0.32, rkx: 0.62,
+          glax: 0.25, grax: 0.25,
+          gx: 0.08,
+          duration: 0.18,
+          ease: 'power2.in'
+        })
+        // Sube ambos brazos bien alto por encima de la cabeza + salto de alegría
+        .to(live, {
+          jy: 0.22,
+          tx: 0,
+          gx: -0.08,
+          gnx: -0.12,
+          glaz: 2.15,           // Brazo izquierdo arriba
+          graz: -2.15,          // Brazo derecho arriba
+          glax: -0.25,
+          grax: -0.25,
+          glez: 0.22,
+          grez: -0.22,
+          llx: 0.12, lkx: 0.15,
+          rlx: -0.15, rkx: 0.45,
+          skirtFlare: 0.16,
+          duration: 0.34,
+          ease: 'back.out(1.6)'
+        })
+        // Agita los brazos en lo alto con rebote alegre de pies
+        .to(live, {
+          jy: 0.02,
+          glaz: 1.92,
+          graz: -1.92,
+          glwz: 0.32,
+          grwz: -0.32,
+          gnz: 0.08,
+          hipZ: 0.09,
+          llx: 0, lkx: 0,
+          rlx: 0, rkx: 0,
+          duration: 0.22,
+          yoyo: true,
+          repeat: 5,
+          ease: 'sine.inOut'
+        })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.45,
+          ease: 'power2.inOut'
+        });
+        return tl;
+      },
+
+      // Alias para cheer
+      cheer: () => GESTURES.arms_up(),
+
+      // 3. GIRAR 360° REALISTA (Anticipación + Pirueta en el aire con brazos abiertos y falda al vuelo + Aterrizaje)
+      spin: () => {
+        const tl = gsap.timeline();
+        // Fase 1: Toma impulso (wind-up hacia el lado opuesto y flexiona rodillas)
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          gy: -0.42,
+          jy: -0.11,
+          gx: 0.08,
+          glaz: 0.35, graz: -0.35,
+          glex: -0.55, grex: -0.55,
+          llx: -0.38, lkx: 0.72,
+          rlx: -0.38, rkx: 0.72,
+          duration: 0.24,
+          ease: 'power2.in'
+        })
+        // Fase 2: Pirueta de 360° en el aire con brazos abiertos y vuelo de faldón
+        .to(live, {
+          gy: Math.PI * 2,
+          jy: 0.28,
+          gx: -0.05,
+          glaz: 1.45, graz: -1.45,
+          glax: -0.2, grax: -0.2,
+          glex: -0.15, grex: -0.15,
+          llx: -0.1, lkx: 0.55,
+          rlx: 0.15, rkx: 0.25,
+          skirtFlare: 0.32,
+          staffRotZ: 0.35,
+          duration: 0.78,
+          ease: 'power2.inOut'
+        })
+        // Fase 3: Aterrizaje amortiguado y pose final con brazo arriba
+        .to(live, {
+          jy: -0.06,
+          glaz: 1.85, graz: -0.65,
+          llx: -0.22, lkx: 0.42,
+          rlx: -0.22, rkx: 0.42,
+          gnz: -0.08,
+          skirtFlare: 0.08,
+          duration: 0.20,
+          ease: 'power2.out'
+        })
+        .set(live, { gy: 0 })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.38,
+          ease: 'back.out(1.4)'
+        });
+        return tl;
+      },
+
+      // 4. BAILAR DE VERDAD (Coreografía completa: pasos de pies, caderas, brazos arriba, giro rítmico y pose)
+      dance: () => {
+        const tl = gsap.timeline({
+          onComplete: () => {
+            if (continuousDanceLoop && !reduceMotion) {
+              playGesture('dance');
+            }
+          }
+        });
+
+        // Compás 1 y 2: Groove lateral izquierda / derecha con pasos de rodilla, caderas y brazos arriba al ritmo
+        for (let step = 0; step < 4; step++) {
+          const dir = step % 2 === 0 ? 1 : -1;
+          // Baja en el medio-tiempo (bounce)
+          tl.to(live, {
+            tx: dir * 0.06,
+            jy: -0.06,
+            hipZ: dir * 0.08,
+            gz: -dir * 0.04,
+            llx: -0.22, lkx: 0.42,
+            rlx: -0.22, rkx: 0.42,
+            glaz: dir > 0 ? 1.55 : 0.85,
+            graz: dir < 0 ? -1.55 : -0.85,
+            glex: -0.55, grex: -0.55,
+            duration: 0.17,
+            ease: 'sine.in'
+          })
+          // Sube marcando el paso con la pierna activa y alzando las manos
+          .to(live, {
+            tx: dir * 0.14,
+            jy: 0.10,
+            hipZ: dir * 0.16,
+            hipY: dir * 0.18,
+            gy: dir * 0.28,
+            gz: -dir * 0.09,
+            gnz: dir * 0.12,
+            gny: dir * 0.10,
+            glaz: dir > 0 ? 2.05 : 1.15,
+            graz: dir < 0 ? -2.05 : -1.15,
+            glax: -0.35, grax: -0.35,
+            glex: -0.25, grex: -0.25,
+            glwz: dir * 0.30, grwz: dir * 0.30,
+            llx: dir > 0 ? -0.55 : 0.05,
+            lkx: dir > 0 ? 0.95 : 0.05,
+            rlx: dir < 0 ? -0.55 : 0.05,
+            rkx: dir < 0 ? 0.95 : 0.05,
+            skirtFlare: 0.14,
+            duration: 0.23,
+            ease: 'back.out(1.4)'
+          });
+        }
+
+        // Compás 3: Ambos brazos bien arriba con doble bombeo de cadera
+        tl.to(live, {
+          tx: 0,
+          jy: 0.16,
+          gy: 0,
+          gx: -0.08,
+          gnx: -0.10,
+          glaz: 2.15,
+          graz: -2.15,
+          glax: -0.3,
+          grax: -0.3,
+          glex: -0.15,
+          grex: -0.15,
+          hipZ: 0.15,
+          llx: -0.15, lkx: 0.3,
+          rlx: -0.45, rkx: 0.85,
+          skirtFlare: 0.18,
+          duration: 0.25,
+          ease: 'power2.out'
+        })
+        .to(live, {
+          jy: -0.04,
+          hipZ: -0.15,
+          gnz: -0.10,
+          glaz: 1.85,
+          graz: -1.85,
+          llx: -0.45, lkx: 0.85,
+          rlx: -0.15, rkx: 0.3,
+          duration: 0.25,
+          ease: 'sine.inOut'
+        })
+        // Compás 4: Pirueta alegre de baile (360°) con brazos abiertos
+        .to(live, {
+          gy: Math.PI * 2,
+          jy: 0.24,
+          tx: 0,
+          hipZ: 0,
+          hipY: 0,
+          glaz: 1.65,
+          graz: -1.65,
+          llx: -0.15, lkx: 0.45,
+          rlx: 0.1, rkx: 0.2,
+          skirtFlare: 0.30,
+          duration: 0.62,
+          ease: 'power2.inOut'
+        })
+        .set(live, { gy: 0 })
+        // Pose final de idol con mano arriba y guiño
+        .to(live, {
+          jy: 0.04,
+          glaz: 0.65,
+          graz: -2.05,
+          grwz: 0.25,
+          hipZ: 0.12,
+          gnz: -0.12,
+          llx: 0, lkx: 0,
+          rlx: -0.25, rkx: 0.5,
+          skirtFlare: 0.05,
+          duration: 0.28,
+          ease: 'back.out(1.6)'
+        })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.42,
+          ease: 'power2.inOut'
+        });
+
+        return tl;
+      },
+
+      // 5. SALTAR CON ANTICIPACIÓN Y REBOTE (Squash & Stretch realista)
+      jump: () => {
+        const tl = gsap.timeline();
+        // Se agacha tomando impulso
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          jy: -0.14,
+          gx: 0.18,
+          gnx: 0.12,
+          glax: 0.45, grax: 0.45,
+          glaz: 0.2, graz: -0.2,
+          glex: -0.65, grex: -0.65,
+          llx: -0.52, lkx: 0.95,
+          rlx: -0.52, rkx: 0.95,
+          duration: 0.22,
+          ease: 'power2.in'
+        })
+        // Salto alto con brazos arriba y piernas flexionadas en el aire
+        .to(live, {
+          jy: 0.48,
+          gx: -0.08,
+          gnx: -0.12,
+          glax: -0.35, grax: -0.35,
+          glaz: 1.95, graz: -1.95,
+          glex: -0.15, grex: -0.15,
+          llx: -0.25, lkx: 0.75,
+          rlx: 0.15, rkx: 0.45,
+          skirtFlare: 0.22,
+          duration: 0.32,
+          ease: 'power2.out'
+        })
+        // Caída al suelo
+        .to(live, {
+          jy: -0.10,
+          gx: 0.10,
+          glaz: 0.75, graz: -0.75,
+          llx: -0.42, lkx: 0.82,
+          rlx: -0.42, rkx: 0.82,
+          skirtFlare: 0.28,
+          duration: 0.26,
+          ease: 'power2.in'
+        })
+        // Recuperación elástica
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.35,
+          ease: 'back.out(1.7)'
+        });
+        return tl;
+      },
+
+      // 6. CANTAR CON EXPRESIÓN CORPORAL
+      sing: () => {
+        const tl = gsap.timeline();
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          glax: -0.75, glaz: 0.25, glex: -0.85, // Mano izquierda cerca del pecho
+          grax: -0.45, graz: -1.15, grex: -0.3, // Brazo derecho abierto expresivo
+          gnx: -0.08,
+          duration: 0.35,
+          ease: 'power2.out'
+        })
+        .to(live, {
+          gz: 0.09,
+          gnz: 0.12,
+          gny: 0.12,
+          hipZ: -0.10,
+          jy: 0.05,
+          graz: -1.45,
+          duration: 0.48,
+          yoyo: true,
+          repeat: 3,
+          ease: 'sine.inOut'
+        })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.4,
+          ease: 'power2.inOut'
+        });
+        return tl;
+      },
+
+      // 7. REVERENCIA ELEGANTE DEMACIANA
+      bow: () => {
+        const tl = gsap.timeline();
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          gx: 0.42,
+          gnx: 0.22,
+          jy: -0.06,
+          glax: -0.55, glaz: -0.25, glex: -0.85, // Mano al pecho
+          graz: -0.95, grax: 0.2,                // Brazo derecho extendido con gracia
+          llx: -0.25, lkx: 0.35,
+          rlx: 0.22, rkx: 0.25,                  // Un pie atrás
+          skirtFlare: 0.12,
+          duration: 0.45,
+          ease: 'power2.out'
+        })
+        .to(live, {
+          gx: 0.44,
+          duration: 0.35
+        })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.5,
+          ease: 'power2.inOut'
+        });
+        return tl;
+      },
+
+      // 8. ¡DEMACIA! / CHISPA FINAL (Sobrecarga mágica alzando brazos y flotando)
+      ult: () => {
+        magicParticlesGroup.visible = true;
+        mats.magicOrb.emissiveIntensity = 1.8;
+        const tl = gsap.timeline();
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          jy: -0.10,
+          gx: 0.12,
+          glaz: 0.3, graz: -0.3,
+          llx: -0.35, lkx: 0.65,
+          rlx: -0.35, rkx: 0.65,
+          duration: 0.22,
+          ease: 'power2.in'
+        })
+        .to(live, {
+          jy: 0.36,
+          gx: -0.14,
+          gnx: -0.15,
+          glaz: 2.05, graz: -2.05,
+          glax: -0.4, grax: -0.4,
+          llx: 0.15, lkx: 0.25,
+          rlx: -0.25, rkx: 0.65,
+          skirtFlare: 0.25,
+          staffRotZ: 0.55,
+          duration: 0.42,
+          ease: 'back.out(1.6)'
+        })
+        .to(live, {
+          jy: 0.30,
+          glaz: 2.2, graz: -2.2,
+          duration: 0.45,
+          yoyo: true,
+          repeat: 1,
+          ease: 'sine.inOut'
+        })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.45,
+          ease: 'power2.inOut'
+        });
+        return tl;
+      },
+
+      // 9. ORGULLO / POSE HEROICA
+      pride: () => {
+        const tl = gsap.timeline();
+        tl.to(live, {
+          ...resetGestureOffsets(),
+          gx: -0.10,
+          gz: 0.08,
+          gnz: 0.12,
+          gnx: -0.08,
+          hipZ: -0.10,
+          glaz: 0.65, glex: -0.85, glez: -0.45,
+          graz: -0.65, grex: -0.85, grez: 0.45,
+          duration: 0.35,
+          ease: 'back.out(1.6)'
+        })
+        .to(live, {
+          jy: 0.03,
+          duration: 0.45,
+          yoyo: true,
+          repeat: 1
+        })
+        .to(live, {
+          ...resetGestureOffsets(),
+          duration: 0.42,
+          ease: 'power2.inOut'
+        });
+        return tl;
+      },
+
+      // 10. ASENTIR CON NATURALIDAD
+      nod: () => {
+        return gsap.timeline()
+          .to(live, { gnx: 0.16, gx: 0.04, duration: 0.18, yoyo: true, repeat: 3, ease: 'sine.inOut' })
+          .to(live, { ...resetGestureOffsets(), duration: 0.25 });
+      },
+
+      // 11. ENCOGERSE DE HOMBROS (SHRUG)
+      shrug: () => {
+        return gsap.timeline()
+          .to(live, {
+            ...resetGestureOffsets(),
+            gnz: -0.14,
+            glaz: 0.95, glex: -0.75, glwz: 0.35,
+            graz: -0.95, grex: -0.75, grwz: -0.35,
+            jy: 0.04,
+            duration: 0.32,
+            ease: 'back.out(1.5)'
+          })
+          .to(live, { gnz: -0.16, duration: 0.35 })
+          .to(live, { ...resetGestureOffsets(), duration: 0.4, ease: 'power2.inOut' });
+      }
+    };
+
+    function updateGestureBadge(name) {
+      const badge = document.getElementById('live-gesture-badge');
+      if (!badge) return;
+      if (name && GESTURE_LABELS[name]) {
+        badge.textContent = GESTURE_LABELS[name];
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function playGesture(name) {
+      if (reduceMotion || !GESTURES[name]) return;
+      if (gestureTween) gestureTween.kill();
+      updateGestureBadge(name);
+      gestureTween = GESTURES[name]();
+      gestureTween.eventCallback('onUpdate', applyLivePose);
+      gestureTween.eventCallback('onComplete', () => {
+        if (name === 'dance' && continuousDanceLoop) {
+          playGesture('dance');
+        } else {
+          updateGestureBadge(null);
+        }
+      });
+    }
+
+    function triggerStudioGesture(name) {
+      // Si el usuario elige un gesto alegre o baile, acompañarlo con una expresión acorde si está en reposo
+      if (name === 'dance' || name === 'arms_up') {
+        setFace(EXPRESSIONS[5]); // Guiño alegre o feliz
+      } else if (name === 'ult') {
+        setFace(EXPRESSIONS[3]); // ¡Demacia!
+      } else if (name === 'wave') {
+        setFace(EXPRESSIONS[4]); // Feliz (^ ^)
+      }
+      playGesture(name);
+    }
+
+    function toggleContinuousDance(enabled) {
+      continuousDanceLoop = enabled;
+      if (enabled) {
+        triggerStudioGesture('dance');
+        showToast('Modo Baile Continuo activado 💃');
+      } else {
+        stopAllGestures();
+      }
+    }
+
+    function stopAllGestures() {
+      continuousDanceLoop = false;
+      const loopToggle = document.getElementById('loop-dance-toggle');
+      if (loopToggle) loopToggle.checked = false;
+      if (gestureTween) gestureTween.kill();
+      updateGestureBadge(null);
+      gsap.to(live, {
+        ...resetGestureOffsets(),
+        duration: 0.35,
+        ease: 'power2.out',
+        onUpdate: applyLivePose
+      });
+      setFace(EXPRESSIONS[activeExpressionIndex]);
+    }
+
+    // Caché de texturas de rostro (normal y parpadeo)
+    const faceCache = {};
+    const blinkCache = {};
+    function setFace(expr, isBlinking = false) {
+      const cache = isBlinking ? blinkCache : faceCache;
+      if (!cache[expr.id]) {
+        updateFaceTexture(expr, isBlinking);
+        const copy = document.createElement('canvas');
+        copy.width = faceCanvas.width;
+        copy.height = faceCanvas.height;
+        copy.getContext('2d').drawImage(faceCanvas, 0, 0);
+        cache[expr.id] = copy;
+      }
+      faceTexture.image = cache[expr.id];
+      faceTexture.needsUpdate = true;
+    }
+
+    function mouthTo(id) {
+      const index = EXPRESSIONS.findIndex((item) => item.id === id);
+      if (index >= 0) setFace(EXPRESSIONS[index]);
+    }
+
+    function applyExpressionTo3DModel(index, instant = false) {
+      const expr = EXPRESSIONS[index];
+
+      setFace(expr, false);
+
+      if (instant) {
+        if (gestureTween) gestureTween.kill();
+        Object.assign(live, resetGestureOffsets());
+        bodyPivot.position.set(0, 0, 0);
+      }
+
+      tweenPose(expr.pose, instant);
+
+      const useThumbs = Boolean(expr.pose.thumbsUp);
+      leftArmObj.normalHand.visible = !useThumbs;
+      rightArmObj.normalHand.visible = !useThumbs;
+      leftArmObj.thumbsUpHand.visible = useThumbs;
+      rightArmObj.thumbsUpHand.visible = useThumbs;
+
+      staffGroup.visible = Boolean(expr.pose.showStaff);
+      magicParticlesGroup.visible = Boolean(expr.pose.staffGlow || expr.starEyes);
+      mats.magicOrb.emissiveIntensity = expr.pose.staffGlow ? 1.5 : 0.8;
+    }
+
+    function selectLiveExpression(index) {
+      activeExpressionIndex = index;
+      const expr = EXPRESSIONS[index];
+      applyExpressionTo3DModel(index, false);
+
+      document.getElementById('live-expr-badge').textContent = `${index + 1}. ${expr.name}`;
+      document.getElementById('detail-name').textContent = expr.name;
+      document.getElementById('detail-tag').textContent = expr.badge;
+      document.getElementById('detail-pose').textContent = expr.poseLabel;
+
+      document.querySelectorAll('.expr-selector-btn').forEach((btn, i) => {
+        if (i === index) {
+          btn.className = 'expr-selector-btn px-3 py-2 rounded-xl text-xs font-bold transition border bg-amber-400 text-slate-950 border-amber-300 shadow-md shadow-amber-500/20';
+        } else {
+          btn.className = 'expr-selector-btn px-3 py-2 rounded-xl text-xs font-semibold transition border bg-slate-950/80 text-slate-300 border-slate-800 hover:border-amber-500/40 hover:text-white';
+        }
+      });
+
+      document.querySelectorAll('.snapshot-card').forEach((card, i) => {
+        if (i === index) {
+          card.classList.add('ring-2', 'ring-amber-400');
+        } else {
+          card.classList.remove('ring-2', 'ring-amber-400');
+        }
+      });
+    }
+
+    // ============================================================================
+    // 6. CAPTURA AUTOMÁTICA DE LAS 10 IMÁGENES PNG DESDE EL MOTOR 3D
+    // ============================================================================
+    function renderAllExpressionsToGallery(keepCustomAngle = false) {
+      const savedIndex = activeExpressionIndex;
+      const wasDancing = continuousDanceLoop;
+      if (gestureTween) gestureTween.kill();
+
+      if (!keepCustomAngle) {
+        resetCameraAngle();
+      } else {
+        updateCameraTransform();
+      }
+
+      if (renderBgMode === 'transparent') {
+        scene.background = null;
+        renderer.setClearColor(0x000000, 0);
+      } else {
+        scene.background = studioBgTexture;
+      }
+
+      EXPRESSIONS.forEach((expr, idx) => {
+        applyExpressionTo3DModel(idx, true);
+        renderer.render(scene, camera);
+        capturedDataUrls[idx] = renderer.domElement.toDataURL('image/png');
+      });
+
+      buildGalleryCardsDOM();
+      selectLiveExpression(savedIndex);
+
+      if (wasDancing) {
+        continuousDanceLoop = true;
+        playGesture('dance');
+      }
+    }
+
+    function renderAllExpressionsFromCurrentAngle() {
+      renderAllExpressionsToGallery(true);
+      showToast('¡10 imágenes PNG re-capturadas desde tu ángulo actual!');
+    }
+
+    function buildGalleryCardsDOM() {
+      const grid = document.getElementById('snapshots-grid');
+      grid.innerHTML = '';
+
+      const bgClass = renderBgMode === 'transparent' ? 'checkerboard-bg' : 'tft-bg-grid';
+
+      EXPRESSIONS.forEach((expr, idx) => {
+        const card = document.createElement('div');
+        card.className = `snapshot-card bg-slate-900/90 border border-slate-800 hover:border-amber-400/60 rounded-2xl overflow-hidden flex flex-col transition duration-200 shadow-xl group`;
+
+        card.innerHTML = `
+          <div onclick="selectLiveExpression(${idx})" class="relative aspect-square w-full ${bgClass} cursor-pointer overflow-hidden flex items-center justify-center">
+            <img 
+              src="${capturedDataUrls[idx]}" 
+              alt="Chibi Lux 3D - ${expr.name}" 
+              title="Clic derecho -> Guardar imagen como... (${expr.name})"
+              class="w-full h-full object-contain group-hover:scale-105 transition duration-300"
+            />
+            <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-950/80 text-amber-300 border border-amber-400/30 backdrop-blur-sm">
+              #${idx + 1} • ${expr.badge}
+            </span>
+          </div>
+          <div class="p-3 bg-slate-950/90 border-t border-slate-800/80 flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <h4 class="text-xs font-extrabold text-white truncate">${expr.name}</h4>
+              <p class="text-[10px] text-slate-400 truncate">${expr.poseLabel}</p>
+            </div>
+            <button 
+              onclick="downloadSingleSnapshot(${idx})" 
+              title="Descargar PNG de ${expr.name}"
+              class="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-amber-500/20 hover:bg-amber-400 text-amber-300 hover:text-slate-950 border border-amber-500/40 transition flex items-center gap-1"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span>PNG</span>
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function downloadSingleSnapshot(index) {
+      const expr = EXPRESSIONS[index];
+      const dataUrl = capturedDataUrls[index];
+      if (!dataUrl) return;
+
+      const link = document.createElement('a');
+      link.download = `chibi_lux_3d_${expr.code}.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(`Descargado: chibi_lux_3d_${expr.code}.png`);
+    }
+
+    function setRenderBackground(mode) {
+      renderBgMode = mode;
+      const studioBtn = document.getElementById('bg-studio-btn');
+      const alphaBtn = document.getElementById('bg-alpha-btn');
+      const viewportWrapper = document.getElementById('live-viewport-wrapper');
+
+      if (mode === 'studio') {
+        studioBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition bg-indigo-600 text-white shadow';
+        alphaBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+        viewportWrapper.classList.remove('checkerboard-bg');
+        viewportWrapper.classList.add('tft-bg-grid');
+      } else {
+        alphaBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition bg-indigo-600 text-white shadow';
+        studioBtn.className = 'px-3 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+        viewportWrapper.classList.remove('tft-bg-grid');
+        viewportWrapper.classList.add('checkerboard-bg');
+      }
+
+      renderAllExpressionsToGallery(true);
+      showToast(mode === 'transparent' ? 'Modo PNG Transparente (Alpha) activado' : 'Modo Fondo Estudio TFT activado');
+    }
+
+    function setFramingMode(mode) {
+      framingMode = mode;
+      const fullBtn = document.getElementById('cam-full-btn');
+      const closeBtn = document.getElementById('cam-closeup-btn');
+
+      if (mode === 'full') {
+        fullBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition bg-slate-800 text-amber-300';
+        closeBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+      } else {
+        closeBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition bg-slate-800 text-amber-300';
+        fullBtn.className = 'px-2.5 py-1.5 rounded-lg font-semibold transition text-slate-400 hover:text-white';
+      }
+
+      applyFramingPreset();
+      renderAllExpressionsToGallery(true);
+      showToast(mode === 'closeup' ? 'Encuadre: Primer Plano de Expresiones' : 'Encuadre: Cuerpo Completo Chibi 3D');
+    }
+
+    // ============================================================================
+    // 7. GENERADOR DE LÁMINA COMPLETA (CHARACTER SHEET 2400x1350 PNG)
+    // ============================================================================
+    let latestSheetDataUrl = '';
+
+    async function buildSpriteSheetCanvas() {
+      const sheetCanvas = document.createElement('canvas');
+      sheetCanvas.width = 2400;
+      sheetCanvas.height = 1350;
+      const sCtx = sheetCanvas.getContext('2d');
+
+      sCtx.fillStyle = '#fef3c7';
+      sCtx.fillRect(0, 0, 2400, 1350);
+
+      const bgGrad = sCtx.createLinearGradient(0, 24, 0, 1140);
+      bgGrad.addColorStop(0, '#181538');
+      bgGrad.addColorStop(1, '#0e0c24');
+      sCtx.fillStyle = bgGrad;
+      sCtx.fillRect(24, 24, 2352, 1110);
+
+      sCtx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      sCtx.lineWidth = 2;
+      for (let x = 40; x < 2360; x += 60) {
+        sCtx.beginPath(); sCtx.moveTo(x, 24); sCtx.lineTo(x, 1134); sCtx.stroke();
+      }
+      for (let y = 40; y < 1134; y += 60) {
+        sCtx.beginPath(); sCtx.moveTo(24, y); sCtx.lineTo(2376, y); sCtx.stroke();
+      }
+
+      const loadImage = (src) => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = src;
+      });
+
+      const images = await Promise.all(capturedDataUrls.map(url => loadImage(url)));
+
+      const cols = 5;
+      const cardW = 436;
+      const cardH = 495;
+      const gapX = 28;
+      const gapY = 32;
+      const startX = 54;
+      const startY = 52;
+
+      images.forEach((img, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const x = startX + col * (cardW + gapX);
+        const y = startY + row * (cardH + gapY);
+        const expr = EXPRESSIONS[idx];
+
+        sCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        sCtx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+        sCtx.lineWidth = 3;
+        sCtx.beginPath();
+        sCtx.roundRect(x, y, cardW, cardH, 20);
+        sCtx.fill();
+        sCtx.stroke();
+
+        sCtx.save();
+        sCtx.beginPath();
+        sCtx.roundRect(x + 8, y + 8, cardW - 16, cardH - 86, 14);
+        sCtx.clip();
+        sCtx.drawImage(img, x + 8, y + 8, cardW - 16, cardH - 86);
+        sCtx.restore();
+
+        sCtx.fillStyle = '#090a14';
+        sCtx.beginPath();
+        sCtx.roundRect(x + 4, y + cardH - 74, cardW - 8, 70, [0, 0, 16, 16]);
+        sCtx.fill();
+
+        sCtx.fillStyle = '#fbbf24';
+        sCtx.font = '800 22px Inter, sans-serif';
+        sCtx.textAlign = 'center';
+        sCtx.fillText(`${idx + 1}. ${expr.name.toUpperCase()}`, x + cardW / 2, y + cardH - 40);
+
+        sCtx.fillStyle = '#94a3b8';
+        sCtx.font = '600 15px Inter, sans-serif';
+        sCtx.fillText(expr.badge, x + cardW / 2, y + cardH - 16);
+      });
+
+      sCtx.fillStyle = '#110e24';
+      sCtx.fillRect(24, 1152, 410, 174);
+      sCtx.fillStyle = '#ffffff';
+      sCtx.font = '900 28px Inter, sans-serif';
+      sCtx.textAlign = 'center';
+      sCtx.fillText('AI AVATAR STUDIO', 229, 1230);
+      sCtx.fillStyle = '#fbbf24';
+      sCtx.font = '800 22px Inter, sans-serif';
+      sCtx.fillText('10 EXPRESIONES 3D', 229, 1268);
+
+      const bannerGrad = sCtx.createLinearGradient(452, 1152, 1948, 1326);
+      bannerGrad.addColorStop(0, '#fbbf24');
+      bannerGrad.addColorStop(0.5, '#f43f5e');
+      bannerGrad.addColorStop(1, '#7e22ce');
+      sCtx.fillStyle = bannerGrad;
+      sCtx.fillRect(452, 1152, 1496, 174);
+
+      sCtx.fillStyle = '#ffffff';
+      sCtx.shadowColor = 'rgba(0,0,0,0.45)';
+      sCtx.shadowBlur = 12;
+      sCtx.font = '900 68px Inter, sans-serif';
+      sCtx.fillText('CHIBI LUX', 1200, 1242);
+      sCtx.shadowBlur = 0;
+
+      sCtx.fillStyle = '#fde047';
+      sCtx.font = '800 26px Inter, sans-serif';
+      sCtx.fillText('MODELO 3D • HOJA DE EXPRESIONES', 1200, 1288);
+
+      sCtx.fillStyle = '#110e24';
+      sCtx.fillRect(1966, 1152, 410, 174);
+      sCtx.fillStyle = '#fbbf24';
+      sCtx.font = '900 42px Inter, sans-serif';
+      sCtx.fillText('3D', 2171, 1254);
+
+      latestSheetDataUrl = sheetCanvas.toDataURL('image/png');
+      return latestSheetDataUrl;
+    }
+
+    async function openSheetModal() {
+      const url = await buildSpriteSheetCanvas();
+      document.getElementById('sheet-preview-img').src = url;
+      document.getElementById('sheet-modal').classList.remove('hidden');
+    }
+
+    function closeSheetModal() {
+      document.getElementById('sheet-modal').classList.add('hidden');
+    }
+
+    async function generateAndDownloadSpriteSheet() {
+      const url = await buildSpriteSheetCanvas();
+      document.getElementById('sheet-preview-img').src = url;
+      document.getElementById('sheet-modal').classList.remove('hidden');
+      downloadGeneratedSheet();
+    }
+
+    function downloadGeneratedSheet() {
+      if (!latestSheetDataUrl) return;
+      const link = document.createElement('a');
+      link.download = 'Chibi_Lux_3D_Hoja_10_Expresiones.png';
+      link.href = latestSheetDataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('¡Lámina completa de 10 expresiones 3D descargada en PNG!');
+    }
+
+    // ============================================================================
+    // 8. BUCLE DE ANIMACIÓN ORGÁNICA EN VIVO (RESPIRACIÓN, PARPADEO E INERCIA)
+    // ============================================================================
+    function toggleLiveAnimation(enabled) {
+      isLiveAnimating = enabled;
+      if (!enabled) {
+        applyExpressionTo3DModel(activeExpressionIndex, true);
+      }
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-text').textContent = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 2800);
+    }
+
+    function initButtonsUI() {
+      const btnContainer = document.getElementById('live-expression-buttons');
+      btnContainer.innerHTML = '';
+
+      EXPRESSIONS.forEach((expr, idx) => {
+        const btn = document.createElement('button');
+        btn.onclick = () => selectLiveExpression(idx);
+        btn.innerHTML = `
+          <div class="truncate">${idx + 1}. ${expr.name.split('/')[0].trim()}</div>
+          <div class="text-[10px] opacity-75 font-normal truncate">${expr.badge}</div>
+        `;
+        btnContainer.appendChild(btn);
+      });
+    }
+
+    // Parpadeo automático natural cada 3.2 a 5.5 segundos
+    let nextBlinkTime = 3.0;
+    let isCurrentlyBlinking = false;
+
+    const clock = new THREE.Clock();
+    function animateLoop() {
+      requestAnimationFrame(animateLoop);
+
+      if (isLiveAnimating) {
+        const t = clock.getElapsedTime();
+
+        // 1. Respiración orgánica, flotación suave y micro-balanceo
+        const breath = Math.sin(t * 2.4);
+        const sway = Math.sin(t * 1.4);
+
+        bodyPivot.position.y = breath * 0.042 + live.jy;
+        headPivot.rotation.z = live.hz + live.gnz + sway * 0.025;
+        headPivot.rotation.x = live.hx + live.gnx + breath * 0.018;
+
+        // Micro-movimiento respiratorio en los brazos incluso en reposo
+        leftArmObj.armPivot.rotation.z = live.laz + live.glaz + (breath * 0.025);
+        rightArmObj.armPivot.rotation.z = live.raz + live.graz - (breath * 0.025);
+
+        // 2. Parpadeo natural automático cuando tiene los ojos abiertos
+        if (t > nextBlinkTime && !isCurrentlyBlinking) {
+          const currentExpr = EXPRESSIONS[activeExpressionIndex];
+          if (currentExpr && currentExpr.leftEye === 'open' && currentExpr.rightEye === 'open') {
+            isCurrentlyBlinking = true;
+            setFace(currentExpr, true);
+            setTimeout(() => {
+              setFace(EXPRESSIONS[activeExpressionIndex], false);
+              isCurrentlyBlinking = false;
+            }, 130);
+          }
+          nextBlinkTime = t + 2.8 + Math.random() * 2.6;
+        }
+
+        // 3. Si las partículas mágicas están activas, hacerlas girar suavemente
+        if (magicParticlesGroup.visible) {
+          magicParticlesGroup.children.forEach((star, i) => {
+            star.rotation.y = t * 2.5 + i;
+            star.position.y += Math.sin(t * 3 + i) * 0.0015;
+          });
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    window.onload = function () {
+      initButtonsUI();
+      resetCameraAngle();
+      if (!overlayMode) renderAllExpressionsToGallery(false);
+      else applyExpressionTo3DModel(0, true);
+      animateLoop();
+    };
+  </script>
+
+  <script>
+    // Lux en OBS: ?overlay=1 deja solo el personaje sobre fondo transparente.
+    (function () {
+      const overlay = new URLSearchParams(location.search).get('overlay') === '1';
+
+      if (overlay) {
+        const canvas = document.getElementById('three-canvas');
+        document.body.appendChild(canvas);
+        Array.from(document.body.children).forEach((el) => {
+          if (el !== canvas && el.tagName !== 'SCRIPT') el.style.display = 'none';
+        });
+        document.documentElement.style.background = 'transparent';
+        document.body.style.background = 'transparent';
+        document.body.style.margin = '0';
+        const percent = Math.min(Math.max(Number(new URLSearchParams(location.search).get('size')) || 40, 10), 100);
+        const side = `${percent}vh`;
+        Object.assign(canvas.style, {
+          position: 'fixed',
+          bottom: '0',
+          left: '50%',
+          width: side,
+          height: side,
+          transform: 'translateX(-50%)',
+          pointerEvents: 'none',
+        });
+        const fitCharacterInView = () => {
+          const box = new THREE.Box3().setFromObject(scene);
+          if (box.isEmpty()) return;
+          const size = box.getSize(new THREE.Vector3());
+          const center = box.getCenter(new THREE.Vector3());
+          const halfTan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+          const halfExtent = (Math.max(size.x, size.y) / 2) * 1.25;
+          camState.theta = 0;
+          camState.phi = 1.48;
+          camState.targetY = center.y;
+          camState.radius = halfExtent / halfTan;
+          updateCameraTransform();
+          renderer.render(scene, camera);
+        };
+        window.addEventListener('load', () => {
+          setRenderBackground('transparent');
+          fitCharacterInView();
+        });
+      }
+
+      window.addEventListener('message', (event) => {
+        if (event.origin !== location.origin) return;
+        const data = event.data;
+        if (!data) return;
+        if (data.type === 'lux:expression') {
+          const index = typeof data.index === 'number' ? data.index : EXPRESSIONS.findIndex((item) => item.id === data.id);
+          if (index >= 0 && index < EXPRESSIONS.length) applyExpressionTo3DModel(index, false);
+        }
+        if (data.type === 'lux:gesture' && data.name) {
+          playGesture(data.name);
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // Voz de Lux en el overlay. Llegan mensajes por el canal 'lux_bus':
+    //   { type: 'speak', text, emotion, voice: { referenceId, engine }, gesture }
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const widgetKey = params.get('k') || '';
+      const IDS = EXPRESSIONS.map((item) => item.id);
+      const showExpression = (id) => {
+        const index = IDS.indexOf(id);
+        if (index >= 0) applyExpressionTo3DModel(index, false);
+      };
+      const knownEmotion = (id) => (IDS.includes(id) ? id : 'normal');
+
+      let audioContext = null;
+      let queue = Promise.resolve();
+
+      const ensureContext = () => {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        return audioContext;
+      };
+
+      async function synthesize(text, voice) {
+        const body = { text, k: widgetKey || undefined };
+        if (voice && voice.referenceId) body.reference_id = voice.referenceId;
+        if (voice && voice.engine) body.engine = voice.engine;
+        const res = await fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error('tts ' + res.status);
+        return res.blob();
+      }
+
+      function lipSync(audio, analyser, emotion) {
+        const data = new Uint8Array(analyser.fftSize);
+        let open = false;
+        let last = 0;
+        const tick = (now) => {
+          if (audio.paused || audio.ended) return;
+          analyser.getByteTimeDomainData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 1) {
+            const sample = (data[i] - 128) / 128;
+            sum += sample * sample;
+          }
+          const level = Math.sqrt(sum / data.length);
+          const nowOpen = level > 0.04;
+          if (nowOpen !== open && now - last > 110) {
+            open = nowOpen;
+            last = now;
+            mouthTo(open ? 'habla' : emotion);
+          }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+
+      async function playOne(text, emotion, voice, gesture) {
+        playGesture(gesture);
+        showExpression(emotion);
+        let blob;
+        try {
+          blob = await synthesize(text, voice);
+        } catch {
+          try {
+            blob = await synthesize(text, {});
+          } catch {
+            showExpression('normal');
+            return;
+          }
+        }
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.volume = Math.min(1, Math.max(0, (typeof window.luxVolume === 'number' ? window.luxVolume : 100) / 100));
+        const context = ensureContext();
+        if (context.state === 'running') {
+          try {
+            const source = context.createMediaElementSource(audio);
+            const analyser = context.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
+            analyser.connect(context.destination);
+            audio.addEventListener('play', () => lipSync(audio, analyser, emotion));
+          } catch {
+            // Sin analizador, el personaje habla igual con la expresión de la emoción.
+          }
+        }
+        await new Promise((resolve) => {
+          audio.addEventListener('ended', resolve, { once: true });
+          audio.addEventListener('error', resolve, { once: true });
+          audio.play().catch((err) => {
+            console.warn('[Lux] El navegador bloqueó el audio:', err && err.name);
+            resolve();
+          });
+        });
+        URL.revokeObjectURL(url);
+        showExpression('normal');
+      }
+
+      const speak = (text, emotion, voice, gesture) => {
+        const clean = String(text || '').trim().slice(0, 500);
+        if (!clean) return;
+        const mood = knownEmotion(emotion);
+        const stamp = Date.now();
+        queue = queue
+          .then(() => (Date.now() - stamp > 20000 ? null : playOne(clean, mood, voice || {}, gesture)))
+          .catch(() => showExpression('normal'));
+      };
+
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bus = new BroadcastChannel('lux_bus');
+        bus.onmessage = (event) => {
+          const data = event.data;
+          if (!data) return;
+          if (data.type === 'speak') speak(data.text, data.emotion, data.voice, data.gesture);
+          if (data.type === 'gesture' && GESTURES[data.name]) playGesture(data.name);
+          if (data.type === 'emotion') showExpression(knownEmotion(data.id));
+        };
+      }
+
+      window.luxSpeak = (text, emotion, voice, gesture) => speak(text, emotion, voice, gesture);
+      window.luxGesture = (name) => playGesture(name);
+      const demo = params.get('demo');
+      if (demo) window.addEventListener('load', () => setTimeout(() => playGesture(demo), 400));
+    })();
+  </script>
+
+  <script>
+    // Lux en OBS: consulta con la clave de OBS lo que tiene que decir y lo reproduce.
+    (function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get('overlay') !== '1' || !params.get('k')) return;
+      const key = params.get('k');
+      let after = null;
+      const poll = async () => {
+        try {
+          const url = '/api/lux/speech?k=' + encodeURIComponent(key) + (after === null ? '' : '&after=' + after);
+          const res = await fetch(url, { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (after !== null) {
+            for (const item of data.items || []) {
+              window.luxSpeak(item.text, item.emotion, item.voice, item.gesture);
+            }
+          }
+          after = data.last;
+          if (data.tts) window.luxTts = data.tts;
+          if (typeof data.volume === 'number') window.luxVolume = data.volume;
+        } catch {
+          // Sin conexión, se vuelve a intentar en el siguiente ciclo.
+        }
+      };
+      poll();
+      setInterval(poll, 1500);
+    })();
+  </script>
+
+  <script>
+    // Actualizaciones de Lux en OBS
+    (function () {
+      if (new URLSearchParams(location.search).get('overlay') !== '1') return;
+      let known = null;
+      const checkRelease = async () => {
+        try {
+          const res = await fetch('/api/lux/release', { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (known === null) known = data.version;
+          else if (data.version !== known) location.reload();
+        } catch {
+          // Sin conexión no se recarga
+        }
+      };
+      checkRelease();
+      setInterval(checkRelease, 60000);
+    })();
+  </script>
+
+  <script>
+    // Chat de Twitch en el overlay
+    (function () {
+      const params = new URLSearchParams(location.search);
+      if (params.get('overlay') !== '1') return;
+      const key = params.get('k');
+      const channel = (params.get('channel') || '').replace(/^#/, '').toLowerCase();
+      if (!key || !channel || typeof WebSocket === 'undefined') return;
+
+      const parseTags = (raw) => {
+        const out = {};
+        raw.split(';').forEach((pair) => {
+          const at = pair.indexOf('=');
+          if (at > 0) out[pair.slice(0, at)] = pair.slice(at + 1);
+        });
+        return out;
+      };
+      const privileged = (tags) => tags.mod === '1' || /broadcaster|moderator/.test(tags.badges || '');
+
+      const post = (body) =>
+        fetch('/api/lux/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.assign({ k: key }, body)),
+        }).catch(() => undefined);
+
+      const onChat = (user, text, tags) => {
+        if (text.startsWith('!s ')) {
+          const spoken = text.slice(3).trim();
+          if (spoken) window.luxSpeak(user + ' dice: ' + spoken, 'normal', window.luxTts || {}, 'idle');
+          return;
+        }
+        if (text === '!lux' || text.startsWith('!lux ')) {
+          const message = text.slice(4).trim();
+          if (message) post({ command: 'ask', viewer: user, message });
+          return;
+        }
+        if ((text === '!luxon' || text === '!luxoff') && privileged(tags)) {
+          post({ command: text === '!luxon' ? 'on' : 'off', privileged: true });
+        }
+      };
+
+      const connect = () => {
+        const ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+        ws.onopen = () => {
+          ws.send('CAP REQ :twitch.tv/tags');
+          ws.send('PASS SCHMOOPIIE');
+          ws.send('NICK justinfan' + Math.floor(10000 + Math.random() * 80000));
+          ws.send('JOIN #' + channel);
+        };
+        ws.onmessage = (event) => {
+          String(event.data)
+            .split('\r\n')
+            .forEach((line) => {
+              if (line.startsWith('PING')) {
+                ws.send('PONG' + line.slice(4));
+                return;
+              }
+              const match = /^(?:@(\S+) )?:([^!]+)![^ ]+ PRIVMSG #\S+ :(.*)$/.exec(line);
+              if (!match) return;
+              const tags = parseTags(match[1] || '');
+              onChat(tags['display-name'] || match[2], match[3].trim(), tags);
+            });
+        };
+        ws.onclose = () => setTimeout(connect, 5000);
+        ws.onerror = () => ws.close();
+      };
+      connect();
+    })();
+  </script>
+</body>
+</html>

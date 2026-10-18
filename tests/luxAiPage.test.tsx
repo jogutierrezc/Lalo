@@ -49,7 +49,7 @@ describe('panel de Lux AI', () => {
   it('la dirección de OBS lleva el overlay y el tamaño por defecto', () => {
     session.profile = { id: 'p1', role: 'streamer', lux_enabled: true };
     const html = renderToStaticMarkup(<LuxAI />);
-    expect(html).toContain('/lux/index.html?overlay=1&amp;size=40');
+    expect(html).toContain('/lux/overlay.html?overlay=1&amp;size=40');
   });
 
   it('el administrador ve el panel aunque no tenga Lux activada para sí mismo', () => {

@@ -109,6 +109,7 @@ de PythonistaGuild y EvieePy, con licencia MIT.
 Antes de ejecutarlo:
     ${PIP_COMMAND}
 """
+import asyncio
 import aiohttp
 from twitchio.ext import commands
 
@@ -124,6 +125,8 @@ LALO_URL = "http://localhost:3001/api/twitchio/event"
 LUX_URL = "http://localhost:3001/api/lux/chat"
 LUX_KEY = "TU_CLAVE_OBS"
 LUX_BOT_VERSION = ${LUX_BOT_VERSION}
+# Segundos que espera Lux antes de responder a un comando del chat.
+LUX_REPLY_DELAY = 30
 
 
 def fill(text, user=""):
@@ -150,6 +153,7 @@ async def lux_ask(message, text):
         print("No se pudo hablar con Lux: " + str(error))
         return
     if data.get("reply"):
+        await asyncio.sleep(LUX_REPLY_DELAY)
         await message.channel.send(data["reply"])
     elif data.get("skipped") == "cooldown":
         await message.channel.send("@" + message.author.name + " espera " + str(data.get("waitSeconds", 10)) + " s antes de volver a preguntar a Lux.")

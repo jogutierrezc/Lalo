@@ -57,3 +57,23 @@ describe('voz de TTS para el overlay', () => {
     expect(res.body).toMatchObject({ items: [], last: 7, tts: { referenceId: 'voz_tts', engine: 'fish' }, volume: 100 });
   });
 });
+
+describe('todos los gestos desde el chat', () => {
+  it.each([
+    ['!lux demacia', 'ult'],
+    ['!lux chispa!', 'ult'],
+    ['saluda a tu chat', 'wave'],
+    ['haz una reverencia', 'bow'],
+    ['canta', 'sing'],
+    ['!lux cantar', 'sing'],
+    ['salta', 'jump'],
+    ['muestra orgullo', 'pride'],
+    ['tengo dudas', 'shrug'],
+    ['da una vuelta', 'spin'],
+    ['alza los brazos', 'arms_up'],
+    ['levanta los brazos', 'arms_up'],
+    ['baila', 'dance'],
+  ])('"%s" → %s', (message, expected) => {
+    expect(detectGestureRequest(message)).toBe(expected);
+  });
+});

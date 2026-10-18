@@ -105,11 +105,11 @@ describe('canción en el chat', () => {
       db: () => db,
       fetch: fakeFetch(),
     });
-    expect(res.body).toMatchObject({ song: true, gesture: 'dance' });
+    expect(res.body).toMatchObject({ song: true, gesture: 'sing' });
     expect(res.body.note).toBeUndefined();
     expect(speech).toHaveLength(1);
     expect(speech[0].text.startsWith('[canta] ')).toBe(true);
-    expect(speech[0].gesture).toBe('dance');
+    expect(speech[0].gesture).toBe('sing');
   });
 
   it('con voz de Fish no se encola el canto y se avisa', async () => {
@@ -131,7 +131,7 @@ describe('canción desde el panel', () => {
       db: () => db,
       fetch: fakeFetch(),
     });
-    expect(res.body).toMatchObject({ song: true, gesture: 'dance' });
+    expect(res.body).toMatchObject({ song: true, gesture: 'sing' });
     expect(String(res.body.reply)).not.toContain('[canta]');
     expect(speech).toHaveLength(1);
     expect(speech[0].text.startsWith('[canta] ')).toBe(true);

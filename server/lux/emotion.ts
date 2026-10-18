@@ -3,7 +3,7 @@
  *
  * Contrato de emociones entre el modelo y el personaje. El modelo termina su
  * respuesta con una etiqueta [emocion] de esta lista. Los ids son los de las
- * expresiones de public/lux/index.html: si se cambian allí, se cambian aquí.
+ * expresiones de public/lux/overlay.html: si se cambian allí, se cambian aquí.
  */
 
 export const LUX_EMOTIONS = [

@@ -40,6 +40,8 @@ export interface LuxSpeechRow {
   gesture: string;
   voice_reference_id: string | null;
   voice_engine: string | null;
+  /** Hora a partir de la que puede sonar (ISO), o null si suena ya. Migración 0029. */
+  play_after?: string | null;
 }
 
 export interface LuxSpeechItem {
@@ -48,6 +50,8 @@ export interface LuxSpeechItem {
   emotion: string;
   gesture: string;
   voice: { referenceId: string | null; engine: string | null };
+  /** Hora ISO a partir de la que puede sonar, o null. */
+  playAfter: string | null;
 }
 
 export interface LuxDb {
@@ -149,7 +153,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     async speechSince(profileId, afterId) {
       const { data, error } = await db
         .from('lux_speech')
-        .select('id, text, emotion, gesture, voice_reference_id, voice_engine')
+        .select('id, text, emotion, gesture, voice_reference_id, voice_engine, play_after')
         .eq('profile_id', profileId)
         .gt('id', afterId)
         .order('id', { ascending: true })
@@ -161,6 +165,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         emotion: String(row.emotion),
         gesture: String(row.gesture),
         voice: { referenceId: (row.voice_reference_id as string | null) ?? null, engine: (row.voice_engine as string | null) ?? null },
+        playAfter: (row.play_after as string | null) ?? null,
       }));
     },
 

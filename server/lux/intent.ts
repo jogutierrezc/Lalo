@@ -44,20 +44,32 @@ export function intentGuidance(intent: LuxIntent): string {
   }
 }
 
-/** Gestos que entiende el overlay. Los tres últimos los pide el espectador en el mensaje. */
-export type LuxGesture = 'bow' | 'pride' | 'shrug' | 'nod' | 'idle' | 'wave' | 'spin' | 'dance' | 'jump' | 'sing';
+/** Gestos que entiende el overlay. Los nombres son los de su catálogo de movimientos. */
+export type LuxGesture = 'bow' | 'pride' | 'shrug' | 'nod' | 'idle' | 'wave' | 'spin' | 'dance' | 'jump' | 'sing' | 'arms_up' | 'ult';
 
 const DANCE = /\b(baila|bailar|bailes|dance|dancing|danza|dança|dançar)\b/i;
 const SPIN = /\b(gira|girar|da una vuelta|vuelta|spin|turn around|rode|rodar|gire)\b/i;
 const WAVE = /\b(saluda|saludar|saludo|agita|wave|waving|hi there|acena|acenar|saluda con la mano)\b/i;
 const JUMP = /\b(salta|saltar|salto|jump|brinca|brincar)\b/i;
+const ULT = /\b(demacia|chispa|ultimate|ult)\b/i;
+const BOW = /\b(reverencia|reverencias|inclina|inclinate|bow|hace una reverencia)\b/i;
+const ARMS_UP = /\b(alza|alzar|levanta|levantar|sube|subir)\s+(los\s+)?brazos\b|\bbrazos\s+(arriba|al\s+aire)\b|\b(celebra|celebrar|cheer)\b/i;
+const PRIDE = /\b(orgullo|orgulloso|orgullosa|presume|presumir|pose)\b/i;
+const SHRUG = /\b(duda|dudas|dudo|shrug|no\s+s[eé]|encoge|encogerse)\b/i;
+const SING = /\b(cantar|canta|cántame|cantame|sing)\b/i;
 
-/** Gesto que pide el mensaje (baila, gira, saluda, salta), o null si no pide ninguno. */
-export function detectGestureRequest(message: string): 'dance' | 'spin' | 'wave' | 'jump' | null {
+/** Gesto que pide el mensaje, o null si no pide ninguno. Orden: el más específico primero. */
+export function detectGestureRequest(message: string): LuxGesture | null {
   if (DANCE.test(message)) return 'dance';
   if (SPIN.test(message)) return 'spin';
+  if (ULT.test(message)) return 'ult';
+  if (ARMS_UP.test(message)) return 'arms_up';
   if (WAVE.test(message)) return 'wave';
   if (JUMP.test(message)) return 'jump';
+  if (BOW.test(message)) return 'bow';
+  if (PRIDE.test(message)) return 'pride';
+  if (SHRUG.test(message)) return 'shrug';
+  if (SING.test(message)) return 'sing';
   return null;
 }
 
@@ -66,7 +78,7 @@ export function gestureFor(message: string, intent: LuxIntent): LuxGesture {
   return detectGestureRequest(message) ?? INTENT_GESTURE[intent];
 }
 
-/** Gesto del personaje para cada intención. Los nombres son los que entiende el overlay. */
+/** Gesto del personaje para cada intención. */
 export const INTENT_GESTURE: Record<LuxIntent, LuxGesture> = {
   insulto: 'shrug',
   agradecimiento: 'bow',
