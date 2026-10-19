@@ -100,6 +100,8 @@ export const LuxAI: React.FC = () => {
   const [speakOverlay, setSpeakOverlay] = useState(true);
   const [tab, setTab] = useState<'ajustes' | 'memoria'>('ajustes');
   const [character, setCharacter] = useState<LuxCharacterView | null>(null);
+  // Giro del modelo 3D en grados. Va en el enlace de OBS (&turn=) y en la vista previa.
+  const [turn, setTurn] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -152,7 +154,10 @@ export const LuxAI: React.FC = () => {
   const keyPart = profile?.widget_key ? `&k=${encodeURIComponent(profile.widget_key)}` : '';
   // Canal de Twitch: el overlay lee el chat para el !lux y el !s. Una sola fuente de OBS para los dos.
   const channelPart = profile?.twitch_login ? `&channel=${encodeURIComponent(profile.twitch_login)}` : '';
-  const overlayUrl = `${origin}/lux/overlay.html?overlay=1&size=${draft.obsSize}${keyPart}${channelPart}`;
+  const turnPart = turn ? `&turn=${turn}` : '';
+  const overlayUrl = `${origin}/lux/overlay.html?overlay=1&size=${draft.obsSize}${keyPart}${channelPart}${turnPart}`;
+  // La vista previa es el mismo overlay sin voz ni chat: solo enseña el personaje con su giro.
+  const previewUrl = `${overlayUrl}&preview=1`;
   const answered = turns.some((turn) => turn.reply);
 
   // Manda una frase al overlay abierto en este navegador. Sin overlay abierto, nadie la oye.
@@ -471,6 +476,24 @@ export const LuxAI: React.FC = () => {
                     </button>
                   </div>
                 </Field>
+                <Range
+                  label="Giro del personaje"
+                  value={turn}
+                  min={0}
+                  max={355}
+                  step={5}
+                  format={(value) => `${value}°`}
+                  onChange={(value) => setTurn(value)}
+                />
+                <div className="grid gap-2">
+                  <span className="text-sm font-medium">Vista previa</span>
+                  <div className="overflow-hidden rounded-lg border border-white/10 bg-[#15151d]">
+                    <iframe title="Vista previa del personaje de Lux" src={previewUrl} className="block h-[280px] w-full border-0" />
+                  </div>
+                  <p className="cab-hint">
+                    Así se verá en OBS, sin voz. Mueve el giro hasta que el personaje mire a la cámara y luego copia la dirección de arriba.
+                  </p>
+                </div>
               </section>
 
               <div className="flex flex-wrap items-center gap-3">

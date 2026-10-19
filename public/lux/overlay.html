@@ -26,6 +26,8 @@
 
     const params = new URLSearchParams(location.search);
     const widgetKey = params.get('k') || '';
+    // Vista previa del panel: enseña el personaje, sin voz, sin chat ni frases (eso lo hace la fuente de OBS).
+    const preview = params.get('preview') === '1';
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // ---------- 1. Expresiones (las diez de siempre) ----------
@@ -1038,7 +1040,7 @@
     window.luxSpeak = speak;
     window.luxGesture = playGesture;
 
-    if (typeof BroadcastChannel !== 'undefined') {
+    if (!preview && typeof BroadcastChannel !== 'undefined') {
       const bus = new BroadcastChannel('lux_bus');
       bus.onmessage = (event) => {
         const d = event.data;
@@ -1058,7 +1060,7 @@
         if (!res.ok) return;
         const data = await res.json();
         if (data.character) applyCharacter(data.character);
-        if (after !== null) for (const item of data.items || []) speak(item.text, item.emotion, item.voice, item.gesture, item.playAfter);
+        if (after !== null && !preview) for (const item of data.items || []) speak(item.text, item.emotion, item.voice, item.gesture, item.playAfter);
         after = data.last;
         if (data.tts) window.luxTts = data.tts;
         if (typeof data.volume === 'number') window.luxVolume = data.volume;
@@ -1089,7 +1091,7 @@
 
     // ---------- 12. Chat de Twitch (lectura anónima): !s, !lux y !luxon/!luxoff ----------
     const channel = (params.get('channel') || '').replace(/^#/, '').toLowerCase();
-    if (widgetKey && channel && typeof WebSocket !== 'undefined') {
+    if (!preview && widgetKey && channel && typeof WebSocket !== 'undefined') {
       const parseTags = (raw) => {
         const out = {};
         raw.split(';').forEach((pair) => {
