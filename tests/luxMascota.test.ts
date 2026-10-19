@@ -31,6 +31,7 @@ import {
   jawOpening,
   modelIdOf,
   renderFps,
+  resolveClips,
 } from '../public/lux/mascota/logic.js';
 import { LUX_EMOTIONS } from '../server/lux/emotion';
 import { LUX_AVATAR_CHOICES, LUX_MODEL_AVATAR_IDS, isModelAvatar, normalizeCharacterInput, visibleCharacters, characterView, type LuxCharacter } from '../server/lux/characters';
@@ -302,5 +303,39 @@ describe('almacenamiento del modelo: privado y con clave aleatoria', () => {
     const config = readModelsConfig(env);
     expect(config.config?.bucket).toBe('privado');
     expect(config.config?.publicBaseUrl).toBe('');
+  });
+});
+
+describe('Mascota 2: resolución de clips por modelo', () => {
+  // Nombres reales de los dos modelos de prueba (Warwick/).
+  const WARWICK = ['Attack1', 'Crit', 'Laugh', 'Taunt', 'Dance_Loop', 'Dance_Windup', 'Idle1_Base', 'Idle_Var1', 'Joke'];
+  const GUARDIANA = ['Idle_Base', 'Idle_In', 'Joke', 'Dance_Loop', 'Dance_In', 'Damage_Hurt', 'Laugh01', 'Taunt_Intro', 'Taunt_loop', 'Laugh02', 'Finisher01', 'PetChibiLux_StarGuardian_Laugh.anm', 'PetChibiLux_StarGuardian_Dance_loop.anm'];
+
+  it('un modelo con los nombres canónicos los usa tal cual', () => {
+    const r = resolveClips(WARWICK);
+    expect(r).toEqual({ Idle1_Base: 'Idle1_Base', Idle_Var1: 'Idle_Var1', Laugh: 'Laugh', Taunt: 'Taunt', Dance_Loop: 'Dance_Loop', Crit: 'Crit' });
+  });
+
+  it('un modelo con otros nombres encuentra el clip de cada rol por alias', () => {
+    const r = resolveClips(GUARDIANA);
+    expect(r.Idle1_Base).toBe('Idle_Base');
+    expect(r.Laugh).toBe('Laugh01');
+    // El clip de la mascota (PetChibi…Laugh.anm) no es la risa del personaje si hay Laugh01.
+    expect(r.Laugh).not.toMatch(/Pet/);
+    expect(r.Taunt).toBe('Taunt_loop');
+    expect(r.Dance_Loop).toBe('Dance_Loop');
+    expect(r.Crit).toBe('Finisher01');
+  });
+
+  it('un rol sin ningún clip vale null, y la variante de reposo sin distinta vale null', () => {
+    const r = resolveClips(['Idle_Base']);
+    expect(r.Idle1_Base).toBe('Idle_Base');
+    expect(r.Laugh).toBeNull();
+    expect(r.Crit).toBeNull();
+    expect(r.Idle_Var1).toBeNull();
+  });
+
+  it('un modelo sin clips de reposo no resuelve el reposo', () => {
+    expect(resolveClips(['Attack1', 'Spell1']).Idle1_Base).toBeNull();
   });
 });

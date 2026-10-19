@@ -11,8 +11,54 @@
  * sobreviven a la compresión; si cambian, cambian también las pruebas.
  */
 
-/** Clips que sobreviven a la compresión del GLB (de los 66 originales). */
+/**
+ * Roles de clip: los nombres canónicos que usa el overlay. Cada modelo trae sus propios
+ * nombres; resolveClips() busca el clip real de cada rol (ver CLIP_ALIASES).
+ */
 export const MASCOTA_CLIPS = ['Idle1_Base', 'Idle_Var1', 'Laugh', 'Taunt', 'Dance_Loop', 'Crit'];
+
+/**
+ * Patrones, en orden de preferencia, para encontrar el clip de cada rol cuando el modelo
+ * no lo trae con el nombre exacto. Se prueban sobre el nombre en minúsculas.
+ */
+export const CLIP_ALIASES = {
+  Idle1_Base: [/^idle1?_?base$/, /^idle$/, /idle.*base/, /idle/],
+  Idle_Var1: [/^idle_?var1?$/, /idle.*var/],
+  Laugh: [/^laugh$/, /^laugh0?1$/, /^laugh\d*$/, /laugh/, /joke/],
+  Taunt: [/^taunt$/, /taunt.*loop/, /taunt/],
+  Dance_Loop: [/^dance_?loop$/, /dance.*loop/, /dance/],
+  Crit: [/^crit$/, /crit/, /finisher/, /damage.*hurt/],
+};
+
+/**
+ * Rol canónico → nombre real del clip en este modelo, o null si no hay ninguno.
+ * Primero busca el nombre exacto; si no está, prueba los alias del rol. Un rol sin clip
+ * vale null: el overlay lo sustituye por el reposo (Idle1_Base) al reproducirlo.
+ *
+ * @param {string[]} available nombres de los clips del GLB
+ * @returns {Record<string, string | null>}
+ */
+export function resolveClips(available) {
+  const names = [...available];
+  const resolved = {};
+  for (const role of MASCOTA_CLIPS) {
+    const exact = names.find((name) => name === role);
+    if (exact) {
+      resolved[role] = exact;
+      continue;
+    }
+    const patterns = CLIP_ALIASES[role] ?? [];
+    let hit = null;
+    for (const pattern of patterns) {
+      hit = names.find((name) => pattern.test(name.toLowerCase())) ?? null;
+      if (hit) break;
+    }
+    resolved[role] = hit;
+  }
+  // Variante de reposo: si no hay una distinta del reposo, no alterna.
+  if (resolved.Idle_Var1 === resolved.Idle1_Base) resolved.Idle_Var1 = null;
+  return resolved;
+}
 
 /** Duración en segundos de cada clip cuando es una reacción de un solo uso (los que no son bucle de idle). */
 export const CLIP_SECONDS = { Laugh: 2.5, Taunt: 2, Dance_Loop: 4, Crit: 1.5 };

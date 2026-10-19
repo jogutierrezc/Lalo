@@ -17,6 +17,7 @@ import {
   frameIntervalMs,
   jawOpening,
   renderFps,
+  resolveClips,
 } from './logic.js';
 
 /** GLTFLoader de la misma versión que Three.js del overlay (r128). Exacta, no un rango. */
@@ -24,6 +25,31 @@ const GLTF_LOADER_SRC = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/
 
 /** Cada cuánto cambia la variante de reposo (Idle1_Base <-> Idle_Var1). */
 const IDLE_VARIANT_MS = 6000;
+
+/**
+ * Caja del personaje para el encuadre: la posición de sus huesos más un margen para pelo y accesorios.
+ * No se usa la caja de la geometría: hay modelos con vértices sueltos muy lejos del cuerpo (la caja sale
+ * diez veces más grande que el personaje y la cámara lo deja diminuto).
+ */
+function characterBox(scene) {
+  const T = window.THREE;
+  scene.updateMatrixWorld(true);
+  const box = new T.Box3();
+  const point = new T.Vector3();
+  scene.traverse((node) => {
+    if (node.isBone) box.expandByPoint(node.getWorldPosition(point));
+  });
+  if (box.isEmpty()) return new T.Box3().setFromObject(scene);
+  const size = box.getSize(new T.Vector3());
+  box.expandByScalar(Math.max(size.x, size.y, size.z) * 0.12);
+  return box;
+}
+
+/**
+ * Materiales de escenario de la ficha (suelo, cielo, árboles…): no son del personaje y en el overlay
+ * taparían la transparencia de OBS. Se quitan por nombre de material.
+ */
+const STAGE_MATERIAL = /^(groud|ground|floor|sky|tree|env|backdrop|background)/i;
 
 const loadScript = (src) =>
   new Promise((resolve, reject) => {
@@ -49,9 +75,9 @@ async function loadGltf(modelUrl) {
  * Crea la mascota sobre su canvas. Devuelve la API del overlay: enter(), exit(),
  * setEmotion(), setGesture(), setSpeaking(), setMouth(), resize().
  *
- * @param {{ canvas: HTMLCanvasElement, modelUrl: string, fps60?: boolean, reduceMotion?: boolean, effects?: { shake(): void, flash(): void } | null }} options
+ * @param {{ canvas: HTMLCanvasElement, modelUrl: string, fps60?: boolean, reduceMotion?: boolean, turn?: number, effects?: { shake(): void, flash(): void } | null }} options
  */
-export async function createMascota({ canvas, modelUrl, fps60 = false, reduceMotion = false, effects = null }) {
+export async function createMascota({ canvas, modelUrl, fps60 = false, reduceMotion = false, turn = 0, effects = null }) {
   const T = window.THREE;
   const gsap = window.gsap;
   const gltf = await loadGltf(modelUrl);
@@ -70,8 +96,19 @@ export async function createMascota({ canvas, modelUrl, fps60 = false, reduceMot
   root.add(gltf.scene);
   scene.add(root);
 
+  // Escenario de la ficha: nodos Env* y mallas con material de fondo (suelo, cielo, árboles).
+  // Se quitan antes del encuadre: en el overlay taparían la transparencia de OBS y agrandarían el encuadre.
+  const stage = [];
+  gltf.scene.traverse((node) => {
+    const material = Array.isArray(node.material) ? node.material[0] : node.material;
+    if (/^Env\d*$/.test(node.name) || (node.isMesh && material && STAGE_MATERIAL.test(material.name))) stage.push(node);
+  });
+  for (const node of stage) node.parent?.remove(node);
+  // Giro del personaje alrededor de Y, en grados (0 = como viene en el archivo). Lo pide el overlay con ?turn=.
+  gltf.scene.rotation.y = (turn * Math.PI) / 180;
+
   // Encuadre: el modelo entero, con la cámara a la altura de su centro.
-  const box = new T.Box3().setFromObject(gltf.scene);
+  const box = characterBox(gltf.scene);
   const size = box.getSize(new T.Vector3());
   const center = box.getCenter(new T.Vector3());
   gltf.scene.position.sub(new T.Vector3(center.x, box.min.y, center.z));
@@ -79,14 +116,25 @@ export async function createMascota({ canvas, modelUrl, fps60 = false, reduceMot
   const distance = ((Math.max(size.y, size.x) / 2) * 1.25) / halfTan;
   camera.position.set(0, size.y * 0.5, distance + size.z);
   camera.lookAt(0, size.y * 0.5, 0);
+  // El plano lejano sigue al tamaño del modelo: con 100 fijo, los modelos grandes quedaban fuera y no se dibujaban.
+  camera.far = Math.max(100, (distance + size.z) * 3);
+  camera.updateProjectionMatrix();
 
-  // Clips: solo los que trae el archivo (el servidor ya quitó el resto).
+  // Clips: cada rol (Laugh, Taunt…) apunta al clip real del modelo; los roles sin clip usan el reposo.
+  const resolved = resolveClips(gltf.animations.map((clip) => clip.name));
   const mixer = new T.AnimationMixer(gltf.scene);
+  const clipsByName = new Map(gltf.animations.map((clip) => [clip.name, clip]));
+  // Las acciones se crean al primer uso: un modelo con 66 clips no paga por los 60 que nunca suenan.
   const actions = {};
-  for (const clip of gltf.animations) {
-    actions[clip.name] = mixer.clipAction(clip);
-    actions[clip.name].setLoop(T.LoopRepeat, Infinity);
-  }
+  const actionOf = (clipName) => {
+    if (!actions[clipName]) {
+      actions[clipName] = mixer.clipAction(clipsByName.get(clipName));
+      actions[clipName].setLoop(T.LoopRepeat, Infinity);
+    }
+    return actions[clipName];
+  };
+  if (!resolved.Idle1_Base) console.warn('[Lux] El modelo no tiene clip de reposo; se muestra sin animar.');
+  console.info('[Lux] clips del modelo:', resolved);
 
   // Huesos de la cara: la mandíbula y los labios siguen el volumen de la voz.
   const bones = {};
@@ -123,14 +171,17 @@ export async function createMascota({ canvas, modelUrl, fps60 = false, reduceMot
     });
     let name = state.clip;
     // En reposo, Idle1_Base alterna con Idle_Var1 cada pocos segundos (A1).
-    if (name === 'Idle1_Base' && state.timeScale === 1 && !speaking) name = idleVariant % 2 ? 'Idle_Var1' : 'Idle1_Base';
+    if (name === 'Idle1_Base' && state.timeScale === 1 && !speaking) name = idleVariant % 2 && resolved.Idle_Var1 ? 'Idle_Var1' : 'Idle1_Base';
     return { name, timeScale: state.timeScale };
   }
 
-  function playClip(name, timeScale) {
-    const key = name + ':' + timeScale;
-    if (key === currentKey || !actions[name]) return;
-    const next = actions[name];
+  /** Reproduce el rol (Laugh, Taunt…) con su clip real. Si el modelo no trae ese rol, suena el reposo. */
+  function playClip(role, timeScale) {
+    const clipName = resolved[role] ?? resolved.Idle1_Base;
+    if (!clipName) return;
+    const key = clipName + ':' + timeScale;
+    if (key === currentKey) return;
+    const next = actionOf(clipName);
     next.setEffectiveTimeScale(timeScale);
     next.reset().setEffectiveWeight(1).play();
     if (current && current !== next) current.crossFadeTo(next, CROSSFADE_SECONDS, false); // Cruce de 0,3 s (A2)
@@ -139,8 +190,8 @@ export async function createMascota({ canvas, modelUrl, fps60 = false, reduceMot
     fadeUntil = now() + CROSSFADE_SECONDS * 1000;
     // Efectos de apoyo (A3), solo en Sorprendida (Crit) y en el baile (Dance_Loop).
     if (!reduceMotion && effects) {
-      if (name === 'Crit') effects.shake();
-      if (name === 'Dance_Loop') effects.flash();
+      if (role === 'Crit') effects.shake();
+      if (role === 'Dance_Loop') effects.flash();
     }
   }
 

@@ -862,6 +862,8 @@
     const MASCOTA_RETRY_MS = 30000;
     const modelUrlFor = (modelId) => '/api/lux/mascota-model?k=' + encodeURIComponent(widgetKey) + '&m=' + encodeURIComponent(modelId);
     const fps60 = params.get('fps') === '60';
+    // Giro del modelo en grados (?turn=180) para los modelos que vienen de espaldas.
+    const turn = Number(params.get('turn')) || 0;
     // Destello de pantalla para el baile (A3). La vibración es del canvas de la mascota.
     const fxLayer = document.createElement('div');
     Object.assign(fxLayer.style, { position: 'fixed', inset: '0', pointerEvents: 'none', opacity: '0', background: 'radial-gradient(circle at 50% 60%, rgba(255,255,255,0.5), rgba(255,255,255,0) 60%)' });
@@ -872,7 +874,7 @@
     };
     function mascotaLoad(modelId) {
       return import('/lux/mascota/mascota.js')
-        .then((m) => m.createMascota({ canvas: mascotaCanvas, modelUrl: modelUrlFor(modelId), fps60, reduceMotion, effects: reduceMotion ? null : mascotaEffects }))
+        .then((m) => m.createMascota({ canvas: mascotaCanvas, modelUrl: modelUrlFor(modelId), fps60, reduceMotion, turn, effects: reduceMotion ? null : mascotaEffects }))
         .catch((err) => { console.warn('[Lux] Mascota 2 no se pudo cargar:', err && err.message); return null; });
     }
     // Pide el modelo «modelId». Si cambia el modelo, libera el anterior (dispose) y carga el nuevo; si falla, vuelve a Lux.
