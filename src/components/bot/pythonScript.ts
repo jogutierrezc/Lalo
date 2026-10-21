@@ -144,7 +144,7 @@ LUX_BOT_VERSION = ${LUX_BOT_VERSION}
 LUX_WORD = ${pyString(luxWord)}
 LUX_ALIAS = ${luxAlias ? 'True' : 'False'}
 # Segundos que espera Lux antes de responder a un comando del chat.
-LUX_REPLY_DELAY = 30
+LUX_REPLY_DELAY = 5
 # Lux aprende del chat (si lo tienes activado en Lalo): cada media hora manda los mensajes juntos para resumirlos.
 # Los mensajes se guardan solo en la memoria de este script y se borran al enviarlos.
 LUX_DIGEST_EVERY = 1800
@@ -192,7 +192,7 @@ async def lux_ask(message, text):
         await asyncio.sleep(LUX_REPLY_DELAY)
         await message.channel.send(data["reply"])
     elif data.get("skipped") == "cooldown":
-        await message.channel.send("@" + message.author.name + " espera " + str(data.get("waitSeconds", 10)) + " s antes de volver a preguntar a Lux.")
+        await message.channel.send("@" + message.author.name + " espera " + str(data.get("waitSeconds", 5)) + " s antes de volver a preguntar a Lux.")
 
 
 async def lux_switch(message, turn_on):

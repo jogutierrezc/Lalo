@@ -180,7 +180,7 @@ describe('script del bot con la palabra elegida', () => {
     expect(script).toContain('LUX_WORD = "mascota"');
     expect(script).toContain('LUX_ALIAS = True');
     expect(script).toContain(`LUX_BOT_VERSION = ${LUX_BOT_VERSION}`);
-    expect(LUX_BOT_VERSION).toBe(3);
+    expect(LUX_BOT_VERSION).toBe(4);
     expect(script).toContain('words.append("lux")');
   });
 

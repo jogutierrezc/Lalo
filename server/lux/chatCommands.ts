@@ -12,7 +12,7 @@
  */
 
 export const LUX_CHAT_MAX = 300;
-export const LUX_CHAT_COOLDOWN_MS = 10_000;
+export const LUX_CHAT_COOLDOWN_MS = 5_000;
 
 /** Palabra por defecto: la que ya conocen los espectadores. */
 export const LUX_CHAT_WORD_DEFAULT = 'lux';
