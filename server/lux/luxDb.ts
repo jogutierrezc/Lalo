@@ -63,6 +63,31 @@ export interface LuxSpeechItem {
   playAfter: string | null;
 }
 
+/** Estado de un mensaje del panel que espera al bot (migración 0037). */
+export type LuxOutboxStatus = 'pending' | 'claimed' | 'sent' | 'failed';
+
+export interface LuxOutboxRow {
+  profile_id: string;
+  text: string;
+  /** También se oye en el overlay de OBS cuando el bot lo recoge. */
+  speak: boolean;
+  emotion: string;
+  /** 'literal': texto tal cual. 'ai': lo redactó la IA a partir de una idea. */
+  mode: 'literal' | 'ai';
+}
+
+export interface LuxOutboxItem {
+  id: number;
+  text: string;
+  speak: boolean;
+  emotion: string;
+  mode: 'literal' | 'ai';
+  status: LuxOutboxStatus;
+  createdAt: string;
+  claimedAt: string | null;
+  sentAt: string | null;
+}
+
 /** Un recuerdo tal como lo ve el streamer en la pestaña Memoria. */
 export interface LuxMemoryItem {
   id: string;
@@ -161,6 +186,15 @@ export interface LuxDb extends Partial<LuxMemoryDb> {
   speechSince?(profileId: string, afterId: number): Promise<LuxSpeechItem[]>;
   latestSpeechId?(profileId: string): Promise<number>;
   pruneSpeech?(profileId: string, beforeIso: string): Promise<void>;
+  /** Cola de mensajes del panel hacia el chat (migración 0037). Opcionales en las pruebas. */
+  outboxInsert?(row: LuxOutboxRow): Promise<number>;
+  /** Los más recientes primero. */
+  outboxList?(profileId: string, limit: number): Promise<LuxOutboxItem[]>;
+  /** Pasa a «claimed» los pendientes más antiguos y los devuelve. Cada mensaje sale una sola vez. */
+  outboxClaim?(profileId: string, limit: number, nowIso: string): Promise<LuxOutboxItem[]>;
+  /** El bot confirma que lo publicó (o que no pudo). true si era un mensaje recogido de esta cuenta. */
+  outboxFinish?(profileId: string, id: number, ok: boolean, nowIso: string): Promise<boolean>;
+  outboxPrune?(profileId: string, beforeIso: string): Promise<void>;
   /** Voz de TTS del streamer (configs, módulo 'tts'): la que usa el !s del chat. */
   ttsVoice?(profileId: string): Promise<{ referenceId: string | null; engine: string | null }>;
   saveSettingsRow(row: Record<string, unknown>): Promise<void>;
@@ -224,6 +258,22 @@ export interface LuxCharacterModelPatch {
   modelUploadedAt?: string | null;
   modelPendingKey?: string | null;
   modelStaleKeys?: string[];
+}
+
+const OUTBOX_COLUMNS = 'id, text, speak, emotion, mode, status, created_at, claimed_at, sent_at';
+
+function outboxFromRow(row: Record<string, unknown>): LuxOutboxItem {
+  return {
+    id: Number(row.id),
+    text: String(row.text),
+    speak: row.speak === true,
+    emotion: String(row.emotion ?? 'normal'),
+    mode: row.mode === 'ai' ? 'ai' : 'literal',
+    status: (['pending', 'claimed', 'sent', 'failed'].includes(String(row.status)) ? String(row.status) : 'pending') as LuxOutboxStatus,
+    createdAt: String(row.created_at),
+    claimedAt: (row.claimed_at as string | null) ?? null,
+    sentAt: (row.sent_at as string | null) ?? null,
+  };
 }
 
 function memoryFromRow(row: Record<string, unknown>): LuxMemoryItem {
@@ -393,6 +443,63 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .maybeSingle();
       check(error);
       return data ? Number((data as { id: number }).id) : 0;
+    },
+
+    async outboxInsert(row) {
+      const { data, error } = await db.from('lux_outbox').insert(row).select('id').single();
+      check(error);
+      return Number((data as { id: number }).id);
+    },
+
+    async outboxList(profileId, limit) {
+      const { data, error } = await db
+        .from('lux_outbox')
+        .select(OUTBOX_COLUMNS)
+        .eq('profile_id', profileId)
+        .order('id', { ascending: false })
+        .limit(limit);
+      check(error);
+      return ((data ?? []) as Array<Record<string, unknown>>).map(outboxFromRow);
+    },
+
+    async outboxClaim(profileId, limit, nowIso) {
+      const { data: pending, error } = await db
+        .from('lux_outbox')
+        .select('id')
+        .eq('profile_id', profileId)
+        .eq('status', 'pending')
+        .order('id', { ascending: true })
+        .limit(limit);
+      check(error);
+      const ids = ((pending ?? []) as Array<{ id: number }>).map((row) => row.id);
+      if (ids.length === 0) return [];
+      // El filtro por estado repite el de arriba: si dos peticiones compiten, cada mensaje se lo lleva una sola.
+      const { data, error: updateError } = await db
+        .from('lux_outbox')
+        .update({ status: 'claimed', claimed_at: nowIso })
+        .eq('profile_id', profileId)
+        .eq('status', 'pending')
+        .in('id', ids)
+        .select(OUTBOX_COLUMNS);
+      check(updateError);
+      return ((data ?? []) as Array<Record<string, unknown>>).map(outboxFromRow).sort((a, b) => a.id - b.id);
+    },
+
+    async outboxFinish(profileId, id, ok, nowIso) {
+      const { data, error } = await db
+        .from('lux_outbox')
+        .update({ status: ok ? 'sent' : 'failed', sent_at: nowIso })
+        .eq('profile_id', profileId)
+        .eq('id', id)
+        .eq('status', 'claimed')
+        .select('id');
+      check(error);
+      return ((data ?? []) as unknown[]).length > 0;
+    },
+
+    async outboxPrune(profileId, beforeIso) {
+      const { error } = await db.from('lux_outbox').delete().eq('profile_id', profileId).lt('created_at', beforeIso);
+      check(error);
     },
 
     async ttsVoice(profileId) {

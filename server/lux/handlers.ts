@@ -27,7 +27,7 @@ import { defaultDeps, failureOf, fail, isFail, type Auth, type IntegrationReques
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { MODEL_SETTING, PROVIDER_SETTING, activeModel, activeProvider, isKeyFor, keyState, readApiKey, saveApiKey } from './keyVault.js';
 import { LUX_MAX_INPUT, buildLuxMessages, replyTokens } from './prompt.js';
-import { supabaseLuxDb, type LuxDb, type LuxLibraryRow, type LuxMemoryDb, type LuxProfile } from './luxDb.js';
+import { supabaseLuxDb, type LuxDb, type LuxLibraryRow, type LuxMemoryDb, type LuxMemoryRow, type LuxOutboxItem, type LuxProfile } from './luxDb.js';
 import {
   ADMIN_UPLOAD_MAX_BYTES,
   DIGEST_MAX_ITEMS,
@@ -41,7 +41,7 @@ import {
   splitIntoMemories,
 } from './memory.js';
 import { DIGEST_MIN_GAP_MS, buildDigestMessages, keepDigestItems, normalizeDigestLines, parseDigest } from './digest.js';
-import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, type LuxProvider, type NvidiaFetch } from './nvidia.js';
+import { NvidiaError, nvidiaChat, LUX_PROVIDERS, isLuxProvider, providerModel, type ChatMessage, type LuxProvider, type NvidiaFetch } from './nvidia.js';
 import { normalizeLuxSettings, rowFromSettings, settingsFromRow, type LuxSettings } from './settings.js';
 import { parseEmotion } from './emotion.js';
 import { detectIntent, gestureFor } from './intent.js';
@@ -49,6 +49,21 @@ import { buildSongMessages } from './prompt.js';
 import { detectSongRequest, normalizeSong, songForChat } from './song.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
+import { luxDisplayName } from './displayName.js';
+import {
+  BOT_ONLINE_MS,
+  EVENT_MIN_GAP_MS,
+  SAY_COOLDOWN_MS,
+  SAY_IDEA_MAX,
+  SAY_PENDING_MAX,
+  SAY_TEXT_MAX,
+  buildComposeMessages,
+  buildEventMessages,
+  buildSpontaneousMessages,
+  eventsAllowed,
+  normalizeEvents,
+  outboxState,
+} from './proactive.js';
 import {
   LUX_AVATAR_CHOICES,
   LUX_GESTURES,
@@ -91,7 +106,7 @@ import {
 /** Como failureOf, pero el aviso de migración nombra las de Lux (0023 a 0032), no la de integraciones. */
 function luxFailure(err: unknown, where: string): IntegrationResult {
   if (err instanceof MigrationMissingError) {
-    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023 a 0035) en Supabase.');
+    return fail(503, 'migration_missing', 'Falta aplicar una migración de Lux (0023 a 0037) en Supabase.');
   }
   return failureOf(err, where);
 }
@@ -106,6 +121,7 @@ export const LUX_ACTIONS = [
   'reply',
   'config',
   'chat',
+  'say',
   'release',
   'speech',
   'memory',
@@ -152,10 +168,37 @@ export interface LuxDeps {
   modelFiles?: ModelFiles;
   /** Tiempo de espera del chat por espectador. Las pruebas pasan uno propio. */
   cooldown?: LuxCooldown;
+  /** Espera entre mensajes del panel y entre saludos a eventos, por cuenta. Las pruebas pasan los suyos. */
+  sayCooldown?: LuxCooldown;
+  eventCooldown?: LuxCooldown;
   now?: () => number;
 }
 
 const chatCooldown = new LuxCooldown();
+const sayGap = new LuxCooldown(SAY_COOLDOWN_MS);
+const eventGap = new LuxCooldown(EVENT_MIN_GAP_MS);
+
+/** Claves de app_settings: último comentario espontáneo y última vez que el bot dio señales de vida. */
+const spontaneousKey = (profileId: string): string => `lux_spontaneous:${profileId}`;
+const botSeenKey = (profileId: string): string => `lux_bot_seen:${profileId}`;
+/** Para no escribir en la base cada vez que el bot pregunta (cada pocos segundos). */
+const botSeenLocal = new Map<string, number>();
+const BOT_SEEN_WRITE_GAP_MS = 15_000;
+
+/** El bot ha preguntado: se anota. El panel y el overlay saben así que hay un bot vivo. */
+async function touchBot(db: LuxDb, profileId: string, nowMs: number): Promise<void> {
+  const last = botSeenLocal.get(profileId);
+  if (last !== undefined && nowMs - last >= 0 && nowMs - last < BOT_SEEN_WRITE_GAP_MS) return;
+  botSeenLocal.set(profileId, nowMs);
+  await db.putSetting(botSeenKey(profileId), String(nowMs)).catch(() => undefined);
+}
+
+/** true si el bot dio señales de vida hace poco. */
+async function botOnline(db: LuxDb, profileId: string, nowMs: number): Promise<boolean> {
+  const raw = await db.setting(botSeenKey(profileId)).catch(() => null);
+  const seen = raw && Number.isFinite(Number(raw)) ? Number(raw) : null;
+  return seen !== null && nowMs - seen < BOT_ONLINE_MS;
+}
 
 export const defaultLuxDeps: LuxDeps = {
   fetch: (...args) => fetch(...args),
@@ -648,6 +691,52 @@ async function config(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
   }
 }
 
+// ---------- Texto que la IA escribe por su cuenta ----------
+
+type Generated = { ok: true; reply: string; emotion: string; model: string } | { ok: false; result: IntegrationResult };
+
+/**
+ * Mismo camino que una respuesta del chat (proveedor, modelo del personaje, consumo y
+ * recuerdos), para un texto que nadie pidió. Si la IA falla, devuelve skipped y NO texto:
+ * en el chat no se escribe nada.
+ */
+async function proactiveText(
+  env: Env,
+  db: LuxDb,
+  deps: LuxDeps,
+  profile: LuxProfile,
+  current: LuxSettings,
+  nowMs: number,
+  build: (memories: LuxMemoryRow[]) => ChatMessage[]
+): Promise<Generated> {
+  const target = await activeProvider(db);
+  const apiKey = await readApiKey(env, db, target);
+  if (!apiKey) return { ok: false, result: fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`) };
+  const character = await characterFor(db, profile);
+  const choice = await modelChoice(db, target, character, profile, nowMs);
+  const memories = current.memoryEnabled ? await db.memories(profile.id, character.id, MEMORY_LIMIT) : [];
+  let text: string;
+  try {
+    text = await nvidiaChat({
+      baseUrl: LUX_PROVIDERS[target].baseUrl,
+      apiKey,
+      model: choice.model,
+      messages: build(memories),
+      maxTokens: replyTokens(current.replyMax),
+      fetch: deps.fetch,
+    });
+  } catch (err) {
+    if (!(err instanceof NvidiaError)) throw err;
+    console.error(`[Lalo lux] texto propio: la IA falló (${err.code})`);
+    return { ok: false, result: { status: 200, body: { skipped: 'ai_failed' } } };
+  }
+  await recordUsage(db, profile, nowMs, choice);
+  const parsed = parseEmotion(text);
+  const reply = parsed.text.replace(/\s+/g, ' ').trim().slice(0, current.replyMax);
+  if (!reply) return { ok: false, result: { status: 200, body: { skipped: 'empty' } } };
+  return { ok: true, reply, emotion: parsed.emotion, model: choice.model };
+}
+
 // ---------- Respuestas ----------
 
 async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
@@ -689,6 +778,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
       language: ajustes.language,
       replyMax: ajustes.replyMax,
       intent,
+      name: luxDisplayName(ajustes.chatName, ajustes.chatWord),
     };
     const text = await nvidiaChat({
       baseUrl: LUX_PROVIDERS[target].baseUrl,
@@ -828,10 +918,92 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
       }
       return { status: 200, body: { learned: kept.length, discarded: found.length - kept.length } };
     }
+
+    // Cola del panel: el bot la pregunta cada pocos segundos con su clave de OBS. Recoger un mensaje lo
+    // marca «claimed»; solo «outbox_done» lo da por enviado (el panel no dice «enviado» antes).
+    if (raw.command === 'outbox' || raw.command === 'outbox_done') {
+      const nowMs = (deps.now ?? Date.now)();
+      await touchBot(db, profile.id, nowMs);
+      if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { items: [], skipped: 'lux_disabled' } };
+      if (!db.outboxClaim || !db.outboxFinish) return fail(503, 'not_configured', 'Al servidor le falta la cola de mensajes (migración 0037).');
+      if (raw.command === 'outbox_done') {
+        if (typeof raw.id !== 'number' || !Number.isInteger(raw.id) || raw.id < 1) return fail(400, 'bad_id', 'El mensaje no es válido.');
+        const done = await db.outboxFinish(profile.id, raw.id, raw.ok === true, new Date(nowMs).toISOString());
+        return { status: 200, body: { done } };
+      }
+      const items = await db.outboxClaim(profile.id, 3, new Date(nowMs).toISOString());
+      for (const item of items) {
+        if (item.speak) await enqueueSpeech(db, profile.id, item.text, item.emotion, 'idle', current);
+      }
+      if (items.length > 0 && db.outboxPrune) {
+        await db.outboxPrune(profile.id, new Date(nowMs - 24 * 3_600_000).toISOString()).catch(() => undefined);
+      }
+      return { status: 200, body: { items: items.map((item) => ({ id: item.id, text: item.text })) } };
+    }
+
+    // Comentario espontáneo: el bot manda las últimas líneas del chat y el servidor decide si toca hablar.
+    if (raw.command === 'spontaneous') {
+      const nowMs = (deps.now ?? Date.now)();
+      await touchBot(db, profile.id, nowMs);
+      if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
+      if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
+      if (!current.spontaneousEnabled) return { status: 200, body: { skipped: 'spontaneous_off' } };
+
+      const last = await db.setting(spontaneousKey(profile.id));
+      const lastMs = last && Number.isFinite(Number(last)) ? Number(last) : null;
+      const waitMs = lastMs === null ? 0 : Math.max(0, current.spontaneousEveryMin * 60_000 - (nowMs - lastMs));
+      if (waitMs > 0) return { status: 200, body: { skipped: 'too_soon', waitSeconds: Math.ceil(waitMs / 1000) } };
+
+      const lines = normalizeDigestLines(raw.lines);
+      if (lines.length < current.spontaneousMinMessages) {
+        return { status: 200, body: { skipped: 'no_activity', needed: current.spontaneousMinMessages, seen: lines.length } };
+      }
+
+      // Se marca antes de llamar al modelo: un fallo no provoca reintentos seguidos, y no se acumulan los perdidos.
+      await db.putSetting(spontaneousKey(profile.id), String(nowMs));
+      const name = luxDisplayName(current.chatName, current.chatWord);
+      const made = await proactiveText(env, db, deps, profile, current, nowMs, (memories) =>
+        buildSpontaneousMessages({ name, personality: current.personality, language: current.language, replyMax: current.replyMax, memories, lines })
+      );
+      if (!made.ok) return made.result;
+      await enqueueSpeech(db, profile.id, made.reply, made.emotion, 'idle', current);
+      await db.insertReply({ profile_id: profile.id, viewer: null, prompt: '(comentario espontáneo)', reply: made.reply, model: made.model }).catch(() => {
+        console.error('[Lalo lux] no se pudo guardar el registro del comentario espontáneo');
+      });
+      return { status: 200, body: { reply: made.reply, emotion: made.emotion, model: made.model } };
+    }
+
+    // Eventos del canal (seguidor, suscripción, raid, inicio del directo). El bot ya los agrupa por ventana.
+    if (raw.command === 'event') {
+      const nowMs = (deps.now ?? Date.now)();
+      await touchBot(db, profile.id, nowMs);
+      if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
+      if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
+      const events = eventsAllowed(normalizeEvents(raw.events), current);
+      if (events.length === 0) return { status: 200, body: { skipped: 'event_off' } };
+      if (!(deps.eventCooldown ?? eventGap).take(profile.id, nowMs).ok) return { status: 200, body: { skipped: 'cooldown' } };
+
+      const name = luxDisplayName(current.chatName, current.chatWord);
+      const made = await proactiveText(env, db, deps, profile, current, nowMs, (memories) =>
+        buildEventMessages({ name, personality: current.personality, language: current.language, replyMax: current.replyMax, memories, events })
+      );
+      if (!made.ok) return made.result;
+      await enqueueSpeech(db, profile.id, made.reply, made.emotion, 'wave', current);
+      return { status: 200, body: { reply: made.reply, emotion: made.emotion, model: made.model } };
+    }
     if (raw.command !== 'ask') return fail(400, 'bad_command', 'Comando no admitido.');
 
     if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
     if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
+    {
+      // El overlay de OBS también lee el chat y llama a !lux, pero no puede escribir en él: si hay un bot vivo, le cede la pregunta.
+      const seenAt = (deps.now ?? Date.now)();
+      if (raw.source === 'overlay') {
+        if (await botOnline(db, profile.id, seenAt)) return { status: 200, body: { skipped: 'bot_active' } };
+      } else {
+        await touchBot(db, profile.id, seenAt);
+      }
+    }
 
     const message = typeof raw.message === 'string' ? raw.message.trim() : '';
     if (!message || message.length > LUX_CHAT_MAX) {
@@ -860,6 +1032,7 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
       language: current.language,
       replyMax: current.replyMax,
       intent,
+      name: luxDisplayName(current.chatName, current.chatWord),
     };
     const text = await nvidiaChat({
       baseUrl: LUX_PROVIDERS[target].baseUrl,
@@ -904,6 +1077,77 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
   } catch (err) {
     if (err instanceof NvidiaError) return nvidiaFailure(err);
     return luxFailure(err, 'lux/chat');
+  }
+}
+
+/** Mensaje de la cola tal como lo ve el panel: con un estado que no promete más de lo que se sabe. */
+const outboxView = (item: LuxOutboxItem, nowMs: number) => ({
+  id: item.id,
+  text: item.text,
+  mode: item.mode,
+  state: outboxState(item, nowMs),
+  createdAt: item.createdAt,
+});
+
+/**
+ * Escribir en el chat desde el panel (sesión del streamer). POST deja un mensaje en la cola
+ * (literal, o redactado por la IA a partir de una idea); GET lista los últimos con su estado.
+ * El que publica es el bot, que recoge la cola con la clave de OBS: aquí nunca se escribe en Twitch.
+ */
+async function say(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
+  const method = req.method.toUpperCase();
+  if (method !== 'GET' && method !== 'POST') return fail(405, 'method', 'Esta ruta admite GET y POST.');
+  const caller = await deps.auth(req, env);
+  if (isFail(caller)) return caller;
+  const db = deps.db(env);
+  if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+  if (!db.outboxInsert || !db.outboxList) return fail(503, 'not_configured', 'Al servidor le falta la cola de mensajes (migración 0037).');
+
+  try {
+    const profile = await db.profile(caller.id);
+    if (!profile) return fail(403, 'no_profile', 'No se encontró tu perfil.');
+    if (profile.role !== 'admin' && !profile.luxEnabled) return fail(403, 'lux_disabled', 'Lux no está activado para tu cuenta.');
+    const nowMs = (deps.now ?? Date.now)();
+    const recent = await db.outboxList(profile.id, 8);
+
+    if (method === 'GET') {
+      return { status: 200, body: { items: recent.map((item) => outboxView(item, nowMs)), botOnline: await botOnline(db, profile.id, nowMs) } };
+    }
+
+    const raw = bodyOf(req);
+    const mode = raw.mode === 'ai' ? 'ai' : raw.mode === 'literal' ? 'literal' : null;
+    if (!mode) return fail(400, 'bad_mode', 'Elige si el texto va tal cual o lo redacta la IA.');
+    // Saltos de línea y caracteres de control fuera: un mensaje del chat es una sola línea.
+    const input = (typeof raw.text === 'string' ? raw.text : '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const limit = mode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX;
+    if (!input || input.length > limit) return fail(400, 'bad_message', `El texto tiene que tener entre 1 y ${limit} caracteres.`);
+    // «/ban», «.timeout»...: con la cuenta del canal o de un moderador, Twitch los ejecutaría como órdenes.
+    if (mode === 'literal' && /^[/.]\S/.test(input)) return fail(400, 'bad_message', 'El mensaje no puede empezar por «/» ni por «.»: Twitch lo tomaría por una orden.');
+    if (recent.filter((item) => item.status === 'pending').length >= SAY_PENDING_MAX) {
+      return fail(429, 'too_many', 'Ya hay varios mensajes esperando al bot. Espera a que salgan.');
+    }
+    const wait = (deps.sayCooldown ?? sayGap).take(profile.id, nowMs);
+    if (!wait.ok) return fail(429, 'cooldown', `Espera ${wait.waitSeconds} s antes de enviar otro mensaje.`);
+
+    let text = input;
+    let emotion = 'normal';
+    if (mode === 'ai') {
+      const current = settingsFromRow(await db.settingsRow(profile.id));
+      const name = luxDisplayName(current.chatName, current.chatWord);
+      const made = await proactiveText(env, db, deps, profile, current, nowMs, (memories) =>
+        buildComposeMessages({ name, personality: current.personality, language: current.language, replyMax: current.replyMax, memories, idea: input })
+      );
+      if (!made.ok) {
+        if (made.result.status === 200) return fail(502, 'ai_failed', 'La IA no pudo redactarlo. Prueba otra vez o escríbelo tal cual.');
+        return made.result;
+      }
+      text = made.reply;
+      emotion = made.emotion;
+    }
+    const id = await db.outboxInsert({ profile_id: profile.id, text, speak: raw.speak === true, emotion, mode });
+    return { status: 200, body: { id, text, mode, state: 'queued', botOnline: await botOnline(db, profile.id, nowMs) } };
+  } catch (err) {
+    return luxFailure(err, 'lux/say');
   }
 }
 
@@ -1567,6 +1811,8 @@ export async function handleLux(action: LuxAction, req: IntegrationRequest, env:
       return config(req, env, deps);
     case 'chat':
       return chat(req, env, deps);
+    case 'say':
+      return say(req, env, deps);
     case 'release':
       return release(req, env, deps);
     case 'speech':

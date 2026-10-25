@@ -127,7 +127,7 @@ export const TwitchIOStudio: React.FC = () => {
   useEffect(() => {
     let alive = true;
     luxGetSettings().then((res) => {
-      if (alive && res.ok) setLuxChat({ word: res.data.chatWord, alias: res.data.chatAlias });
+      if (alive && res.ok) setLuxChat({ word: res.data.chatWord, alias: res.data.chatAlias, name: res.data.chatName });
     });
     return () => {
       alive = false;
@@ -229,7 +229,7 @@ export const TwitchIOStudio: React.FC = () => {
       if (!navigator.clipboard) throw new Error('Portapapeles no disponible');
       await navigator.clipboard.writeText(script);
       // Lo que se copió queda anotado: Mi AI avisa si luego cambia la palabra.
-      rememberLuxBot({ word: luxChat?.word ?? 'lux', alias: luxChat?.alias ?? true });
+      rememberLuxBot({ word: luxChat?.word ?? 'lux', alias: luxChat?.alias ?? true, name: luxChat?.name ?? '' });
       setCopyState('copied');
       copyTimer.current = setTimeout(() => setCopyState('idle'), 2200);
     } catch {

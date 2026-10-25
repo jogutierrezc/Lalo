@@ -15,8 +15,24 @@ import { songGuidance } from './song.js';
 
 export const LUX_MAX_INPUT = 500;
 
-export const PLACEHOLDER_SYSTEM =
-  'Eres MI AI, un personaje de un directo de Twitch. Responde en español. Piensa lo que te preguntan y da una respuesta con fondo: razona, da un ejemplo o un dato concreto si ayuda, y aprovecha el límite de caracteres sin rellenar.';
+/** Lo que sigue a «Eres <nombre>» en el sistema. */
+const SYSTEM_BODY =
+  ', un personaje de un directo de Twitch. Responde en español. Piensa lo que te preguntan y da una respuesta con fondo: razona, da un ejemplo o un dato concreto si ayuda, y aprovecha el límite de caracteres sin rellenar.';
+
+/** Sistema de respaldo, sin nombre elegido por el creador. */
+export const PLACEHOLDER_SYSTEM = `Eres MI AI${SYSTEM_BODY}`;
+
+/**
+ * Sistema con el nombre visible de la IA (displayName.ts). Sin nombre vale el de respaldo.
+ * Si el nombre no es «Lux», se le pide al modelo que no se presente así.
+ */
+export function systemFor(name?: string): string {
+  const clean = name?.trim();
+  if (!clean) return PLACEHOLDER_SYSTEM;
+  const lines = [`Eres ${clean}${SYSTEM_BODY}`, `Tu nombre es ${clean}: si te preguntan cómo te llamas, o te presentas, usa ese nombre.`];
+  if (clean.toLowerCase() !== 'lux') lines.push('Nunca digas que te llamas «Lux».');
+  return lines.join('\n');
+}
 
 /**
  * Tokens que se piden al modelo. Los modelos que razonan gastan parte en pensar antes de
@@ -36,13 +52,15 @@ export interface LuxTurn {
   replyMax?: number;
   /** Intención social del mensaje (insulto, agradecimiento, cumplido...). */
   intent?: LuxIntent;
+  /** Nombre visible de la IA (displayName.ts). */
+  name?: string;
 }
 
 const LANGUAGE_NAMES = { es: 'español', en: 'inglés', pt: 'portugués' } as const;
 
 /** Mensajes para una canción: letra original con cada verso en [canta]. Sin etiqueta de emoción. */
 export function buildSongMessages(turn: LuxTurn, topic: string): ChatMessage[] {
-  const lines = [PLACEHOLDER_SYSTEM];
+  const lines = [systemFor(turn.name)];
   if (turn.personality) lines.push(`Personalidad del personaje: ${turn.personality}`);
   lines.push(songGuidance(topic, LANGUAGE_NAMES[turn.language ?? 'es']));
   return [
@@ -52,7 +70,7 @@ export function buildSongMessages(turn: LuxTurn, topic: string): ChatMessage[] {
 }
 
 export function buildLuxMessages(turn: LuxTurn): ChatMessage[] {
-  const lines = [PLACEHOLDER_SYSTEM];
+  const lines = [systemFor(turn.name)];
   if (turn.personality) lines.push(`Personalidad del personaje: ${turn.personality}`);
   if (turn.language) lines.push(`Responde siempre en ${LANGUAGE_NAMES[turn.language]}.`);
   if (turn.replyMax) lines.push(`No superes ${turn.replyMax} caracteres.`);

@@ -15,19 +15,24 @@ const KEY = 'lalo.lux.botRecord';
 export interface LuxBotRecord {
   word: string;
   alias: boolean;
+  /** Nombre visible con el que se copió (chatName). Los registros viejos no lo traen. */
+  name?: string;
   /** Versión del script (LUX_BOT_VERSION) con la que se generó. */
   version: number;
 }
 
 /** Clave que compara palabra y alias. Con la palabra «lux» el alias no cambia nada. */
-export function luxChatKey(word: string, alias: boolean): string {
+export function luxChatKey(word: string, alias: boolean, name = ''): string {
   const w = word.trim().toLowerCase() || LUX_CHAT_WORD_DEFAULT;
-  return w === LUX_CHAT_WORD_DEFAULT ? w : `${w}${alias ? '+alias' : ''}`;
+  const base = w === LUX_CHAT_WORD_DEFAULT ? w : `${w}${alias ? '+alias' : ''}`;
+  // El nombre visible también va dentro del script: si cambia, hay que volver a copiarlo.
+  const n = name.trim().toLowerCase();
+  return n ? `${base}|${n}` : base;
 }
 
 export function rememberLuxBot(record: Omit<LuxBotRecord, 'version'>): void {
   try {
-    const value: LuxBotRecord = { word: record.word, alias: record.alias, version: LUX_BOT_VERSION };
+    const value: LuxBotRecord = { word: record.word, alias: record.alias, name: record.name ?? '', version: LUX_BOT_VERSION };
     localStorage.setItem(KEY, JSON.stringify(value));
   } catch {
     // Sin almacenamiento no hay aviso. El bot funciona igual.
@@ -40,7 +45,7 @@ export function readLuxBot(): LuxBotRecord | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as Partial<LuxBotRecord>;
     if (typeof data.word !== 'string' || typeof data.alias !== 'boolean' || !Number.isInteger(data.version)) return null;
-    return { word: data.word, alias: data.alias, version: data.version as number };
+    return { word: data.word, alias: data.alias, name: typeof data.name === 'string' ? data.name : '', version: data.version as number };
   } catch {
     return null;
   }

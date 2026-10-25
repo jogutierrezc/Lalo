@@ -180,7 +180,7 @@ describe('script del bot con la palabra elegida', () => {
     expect(script).toContain('LUX_WORD = "mascota"');
     expect(script).toContain('LUX_ALIAS = True');
     expect(script).toContain(`LUX_BOT_VERSION = ${LUX_BOT_VERSION}`);
-    expect(LUX_BOT_VERSION).toBe(5);
+    expect(LUX_BOT_VERSION).toBe(6);
     expect(script).toContain('words.append("lux")');
   });
 
@@ -241,6 +241,8 @@ vi.mock('../src/lib/luxApi', () => ({
   luxSaveSettings: () => new Promise(() => {}),
   luxAsk: () => new Promise(() => {}),
   luxCharacterView: () => new Promise(() => {}),
+  luxSay: () => new Promise(() => {}),
+  luxSayList: () => new Promise(() => {}),
 }));
 
 import { LuxAI } from '../src/pages/LuxAI';

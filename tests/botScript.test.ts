@@ -116,7 +116,7 @@ describe('buildPythonScript', () => {
     expect(script).not.toContain('${');
     expect(script).toContain('print(f"{BOT_NAME} listo en #{CHANNEL}")');
     // Las únicas f-strings son las dos de print, y solo nombran variables de Python
-    const fStrings = script.match(/f"[^"\n]*"/g) ?? [];
+    const fStrings = script.match(/(?<![\w"])f"[^"\n]*"/g) ?? [];
     expect(fStrings).toHaveLength(2);
     for (const fString of fStrings) {
       for (const [, name] of fString.matchAll(/\{([^}]*)\}/g)) expect(['BOT_NAME', 'CHANNEL', 'error']).toContain(name);
@@ -137,7 +137,7 @@ describe('buildPythonScript', () => {
     );
     expect(script.match(/@commands\.command\(/g)).toHaveLength(4);
     expect(script).toContain('@commands.command(name="redes")');
-    expect(script).toContain('await ctx.send(fill("twitch.tv/{channel}", ctx.author.name))');
+    expect(script).toContain('await chat_send(ctx.channel, fill("twitch.tv/{channel}", ctx.author.name))');
     expect(script).toContain('if not (ctx.author.is_mod or ctx.author.is_broadcaster):');
     expect(script).toContain('if not (ctx.author.is_subscriber or ctx.author.is_mod or ctx.author.is_broadcaster):');
     expect(script).toContain('if not (ctx.author.is_broadcaster):');

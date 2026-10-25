@@ -197,7 +197,7 @@ describe('speech: el avatar que recibe el overlay es el del modelo efectivo', ()
     const res = await handleLux('speech', get({ k: CREATOR_KEY }), {}, { db: () => makeDb({ creator: { luxModelId: APPROVED }, noLibrary: true }) });
     expect(res.status).toBe(503);
     expect(res.body).toMatchObject({ code: 'migration_missing' });
-    expect(JSON.stringify(res.body)).toContain('0035');
+    expect(JSON.stringify(res.body)).toContain('0037');
   });
 });
 

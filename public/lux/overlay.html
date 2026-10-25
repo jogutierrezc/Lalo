@@ -1115,7 +1115,7 @@
         }
         if (text === '!lux' || text.startsWith('!lux ')) {
           const message = text.slice(4).trim();
-          if (message) post({ command: 'ask', viewer: user, message });
+          if (message) post({ command: 'ask', viewer: user, message, source: 'overlay' });
           return;
         }
         if ((text === '!luxon' || text === '!luxoff') && privileged(tags)) {

@@ -14,13 +14,26 @@ import { Check, Copy, Send } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { Field, Range, Toggle } from '../components/studio/StudioKit';
 import { useCloudSession } from '../hooks/useCloudSession';
-import { luxAsk, luxCharacterView, luxGetSettings, luxSaveSettings, type LuxCharacterView, type LuxSettingsView, type LuxVoice } from '../lib/luxApi';
+import {
+  luxAsk,
+  luxCharacterView,
+  luxGetSettings,
+  luxSaveSettings,
+  luxSay,
+  luxSayList,
+  type LuxCharacterView,
+  type LuxSayList,
+  type LuxSayState,
+  type LuxSettingsView,
+  type LuxVoice,
+} from '../lib/luxApi';
 import { LuxMemoryPanel } from '../components/lux/LuxMemoryPanel';
 import { LuxModelLibraryPanel } from '../components/lux/LuxModelLibrary';
 import { loadVoiceCatalogue } from '../lib/voicesCloud';
 import type { VoiceCatalogue } from '../lib/voicesLogic';
 import { loadTwitchIOSettings } from '../types/twitchio';
 import { validateChatWord } from '../../server/lux/chatCommands';
+import { luxDisplayName, validateChatName } from '../../server/lux/displayName';
 import { LUX_BOT_VERSION } from '../../server/lux/release';
 import { luxChatKey, readLuxBot } from '../lib/luxBotRecord';
 import '../styles/integraciones.css';
@@ -37,6 +50,28 @@ const DEFAULTS: LuxSettingsView = {
   chatLearning: false,
   chatWord: 'lux',
   chatAlias: true,
+  chatName: '',
+  spontaneousEnabled: true,
+  spontaneousEveryMin: 15,
+  spontaneousMinMessages: 10,
+  eventFollow: true,
+  eventSub: true,
+  eventRaid: true,
+  eventStart: true,
+};
+const SPONTANEOUS_EVERY = [10, 15, 30, 60];
+const SPONTANEOUS_MIN = [3, 5, 10];
+const SAY_TEXT_MAX = 500;
+const SAY_IDEA_MAX = 300;
+
+/** Lo que el panel dice de un mensaje de «Decir en el chat». Solo «Enviado» cuando el bot lo confirmó. */
+const SAY_STATE: Record<LuxSayState, string> = {
+  queued: 'En cola, esperando al bot',
+  stalled: 'El bot no está respondiendo; ¿está corriendo?',
+  sending: 'El bot lo recogió; esperando que confirme',
+  unconfirmed: 'El bot lo recogió pero no confirmó si lo publicó',
+  sent: 'Enviado (confirmado por el bot)',
+  failed: 'El bot no pudo escribirlo en el chat; mira su terminal',
 };
 const PERSONALITY_MAX = 600;
 const LANGUAGES: { value: LuxSettingsView['language']; label: string }[] = [
@@ -102,6 +137,14 @@ export const LuxAI: React.FC = () => {
   const [character, setCharacter] = useState<LuxCharacterView | null>(null);
   // Giro del modelo 3D en grados. Va en el enlace de OBS (&turn=) y en la vista previa.
   const [turn, setTurn] = useState(0);
+  // Decir en el chat: el mensaje queda en una cola y lo publica el bot.
+  const [sayMode, setSayMode] = useState<'literal' | 'ai'>('literal');
+  const [sayText, setSayText] = useState('');
+  const [sayAlsoObs, setSayAlsoObs] = useState(true);
+  const [sayBusy, setSayBusy] = useState(false);
+  const [sayError, setSayError] = useState<string | null>(null);
+  const [sayList, setSayList] = useState<LuxSayList | null>(null);
+  const sayWaiting = sayList?.items.some((item) => item.state === 'queued' || item.state === 'sending' || item.state === 'stalled') ?? false;
 
   useEffect(() => {
     let alive = true;
@@ -142,13 +185,35 @@ export const LuxAI: React.FC = () => {
     };
   }, [enabled]);
 
+  // Estado de la cola: se vuelve a leer más seguido mientras hay algo esperando al bot.
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const load = () => {
+      luxSayList().then((res) => {
+        if (alive && res.ok) setSayList(res.data);
+      });
+    };
+    load();
+    const timer = setInterval(load, sayWaiting ? 4000 : 20000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [enabled, sayWaiting]);
+
   const dirty = saved !== null && !sameSettings(saved, draft);
   const wordCheck = validateChatWord(draft.chatWord, botCommandNames);
+  const nameCheck = validateChatName(draft.chatName);
+  // Cómo se presenta la IA en el chat y en OBS (el nombre guardado; si aún no hay, el borrador).
+  const aiName = luxDisplayName((saved ?? draft).chatName, (saved ?? draft).chatWord);
+  const draftName = luxDisplayName(draft.chatName, draft.chatWord);
   // El bot copiado no coincide con lo guardado (o es de una versión anterior): hay que volver a copiarlo.
   const botStale =
     saved !== null &&
     botRecord !== null &&
-    (luxChatKey(botRecord.word, botRecord.alias) !== luxChatKey(saved.chatWord, saved.chatAlias) || botRecord.version < LUX_BOT_VERSION);
+    (luxChatKey(botRecord.word, botRecord.alias, botRecord.name) !== luxChatKey(saved.chatWord, saved.chatAlias, saved.chatName) ||
+      botRecord.version < LUX_BOT_VERSION);
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
   // La clave k es la de OBS del streamer (la misma de la pestaña Cuenta): el overlay la usa para el tope de voz.
   const keyPart = profile?.widget_key ? `&k=${encodeURIComponent(profile.widget_key)}` : '';
@@ -182,10 +247,12 @@ export const LuxAI: React.FC = () => {
     if (res.ok) {
       setSaved(res.data);
       setDraft(res.data);
-      const commandChanged = previous !== null && luxChatKey(previous.chatWord, previous.chatAlias) !== luxChatKey(res.data.chatWord, res.data.chatAlias);
+      const commandChanged =
+        previous !== null &&
+        luxChatKey(previous.chatWord, previous.chatAlias, previous.chatName) !== luxChatKey(res.data.chatWord, res.data.chatAlias, res.data.chatName);
       setSaveNote(
         commandChanged && previous
-          ? `Ajustes guardados. Vuelve a copiar el script del bot en el estudio de TwitchIO: hasta entonces, el bot antiguo sigue con !${commandPrefix}${previous.chatWord}.`
+          ? `Ajustes guardados. Vuelve a copiar el script del bot en el estudio de TwitchIO: hasta entonces, el bot antiguo sigue con ${commandPrefix}${previous.chatWord} y el nombre anterior.`
           : 'Ajustes guardados.'
       );
     } else {
@@ -233,7 +300,23 @@ export const LuxAI: React.FC = () => {
   // Prueba de voz: una frase con la voz y la emoción elegidas, sin pasar por el modelo.
   const listenOverlay = () => {
     const voice: LuxVoice = { referenceId: draft.voiceReferenceId, engine: draft.voiceEngine };
-    sendToOverlay('Hola, soy Lux. Así suena mi voz.', 'feliz', voice, 'pride');
+    sendToOverlay(`Hola, soy ${aiName}. Así suena mi voz.`, 'feliz', voice, 'pride');
+  };
+
+  const say = async () => {
+    const text = sayText.trim();
+    if (!text || sayBusy) return;
+    setSayBusy(true);
+    setSayError(null);
+    const res = await luxSay(text, sayMode, sayAlsoObs);
+    if (res.ok) {
+      setSayText('');
+      const list = await luxSayList();
+      if (list.ok) setSayList(list.data);
+    } else {
+      setSayError(res.message);
+    }
+    setSayBusy(false);
   };
 
   return (
@@ -323,7 +406,29 @@ export const LuxAI: React.FC = () => {
                 <h2 id="lux-command" className="text-base font-semibold">
                   Comando de activación
                 </h2>
-                <Field label="Palabra para hablar con Lux" htmlFor="lux-chat-word" hint="De 2 a 20 letras o números, sin espacios. Por defecto: lux.">
+                <Field label="Nombre de tu IA en el chat" htmlFor="lux-chat-name" hint="Opcional, hasta 30 caracteres. Si lo dejas vacío, usa la palabra de activación.">
+                  <input
+                    id="lux-chat-name"
+                    className="cab-inp"
+                    maxLength={40}
+                    value={draft.chatName}
+                    disabled={busy || saved === null}
+                    placeholder={luxDisplayName('', draft.chatWord)}
+                    aria-invalid={!nameCheck.ok}
+                    aria-describedby={nameCheck.ok ? undefined : 'lux-chat-name-error'}
+                    onChange={(e) => update('chatName', e.target.value)}
+                  />
+                </Field>
+                {nameCheck.ok ? (
+                  <p className="cab-hint" aria-live="polite">
+                    En el chat y en OBS se presentará como <strong>{draftName}</strong>.
+                  </p>
+                ) : (
+                  <p id="lux-chat-name-error" className="cab-error" role="alert">
+                    {nameCheck.message}
+                  </p>
+                )}
+                <Field label="Palabra para hablar con tu IA" htmlFor="lux-chat-word" hint="De 2 a 20 letras o números, sin espacios. Por defecto: lux.">
                   <input
                     id="lux-chat-word"
                     className="cab-inp"
@@ -364,6 +469,64 @@ export const LuxAI: React.FC = () => {
                     El bot que copiaste no usa tu comando actual o es de una versión anterior. Vuelve a copiar el script del bot en el estudio de TwitchIO.
                   </p>
                 )}
+              </section>
+
+              <section className="cab-mod grid gap-4" aria-labelledby="lux-proactive">
+                <h2 id="lux-proactive" className="text-base font-semibold">
+                  Comentarios y eventos
+                </h2>
+                <Toggle
+                  label="Comentarios espontáneos"
+                  checked={draft.spontaneousEnabled}
+                  disabled={busy || saved === null}
+                  onChange={(next) => update('spontaneousEnabled', next)}
+                />
+                {draft.spontaneousEnabled && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Cada cuánto como mucho" htmlFor="lux-spont-every">
+                      <select
+                        id="lux-spont-every"
+                        className="cab-inp"
+                        value={draft.spontaneousEveryMin}
+                        disabled={busy || saved === null}
+                        onChange={(e) => update('spontaneousEveryMin', Number(e.target.value))}
+                      >
+                        {SPONTANEOUS_EVERY.map((minutes) => (
+                          <option key={minutes} value={minutes}>
+                            {minutes} minutos
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Mensajes mínimos del chat" htmlFor="lux-spont-min">
+                      <select
+                        id="lux-spont-min"
+                        className="cab-inp"
+                        value={draft.spontaneousMinMessages}
+                        disabled={busy || saved === null}
+                        onChange={(e) => update('spontaneousMinMessages', Number(e.target.value))}
+                      >
+                        {SPONTANEOUS_MIN.map((count) => (
+                          <option key={count} value={count}>
+                            {count} mensajes
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                )}
+                <p className="cab-hint">
+                  Cada cierto tiempo, {draftName} comenta lo que se habló en el chat, pero solo si hubo al menos esos mensajes de espectadores desde su último comentario. Si no, no dice nada. Se calla con !luxoff.
+                </p>
+                <span className="text-sm font-medium">Saludar cuando haya</span>
+                <Toggle label="Seguidores nuevos" checked={draft.eventFollow} disabled={busy || saved === null} onChange={(next) => update('eventFollow', next)} />
+                <Toggle label="Suscripciones" checked={draft.eventSub} disabled={busy || saved === null} onChange={(next) => update('eventSub', next)} />
+                <Toggle label="Raids" checked={draft.eventRaid} disabled={busy || saved === null} onChange={(next) => update('eventRaid', next)} />
+                <Toggle label="Inicio del directo" checked={draft.eventStart} disabled={busy || saved === null} onChange={(next) => update('eventStart', next)} />
+                <p className="cab-note" role="note">
+                  Hoy el bot recibe suscripciones y raids por el chat de Twitch. Los seguidores nuevos y el inicio del directo todavía no llegan al bot (necesitan EventSub): el ajuste se guarda, pero no saluda hasta que esa conexión exista.
+                </p>
+                <p className="cab-hint">Varios eventos seguidos se saludan juntos, en un solo mensaje. Si la IA falla, no escribe nada.</p>
               </section>
 
               <section className="cab-mod grid gap-4" aria-labelledby="lux-replies">
@@ -497,7 +660,7 @@ export const LuxAI: React.FC = () => {
               </section>
 
               <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className="cab-btn2" disabled={busy || !dirty || !wordCheck.ok} onClick={save}>
+                <button type="button" className="cab-btn2" disabled={busy || !dirty || !wordCheck.ok || !nameCheck.ok} onClick={save}>
                   Guardar ajustes
                 </button>
                 {dirty && <span className="cab-hint">Hay cambios sin guardar.</span>}
@@ -530,7 +693,7 @@ export const LuxAI: React.FC = () => {
                       </p>
                       {turn.reply && (
                         <p className="text-sm">
-                          <strong>Lux{turn.emotion ? ` · ${turn.emotion}` : ''}:</strong> {turn.reply}
+                          <strong>{aiName}{turn.emotion ? ` · ${turn.emotion}` : ''}:</strong> {turn.reply}
                         </p>
                       )}
                       {turn.error && (
@@ -540,7 +703,7 @@ export const LuxAI: React.FC = () => {
                       )}
                     </div>
                   ))}
-                  {busy && <p className="cab-hint">Lux está pensando…</p>}
+                  {busy && <p className="cab-hint">{aiName} está pensando…</p>}
                 </div>
 
                 <div className="grid gap-2">
@@ -573,6 +736,64 @@ export const LuxAI: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              </section>
+
+              <section className="cab-mod grid gap-4" aria-labelledby="lux-say">
+                <h2 id="lux-say" className="text-base font-semibold">
+                  Decir en el chat
+                </h2>
+                <p className="cab-hint">
+                  El mensaje lo publica tu bot de Twitch, con el nombre {aiName}. Tiene que estar corriendo con el script de la versión {LUX_BOT_VERSION}.
+                </p>
+                <div className="cab-seg" role="group" aria-label="Cómo se escribe el mensaje">
+                  <button type="button" aria-pressed={sayMode === 'literal'} onClick={() => setSayMode('literal')}>
+                    Texto tal cual
+                  </button>
+                  <button type="button" aria-pressed={sayMode === 'ai'} onClick={() => setSayMode('ai')}>
+                    Que la IA lo redacte
+                  </button>
+                </div>
+                <Field
+                  label={sayMode === 'ai' ? 'Idea para el mensaje' : 'Mensaje'}
+                  htmlFor="lux-say-text"
+                  hint={`${sayText.length} de ${sayMode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX} caracteres`}
+                >
+                  <textarea
+                    id="lux-say-text"
+                    className="cab-inp min-h-20"
+                    maxLength={sayMode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX}
+                    value={sayText}
+                    disabled={sayBusy}
+                    placeholder={sayMode === 'ai' ? 'Ejemplo: recuerda que mañana hay directo a las 8 y agradece el apoyo.' : 'Escribe lo que quieres que salga en el chat.'}
+                    onChange={(e) => setSayText(e.target.value)}
+                  />
+                </Field>
+                <Toggle label="También que se oiga en OBS" checked={sayAlsoObs} disabled={sayBusy} onChange={setSayAlsoObs} />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" className="cab-btn2 cab-btn-sm" disabled={sayBusy || sayText.trim() === ''} onClick={say}>
+                    <Send size={16} aria-hidden />
+                    {sayMode === 'ai' ? 'Redactar y mandar a la cola' : 'Mandar a la cola'}
+                  </button>
+                  {sayBusy && <span className="cab-hint">{sayMode === 'ai' ? 'La IA está redactando…' : 'Enviando a la cola…'}</span>}
+                  {sayError && (
+                    <span className="cab-error" role="alert">
+                      {sayError}
+                    </span>
+                  )}
+                </div>
+                {sayList && sayList.items.length > 0 && (
+                  <ul className="grid gap-2 text-sm" aria-live="polite">
+                    {sayList.items.slice(0, 5).map((item) => (
+                      <li key={item.id} className="grid gap-0.5">
+                        <span>{item.text}</span>
+                        <span className={item.state === 'sent' ? 'cab-hint' : item.state === 'queued' || item.state === 'sending' ? 'cab-hint' : 'cab-error'}>
+                          {SAY_STATE[item.state]}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {sayList && !sayList.botOnline && <p className="cab-hint">Ahora mismo el bot no ha dado señales de vida.</p>}
               </section>
 
               <section className="cab-mod grid gap-3" aria-labelledby="lux-checks">

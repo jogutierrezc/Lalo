@@ -127,6 +127,17 @@ export interface LuxSettingsView {
   chatWord: string;
   /** Alias !lux activo cuando la palabra es otra (migración 0036). */
   chatAlias: boolean;
+  /** Nombre visible de la IA en el chat; vacío = la palabra de activación (migración 0037). */
+  chatName: string;
+  /** Comentarios espontáneos (migración 0037). */
+  spontaneousEnabled: boolean;
+  spontaneousEveryMin: number;
+  spontaneousMinMessages: number;
+  /** Reacciones a eventos (migración 0037). */
+  eventFollow: boolean;
+  eventSub: boolean;
+  eventRaid: boolean;
+  eventStart: boolean;
 }
 
 /** Recuerdo de Lux tal como lo devuelve /api/lux/memory. */
@@ -298,6 +309,39 @@ export async function luxAsk(
       voice: { referenceId: voice.referenceId ?? null, engine: voice.engine ?? null },
     },
   };
+}
+
+/*
+ * Escribir en el chat desde el panel (ruta /api/lux/say, migración 0037). El mensaje queda en cola
+ * y lo publica el bot: «sent» solo cuando el bot lo confirma.
+ */
+
+export type LuxSayState = 'queued' | 'stalled' | 'sending' | 'unconfirmed' | 'sent' | 'failed';
+
+export interface LuxSayItem {
+  id: number;
+  text: string;
+  mode: 'literal' | 'ai';
+  state: LuxSayState;
+  createdAt: string;
+}
+
+export interface LuxSayList {
+  items: LuxSayItem[];
+  botOnline: boolean;
+}
+
+export async function luxSayList(): Promise<ApiOutcome<LuxSayList>> {
+  const res = await call('/api/lux/say', 'GET');
+  if (!res.ok) return res;
+  return { ok: true, data: { items: (res.data.items ?? []) as LuxSayItem[], botOnline: res.data.botOnline === true } };
+}
+
+/** Deja un mensaje en la cola: tal cual (literal) o una idea que la IA redacta (ai). */
+export async function luxSay(text: string, mode: 'literal' | 'ai', speak: boolean): Promise<ApiOutcome<{ id: number; text: string; botOnline: boolean }>> {
+  const res = await call('/api/lux/say', 'POST', { text, mode, speak });
+  if (!res.ok) return res;
+  return { ok: true, data: { id: Number(res.data.id ?? 0), text: String(res.data.text ?? ''), botOnline: res.data.botOnline === true } };
 }
 
 /*
