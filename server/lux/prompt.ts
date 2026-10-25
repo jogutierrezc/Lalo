@@ -15,7 +15,16 @@ import { songGuidance } from './song.js';
 
 export const LUX_MAX_INPUT = 500;
 
-export const PLACEHOLDER_SYSTEM = 'Eres Lux, un personaje de un directo de Twitch. Responde en español, en una o dos frases cortas.';
+export const PLACEHOLDER_SYSTEM =
+  'Eres MI AI, un personaje de un directo de Twitch. Responde en español. Piensa lo que te preguntan y da una respuesta con fondo: razona, da un ejemplo o un dato concreto si ayuda, y aprovecha el límite de caracteres sin rellenar.';
+
+/**
+ * Tokens que se piden al modelo. Los modelos que razonan gastan parte en pensar antes de
+ * contestar, así que se deja margen sobre lo que cabe en `replyMax` caracteres.
+ */
+export function replyTokens(replyMax: number): number {
+  return Math.ceil(replyMax / 2) + 600;
+}
 
 export interface LuxTurn {
   viewer: string | null;

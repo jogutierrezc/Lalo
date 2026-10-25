@@ -242,6 +242,7 @@ class LaloBot(commands.Bot):
 
     async def event_ready(self):
         print(f"{BOT_NAME} listo en #{CHANNEL}")
+        print("Lux responde a " + PREFIX + LUX_WORD + (" y " + PREFIX + "lux" if LUX_ALIAS and LUX_WORD != "lux" else ""))
         await check_lux_version()
         asyncio.ensure_future(lux_digest_loop())
 

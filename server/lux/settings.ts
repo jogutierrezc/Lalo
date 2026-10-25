@@ -12,7 +12,7 @@ export type LuxLanguage = (typeof LUX_LANGUAGES)[number];
 
 export const LUX_LIMITS = {
   personality: 600,
-  replyMax: { min: 60, max: 500, default: 200 },
+  replyMax: { min: 60, max: 500, default: 400 },
   obsSize: { min: 10, max: 100, default: 40 },
 } as const;
 

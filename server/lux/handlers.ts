@@ -26,7 +26,7 @@
 import { defaultDeps, failureOf, fail, isFail, type Auth, type IntegrationRequest, type IntegrationResult } from '../integrations/http.js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { MODEL_SETTING, PROVIDER_SETTING, activeModel, activeProvider, isKeyFor, keyState, readApiKey, saveApiKey } from './keyVault.js';
-import { LUX_MAX_INPUT, buildLuxMessages } from './prompt.js';
+import { LUX_MAX_INPUT, buildLuxMessages, replyTokens } from './prompt.js';
 import { supabaseLuxDb, type LuxDb, type LuxLibraryRow, type LuxMemoryDb, type LuxProfile } from './luxDb.js';
 import {
   ADMIN_UPLOAD_MAX_BYTES,
@@ -695,7 +695,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
       apiKey,
       model,
       messages: topic !== null ? buildSongMessages(turn, topic) : buildLuxMessages(turn),
-      maxTokens: topic !== null ? 260 : Math.ceil(ajustes.replyMax / 2) + 40,
+      maxTokens: topic !== null ? 260 : replyTokens(ajustes.replyMax),
       fetch: deps.fetch,
     });
     await recordUsage(db, profile, nowMs, choice);
@@ -866,7 +866,7 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
       apiKey,
       model,
       messages: topic !== null ? buildSongMessages(turn, topic) : buildLuxMessages(turn),
-      maxTokens: topic !== null ? 260 : Math.ceil(current.replyMax / 2) + 40,
+      maxTokens: topic !== null ? 260 : replyTokens(current.replyMax),
       fetch: deps.fetch,
     });
     await recordUsage(db, profile, nowMs, choice);
