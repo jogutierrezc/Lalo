@@ -29,6 +29,9 @@ import {
 } from '../lib/luxApi';
 import { LuxMemoryPanel } from '../components/lux/LuxMemoryPanel';
 import { LuxModelLibraryPanel } from '../components/lux/LuxModelLibrary';
+import { callSubscriptions, type SubscriptionRow } from '../lib/twitchEventsApi';
+import { SUBSCRIPTION_NAMES, eventLinkState, type EventLinkState } from '../utils/twitchEvents';
+import { loadPowerupsSettings } from '../types/powerups';
 import { loadVoiceCatalogue } from '../lib/voicesCloud';
 import type { VoiceCatalogue } from '../lib/voicesLogic';
 import { loadTwitchIOSettings } from '../types/twitchio';
@@ -107,6 +110,22 @@ const CHARACTER_NOTE: Record<NonNullable<LuxCharacterView['modelNote']>, string>
   disabled: 'El modelo de tu personaje ya no está disponible: Mi AI usa el modelo por defecto.',
 };
 
+/** Qué se le dice al creador de cada conexión de Twitch (seguidores nuevos, inicio del directo). */
+function linkText(state: EventLinkState): string {
+  switch (state) {
+    case 'on':
+      return 'conectado: Twitch avisa a Lalo.';
+    case 'off':
+      return 'falta encender el «Canal de eventos» en Power-ups.';
+    case 'permission':
+      return 'falta el permiso moderator:read:followers. Vuelve a autorizar con Twitch en Power-ups y enciende el «Canal de eventos».';
+    case 'problem':
+      return 'Twitch la tiene con problemas. Mira el estado en Power-ups, «Canal de eventos».';
+    default:
+      return 'no se pudo comprobar ahora.';
+  }
+}
+
 export const LuxAI: React.FC = () => {
   const { profile } = useCloudSession();
   const enabled = profile?.lux_enabled === true || profile?.role === 'admin';
@@ -168,6 +187,20 @@ export const LuxAI: React.FC = () => {
       } else {
         setLoadError(res.message);
       }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [enabled]);
+
+  // Seguidores nuevos e inicio del directo llegan por EventSub: se pregunta al mismo sitio que la página de Power-ups.
+  const [eventLinks, setEventLinks] = useState<SubscriptionRow[] | null | 'loading'>('loading');
+  const [grantedScopes] = useState(() => loadPowerupsSettings().scopes);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    callSubscriptions().then((res) => {
+      if (alive) setEventLinks(res.ok ? res.subscriptions : null);
     });
     return () => {
       alive = false;
@@ -523,9 +556,23 @@ export const LuxAI: React.FC = () => {
                 <Toggle label="Suscripciones" checked={draft.eventSub} disabled={busy || saved === null} onChange={(next) => update('eventSub', next)} />
                 <Toggle label="Raids" checked={draft.eventRaid} disabled={busy || saved === null} onChange={(next) => update('eventRaid', next)} />
                 <Toggle label="Inicio del directo" checked={draft.eventStart} disabled={busy || saved === null} onChange={(next) => update('eventStart', next)} />
-                <p className="cab-note" role="note">
-                  Hoy el bot recibe suscripciones y raids por el chat de Twitch. Los seguidores nuevos y el inicio del directo todavía no llegan al bot (necesitan EventSub): el ajuste se guarda, pero no saluda hasta que esa conexión exista.
-                </p>
+                <div className="cab-note" role="note">
+                  <p>Las suscripciones y las raids llegan por el chat de Twitch. Los seguidores nuevos y el inicio del directo llegan por el «Canal de eventos» de Twitch:</p>
+                  <ul className="list-disc pl-5">
+                    {(['channel.follow', 'stream.online'] as const).map((type) => (
+                      <li key={type}>
+                        {SUBSCRIPTION_NAMES[type]}:{' '}
+                        {eventLinks === 'loading' ? 'comprobando…' : linkText(eventLinkState(eventLinks, type, grantedScopes))}
+                      </li>
+                    ))}
+                  </ul>
+                  <p>
+                    {draftName} los saluda a través del bot, que tiene que estar en marcha.{' '}
+                    <a className="studio-link" href="#powerups">
+                      Ir a Power-ups
+                    </a>
+                  </p>
+                </div>
                 <p className="cab-hint">Varios eventos seguidos se saludan juntos, en un solo mensaje. Si la IA falla, no escribe nada.</p>
               </section>
 

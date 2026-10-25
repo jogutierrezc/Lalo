@@ -20,7 +20,7 @@ import {
   verifySignature,
   type NormalizedEvent,
 } from '../server/twitch/eventsub';
-import { WANTED, callbackUrl, ownSubscriptions, readEventsConfig, summarize } from '../server/twitch/subscriptions';
+import { WANTED, callbackUrl, conditionFor, ownSubscriptions, readEventsConfig, summarize } from '../server/twitch/subscriptions';
 import {
   addBitsToGoals,
   applyGoalTotals,
@@ -235,7 +235,7 @@ describe('de cada aviso de Twitch a lo que guarda Lalo', () => {
   });
 
   it('descarta tipos desconocidos y eventos mal formados', () => {
-    expect(normalizeEvent('channel.follow', BITS_CHEER)).toBeNull();
+    expect(normalizeEvent('channel.raid', BITS_CHEER)).toBeNull();
     expect(normalizeEvent(EVENT_TYPES.bits, null)).toBeNull();
     expect(normalizeEvent(EVENT_TYPES.bits, { ...BITS_CHEER, broadcaster_user_id: '1337; drop' })).toBeNull();
     expect(normalizeEvent(EVENT_TYPES.bits, { ...BITS_CHEER, bits: -5 })).toBeNull();
@@ -358,12 +358,22 @@ describe('atención del aviso completo', () => {
 });
 
 describe('suscripciones', () => {
-  it('pide los tres tipos con su permiso', () => {
+  it('pide los cinco tipos con su versión y su permiso', () => {
     expect(WANTED.map((item) => `${item.type}@${item.version}:${item.scope}`)).toEqual([
       'channel.bits.use@1:bits:read',
       'channel.custom_power_up_redemption.add@1:bits:read',
       'channel.channel_points_custom_reward_redemption.add@1:channel:read:redemptions',
+      'channel.follow@2:moderator:read:followers',
+      'stream.online@1:',
     ]);
+  });
+
+  it('cada tipo lleva la condición que Twitch le exige', () => {
+    const byType = (type: string) => WANTED.find((item) => item.type === type)!;
+    expect(conditionFor(byType(EVENT_TYPES.bits), '1337')).toEqual({ broadcaster_user_id: '1337' });
+    // channel.follow v2: el moderador es el propio dueño del canal
+    expect(conditionFor(byType(EVENT_TYPES.follow), '1337')).toEqual({ broadcaster_user_id: '1337', moderator_user_id: '1337' });
+    expect(conditionFor(byType(EVENT_TYPES.online), '1337')).toEqual({ broadcaster_user_id: '1337' });
   });
 
   it('la dirección de avisos sale del servidor y solo vale con https', () => {
@@ -401,6 +411,7 @@ describe('suscripciones', () => {
         row(EVENT_TYPES.bits, 'enabled'),
         row(EVENT_TYPES.powerup, 'enabled', '999'),
         row(EVENT_TYPES.points, 'enabled', '1337', 'https://otro.example/api'),
+        // channel.follow sin moderator_user_id, o de otro moderador, no es la nuestra
         row('channel.follow', 'enabled'),
         'basura',
       ],
@@ -412,6 +423,8 @@ describe('suscripciones', () => {
       { type: EVENT_TYPES.bits, status: 'enabled', createdAt: '2026-10-04T10:00:00Z' },
       { type: EVENT_TYPES.powerup, status: 'missing', createdAt: null },
       { type: EVENT_TYPES.points, status: 'missing', createdAt: null },
+      { type: EVENT_TYPES.follow, status: 'missing', createdAt: null },
+      { type: EVENT_TYPES.online, status: 'missing', createdAt: null },
     ]);
   });
 
@@ -439,7 +452,7 @@ describe('permisos', () => {
     expect(missingScopes([...old, 'bits:read'])).toEqual(['channel:read:redemptions']);
     expect(scopeState([...TWITCH_SCOPES])).toBe('ok');
     // Gestionar canjes incluye leerlos
-    expect(missingScopes(['bits:read', 'channel:manage:redemptions'])).toEqual([]);
+    expect(missingScopes(['bits:read', 'moderator:read:followers', 'channel:manage:redemptions'])).toEqual([]);
   });
 });
 

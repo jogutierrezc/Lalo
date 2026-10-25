@@ -60,10 +60,24 @@ import {
   buildComposeMessages,
   buildEventMessages,
   buildSpontaneousMessages,
+  cleanName,
   eventsAllowed,
   normalizeEvents,
   outboxState,
 } from './proactive.js';
+import {
+  PENDING_TTL_MS,
+  acceptStart,
+  addFollow,
+  followExpired,
+  followKey,
+  followReady,
+  lastKey,
+  parseFollowGroup,
+  parseStart,
+  pendingEvents,
+  startKey,
+} from './channelEvents.js';
 import {
   LUX_AVATAR_CHOICES,
   LUX_GESTURES,
@@ -737,6 +751,85 @@ async function proactiveText(
   return { ok: true, reply, emotion: parsed.emotion, model: choice.model };
 }
 
+// ---------- Seguidores nuevos e inicio del directo (EventSub) ----------
+
+export type ChannelEventInput = { kind: 'follow'; user: string } | { kind: 'start'; streamId: string };
+
+/**
+ * Apunta un seguidor nuevo o un inicio de directo que llegó por EventSub (lo llama el webhook, ya
+ * con la firma comprobada y el aviso guardado). Solo anota en app_settings si ese aviso está
+ * activado en los ajustes de Mi AI: el saludo lo genera flushChannelEvents cuando el bot pregunta
+ * su cola. Devuelve qué pasó (para registro y pruebas); no lanza por ajustes ni por canal raro.
+ */
+export async function luxRecordChannelEvent(profileId: string, input: ChannelEventInput, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<string> {
+  const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
+  const db = deps.db(env);
+  if (!db) return 'not_configured';
+  const nowMs = (deps.now ?? Date.now)();
+  const profile = await db.profile(profileId);
+  if (!profile) return 'no_profile';
+  if (profile.role !== 'admin' && !profile.luxEnabled) return 'lux_disabled';
+  const current = settingsFromRow(await db.settingsRow(profile.id));
+  if (!current.chatEnabled) return 'chat_off';
+
+  if (input.kind === 'follow') {
+    if (!current.eventFollow) return 'event_off';
+    const group = addFollow(parseFollowGroup(await db.setting(followKey(profile.id))), cleanName(input.user) ?? '', nowMs);
+    await db.putSetting(followKey(profile.id), JSON.stringify(group));
+    return 'queued';
+  }
+  if (!current.eventStart) return 'event_off';
+  const next = acceptStart(parseStart(await db.setting(startKey(profile.id))), input.streamId, nowMs);
+  if (!next) return 'repeat';
+  await db.putSetting(startKey(profile.id), JSON.stringify(next));
+  return 'queued';
+}
+
+/**
+ * Si hay seguidores nuevos o un inicio de directo esperando y ya toca, la IA escribe UN saludo y
+ * queda en lux_outbox para que el bot lo publique (más la voz de OBS, como el comando event).
+ * Lo pendiente se retira ANTES de llamar a la IA: si falla o devuelve vacío no se escribe nada ni
+ * se reintenta, igual que el comentario espontáneo.
+ */
+async function flushChannelEvents(db: LuxDb, env: Env, deps: LuxDeps, profile: LuxProfile, current: LuxSettings, nowMs: number): Promise<void> {
+  if (!current.chatEnabled || !db.outboxInsert) return;
+  let follow = parseFollowGroup(await db.setting(followKey(profile.id)));
+  let start = parseStart(await db.setting(startKey(profile.id)));
+  if (!follow && start?.state !== 'pending') return;
+
+  // Lo que nadie recogió a tiempo (bot apagado) caduca sin saludar; el inicio se queda como visto para el aviso doble
+  if (follow && followExpired(follow, nowMs)) {
+    await db.putSetting(followKey(profile.id), null);
+    follow = null;
+  }
+  if (start?.state === 'pending' && nowMs - start.at > PENDING_TTL_MS) {
+    start = { ...start, state: 'done' };
+    await db.putSetting(startKey(profile.id), JSON.stringify(start));
+  }
+  const readyFollow = follow && followReady(follow, nowMs) ? follow : null;
+  const readyStart = start?.state === 'pending' ? start : null;
+  if (!readyFollow && !readyStart) return;
+
+  // Mínimo entre dos saludos a eventos por perfil; mientras tanto lo pendiente espera
+  const lastRaw = await db.setting(lastKey(profile.id));
+  const last = lastRaw && Number.isFinite(Number(lastRaw)) ? Number(lastRaw) : null;
+  if (last !== null && nowMs >= last && nowMs - last < EVENT_MIN_GAP_MS) return;
+
+  if (readyFollow) await db.putSetting(followKey(profile.id), null);
+  if (readyStart) await db.putSetting(startKey(profile.id), JSON.stringify({ ...readyStart, state: 'done' }));
+  await db.putSetting(lastKey(profile.id), String(nowMs));
+
+  const events = eventsAllowed(pendingEvents(readyFollow, readyStart), current);
+  if (events.length === 0) return;
+  const name = luxDisplayName(current.chatName, current.chatWord);
+  const made = await proactiveText(env, db, deps, profile, current, nowMs, (memories) =>
+    buildEventMessages({ name, personality: current.personality, language: current.language, replyMax: current.replyMax, memories, events })
+  );
+  if (!made.ok) return;
+  await db.outboxInsert({ profile_id: profile.id, text: made.reply, speak: false, emotion: made.emotion, mode: 'ai' });
+  await enqueueSpeech(db, profile.id, made.reply, made.emotion, 'wave', current);
+}
+
 // ---------- Respuestas ----------
 
 async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
@@ -931,6 +1024,11 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
         const done = await db.outboxFinish(profile.id, raw.id, raw.ok === true, new Date(nowMs).toISOString());
         return { status: 200, body: { done } };
       }
+      // Seguidores nuevos e inicio del directo (EventSub): si ya toca saludarlos, el saludo entra en la cola
+      // y sale en esta misma respuesta. Un fallo aquí nunca debe impedir que el bot reciba el resto.
+      await flushChannelEvents(db, env, deps, profile, current, nowMs).catch((err: unknown) => {
+        console.error('[Lalo lux] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
+      });
       const items = await db.outboxClaim(profile.id, 3, new Date(nowMs).toISOString());
       for (const item of items) {
         if (item.speak) await enqueueSpeech(db, profile.id, item.text, item.emotion, 'idle', current);

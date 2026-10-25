@@ -23,6 +23,13 @@
  *   - Las suscripciones que piden permiso del usuario no tienen coste.
  *   - GET helix/eventsub/subscriptions?user_id= devuelve las de ese canal.
  *
+ *   - channel.follow v2 pide condition {broadcaster_user_id, moderator_user_id} y el permiso
+ *     moderator:read:followers; si quien autoriza es el dueño del canal, moderator_user_id es
+ *     su propio id (comprobado en la referencia de EventSub, 2026-10-25). Que con webhook y
+ *     token de aplicación baste con que ese usuario haya concedido el permiso a la aplicación
+ *     es lo que dice la documentación general de autorización; NO está probado aquí.
+ *   - stream.online (v1) solo pide broadcaster_user_id y ningún permiso.
+ *
  * No se guarda ningún token de usuario en el servidor: no hace falta.
  *
  * SIN PROBAR contra Twitch ni contra Supabase reales.
@@ -35,8 +42,10 @@ import { EVENT_TYPES, validSecret } from './eventsub.js';
 export interface WantedSubscription {
   type: string;
   version: string;
-  /** Permiso que el streamer debe haber dado a la aplicación. */
+  /** Permiso que el streamer debe haber dado a la aplicación. Vacío si el tipo no pide ninguno. */
   scope: string;
+  /** La condición lleva también moderator_user_id, que aquí es el propio canal (autoriza el dueño, no un moderador). */
+  moderator?: boolean;
 }
 
 /** Lo que Lalo pide a Twitch para cada canal. */
@@ -44,7 +53,16 @@ export const WANTED: readonly WantedSubscription[] = [
   { type: EVENT_TYPES.bits, version: '1', scope: 'bits:read' },
   { type: EVENT_TYPES.powerup, version: '1', scope: 'bits:read' },
   { type: EVENT_TYPES.points, version: '1', scope: 'channel:read:redemptions' },
+  { type: EVENT_TYPES.follow, version: '2', scope: 'moderator:read:followers', moderator: true },
+  { type: EVENT_TYPES.online, version: '1', scope: '' },
 ];
+
+/** La condición que Twitch exige a cada tipo. */
+export function conditionFor(wanted: WantedSubscription, twitchUserId: string): Record<string, string> {
+  return wanted.moderator
+    ? { broadcaster_user_id: twitchUserId, moderator_user_id: twitchUserId }
+    : { broadcaster_user_id: twitchUserId };
+}
 
 /** Estados en los que una suscripción funciona o está a punto de hacerlo. */
 const ALIVE = ['enabled', 'webhook_callback_verification_pending'];
@@ -126,12 +144,16 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 /** De la lista de Twitch, las suscripciones de Lalo para ese canal y esta dirección. */
 export function ownSubscriptions(data: unknown, twitchUserId: string, callback: string): TwitchSubscription[] {
   if (!Array.isArray(data)) return [];
-  const types = WANTED.map((item) => item.type);
   return data.filter(isObject).flatMap((item) => {
     const condition = isObject(item.condition) ? item.condition : {};
     const transport = isObject(item.transport) ? item.transport : {};
-    if (!types.includes(str(item.type))) return [];
+    const wanted = WANTED.find((entry) => entry.type === str(item.type));
+    if (!wanted) return [];
+    // Twitch siempre trae la versión; si viniera otra (p. ej. channel.follow v1) no es la nuestra
+    if (typeof item.version === 'string' && item.version !== wanted.version) return [];
     if (condition.broadcaster_user_id !== twitchUserId) return [];
+    // Con moderator_user_id, solo cuenta la que autorizó el propio dueño del canal
+    if (wanted.moderator && condition.moderator_user_id !== twitchUserId) return [];
     if (transport.method !== 'webhook' || transport.callback !== callback) return [];
     return [{ id: str(item.id), type: str(item.type), status: str(item.status), createdAt: str(item.created_at) || null }];
   });
@@ -149,7 +171,7 @@ export function summarize(found: readonly TwitchSubscription[]): SubscriptionRow
 async function listOwn(twitchUserId: string, config: Config, deps: Deps): Promise<TwitchSubscription[]> {
   const found: TwitchSubscription[] = [];
   let after = '';
-  // Un canal tiene tres suscripciones; el tope de páginas solo evita un bucle
+  // Un canal tiene cinco suscripciones; el tope de páginas solo evita un bucle
   for (let page = 0; page < 5; page += 1) {
     const res = await helix('GET', after ? { user_id: twitchUserId, after } : { user_id: twitchUserId }, undefined, config, deps);
     if (!res.ok) throw new Error(`Twitch respondió con el código ${res.status} al listar las suscripciones.`);
@@ -168,7 +190,7 @@ async function createOne(wanted: WantedSubscription, twitchUserId: string, confi
     {
       type: wanted.type,
       version: wanted.version,
-      condition: { broadcaster_user_id: twitchUserId },
+      condition: conditionFor(wanted, twitchUserId),
       transport: { method: 'webhook', callback: config.callback, secret: config.secret },
     },
     config,
@@ -176,7 +198,9 @@ async function createOne(wanted: WantedSubscription, twitchUserId: string, confi
   );
   if (res.status === 202 || res.ok) return { outcome: 'created', detail: '' };
   if (res.status === 409) return { outcome: 'already', detail: '' };
-  if (res.status === 403) return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope}.` };
+  if (res.status === 403 && wanted.scope) {
+    return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope}.` };
+  }
   return { outcome: 'error', detail: `Twitch respondió con el código ${res.status}.` };
 }
 

@@ -54,7 +54,8 @@ export interface LuxEvent {
 const EVENTS_MAX = 20;
 const USER_MAX = 40;
 
-const cleanName = (value: unknown): string | null => {
+/** Nombre de quien provoca un evento: recortado y sin caracteres de control. Va al prompt como dato. */
+export const cleanName = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
   const name = value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, USER_MAX);
   return name || null;
@@ -93,9 +94,10 @@ export function eventsAllowed(
   return events.filter((event) => on[event.type]);
 }
 
-const list = (names: string[]): string => {
+/** `total` es cuántas personas son en realidad, aunque solo se conozcan los nombres de algunas. */
+const list = (names: string[], total = names.length): string => {
   const shown = names.slice(0, 5);
-  const rest = names.length - shown.length;
+  const rest = Math.max(total, names.length) - shown.length;
   return `${shown.join(', ')}${rest > 0 ? ` y ${rest} más` : ''}`;
 };
 
@@ -108,7 +110,7 @@ export function describeEvents(events: LuxEvent[]): string[] {
     lines.push(
       follows.length === 1 && names[0]
         ? `${names[0]} acaba de seguir el canal.`
-        : `${follows.length} personas acaban de seguir el canal${names.length ? `: ${list(names)}` : ''}.`
+        : `${follows.length} personas acaban de seguir el canal${names.length ? `: ${list(names, follows.length)}` : ''}.`
     );
   }
   for (const event of events.filter((item) => item.type === 'sub')) {

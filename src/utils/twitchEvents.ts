@@ -24,6 +24,7 @@ import type { RewardTriggerInput } from './rewardsEngine';
 export const EVENT_SCOPES = [
   { scope: 'bits:read', what: 'leer los Bits y los Power-ups' },
   { scope: 'channel:read:redemptions', what: 'leer los canjes de puntos' },
+  { scope: 'moderator:read:followers', what: 'saber de los seguidores nuevos' },
 ] as const;
 
 /** Permisos que faltan. Con `null` (no se pudo comprobar) devuelve null: no se sabe. */
@@ -297,7 +298,33 @@ export const SUBSCRIPTION_NAMES: Record<string, string> = {
   'channel.bits.use': 'Bits usados (cheers y Power-ups)',
   'channel.custom_power_up_redemption.add': 'Power-ups personalizados',
   'channel.channel_points_custom_reward_redemption.add': 'Canjes de puntos',
+  'channel.follow': 'Seguidores nuevos',
+  'stream.online': 'Inicio del directo',
 };
+
+/**
+ * Estado de una conexión de Twitch de las que usa Mi AI (seguidores nuevos, inicio del directo), a
+ * partir de las filas de /api/twitch/subscriptions. `off`: la suscripción no existe (falta encender
+ * «Canal de eventos»); `permission`: Twitch la retiró por falta del permiso; `problem`: otro fallo;
+ * `unknown`: no se pudo consultar (null).
+ */
+export type EventLinkState = 'on' | 'off' | 'permission' | 'problem' | 'unknown';
+export function eventLinkState(
+  rows: readonly { type: string; status: string }[] | null,
+  type: string,
+  /** Permisos que se vieron en la última sesión con Twitch (powerups.scopes), si se conocen. */
+  granted: readonly string[] | null = null
+): EventLinkState {
+  if (rows === null) return 'unknown';
+  const row = rows.find((item) => item.type === type);
+  if (!row || row.status === 'missing') {
+    // Apagada: si además se sabe que falta el permiso de este tipo, lo primero que hay que hacer es autorizar
+    const needs = type === 'channel.follow' ? 'moderator:read:followers' : '';
+    return needs && granted !== null && !granted.includes(needs) ? 'permission' : 'off';
+  }
+  if (subscriptionStatusText(row.status).good) return 'on';
+  return row.status === 'authorization_revoked' ? 'permission' : 'problem';
+}
 
 /** Estado de una suscripción en palabras llanas. `good` dice si funciona. */
 export function subscriptionStatusText(status: string): { text: string; good: boolean } {

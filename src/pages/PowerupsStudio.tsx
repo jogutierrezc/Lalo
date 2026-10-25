@@ -173,7 +173,7 @@ export const PowerupsStudio: React.FC = () => {
         const denied = result.results.filter((row) => row.outcome === 'no_permission');
         say(
           denied.length > 0
-            ? 'Twitch no dejó encender alguna parte: falta el permiso. Pulsa «Volver a autorizar» y enciéndelo otra vez.'
+            ? `Twitch no dejó encender alguna parte: ${denied.map((row) => row.detail).filter(Boolean).join(' ') || 'falta un permiso.'} Pulsa «Volver a autorizar» y enciéndelo otra vez.`
             : 'Hecho. Twitch tarda unos segundos en comprobar la conexión: pulsa «Volver a consultar».'
         );
       }

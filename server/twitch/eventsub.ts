@@ -27,6 +27,11 @@
  *   - Formas de los eventos: channel.bits.use, channel.custom_power_up_redemption.add
  *     y channel.channel_points_custom_reward_redemption.add en
  *     https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/
+ *   - channel.follow v2 (user_id, user_login, user_name, broadcaster_user_*, followed_at)
+ *     y stream.online (id, type: live|playlist|watch_party|premiere|rerun, started_at)
+ *     en https://dev.twitch.tv/docs/eventsub/eventsub-reference/ (leídos el 2026-10-25).
+ *     Estos dos no van a la capa de OBS: se guardan para no procesarlos dos veces y se
+ *     entregan a Mi AI (server/lux/handlers.ts, luxRecordChannelEvent), que los saluda.
  *
  * Cómo probarlo:
  *   - En local Twitch no puede llegar a esta ruta. Para ver las capas, la página
@@ -62,6 +67,9 @@ export const EVENT_TYPES = {
   bits: 'channel.bits.use',
   powerup: 'channel.custom_power_up_redemption.add',
   points: 'channel.channel_points_custom_reward_redemption.add',
+  /** Versión 2: la 1 está retirada. Pide moderator_user_id en la condición. */
+  follow: 'channel.follow',
+  online: 'stream.online',
 } as const;
 
 // ---------- Firma ----------
@@ -133,7 +141,7 @@ export function createDeduper(max = 1000, ttlMs = MAX_AGE_MS + MAX_FUTURE_MS): D
 
 // ---------- Del aviso de Twitch a lo que guarda Lalo ----------
 
-export type EventKind = 'bits' | 'powerup' | 'points';
+export type EventKind = 'bits' | 'powerup' | 'points' | 'follow' | 'stream_online';
 
 export interface NormalizedEvent {
   kind: EventKind;
@@ -232,6 +240,20 @@ export function normalizeEvent(type: string, event: unknown): NormalizedEvent | 
     };
   }
 
+  if (type === EVENT_TYPES.follow) {
+    // El id del seguidor solo se valida: no se guarda. Sin nombre ni usuario no hay a quién saludar
+    if (typeof event.user_id !== 'string' || !TWITCH_ID.test(event.user_id)) return null;
+    if (!who.login && !text(event.user_name, 40)) return null;
+    return { kind: 'follow', broadcasterId, bits: 0, payload: { ...who } };
+  }
+
+  if (type === EVENT_TYPES.online) {
+    // Solo el directo en vivo: una reposición, una lista o un estreno no son «el directo empieza»
+    const streamId = typeof event.id === 'string' && TWITCH_ID.test(event.id) ? event.id : '';
+    if (!streamId || event.type !== 'live') return null;
+    return { kind: 'stream_online', broadcasterId, bits: 0, payload: { streamId } };
+  }
+
   return null;
 }
 
@@ -252,12 +274,18 @@ export interface WebhookResult {
 }
 
 export type IngestOutcome = 'ok' | 'duplicate' | 'unknown_channel';
-export type Ingest = (messageId: string, event: NormalizedEvent, env: Env) => Promise<IngestOutcome>;
+/** Con seguidor nuevo e inicio del directo, el 'ok' lleva el id del perfil dueño del canal: `ok:<uuid>`. */
+export type Ingest = (messageId: string, event: NormalizedEvent, env: Env) => Promise<IngestOutcome | `ok:${string}`>;
+/** Lo que se hace con un seguidor nuevo o un inicio de directo ya guardados: dejar que Mi AI los salude. */
+export type Deliver = (profileId: string, event: NormalizedEvent, env: Env) => Promise<void>;
+
+const PROFILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface Deps {
   now: () => number;
   ingest: Ingest;
   deduper: Deduper;
+  deliver: Deliver;
 }
 
 const json = (status: number, code: string): WebhookResult => ({
@@ -284,17 +312,28 @@ const ingestWithSupabase: Ingest = async (messageId, event, env) => {
     p_bits: event.bits,
   });
   if (error) throw new Error(error.message);
+  if (typeof data === 'string' && data.startsWith('ok:') && PROFILE_ID.test(data.slice(3))) return data as `ok:${string}`;
   return data === 'duplicate' || data === 'unknown_channel' ? data : 'ok';
 };
 
-const defaultDeps: Deps = { now: Date.now, ingest: ingestWithSupabase, deduper: createDeduper() };
+/** Entrega a Mi AI (server/lux/handlers.ts), que decide si saluda y deja el texto en la cola del bot. */
+const deliverToLux: Deliver = async (profileId, event, env) => {
+  const { luxRecordChannelEvent } = await import('../lux/handlers.js');
+  if (event.kind === 'follow') {
+    await luxRecordChannelEvent(profileId, { kind: 'follow', user: String(event.payload.user ?? '') }, env);
+  } else if (event.kind === 'stream_online') {
+    await luxRecordChannelEvent(profileId, { kind: 'start', streamId: String(event.payload.streamId ?? '') }, env);
+  }
+};
+
+const defaultDeps: Deps = { now: Date.now, ingest: ingestWithSupabase, deduper: createDeduper(), deliver: deliverToLux };
 
 const byteLength = (body: string | Uint8Array): number => (typeof body === 'string' ? Buffer.byteLength(body, 'utf8') : body.byteLength);
 const bodyText = (body: string | Uint8Array): string => (typeof body === 'string' ? body : Buffer.from(body).toString('utf8'));
 
 /** Atiende un aviso de Twitch. No lanza: siempre devuelve qué responder. */
 export async function handleEventsub(input: WebhookInput, env: Env = process.env, deps: Partial<Deps> = {}): Promise<WebhookResult> {
-  const { now, ingest, deduper } = { ...defaultDeps, ...deps };
+  const { now, ingest, deduper, deliver } = { ...defaultDeps, ...deps };
   if (input.method.toUpperCase() !== 'POST') return json(405, 'method');
 
   const secret = (env.TWITCH_EVENTSUB_SECRET ?? '').trim();
@@ -346,7 +385,16 @@ export async function handleEventsub(input: WebhookInput, env: Env = process.env
   if (condition.broadcaster_user_id !== event.broadcasterId) return json(200, 'ignored');
 
   try {
-    const outcome = await ingest(messageId, event, env);
+    const result = await ingest(messageId, event, env);
+    const outcome: IngestOutcome = result.startsWith('ok:') ? 'ok' : (result as IngestOutcome);
+    if (result.startsWith('ok:')) {
+      // El aviso ya está guardado: si el saludo falla, Twitch no debe reintentar (el reintento sería un duplicado)
+      try {
+        await deliver(result.slice(3), event, env);
+      } catch (err) {
+        console.error('[Lalo eventos] No se pudo preparar el saludo de Mi AI:', err instanceof Error ? err.message : 'error desconocido');
+      }
+    }
     return json(200, outcome);
   } catch (err) {
     // Que Twitch lo reintente: se olvida el id para que el reintento no se tome por repetido

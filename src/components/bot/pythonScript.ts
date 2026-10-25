@@ -372,7 +372,7 @@ async def lux_spontaneous_loop(bot):
 
 
 def lux_event_push(kind, user="", months=0, viewers=0, gift=False):
-    """Apunta un evento del canal (follow, sub, raid o start). Se saluda junto con los que lleguen en la misma ventana."""
+    """Apunta un evento del canal que llega por el chat (sub o raid). Se saluda junto con los que lleguen en la misma ventana. Follow y start ya no pasan por aquí: los entrega el servidor por la cola."""
     lux_events.append({"at": time.time(), "type": kind, "user": user, "months": months, "viewers": viewers, "gift": gift})
     if len(lux_events) > 50:
         del lux_events[0]
@@ -446,7 +446,8 @@ class LaloBot(commands.Bot):
             print("Aviso de Twitch: " + data.strip()[:300])
 
     async def event_raw_usernotice(self, channel, tags):
-        # Suscripciones y raids llegan por el chat (IRC). Los seguidores nuevos y el inicio del directo NO: necesitan EventSub.
+        # Suscripciones y raids llegan por el chat (IRC). Los seguidores nuevos y el inicio del directo NO: los recibe el servidor
+        # de Lalo por EventSub y deja el saludo en la cola de mensajes (lux_outbox_loop), así que el bot no los apunta.
         kind = tags.get("msg-id", "")
         user = tags.get("display-name") or tags.get("login") or ""
         if kind in ("sub", "resub"):
