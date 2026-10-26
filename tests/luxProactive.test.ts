@@ -548,9 +548,9 @@ function compile(script: string): { status: number | null; stderr: string } {
 
 describe('script del bot, versión 6', () => {
   it('lleva la versión 6 y el nombre visible', () => {
-    expect(LUX_BOT_VERSION).toBe(6);
+    expect(LUX_BOT_VERSION).toBe(8);
     const script = buildPythonScript(botSettings(), { word: 'mascota', alias: true, name: 'Luna' });
-    expect(script).toContain('LUX_BOT_VERSION = 6');
+    expect(script).toContain('LUX_BOT_VERSION = 8');
     expect(script).toContain('LUX_NAME = "Luna"');
   });
 

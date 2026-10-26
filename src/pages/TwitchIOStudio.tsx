@@ -1,11 +1,18 @@
 /**
  * src/pages/TwitchIOStudio.tsx
  *
- * Bot del chat. La página es la lista de comandos: cada uno se edita en su
- * propia fila. A la derecha se prueban sin salir del panel.
+ * Bot del chat. Arriba, la tarjeta «Bot en la nube»: tres pasos (cuenta de Twitch,
+ * permiso al bot y bot activo) y el estado de la conexión. Debajo, la lista de
+ * comandos: cada uno se edita en su propia fila y se guarda en el servidor, por
+ * streamer. A la derecha se prueban sin salir del panel (prueba local: no se
+ * envía nada a Twitch).
  *
- * El bot no corre en el panel: es un script de Python que el streamer ejecuta
- * en su equipo. Por eso aquí no hay ningún indicador de conexión.
+ * El bot en la nube es el bot global «Lalo»: el streamer solo concede en Twitch
+ * el permiso channel:bot. Sin sesión de la nube, la lista se guarda solo en este
+ * navegador, como antes.
+ *
+ * Opción avanzada, plegada al final: un script de Python que el streamer ejecuta
+ * en su equipo. Ese bot no avisa de si está conectado.
  *
  * El script usa TwitchIO (https://github.com/TwitchIO/TwitchIO), de
  * PythonistaGuild y EvieePy, con licencia MIT.
@@ -16,7 +23,9 @@ import { Check, Copy, Plus, Send } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { Field, UndoNote, useUndo } from '../components/studio/StudioKit';
 import { useTwitchIOSettings } from '../hooks/useTwitchIOSettings';
-import { CommandPermission, TwitchIOCommand } from '../types/twitchio';
+import { useCloudSession } from '../hooks/useCloudSession';
+import { BotRow, useBotCloud } from '../hooks/useBotCloud';
+import { CommandPermission, TWITCHIO_STORAGE_KEY, TwitchIOCommand } from '../types/twitchio';
 import { loadSettings } from '../types/settings';
 import { postBus } from '../utils/bus';
 import { playAlertAudio } from '../utils/alertsAudio';
@@ -32,6 +41,8 @@ import {
   TOKEN_PLACEHOLDER,
 } from '../components/bot/pythonScript';
 import { luxGetSettings } from '../lib/luxApi';
+import { signInWithTwitch } from '../lib/cloud';
+import { botSteps, type StepState } from '../utils/botCloud';
 import { rememberLuxBot } from '../lib/luxBotRecord';
 import '../styles/inicio-bot.css';
 
@@ -42,6 +53,12 @@ const TWITCHIO_TOUR_STEPS: TourStep[] = [
     badge: 'Bienvenida',
     title: 'Bot del chat',
     body: 'Aquí decides qué responde el bot cuando alguien escribe un comando en tu chat.',
+  },
+  {
+    target: 'bot-nube',
+    badge: 'Bot en la nube',
+    title: 'Conéctalo en tres pasos',
+    body: 'Das permiso al bot de Lalo una sola vez en Twitch y responde en tu chat desde el servidor. No instalas nada.',
   },
   {
     target: 'bot-comandos',
@@ -57,9 +74,9 @@ const TWITCHIO_TOUR_STEPS: TourStep[] = [
   },
   {
     target: 'bot-arranque',
-    badge: 'Puesta en marcha',
-    title: 'Llévalo a tu equipo',
-    body: 'El bot funciona en tu equipo. Copia el script, pega tu token y ejecútalo con Python.',
+    badge: 'Opción avanzada',
+    title: 'Ejecútalo en tu equipo',
+    body: 'Si prefieres tu propia cuenta de bot, copia el script, pega tu token y ejecútalo con Python.',
   },
 ];
 
@@ -78,9 +95,48 @@ interface LogLine {
   text: string;
 }
 
+/** Una fila de la lista, venga del servidor o del navegador. */
+interface CmdItem {
+  key: string;
+  name: string;
+  response: string;
+  permission: CommandPermission;
+  enabled: boolean;
+  error: string;
+}
+
+/** La etiqueta de un paso: verde si está hecho, ámbar si falta algo que se puede hacer. */
+function chipStatus(state: StepState): 'read' | 'skipped' | undefined {
+  if (state === 'done') return 'read';
+  if (state === 'todo' || state === 'unavailable') return 'skipped';
+  return undefined;
+}
+
+const toLocalCommand = (row: BotRow): TwitchIOCommand => ({
+  id: row.key,
+  name: row.name,
+  response: row.response,
+  permission: row.permission,
+  cooldown: 5,
+  enabled: row.enabled,
+  category: 'stream',
+});
+
+/** El streamer guardó algo alguna vez en este navegador (si no, solo ve los comandos de ejemplo). */
+function hasLocalSettings(): boolean {
+  try {
+    return localStorage.getItem(TWITCHIO_STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+type UndoSnapshot = { kind: 'cloud'; rows: BotRow[] } | { kind: 'local'; commands: TwitchIOCommand[] };
+
 export const TwitchIOStudio: React.FC = () => {
   const { twitchIOSettings, updateTwitchIO, saved } = useTwitchIOSettings();
-  const undo = useUndo<TwitchIOCommand[]>();
+  const cloud = useCloudSession();
+  const undo = useUndo<UndoSnapshot>();
   const uid = useId();
 
   const [tourOpen, setTourOpen] = useState(false);
@@ -91,22 +147,48 @@ export const TwitchIOStudio: React.FC = () => {
   const [log, setLog] = useState<LogLine[]>([]);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [suiteChannel] = useState(() => loadSettings().channel.trim());
+  const [stepMessage, setStepMessage] = useState('');
   // Palabra de Lux para el chat (Mi AI). Hasta que llega, el script usa la de por defecto.
   const [luxChat, setLuxChat] = useState<LuxChatSettings | null>(null);
+  const [localSaved] = useState(hasLocalSettings);
 
   const logRef = useRef<HTMLUListElement | null>(null);
   const lineId = useRef(0);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const commands = twitchIOSettings.commands;
-  const prefix = twitchIOSettings.prefix || '!';
+  // ---------- Nube ----------
+  // Con cuenta activa, comandos y ajustes viven en el servidor; sin ella, en este navegador
+  const account = cloud.enabled && cloud.profile?.status === 'active' ? cloud.profile : null;
+  const bot = useBotCloud(Boolean(account), account?.id ?? '', {
+    commands: twitchIOSettings.commands,
+    prefix: twitchIOSettings.prefix || '!',
+    hasSaved: localSaved,
+  });
+  const cloudOn = Boolean(account);
+  const cloudReady = cloudOn && bot.phase === 'ready';
+  const steps = botSteps(cloudReady ? bot.connection : null);
+
+  const prefix = (cloudReady ? bot.settings.prefix : twitchIOSettings.prefix) || '!';
+  const welcomeMessage = cloudReady ? bot.settings.welcomeMessage : twitchIOSettings.welcomeMessage;
+  const commands: TwitchIOCommand[] = cloudReady ? bot.rows.map(toLocalCommand) : twitchIOSettings.commands;
+  const items: CmdItem[] = cloudReady
+    ? bot.rows.map((row) => ({ key: row.key, name: row.name, response: row.response, permission: row.permission, enabled: row.enabled, error: row.error }))
+    : twitchIOSettings.commands.map((command) => ({
+        key: command.id,
+        name: command.name,
+        response: command.response,
+        permission: command.permission,
+        enabled: command.enabled,
+        error: '',
+      }));
+  const showList = !cloudOn || cloudReady;
   const botName = twitchIOSettings.botUsername || 'LaloBot';
-  const activeCount = commands.filter((command) => command.enabled).length;
+  const activeCount = items.filter((item) => item.enabled).length;
   const inScript = scriptCommands(commands, prefix);
-  const script = buildPythonScript(twitchIOSettings, luxChat ?? undefined);
+  const script = buildPythonScript({ ...twitchIOSettings, prefix, welcomeMessage, commands }, luxChat ?? undefined);
 
   // Nombres repetidos: el bot solo puede atender al primero
-  const names = commands.map((command) => cleanCommandName(command.name, prefix)).filter(Boolean);
+  const names = items.map((item) => cleanCommandName(item.name, prefix)).filter(Boolean);
   const repeated = [...new Set(names.filter((name, index) => names.indexOf(name) !== index))];
 
   // La guía se abre sola la primera vez; después se accede desde el botón de la cabecera
@@ -140,31 +222,89 @@ export const TwitchIOStudio: React.FC = () => {
     if (box) box.scrollTop = box.scrollHeight;
   }, [log]);
 
+  // ---------- Conexión ----------
+  const connectBot = async () => {
+    setStepMessage('');
+    const res = await bot.connect();
+    if ('error' in res) {
+      setStepMessage(res.error);
+      return;
+    }
+    if (res.outcome === 'no_permission') {
+      // El permiso se pide con el mismo inicio de sesión de Twitch de siempre (incluye channel:bot)
+      setStepMessage('Twitch necesita que aceptes el permiso del bot. Te llevamos a Twitch; cuando vuelvas, pulsa «Conectar el bot» otra vez.');
+      try {
+        await signInWithTwitch();
+      } catch (err) {
+        setStepMessage(err instanceof Error ? `No se pudo abrir Twitch: ${err.message}` : 'No se pudo abrir Twitch.');
+      }
+      return;
+    }
+    if (res.outcome === 'error') {
+      setStepMessage(res.detail || 'Twitch no dejó conectar el bot. Prueba de nuevo en un momento.');
+      return;
+    }
+    setStepMessage('Hecho. Twitch tarda unos segundos en comprobar la conexión: pulsa «Volver a consultar».');
+  };
+
+  const disconnectBot = async () => {
+    setStepMessage('');
+    const problem = await bot.disconnect();
+    setStepMessage(problem || 'Bot apagado. Ya no escucha ni responde en tu chat.');
+  };
+
   // ---------- Comandos ----------
-  const patchCommand = (id: string, patch: Partial<TwitchIOCommand>) => {
-    updateTwitchIO({ commands: commands.map((command) => (command.id === id ? { ...command, ...patch } : command)) });
+  const patchCommand = (key: string, patch: Partial<Pick<CmdItem, 'name' | 'response' | 'permission' | 'enabled'>>) => {
+    if (cloudReady) {
+      bot.patchRow(key, patch);
+      return;
+    }
+    updateTwitchIO({ commands: twitchIOSettings.commands.map((command) => (command.id === key ? { ...command, ...patch } : command)) });
   };
 
   const addCommand = () => {
+    if (cloudReady) {
+      setAddedId(bot.addRow());
+      return;
+    }
     const id = `cmd-${Date.now()}`;
     setAddedId(id);
     updateTwitchIO({
       commands: [
-        ...commands,
+        ...twitchIOSettings.commands,
         { id, name: '', response: '', permission: 'all', cooldown: 5, enabled: true, category: 'stream' },
       ],
     });
   };
 
-  const removeCommand = (command: TwitchIOCommand) => {
-    undo.offer(command.name ? `Se quitó ${prefix}${command.name}.` : 'Se quitó un comando sin nombre.', commands);
-    updateTwitchIO({ commands: commands.filter((entry) => entry.id !== command.id) });
+  const removeCommand = (item: CmdItem) => {
+    const label = item.name ? `Se quitó ${prefix}${item.name}.` : 'Se quitó un comando sin nombre.';
+    if (cloudReady) {
+      undo.offer(label, { kind: 'cloud', rows: bot.rows });
+      void bot.removeRow(item.key);
+      return;
+    }
+    undo.offer(label, { kind: 'local', commands: twitchIOSettings.commands });
+    updateTwitchIO({ commands: twitchIOSettings.commands.filter((entry) => entry.id !== item.key) });
   };
 
   const restoreCommands = () => {
     if (!undo.pending) return;
-    updateTwitchIO({ commands: undo.pending.snapshot });
+    const snapshot = undo.pending.snapshot;
+    if (snapshot.kind === 'cloud') void bot.restoreRows(snapshot.rows);
+    else updateTwitchIO({ commands: snapshot.commands });
     undo.clear();
+  };
+
+  // ---------- Ajustes ----------
+  const changePrefix = (next: string) => {
+    if (cloudReady) bot.patchSettings({ prefix: next });
+    else updateTwitchIO({ prefix: next });
+  };
+
+  const changeWelcome = (next: string) => {
+    if (cloudReady) bot.patchSettings({ welcomeMessage: next });
+    else updateTwitchIO({ welcomeMessage: next });
   };
 
   // ---------- Probar ----------
@@ -239,6 +379,36 @@ export const TwitchIOStudio: React.FC = () => {
 
   const example = commands.find((command) => command.enabled && command.name);
 
+  // Lo que hay a la derecha de cada paso: etiqueta o botón
+  const permissionAction =
+    steps.permission.state === 'todo' ? (
+      <button type="button" className="cab-btn" disabled={bot.busy} onClick={connectBot}>
+        Conectar el bot
+      </button>
+    ) : (
+      <span className="cab-chip" data-status={chipStatus(steps.permission.state)}>
+        {steps.permission.label}
+      </span>
+    );
+
+  const activeAction =
+    steps.active.state === 'todo' ? (
+      <button type="button" className="cab-btn" disabled={bot.busy} onClick={connectBot}>
+        Encender el bot
+      </button>
+    ) : (
+      <span className="flex flex-wrap items-center justify-end gap-2">
+        <span className="cab-chip" data-status={chipStatus(steps.active.state)}>
+          {steps.active.label}
+        </span>
+        {steps.active.state === 'done' && (
+          <button type="button" className="cab-btn2 cab-btn-sm" disabled={bot.busy} onClick={disconnectBot}>
+            Apagar
+          </button>
+        )}
+      </span>
+    );
+
   return (
     <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
@@ -252,32 +422,130 @@ export const TwitchIOStudio: React.FC = () => {
 
         <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
           <div className="grid gap-5">
+            {/* ---------- Bot en la nube ---------- */}
+            <section className="cab-mod" data-tour="bot-nube">
+              <h2>Bot en la nube</h2>
+              <p className="cab-hint">
+                El bot de Lalo responde en tu chat desde el servidor: sin Python y sin dejar el equipo encendido. Solo das un
+                permiso en Twitch.
+              </p>
+
+              {!cloudOn ? (
+                <p className="cab-note">
+                  Entra con tu cuenta de Twitch para conectar el bot en la nube. Mientras tanto puedes preparar los comandos
+                  aquí; se guardan solo en este navegador.
+                </p>
+              ) : bot.phase === 'loading' ? (
+                <p className="cab-note" role="status">
+                  Comprobando tu bot…
+                </p>
+              ) : bot.phase === 'error' ? (
+                <div className="grid gap-3">
+                  <p className="cab-error" role="alert">
+                    {bot.loadError}
+                  </p>
+                  <div>
+                    <button type="button" className="cab-btn2" onClick={() => void bot.reload()}>
+                      Reintentar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <ol className="bot-steps">
+                    <li className="bot-step" data-state={steps.account.state}>
+                      <span className="bot-step-dot" aria-hidden="true">
+                        {steps.account.state === 'done' ? <Check className="h-4 w-4" /> : '1'}
+                      </span>
+                      <p className="bot-step-text">
+                        <b>Cuenta de Twitch conectada</b>
+                        <span className="cab-hint">
+                          {bot.connection?.hasChannel
+                            ? `Canal #${bot.connection.twitchLogin || twitchIOSettings.channel}`
+                            : 'Esta cuenta no está conectada a un canal de Twitch.'}
+                        </span>
+                      </p>
+                      <span className="cab-chip" data-status={chipStatus(steps.account.state)}>
+                        {steps.account.label}
+                      </span>
+                    </li>
+                    <li className="bot-step" data-state={steps.permission.state}>
+                      <span className="bot-step-dot" aria-hidden="true">
+                        {steps.permission.state === 'done' ? <Check className="h-4 w-4" /> : '2'}
+                      </span>
+                      <p className="bot-step-text">
+                        <b>Dar permiso al bot</b>
+                        <span className="cab-hint">Twitch te pide aceptar una vez. No instalas nada.</span>
+                      </p>
+                      {permissionAction}
+                    </li>
+                    <li className="bot-step" data-state={steps.active.state}>
+                      <span className="bot-step-dot" aria-hidden="true">
+                        {steps.active.state === 'done' ? <Check className="h-4 w-4" /> : '3'}
+                      </span>
+                      <p className="bot-step-text">
+                        <b>Bot activo en tu chat</b>
+                        <span className="cab-hint">Responde a tus comandos y a Lux.</span>
+                      </p>
+                      {activeAction}
+                    </li>
+                  </ol>
+
+                  {stepMessage && (
+                    <p className="cab-note" role="status">
+                      {stepMessage}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" className="cab-btn2 cab-btn-sm" disabled={bot.busy} onClick={async () => setStepMessage(await bot.refreshConnection())}>
+                      Volver a consultar
+                    </button>
+                  </div>
+                </>
+              )}
+            </section>
+
             {/* ---------- Comandos ---------- */}
             <section className="cab-mod" data-tour="bot-comandos">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2>Comandos</h2>
-                <p className="cab-hint">
-                  {activeCount} de {commands.length} encendidos
-                </p>
+                {showList && (
+                  <p className="cab-hint">
+                    {activeCount} de {items.length} encendidos
+                  </p>
+                )}
               </div>
 
-              {commands.length === 0 ? (
+              {bot.notice && (
+                <p className="cab-note" role="status">
+                  {bot.notice}{' '}
+                  <button type="button" className="studio-link" onClick={bot.clearNotice}>
+                    Entendido
+                  </button>
+                </p>
+              )}
+
+              {!showList ? (
+                <p className="cab-note">
+                  {bot.phase === 'loading' ? 'Cargando tus comandos…' : 'No se pudieron cargar tus comandos. Reintenta arriba.'}
+                </p>
+              ) : items.length === 0 ? (
                 <p className="cab-note">
                   Todavía no hay comandos. Pulsa «Nuevo comando», ponle un nombre (por ejemplo, redes) y escribe lo que
                   debe contestar el bot.
                 </p>
               ) : (
                 <ul className="cab-rows !max-h-none">
-                  {commands.map((command) => {
-                    const label = command.name ? `${prefix}${command.name}` : 'comando sin nombre';
+                  {items.map((item) => {
+                    const label = item.name ? `${prefix}${item.name}` : 'comando sin nombre';
                     return (
-                      <li key={command.id} className="bot-cmd">
+                      <li key={item.key} className="bot-cmd">
                         <input
                           type="checkbox"
                           className="cab-tog"
-                          checked={command.enabled}
+                          checked={item.enabled}
                           aria-label={`Encender ${label}`}
-                          onChange={(e) => patchCommand(command.id, { enabled: e.target.checked })}
+                          onChange={(e) => patchCommand(item.key, { enabled: e.target.checked })}
                         />
                         <div className="bot-cmd-name">
                           <span className="cab-mono" aria-hidden="true">
@@ -285,29 +553,29 @@ export const TwitchIOStudio: React.FC = () => {
                           </span>
                           <input
                             className="cab-inp cab-mono"
-                            value={command.name}
+                            value={item.name}
                             placeholder="nombre"
                             aria-label="Nombre del comando"
                             autoComplete="off"
                             spellCheck={false}
                             maxLength={25}
-                            autoFocus={command.id === addedId}
-                            onChange={(e) => patchCommand(command.id, { name: cleanCommandName(e.target.value, prefix) })}
+                            autoFocus={item.key === addedId}
+                            onChange={(e) => patchCommand(item.key, { name: cleanCommandName(e.target.value, prefix) })}
                           />
                         </div>
                         <input
                           className="cab-inp bot-cmd-reply"
-                          value={command.response}
+                          value={item.response}
                           placeholder="Lo que contesta el bot"
                           aria-label={`Respuesta de ${label}`}
                           maxLength={450}
-                          onChange={(e) => patchCommand(command.id, { response: e.target.value })}
+                          onChange={(e) => patchCommand(item.key, { response: e.target.value })}
                         />
                         <select
                           className="cab-inp bot-cmd-who"
-                          value={command.permission}
+                          value={item.permission}
                           aria-label={`Quién puede usar ${label}`}
-                          onChange={(e) => patchCommand(command.id, { permission: e.target.value as CommandPermission })}
+                          onChange={(e) => patchCommand(item.key, { permission: e.target.value as CommandPermission })}
                         >
                           {PERMISSIONS.map((permission) => (
                             <option key={permission.id} value={permission.id}>
@@ -319,7 +587,7 @@ export const TwitchIOStudio: React.FC = () => {
                           type="button"
                           className="cab-btn2 cab-btn-sm"
                           aria-label={`Quitar ${label}`}
-                          onClick={() => removeCommand(command)}
+                          onClick={() => removeCommand(item)}
                         >
                           Quitar
                         </button>
@@ -336,56 +604,94 @@ export const TwitchIOStudio: React.FC = () => {
                 </p>
               )}
 
+              {items
+                .filter((item) => item.error)
+                .map((item) => (
+                  <p key={item.key} className="cab-error" role="alert">
+                    {item.name ? `${prefix}${item.name}` : 'Un comando'}: {item.error}
+                  </p>
+                ))}
+
               {undo.pending && <UndoNote label={undo.pending.label} onUndo={restoreCommands} />}
 
-              <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className="cab-btn2" onClick={addCommand}>
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  <span>Nuevo comando</span>
-                </button>
-                <p className="cab-hint flex-1 basis-60">
-                  En la respuesta, <span className="cab-mono">{'{user}'}</span> se cambia por quien escribe y{' '}
-                  <span className="cab-mono">{'{channel}'}</span> por tu canal.
-                </p>
-              </div>
+              {showList && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" className="cab-btn2" onClick={addCommand}>
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    <span>Nuevo comando</span>
+                  </button>
+                  <p className="cab-hint flex-1 basis-60">
+                    En la respuesta, <span className="cab-mono">{'{user}'}</span> se cambia por quien escribe y{' '}
+                    <span className="cab-mono">{'{channel}'}</span> por tu canal.
+                    {cloudReady && ' Cada comando se guarda en la nube cuando tiene nombre y respuesta.'}
+                  </p>
+                </div>
+              )}
+
+              {showList && (
+                <details className="studio-details">
+                  <summary>Ajustes del bot</summary>
+                  <div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field
+                        label="Prefijo"
+                        htmlFor={`${uid}-prefix`}
+                        hint="El símbolo con el que empiezan los comandos. Si lo dejas vacío, vuelve a ser !"
+                      >
+                        <input
+                          id={`${uid}-prefix`}
+                          className="cab-inp cab-mono"
+                          value={prefixDraft ?? prefix}
+                          maxLength={3}
+                          autoComplete="off"
+                          spellCheck={false}
+                          onChange={(e) => {
+                            const next = e.target.value.replace(/\s+/g, '');
+                            setPrefixDraft(next);
+                            if (next) changePrefix(next);
+                          }}
+                          onBlur={() => {
+                            if (prefixDraft === '') changePrefix('!');
+                            setPrefixDraft(null);
+                          }}
+                        />
+                      </Field>
+                      <Field
+                        label="Mensaje de bienvenida (solo script de Python)"
+                        htmlFor={`${uid}-welcome`}
+                        hint="Solo lo usa el script de Python de la opción avanzada. El bot en la nube todavía no envía saludo. Déjalo vacío si no quieres saludo."
+                      >
+                        <input
+                          id={`${uid}-welcome`}
+                          className="cab-inp"
+                          value={welcomeMessage}
+                          maxLength={450}
+                          onChange={(e) => changeWelcome(e.target.value)}
+                        />
+                      </Field>
+                    </div>
+                    {cloudReady && bot.settingsError && (
+                      <p className="cab-error" role="alert">
+                        {bot.settingsError}
+                      </p>
+                    )}
+                  </div>
+                </details>
+              )}
             </section>
 
-            {/* ---------- Puesta en marcha ---------- */}
+            {/* ---------- Opción avanzada ---------- */}
             <section className="cab-mod" data-tour="bot-arranque">
-              <h2>Puesta en marcha</h2>
-              <p className="cab-note">
-                El bot funciona en tu equipo, no en este panel. Por eso aquí no se puede saber si está encendido: no hay
-                indicador de conexión. Cuando cambies algo en esta página, copia el script otra vez y vuelve a
-                ejecutarlo.
-              </p>
-
               <details className="studio-details">
-                <summary>Ajustes del bot</summary>
+                <summary>Opción avanzada: ejecutar el bot en tu PC</summary>
                 <div>
+                  <p className="cab-note">
+                    Si prefieres que el bot hable con tu propia cuenta, puedes ejecutarlo en tu equipo con un script de
+                    Python. Ese bot no avisa de si está conectado. Cuando cambies algo en esta página, copia el script otra
+                    vez y vuelve a ejecutarlo.
+                  </p>
+
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field
-                      label="Prefijo"
-                      htmlFor={`${uid}-prefix`}
-                      hint="El símbolo con el que empiezan los comandos. Si lo dejas vacío, vuelve a ser !"
-                    >
-                      <input
-                        id={`${uid}-prefix`}
-                        className="cab-inp cab-mono"
-                        value={prefixDraft ?? twitchIOSettings.prefix}
-                        maxLength={3}
-                        autoComplete="off"
-                        spellCheck={false}
-                        onChange={(e) => {
-                          const next = e.target.value.replace(/\s+/g, '');
-                          setPrefixDraft(next);
-                          if (next) updateTwitchIO({ prefix: next });
-                        }}
-                        onBlur={() => {
-                          if (prefixDraft === '') updateTwitchIO({ prefix: '!' });
-                          setPrefixDraft(null);
-                        }}
-                      />
-                    </Field>
                     <Field
                       label="Nombre del bot"
                       htmlFor={`${uid}-name`}
@@ -400,54 +706,36 @@ export const TwitchIOStudio: React.FC = () => {
                         onChange={(e) => updateTwitchIO({ botUsername: e.target.value.trim() })}
                       />
                     </Field>
+                    <Field
+                      label="Canal donde entra el bot"
+                      htmlFor={`${uid}-channel`}
+                      hint={
+                        suiteChannel && suiteChannel !== twitchIOSettings.channel ? (
+                          <>
+                            En Inicio tienes otro canal.{' '}
+                            <button
+                              type="button"
+                              className="studio-link"
+                              onClick={() => updateTwitchIO({ channel: suiteChannel })}
+                            >
+                              Usar {suiteChannel}
+                            </button>
+                          </>
+                        ) : undefined
+                      }
+                    >
+                      <input
+                        id={`${uid}-channel`}
+                        className="cab-inp cab-mono"
+                        value={twitchIOSettings.channel}
+                        placeholder="tu_canal"
+                        autoComplete="off"
+                        spellCheck={false}
+                        onChange={(e) => updateTwitchIO({ channel: cleanChannel(e.target.value) })}
+                      />
+                    </Field>
                   </div>
-                  <Field
-                    label="Canal donde entra el bot"
-                    htmlFor={`${uid}-channel`}
-                    hint={
-                      suiteChannel && suiteChannel !== twitchIOSettings.channel ? (
-                        <>
-                          En Inicio tienes otro canal.{' '}
-                          <button
-                            type="button"
-                            className="studio-link"
-                            onClick={() => updateTwitchIO({ channel: suiteChannel })}
-                          >
-                            Usar {suiteChannel}
-                          </button>
-                        </>
-                      ) : undefined
-                    }
-                  >
-                    <input
-                      id={`${uid}-channel`}
-                      className="cab-inp cab-mono"
-                      value={twitchIOSettings.channel}
-                      placeholder="tu_canal"
-                      autoComplete="off"
-                      spellCheck={false}
-                      onChange={(e) => updateTwitchIO({ channel: cleanChannel(e.target.value) })}
-                    />
-                  </Field>
-                  <Field
-                    label="Mensaje de bienvenida"
-                    htmlFor={`${uid}-welcome`}
-                    hint="El bot lo escribe en el chat al entrar. Déjalo vacío si no quieres saludo."
-                  >
-                    <input
-                      id={`${uid}-welcome`}
-                      className="cab-inp"
-                      value={twitchIOSettings.welcomeMessage}
-                      maxLength={450}
-                      onChange={(e) => updateTwitchIO({ welcomeMessage: e.target.value })}
-                    />
-                  </Field>
-                </div>
-              </details>
 
-              <details className="studio-details">
-                <summary>Script de Python</summary>
-                <div>
                   <ol className="cab-cmds">
                     <li>
                       1. Instala Python y, en una terminal, ejecuta <code className="cab-mono">{PIP_COMMAND}</code>
@@ -487,16 +775,16 @@ export const TwitchIOStudio: React.FC = () => {
                       El navegador no dejó copiar. Selecciona el texto del script y cópialo a mano.
                     </p>
                   )}
+
+                  <p className="cab-hint">
+                    El script usa{' '}
+                    <a className="studio-link" href="https://github.com/TwitchIO/TwitchIO" target="_blank" rel="noreferrer">
+                      TwitchIO
+                    </a>
+                    , de PythonistaGuild y EvieePy, con licencia MIT.
+                  </p>
                 </div>
               </details>
-
-              <p className="cab-hint">
-                El script usa{' '}
-                <a className="studio-link" href="https://github.com/TwitchIO/TwitchIO" target="_blank" rel="noreferrer">
-                  TwitchIO
-                </a>
-                , de PythonistaGuild y EvieePy, con licencia MIT.
-              </p>
             </section>
           </div>
 

@@ -13,6 +13,10 @@ import type { CommandPermission, TwitchIOCommand, TwitchIOSettings } from '../..
 import { LUX_BOT_VERSION } from '../../../server/lux/release';
 import { LUX_CHAT_WORD_DEFAULT, validateChatWord } from '../../../server/lux/chatCommands';
 import { luxDisplayName } from '../../../server/lux/displayName';
+import { cleanCommandName } from '../../../server/twitch/commandNames';
+
+// Se sigue exportando desde aquí: el panel y las pruebas lo importan de este módulo
+export { cleanCommandName };
 
 /** Comando de Lux en el chat tal como lo guarda el panel de Mi AI. */
 export interface LuxChatSettings {
@@ -50,16 +54,6 @@ export function pyString(text: string): string {
     } else out += ch;
   }
   return `${out}"`;
-}
-
-/** Nombre de comando tal como lo entiende el bot: minúsculas, sin espacios ni prefijo delante. */
-export function cleanCommandName(raw: string, prefix = '!'): string {
-  let name = raw.toLowerCase().replace(/\s+/g, '');
-  while (name.startsWith('!')) name = name.slice(1);
-  // Un prefijo hecho de letras o números podría ser el principio del propio nombre: no se toca
-  const symbolPrefix = /^[^a-z0-9]+$/i.test(prefix) ? prefix.toLowerCase() : '';
-  while (symbolPrefix && name.startsWith(symbolPrefix)) name = name.slice(symbolPrefix.length);
-  return name;
 }
 
 /** Canal sin almohadilla, sin espacios y en minúsculas. */
@@ -151,8 +145,8 @@ LUX_WORD = ${pyString(luxWord)}
 LUX_ALIAS = ${luxAlias ? 'True' : 'False'}
 # Nombre con el que la IA habla en el chat (el que eliges en Mi AI; si no, la palabra; si no, MI AI).
 LUX_NAME = ${pyString(luxName)}
-# Segundos que espera la IA antes de responder a un comando del chat.
-LUX_REPLY_DELAY = 5
+# Segundos que espera la IA antes de responder a un comando del chat (0 = responde en cuanto llega la petición).
+LUX_REPLY_DELAY = 0
 # La IA aprende del chat (si lo tienes activado en Lalo): cada media hora manda los mensajes juntos para resumirlos.
 # Los mensajes se guardan solo en la memoria de este script y se borran al enviarlos.
 LUX_DIGEST_EVERY = 1800
@@ -429,7 +423,8 @@ async def lux_outbox_loop(bot):
 
 class LaloBot(commands.Bot):
     def __init__(self):
-        super().__init__(token=TOKEN, prefix=PREFIX, initial_channels=[CHANNEL])
+        # case_insensitive: en el chat se escribe !Hola o !HOLA igual que !hola (el móvil pone la primera en mayúscula).
+        super().__init__(token=TOKEN, prefix=PREFIX, initial_channels=[CHANNEL], case_insensitive=True)
 
     async def event_ready(self):
         print(f"{BOT_NAME} listo en #{CHANNEL}")

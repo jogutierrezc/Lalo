@@ -32,6 +32,14 @@
  *     en https://dev.twitch.tv/docs/eventsub/eventsub-reference/ (leídos el 2026-10-25).
  *     Estos dos no van a la capa de OBS: se guardan para no procesarlos dos veces y se
  *     entregan a Mi AI (server/lux/handlers.ts, luxRecordChannelEvent), que los saluda.
+ *   - channel.chat.message (v1): message_id, broadcaster_user_*, chatter_user_*,
+ *     message.text, badges[{set_id}] y reply (null o con parent_*) en la misma referencia
+ *     (2026-10-25). Es el único tipo que NO se guarda en la tabla de eventos ni se muestra
+ *     como alerta: se normaliza a ChatMessageEvent y se entrega al enganche opcional
+ *     `onChatMessage` de handleEventsub (por defecto, el bot en la nube de chatProcessor.ts; sigue
+ *     trabajando tras el 200 gracias a waitUntil de @vercel/functions). Twitch entrega
+ *     'al menos una vez' (reintentos con el mismo Message-Id): el deduper los descarta. El bot ve
+ *     sus propios mensajes: quien procese debe filtrarlos con isOwnBotMessage.
  *
  * Cómo probarlo:
  *   - En local Twitch no puede llegar a esta ruta. Para ver las capas, la página
@@ -53,6 +61,7 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { waitUntil } from '@vercel/functions';
 
 export type Env = Record<string, string | undefined>;
 
@@ -70,6 +79,8 @@ export const EVENT_TYPES = {
   /** Versión 2: la 1 está retirada. Pide moderator_user_id en la condición. */
   follow: 'channel.follow',
   online: 'stream.online',
+  /** Mensajes del chat: NO se guardan como evento ni van a la capa de OBS; los recoge `onChatMessage`. */
+  chat: 'channel.chat.message',
 } as const;
 
 // ---------- Firma ----------
@@ -257,6 +268,85 @@ export function normalizeEvent(type: string, event: unknown): NormalizedEvent | 
   return null;
 }
 
+// ---------- Mensajes del chat (channel.chat.message) ----------
+
+export interface ChatMessageEvent {
+  /** Id del mensaje en Twitch (sirve para responder o moderar). */
+  messageId: string;
+  /** Id de Twitch del canal donde se escribió. */
+  broadcasterId: string;
+  broadcasterLogin: string;
+  chatterId: string;
+  chatterLogin: string;
+  chatterName: string;
+  /** Texto completo, sin caracteres de control (máx. 500, el tope de Twitch). */
+  text: string;
+  isBroadcaster: boolean;
+  isMod: boolean;
+  /** Suscriptor o fundador. */
+  isSub: boolean;
+  isVip: boolean;
+  /** Solo si es una respuesta a otro mensaje. */
+  replyParent?: { messageId: string; userId: string; userLogin: string; userName: string; text: string };
+}
+
+/** Reduce un channel.chat.message a ChatMessageEvent. null si le falta algo imprescindible. */
+export function normalizeChatMessage(event: unknown): ChatMessageEvent | null {
+  if (!isObject(event)) return null;
+  const idOf = (value: unknown): string => (typeof value === 'string' && TWITCH_ID.test(value) ? value : '');
+  const loginOf = (value: unknown): string => (typeof value === 'string' && LOGIN.test(value) ? value : '');
+  const broadcasterId = idOf(event.broadcaster_user_id);
+  const chatterId = idOf(event.chatter_user_id);
+  const messageId = safeId(event.message_id);
+  const body = isObject(event.message) ? text(event.message.text, 500) : '';
+  if (!broadcasterId || !chatterId || !messageId || !body) return null;
+
+  const chatterLogin = loginOf(event.chatter_user_login);
+  const sets = new Set(
+    Array.isArray(event.badges) ? event.badges.filter(isObject).map((badge) => (typeof badge.set_id === 'string' ? badge.set_id : '')) : []
+  );
+
+  const result: ChatMessageEvent = {
+    messageId,
+    broadcasterId,
+    broadcasterLogin: loginOf(event.broadcaster_user_login),
+    chatterId,
+    chatterLogin,
+    chatterName: text(event.chatter_user_name, 40) || chatterLogin || 'Espectador',
+    text: body,
+    isBroadcaster: sets.has('broadcaster'),
+    isMod: sets.has('moderator'),
+    isSub: sets.has('subscriber') || sets.has('founder'),
+    isVip: sets.has('vip'),
+  };
+
+  // Una respuesta mal formada no descarta el mensaje: solo se queda sin su contexto
+  if (isObject(event.reply)) {
+    const parentId = safeId(event.reply.parent_message_id);
+    if (parentId) {
+      result.replyParent = {
+        messageId: parentId,
+        userId: idOf(event.reply.parent_user_id),
+        userLogin: loginOf(event.reply.parent_user_login),
+        userName: text(event.reply.parent_user_name, 40),
+        text: text(event.reply.parent_message_body, 500),
+      };
+    }
+  }
+  return result;
+}
+
+/** ¿Lo escribió la cuenta Lalo? El bot recibe sus propios mensajes y no debe responderse a sí mismo. */
+export function isOwnBotMessage(event: Pick<ChatMessageEvent, 'chatterId'>, botUserId: string): boolean {
+  return botUserId !== '' && event.chatterId === botUserId;
+}
+
+/** Enganche para el procesador del chat (comandos, Mi AI...): chatProcessor.ts. Aquí solo se entrega el mensaje. */
+export type ChatHandler = (event: ChatMessageEvent, env: Env) => Promise<void> | void;
+
+/** Lo máximo que se espera al procesador antes de responder a Twitch (que pide 2XX en 1-2 s). */
+export const CHAT_HANDLER_WAIT_MS = 1500;
+
 // ---------- Atención del aviso ----------
 
 export interface WebhookInput {
@@ -286,6 +376,14 @@ interface Deps {
   ingest: Ingest;
   deduper: Deduper;
   deliver: Deliver;
+  /** Procesador del chat. Por defecto, el bot en la nube (chatProcessor.ts). */
+  onChatMessage?: ChatHandler;
+  /**
+   * Mantiene vivo el trabajo que sigue tras responder a Twitch (la IA tarda varios segundos).
+   * Por defecto, waitUntil de @vercel/functions: en Vercel la función no se corta al devolver el 200
+   * y, fuera de Vercel, no hace nada (el proceso sigue vivo).
+   */
+  keepAlive?: (work: Promise<unknown>) => void;
 }
 
 const json = (status: number, code: string): WebhookResult => ({
@@ -319,21 +417,53 @@ const ingestWithSupabase: Ingest = async (messageId, event, env) => {
 /** Entrega a Mi AI (server/lux/handlers.ts), que decide si saluda y deja el texto en la cola del bot. */
 const deliverToLux: Deliver = async (profileId, event, env) => {
   const { luxRecordChannelEvent } = await import('../lux/handlers.js');
+  let recorded = '';
   if (event.kind === 'follow') {
-    await luxRecordChannelEvent(profileId, { kind: 'follow', user: String(event.payload.user ?? '') }, env);
+    recorded = await luxRecordChannelEvent(profileId, { kind: 'follow', user: String(event.payload.user ?? '') }, env);
   } else if (event.kind === 'stream_online') {
-    await luxRecordChannelEvent(profileId, { kind: 'start', streamId: String(event.payload.streamId ?? '') }, env);
+    recorded = await luxRecordChannelEvent(profileId, { kind: 'start', streamId: String(event.payload.streamId ?? '') }, env);
+  }
+  if (recorded !== 'queued') return;
+  // Con el bot en la nube encendido, el saludo sale ya si está listo (el de inicio de directo lo está; el de seguidores espera a
+  // que se calme el grupo y sale con el siguiente mensaje del chat). La IA tarda: sigue tras responder a Twitch. Sin bot en la nube no hace nada
+  const { pushOutboxNow } = await import('./botBackground.js');
+  keepAliveOnVercel(pushOutboxNow(profileId, env));
+};
+
+let chatProcessor: ChatHandler | null = null;
+
+/** El bot en la nube (chatProcessor.ts). Carga perezosa: evita la importación circular y el peso en los demás avisos. */
+const processChat: ChatHandler = async (event, env) => {
+  if (!chatProcessor) {
+    const { createChatProcessor } = await import('./chatProcessor.js');
+    chatProcessor = createChatProcessor();
+  }
+  await chatProcessor(event, env);
+};
+
+const keepAliveOnVercel = (work: Promise<unknown>): void => {
+  try {
+    waitUntil(work);
+  } catch {
+    // Sin contexto de Vercel (local, pruebas): el trabajo sigue igualmente en este proceso
   }
 };
 
-const defaultDeps: Deps = { now: Date.now, ingest: ingestWithSupabase, deduper: createDeduper(), deliver: deliverToLux };
+const defaultDeps: Deps = {
+  now: Date.now,
+  ingest: ingestWithSupabase,
+  deduper: createDeduper(),
+  deliver: deliverToLux,
+  onChatMessage: processChat,
+  keepAlive: keepAliveOnVercel,
+};
 
 const byteLength = (body: string | Uint8Array): number => (typeof body === 'string' ? Buffer.byteLength(body, 'utf8') : body.byteLength);
 const bodyText = (body: string | Uint8Array): string => (typeof body === 'string' ? body : Buffer.from(body).toString('utf8'));
 
 /** Atiende un aviso de Twitch. No lanza: siempre devuelve qué responder. */
 export async function handleEventsub(input: WebhookInput, env: Env = process.env, deps: Partial<Deps> = {}): Promise<WebhookResult> {
-  const { now, ingest, deduper, deliver } = { ...defaultDeps, ...deps };
+  const { now, ingest, deduper, deliver, onChatMessage, keepAlive } = { ...defaultDeps, ...deps };
   if (input.method.toUpperCase() !== 'POST') return json(405, 'method');
 
   const secret = (env.TWITCH_EVENTSUB_SECRET ?? '').trim();
@@ -377,6 +507,37 @@ export async function handleEventsub(input: WebhookInput, env: Env = process.env
 
   if (messageType !== 'notification') return json(200, 'ignored');
   if (deduper.seen(messageId, now())) return json(200, 'duplicate');
+
+  if (type === EVENT_TYPES.chat) {
+    // El chat no pasa por la tabla de eventos ni por la capa de OBS: se entrega tal cual al enganche
+    const chat = normalizeChatMessage(parsed.event);
+    const chatCondition = isObject(subscription.condition) ? subscription.condition : {};
+    if (!chat || chatCondition.broadcaster_user_id !== chat.broadcasterId) return json(200, 'ignored');
+    if (!onChatMessage) return json(200, 'chat');
+    // Un fallo del procesador no debe provocar reintentos de Twitch (repetirían respuestas del bot)
+    // El trabajo sigue aunque pasen los CHAT_HANDLER_WAIT_MS: keepAlive lo mantiene vivo tras el 200 (una respuesta de la IA tarda varios segundos)
+    const work = (async () => {
+      try {
+        await onChatMessage(chat, env);
+      } catch (err) {
+        console.error('[Lalo eventos] No se pudo procesar un mensaje del chat:', err instanceof Error ? err.message : 'error desconocido');
+      }
+    })();
+    try {
+      keepAlive?.(work);
+    } catch {
+      // Un fallo al registrar el trabajo no debe romper la respuesta a Twitch
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      work,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, CHAT_HANDLER_WAIT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    return json(200, 'chat');
+  }
 
   const event = normalizeEvent(type, parsed.event);
   if (!event) return json(200, 'ignored');

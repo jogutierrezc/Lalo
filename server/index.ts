@@ -9,7 +9,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { processTTSRequest, normalizeServerText, MAX_TTS_LENGTH } from './ttsHandler';
+import { processTTSRequest, normalizeServerText, MAX_TTS_LENGTH } from './ttsHandler.js';
 import { elevenQuotaCheckAndRecord, elevenSynthesize, recordFishTtsUsage } from './elevenlabs.js';
 import { nodeHandler, type ApiRoute } from './storage/handlers.js';
 import { clipNodeHandler } from './twitch/clips.js';
@@ -125,6 +125,9 @@ app.all('/api/twitch/clip', clipNodeHandler);
 // Canal de eventos de Twitch: encender, consultar y apagar las suscripciones del propio canal.
 // La misma lógica que api/twitch/subscriptions.ts
 app.all('/api/twitch/subscriptions', subscriptionsNodeHandler);
+
+// Bot de chat en la nube del streamer (comandos, ajustes y conexión). La misma lógica que api/integraciones.ts (grupo twitch-bot)
+app.all('/api/twitch/bot', (req, res) => integrationNodeHandler('twitch-bot', 'bot', req, res));
 
 // Integraciones (Spotify y Ko-fi). La misma lógica que api/integraciones.ts.
 // El webhook de Ko-fi llega como formulario: por eso esa ruta lee también ese formato

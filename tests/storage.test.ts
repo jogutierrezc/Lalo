@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { amzDate, encodePath, encodeRfc3986, presignUrl, signHeaders } from '../server/storage/sigv4';
 import {
   UPLOAD_ALLOWED_MIME,
@@ -188,11 +188,15 @@ describe('rutas del servidor sin configurar', () => {
     expect(missingSupabaseEnv({ SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'k' })).toEqual([]);
   });
 
-  it('responde 503 con los nombres, sin tocar la red', async () => {
+  it('responde 503 sin tocar la red y SIN nombres de variables de entorno (solo van al registro)', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const result = await handleApi('storage/status', { method: 'GET', headers: {}, body: null }, {});
     expect(result.status).toBe(503);
     expect(result.body.code).toBe('server_not_configured');
-    expect(result.body.missing).toEqual(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']);
+    expect(result.body.missing).toBeUndefined();
+    expect(JSON.stringify(result.body)).not.toMatch(/SUPABASE_/);
+    expect(spy.mock.calls.flat().join(' ')).toContain('SUPABASE_URL');
+    spy.mockRestore();
   });
 
   it('rechaza el método equivocado y la falta de sesión', async () => {

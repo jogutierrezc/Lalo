@@ -29,6 +29,11 @@
  *     token de aplicación baste con que ese usuario haya concedido el permiso a la aplicación
  *     es lo que dice la documentación general de autorización; NO está probado aquí.
  *   - stream.online (v1) solo pide broadcaster_user_id y ningún permiso.
+ *   - channel.chat.message (v1) pide condition {broadcaster_user_id, user_id}, donde user_id es la
+ *     cuenta de Twitch de Lalo (el bot global, TWITCH_BOT_USER_ID). Con webhook y token de
+ *     aplicación, la cuenta Lalo debe haber concedido a la aplicación user:read:chat, user:write:chat
+ *     y user:bot, y el streamer channel:bot; si no, Twitch responde 403. Sin coste de suscripción
+ *     (comprobado en la referencia de EventSub, 2026-10-25). NO está probado contra Twitch real.
  *
  * No se guarda ningún token de usuario en el servidor: no hace falta.
  *
@@ -46,6 +51,8 @@ export interface WantedSubscription {
   scope: string;
   /** La condición lleva también moderator_user_id, que aquí es el propio canal (autoriza el dueño, no un moderador). */
   moderator?: boolean;
+  /** La condición lleva user_id = la cuenta Lalo (TWITCH_BOT_USER_ID) en vez de moderator_user_id. */
+  bot?: boolean;
 }
 
 /** Lo que Lalo pide a Twitch para cada canal. */
@@ -55,17 +62,19 @@ export const WANTED: readonly WantedSubscription[] = [
   { type: EVENT_TYPES.points, version: '1', scope: 'channel:read:redemptions' },
   { type: EVENT_TYPES.follow, version: '2', scope: 'moderator:read:followers', moderator: true },
   { type: EVENT_TYPES.online, version: '1', scope: '' },
+  { type: EVENT_TYPES.chat, version: '1', scope: 'channel:bot', bot: true },
 ];
 
 /** La condición que Twitch exige a cada tipo. */
-export function conditionFor(wanted: WantedSubscription, twitchUserId: string): Record<string, string> {
+export function conditionFor(wanted: WantedSubscription, twitchUserId: string, botUserId = ''): Record<string, string> {
+  if (wanted.bot) return { broadcaster_user_id: twitchUserId, user_id: botUserId };
   return wanted.moderator
     ? { broadcaster_user_id: twitchUserId, moderator_user_id: twitchUserId }
     : { broadcaster_user_id: twitchUserId };
 }
 
 /** Estados en los que una suscripción funciona o está a punto de hacerlo. */
-const ALIVE = ['enabled', 'webhook_callback_verification_pending'];
+export const ALIVE = ['enabled', 'webhook_callback_verification_pending'];
 
 export interface SubscriptionRow {
   type: string;
@@ -74,13 +83,16 @@ export interface SubscriptionRow {
   createdAt: string | null;
 }
 
-export type CreateOutcome = 'created' | 'already' | 'no_permission' | 'error';
+/** `skipped`: no se intentó porque falta configuración del servidor (p. ej. TWITCH_BOT_USER_ID). */
+export type CreateOutcome = 'created' | 'already' | 'no_permission' | 'error' | 'skipped';
 
-interface Config {
+export interface Config {
   clientId: string;
   clientSecret: string;
   secret: string;
   callback: string;
+  /** Id de Twitch de la cuenta Lalo. Vacío si no está configurado: el chat se omite, lo demás sigue. */
+  botUserId: string;
 }
 
 /** Dirección pública a la que Twitch enviará los avisos. Nunca sale de la petición: sería falsificable. */
@@ -100,11 +112,14 @@ export function readEventsConfig(env: Env): { config: Config | null; missing: st
   if (!validSecret(secret)) missing.push('TWITCH_EVENTSUB_SECRET');
   if (!callback) missing.push('TWITCH_EVENTSUB_CALLBACK');
   if (missing.length > 0) return { config: null, missing };
-  return { config: { clientId: twitch.clientId, clientSecret: twitch.clientSecret, secret, callback }, missing };
+  // No es obligatoria: sin ella solo se omite la suscripción del chat
+  const bot = (env.TWITCH_BOT_USER_ID ?? '').trim();
+  const botUserId = /^\d{1,20}$/.test(bot) ? bot : '';
+  return { config: { clientId: twitch.clientId, clientSecret: twitch.clientSecret, secret, callback, botUserId }, missing };
 }
 
 type Fetch = typeof fetch;
-interface Deps {
+export interface Deps {
   fetch: Fetch;
   now: () => number;
 }
@@ -131,7 +146,7 @@ async function helix(method: 'GET' | 'POST' | 'DELETE', query: Record<string, st
   return res;
 }
 
-interface TwitchSubscription {
+export interface TwitchSubscription {
   id: string;
   type: string;
   status: string;
@@ -142,7 +157,7 @@ const str = (value: unknown): string => (typeof value === 'string' ? value : '')
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** De la lista de Twitch, las suscripciones de Lalo para ese canal y esta dirección. */
-export function ownSubscriptions(data: unknown, twitchUserId: string, callback: string): TwitchSubscription[] {
+export function ownSubscriptions(data: unknown, twitchUserId: string, callback: string, botUserId = ''): TwitchSubscription[] {
   if (!Array.isArray(data)) return [];
   return data.filter(isObject).flatMap((item) => {
     const condition = isObject(item.condition) ? item.condition : {};
@@ -154,43 +169,58 @@ export function ownSubscriptions(data: unknown, twitchUserId: string, callback: 
     if (condition.broadcaster_user_id !== twitchUserId) return [];
     // Con moderator_user_id, solo cuenta la que autorizó el propio dueño del canal
     if (wanted.moderator && condition.moderator_user_id !== twitchUserId) return [];
+    // Con user_id, solo cuenta la que lee el chat como la cuenta Lalo (si no se sabe cuál es, vale cualquiera con user_id)
+    if (wanted.bot && (typeof condition.user_id !== 'string' || (botUserId && condition.user_id !== botUserId))) return [];
     if (transport.method !== 'webhook' || transport.callback !== callback) return [];
     return [{ id: str(item.id), type: str(item.type), status: str(item.status), createdAt: str(item.created_at) || null }];
   });
 }
 
+/** true si el tipo es de los del panel de eventos (Power-ups, seguidores, directo); el chat del bot no. */
+const isPanelType = (type: string): boolean => !WANTED.find((entry) => entry.type === type)?.bot;
+
 /** Una fila por tipo que Lalo quiere: la suscripción viva si la hay, si no la más reciente, o `missing`. */
 export function summarize(found: readonly TwitchSubscription[]): SubscriptionRow[] {
-  return WANTED.map(({ type }) => {
+  // El chat (bot: true) no sale aquí: lo gestiona solo botChatPort desde la tarjeta «Bot en la nube»
+  return WANTED.filter((entry) => !entry.bot).map(({ type }) => {
     const mine = found.filter((item) => item.type === type);
     const best = mine.find((item) => item.status === 'enabled') ?? mine.find((item) => ALIVE.includes(item.status)) ?? mine[mine.length - 1];
     return best ? { type, status: best.status, createdAt: best.createdAt } : { type, status: 'missing', createdAt: null };
   });
 }
 
-async function listOwn(twitchUserId: string, config: Config, deps: Deps): Promise<TwitchSubscription[]> {
+export async function listOwn(twitchUserId: string, config: Config, deps: Deps): Promise<TwitchSubscription[]> {
   const found: TwitchSubscription[] = [];
   let after = '';
-  // Un canal tiene cinco suscripciones; el tope de páginas solo evita un bucle
+  // Un canal tiene seis suscripciones; el tope de páginas solo evita un bucle
   for (let page = 0; page < 5; page += 1) {
     const res = await helix('GET', after ? { user_id: twitchUserId, after } : { user_id: twitchUserId }, undefined, config, deps);
     if (!res.ok) throw new Error(`Twitch respondió con el código ${res.status} al listar las suscripciones.`);
     const body = (await res.json()) as { data?: unknown; pagination?: { cursor?: unknown } };
-    found.push(...ownSubscriptions(body.data, twitchUserId, config.callback));
+    found.push(...ownSubscriptions(body.data, twitchUserId, config.callback, config.botUserId));
     after = str(body.pagination?.cursor);
     if (!after) break;
   }
   return found;
 }
 
-async function createOne(wanted: WantedSubscription, twitchUserId: string, config: Config, deps: Deps): Promise<{ outcome: CreateOutcome; detail: string }> {
+/** Borra una suscripción por su id. true si quedó borrada (Twitch responde 404 si ya no existía). */
+export async function deleteOne(id: string, config: Config, deps: Deps): Promise<boolean> {
+  const res = await helix('DELETE', { id }, undefined, config, deps);
+  return res.ok || res.status === 404;
+}
+
+export async function createOne(wanted: WantedSubscription, twitchUserId: string, config: Config, deps: Deps): Promise<{ outcome: CreateOutcome; detail: string }> {
+  if (wanted.bot && !config.botUserId) {
+    return { outcome: 'skipped', detail: 'Falta configurar TWITCH_BOT_USER_ID (la cuenta de Twitch de Lalo) en el servidor.' };
+  }
   const res = await helix(
     'POST',
     {},
     {
       type: wanted.type,
       version: wanted.version,
-      condition: conditionFor(wanted, twitchUserId),
+      condition: conditionFor(wanted, twitchUserId, config.botUserId),
       transport: { method: 'webhook', callback: config.callback, secret: config.secret },
     },
     config,
@@ -198,6 +228,9 @@ async function createOne(wanted: WantedSubscription, twitchUserId: string, confi
   );
   if (res.status === 202 || res.ok) return { outcome: 'created', detail: '' };
   if (res.status === 409) return { outcome: 'already', detail: '' };
+  if (res.status === 403 && wanted.bot) {
+    return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope} del streamer o la autorización de la cuenta Lalo (user:read:chat, user:write:chat y user:bot).` };
+  }
   if (res.status === 403 && wanted.scope) {
     return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope}.` };
   }
@@ -253,7 +286,8 @@ export async function handleSubscriptions(req: ApiRequest, env: Env = process.en
     const action = bodyOf(req).action;
     if (action !== 'create' && action !== 'delete') return fail(400, 'bad_request', 'Falta qué hacer: crear o quitar.');
 
-    const existing = await listOwn(twitchUserId, config, deps);
+    // El chat del bot no se crea ni se quita desde aquí: apagar los eventos no debe dejar mudo al bot
+    const existing = (await listOwn(twitchUserId, config, deps)).filter((item) => isPanelType(item.type));
     const results: { type: string; outcome: CreateOutcome | 'deleted'; detail: string }[] = [];
 
     if (action === 'delete') {
@@ -266,7 +300,7 @@ export async function handleSubscriptions(req: ApiRequest, env: Env = process.en
         });
       }
     } else {
-      for (const wanted of WANTED) {
+      for (const wanted of WANTED.filter((entry) => !entry.bot)) {
         const mine = existing.filter((item) => item.type === wanted.type);
         if (mine.some((item) => ALIVE.includes(item.status))) {
           results.push({ type: wanted.type, outcome: 'already', detail: '' });

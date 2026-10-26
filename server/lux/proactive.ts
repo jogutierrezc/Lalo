@@ -10,7 +10,7 @@
 import type { ChatMessage } from './nvidia.js';
 import type { LuxMemoryRow } from './luxDb.js';
 import { EMOTION_INSTRUCTION } from './emotion.js';
-import { systemFor } from './prompt.js';
+import { CHAT_DATA_RULE, systemFor, wrapChatData } from './prompt.js';
 import type { ChatLine } from './digest.js';
 
 const LANGUAGE_NAMES = { es: 'español', en: 'inglés', pt: 'portugués' } as const;
@@ -177,9 +177,11 @@ export function buildSpontaneousMessages(turn: ProactiveBase & { lines: ChatLine
   const messages = baseMessages(turn, [
     'Nadie te ha preguntado nada: comentas por tu cuenta lo que se ha hablado en el chat.',
     'Haz un comentario natural y corto sobre el tema, como una persona más del directo. No saludes, no te presentes y no digas «he leído el chat». No repitas frases del chat tal cual. Una sola idea.',
+    'No escribas enlaces ni dominios y no menciones a nadie con @.',
+    CHAT_DATA_RULE,
   ]);
   const chat = turn.lines.slice(-SPONTANEOUS_LINES_MAX).map((line) => `${line.viewer}: ${line.text}`);
-  messages.push({ role: 'user', content: `Esto se ha dicho en el chat desde tu último comentario:\n${chat.join('\n')}` });
+  messages.push({ role: 'user', content: `Esto se ha dicho en el chat desde tu último comentario:\n${wrapChatData(chat)}` });
   return messages;
 }
 

@@ -9,6 +9,7 @@
 
 import type { ChatMessage } from './nvidia.js';
 import { DIGEST_MAX_ITEMS, MEMORY_CONTENT_MAX, screenMemory } from './memory.js';
+import { CHAT_DATA_RULE, wrapChatData } from './prompt.js';
 
 /** Como mucho un resumen cada 20 minutos por streamer (el bot manda cada 30). */
 export const DIGEST_MIN_GAP_MS = 20 * 60_000;
@@ -52,11 +53,12 @@ export function buildDigestMessages(lines: ChatLine[], existing: string[]): Chat
     'Reglas: no copies mensajes; resume con tus palabras. No incluyas enlaces, correos, teléfonos, direcciones, datos de salud, religión, política ni orientación sexual de nadie.',
     'Si aparece un insulto, no lo copies: conviértelo en una expresión divertida y sin ofensa.',
     'Si no hay nada que merezca recordarse, devuelve [].',
+    CHAT_DATA_RULE,
   ];
   if (existing.length > 0) {
     system.push(`Ya se recuerda esto; no lo repitas:\n${existing.map((text) => `- ${text}`).join('\n')}`);
   }
-  const user = lines.map((line) => `${line.viewer}: ${line.text}`).join('\n');
+  const user = wrapChatData(lines.map((line) => `${line.viewer}: ${line.text}`));
   return [
     { role: 'system', content: system.join('\n') },
     { role: 'user', content: user },

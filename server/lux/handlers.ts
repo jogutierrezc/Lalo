@@ -23,6 +23,7 @@
  * los proveedores se traducen a mensajes del panel.
  */
 
+import { waitUntil } from '@vercel/functions';
 import { defaultDeps, failureOf, fail, isFail, type Auth, type IntegrationRequest, type IntegrationResult } from '../integrations/http.js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { MODEL_SETTING, PROVIDER_SETTING, activeModel, activeProvider, isKeyFor, keyState, readApiKey, saveApiKey } from './keyVault.js';
@@ -50,6 +51,7 @@ import { detectSongRequest, normalizeSong, songForChat } from './song.js';
 import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 import { luxDisplayName } from './displayName.js';
+import { sanitizeChatOutput } from './outputFilter.js';
 import {
   BOT_ONLINE_MS,
   EVENT_MIN_GAP_MS,
@@ -148,8 +150,8 @@ export const LUX_ACTIONS = [
 ] as const;
 export type LuxAction = (typeof LUX_ACTIONS)[number];
 
-/** Las respuestas a un comando del chat esperan este tiempo antes de sonar y de aparecer en el chat. */
-export const LUX_REPLY_DELAY_MS = 5_000;
+/** Las respuestas a un comando del chat no esperan: suenan y aparecen en el chat en cuanto llegan (0 = sin retraso). */
+export const LUX_REPLY_DELAY_MS = 0;
 
 const MEMORY_LIMIT = MEMORY_USED_IN_REPLY;
 const VIEWER_MAX = 40;
@@ -185,6 +187,16 @@ export interface LuxDeps {
   /** Espera entre mensajes del panel y entre saludos a eventos, por cuenta. Las pruebas pasan los suyos. */
   sayCooldown?: LuxCooldown;
   eventCooldown?: LuxCooldown;
+  /**
+   * Se llama justo después de dejar un mensaje en la cola del panel, para que el bot en la nube lo envíe sin esperar
+   * (por defecto, server/twitch/botBackground.ts; no hace nada si el canal no tiene el bot en la nube). Las pruebas pasan el suyo.
+   */
+  afterEnqueue?: (profileId: string, env: Env) => Promise<void>;
+  /**
+   * Borra las líneas del chat que el bot en la nube tenía guardadas de ese perfil (privacidad). Se llama al guardar
+   * ajustes con el aprendizaje Y los comentarios apagados. Las pruebas pasan uno falso.
+   */
+  clearChatLines?: (profileId: string, env: Env) => Promise<void>;
   now?: () => number;
 }
 
@@ -699,6 +711,12 @@ async function config(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
       return fail(400, 'voice_not_allowed', 'Tu cuenta no tiene ElevenLabs activado: elige una voz de Fish Audio.');
     }
     await db.saveSettingsRow(rowFromSettings(caller.id, check.value));
+    // Sin aprendizaje ni comentarios, nada del chat debe quedar guardado (migración 0041)
+    if (!check.value.chatLearning && !check.value.spontaneousEnabled) {
+      await (deps.clearChatLines ?? defaultClearChatLines)(caller.id, env).catch(() => {
+        console.error('[Lalo lux] no se pudieron borrar las líneas del chat guardadas');
+      });
+    }
     return { status: 200, body: { settings: check.value } };
   } catch (err) {
     return luxFailure(err, 'lux/config');
@@ -746,7 +764,8 @@ async function proactiveText(
   }
   await recordUsage(db, profile, nowMs, choice);
   const parsed = parseEmotion(text);
-  const reply = parsed.text.replace(/\s+/g, ' ').trim().slice(0, current.replyMax);
+  // Sin enlaces ni menciones: lo que la IA escribe por su cuenta no puede llevar publicidad ni avisar a nadie
+  const reply = sanitizeChatOutput(parsed.text).slice(0, current.replyMax).trim();
   if (!reply) return { ok: false, result: { status: 200, body: { skipped: 'empty' } } };
   return { ok: true, reply, emotion: parsed.emotion, model: choice.model };
 }
@@ -922,6 +941,207 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
   }
 }
 
+/** Tiempo de espera de un espectador: ok, o los segundos que le faltan. */
+type ChatCooldownTake = (viewer: string, nowMs: number) => Promise<{ ok: true } | { ok: false; waitSeconds: number }> | { ok: true } | { ok: false; waitSeconds: number };
+
+/**
+ * La pregunta de un espectador a Lux en el chat, ya con el perfil y sus ajustes en la mano. La comparten la ruta
+ * `chat` (bot de Python, con la clave de OBS) y luxAskForProfile (bot en la nube): mismo camino, mismas reglas.
+ * Puede lanzar NvidiaError y errores de la base: quien llama los traduce.
+ */
+async function askInChat(
+  db: LuxDb,
+  env: Env,
+  deps: LuxDeps,
+  profile: LuxProfile,
+  current: LuxSettings,
+  raw: Record<string, unknown>,
+  takeCooldown: ChatCooldownTake
+): Promise<IntegrationResult> {
+  if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
+  if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
+  {
+    // El overlay de OBS también lee el chat y llama a !lux, pero no puede escribir en él: si hay un bot vivo, le cede la pregunta.
+    const seenAt = (deps.now ?? Date.now)();
+    if (raw.source === 'overlay') {
+      if (await botOnline(db, profile.id, seenAt)) return { status: 200, body: { skipped: 'bot_active' } };
+    } else {
+      await touchBot(db, profile.id, seenAt);
+    }
+  }
+
+  const message = typeof raw.message === 'string' ? raw.message.trim() : '';
+  if (!message || message.length > LUX_CHAT_MAX) {
+    return fail(400, 'bad_message', `El mensaje tiene que tener entre 1 y ${LUX_CHAT_MAX} caracteres.`);
+  }
+  const viewer = typeof raw.viewer === 'string' && raw.viewer.trim() ? raw.viewer.trim().slice(0, VIEWER_MAX) : 'Espectador';
+  const nowMs = (deps.now ?? Date.now)();
+  const wait = await takeCooldown(viewer, nowMs);
+  if (!wait.ok) return { status: 200, body: { skipped: 'cooldown', waitSeconds: wait.waitSeconds } };
+
+  const target = await activeProvider(db);
+  const apiKey = await readApiKey(env, db, target);
+  if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
+  const character = await characterFor(db, profile);
+  const choice = await modelChoice(db, target, character, profile, nowMs);
+  const model = choice.model;
+  const memories = current.memoryEnabled ? await db.memories(profile.id, character.id, MEMORY_LIMIT) : [];
+  const intent = detectIntent(message);
+
+  const topic = detectSongRequest(message);
+  const turn = {
+    viewer,
+    message,
+    memories,
+    personality: current.personality,
+    language: current.language,
+    replyMax: current.replyMax,
+    intent,
+    name: luxDisplayName(current.chatName, current.chatWord),
+  };
+  const text = await nvidiaChat({
+    baseUrl: LUX_PROVIDERS[target].baseUrl,
+    apiKey,
+    model,
+    messages: topic !== null ? buildSongMessages(turn, topic) : buildLuxMessages(turn),
+    maxTokens: topic !== null ? 260 : replyTokens(current.replyMax),
+    fetch: deps.fetch,
+  });
+  await recordUsage(db, profile, nowMs, choice);
+  const isSong = topic !== null;
+  const lyrics = isSong ? normalizeSong(text) : '';
+  const parsed = isSong ? { text: lyrics, emotion: 'normal' } : parseEmotion(text);
+  const emotion = parsed.emotion;
+  const reply = isSong ? songForChat(lyrics) || '…' : sanitizeChatOutput(parsed.text, { viewer }).slice(0, current.replyMax) || '…';
+  // Solo ElevenLabs canta: con otra voz, Lux responde con la letra en el chat y sin canto.
+  const canSing = isSong && current.voiceEngine === 'elevenlabs';
+
+  await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply, model }).catch(() => {
+    console.error('[Lalo lux] no se pudo guardar el registro de la respuesta del chat');
+  });
+  // En directo, lo que Lux responde en el chat también se oye en OBS.
+  if (isSong) {
+    if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'sing', current, LUX_REPLY_DELAY_MS);
+  } else {
+    await enqueueSpeech(db, profile.id, reply, emotion, gestureFor(message, intent), current, LUX_REPLY_DELAY_MS);
+  }
+  return {
+    status: 200,
+    body: {
+      reply,
+      emotion,
+      intent,
+      gesture: isSong ? 'sing' : gestureFor(message, intent),
+      song: isSong,
+      note: isSong && !canSing ? 'sing_needs_elevenlabs' : undefined,
+      model,
+      modelNote: choice.fellBack,
+      voice: { referenceId: current.voiceReferenceId, engine: current.voiceEngine },
+    },
+  };
+}
+
+/** Aprendizaje del chat de un perfil: si está activo, si ya toca resumir y cuánto falta. */
+async function learnState(db: LuxDb, profile: LuxProfile, current: LuxSettings, nowMs: number) {
+  const allowed = profile.role === 'admin' || profile.luxEnabled;
+  const learning = allowed && current.chatLearning;
+  const last = await db.setting(digestKey(profile.id));
+  const lastMs = last && Number.isFinite(Number(last)) ? Number(last) : null;
+  const waitMs = lastMs === null ? 0 : Math.max(0, DIGEST_MIN_GAP_MS - (nowMs - lastMs));
+  return { allowed, learning, ready: learning && waitMs === 0, waitMs, waitSeconds: Math.ceil(waitMs / 1000) };
+}
+
+/**
+ * Resume líneas del chat en recuerdos de Lux (comando digest). La comparten la ruta `chat` y el bot en la nube.
+ * Los mensajes crudos solo viven en esta llamada: no se guardan ni se devuelven.
+ */
+async function runDigest(db: LuxDb, env: Env, deps: LuxDeps, profile: LuxProfile, current: LuxSettings, rawLines: unknown, nowMs: number): Promise<IntegrationResult> {
+  const state = await learnState(db, profile, current, nowMs);
+  if (!state.allowed) return { status: 200, body: { skipped: 'lux_disabled' } };
+  if (!current.chatLearning) return { status: 200, body: { skipped: 'learning_off' } };
+  if (state.waitMs > 0) return { status: 200, body: { skipped: 'too_soon', waitSeconds: state.waitSeconds } };
+
+  const lines = normalizeDigestLines(rawLines);
+  if (lines.length === 0) return { status: 200, body: { skipped: 'no_chat' } };
+  const api = memoryApi(db);
+  if (!api) return fail(503, 'not_configured', 'Al servidor le faltan las funciones de memoria de Lux.');
+
+  // Los recuerdos que aprende son del personaje activo de la cuenta.
+  const character = await characterFor(db, profile);
+  const nowIso = new Date(nowMs).toISOString();
+  await api.memoryPrune(profile.id, nowIso);
+  const existing = await api.memoryList(profile.id, character.id);
+  const room = MEMORY_SAVED_MAX - existing.length;
+  if (room <= 0) return { status: 200, body: { skipped: 'memory_full' } };
+
+  const target = await activeProvider(db);
+  const apiKey = await readApiKey(env, db, target);
+  if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
+  const choice = await modelChoice(db, target, character, profile, nowMs);
+
+  // Se marca antes de llamar al modelo: un fallo no provoca reintentos seguidos.
+  await db.putSetting(digestKey(profile.id), String(nowMs));
+  const text = await nvidiaChat({
+    baseUrl: LUX_PROVIDERS[target].baseUrl,
+    apiKey,
+    model: choice.model,
+    messages: buildDigestMessages(lines, existing.slice(0, MEMORY_LIMIT).map((item) => item.content)),
+    maxTokens: 700,
+    fetch: deps.fetch,
+  });
+  await recordUsage(db, profile, nowMs, choice);
+  const found = parseDigest(text);
+  const kept = keepDigestItems(found).slice(0, Math.min(DIGEST_MAX_ITEMS, room));
+  if (kept.length > 0) {
+    await api.memoryInsert(
+      profile.id,
+      kept.map((item) => ({
+        kind: item.kind,
+        subject: item.subject,
+        content: item.content,
+        pinned: false,
+        source: 'chat' as const,
+        expiresAt: expiresAtFor(item.kind, false, nowMs),
+        characterId: character.id,
+      }))
+    );
+  }
+  return { status: 200, body: { learned: kept.length, discarded: found.length - kept.length } };
+}
+
+/**
+ * Comentario espontáneo (comando spontaneous): con las últimas líneas del chat, el servidor decide si toca hablar
+ * (ajustes, intervalo, mínimo de mensajes). La comparten la ruta `chat` y el bot en la nube.
+ */
+async function runSpontaneous(db: LuxDb, env: Env, deps: LuxDeps, profile: LuxProfile, current: LuxSettings, rawLines: unknown, nowMs: number): Promise<IntegrationResult> {
+  if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
+  if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
+  if (!current.spontaneousEnabled) return { status: 200, body: { skipped: 'spontaneous_off' } };
+
+  const last = await db.setting(spontaneousKey(profile.id));
+  const lastMs = last && Number.isFinite(Number(last)) ? Number(last) : null;
+  const waitMs = lastMs === null ? 0 : Math.max(0, current.spontaneousEveryMin * 60_000 - (nowMs - lastMs));
+  if (waitMs > 0) return { status: 200, body: { skipped: 'too_soon', waitSeconds: Math.ceil(waitMs / 1000) } };
+
+  const lines = normalizeDigestLines(rawLines);
+  if (lines.length < current.spontaneousMinMessages) {
+    return { status: 200, body: { skipped: 'no_activity', needed: current.spontaneousMinMessages, seen: lines.length } };
+  }
+
+  // Se marca antes de llamar al modelo: un fallo no provoca reintentos seguidos, y no se acumulan los perdidos.
+  await db.putSetting(spontaneousKey(profile.id), String(nowMs));
+  const name = luxDisplayName(current.chatName, current.chatWord);
+  const made = await proactiveText(env, db, deps, profile, current, nowMs, (memories) =>
+    buildSpontaneousMessages({ name, personality: current.personality, language: current.language, replyMax: current.replyMax, memories, lines })
+  );
+  if (!made.ok) return made.result;
+  await enqueueSpeech(db, profile.id, made.reply, made.emotion, 'idle', current);
+  await db.insertReply({ profile_id: profile.id, viewer: null, prompt: '(comentario espontáneo)', reply: made.reply, model: made.model }).catch(() => {
+    console.error('[Lalo lux] no se pudo guardar el registro del comentario espontáneo');
+  });
+  return { status: 200, body: { reply: made.reply, emotion: made.emotion, model: made.model } };
+}
+
 /**
  * Lux en el chat de Twitch. El bot no tiene sesión: el streamer se identifica con
  * su clave de OBS (widget_key), igual que el overlay. Mismo camino de respuesta que el panel.
@@ -949,67 +1169,12 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
     }
     // Resumen del chat (C2). El bot pregunta primero: solo manda mensajes si el streamer tiene el aprendizaje activado.
     if (raw.command === 'learn_status' || raw.command === 'digest') {
-      const allowed = profile.role === 'admin' || profile.luxEnabled;
-      const learning = allowed && current.chatLearning;
-      const last = await db.setting(digestKey(profile.id));
-      const lastMs = last && Number.isFinite(Number(last)) ? Number(last) : null;
       const nowMs = (deps.now ?? Date.now)();
-      const waitMs = lastMs === null ? 0 : Math.max(0, DIGEST_MIN_GAP_MS - (nowMs - lastMs));
-
       if (raw.command === 'learn_status') {
-        return { status: 200, body: { learning, ready: learning && waitMs === 0, waitSeconds: Math.ceil(waitMs / 1000) } };
+        const state = await learnState(db, profile, current, nowMs);
+        return { status: 200, body: { learning: state.learning, ready: state.ready, waitSeconds: state.waitSeconds } };
       }
-      if (!allowed) return { status: 200, body: { skipped: 'lux_disabled' } };
-      if (!current.chatLearning) return { status: 200, body: { skipped: 'learning_off' } };
-      if (waitMs > 0) return { status: 200, body: { skipped: 'too_soon', waitSeconds: Math.ceil(waitMs / 1000) } };
-
-      const lines = normalizeDigestLines(raw.messages);
-      if (lines.length === 0) return { status: 200, body: { skipped: 'no_chat' } };
-      const api = memoryApi(db);
-      if (!api) return fail(503, 'not_configured', 'Al servidor le faltan las funciones de memoria de Lux.');
-
-      // Los recuerdos que aprende son del personaje activo de la cuenta.
-      const character = await characterFor(db, profile);
-      const nowIso = new Date(nowMs).toISOString();
-      await api.memoryPrune(profile.id, nowIso);
-      const existing = await api.memoryList(profile.id, character.id);
-      const room = MEMORY_SAVED_MAX - existing.length;
-      if (room <= 0) return { status: 200, body: { skipped: 'memory_full' } };
-
-      const target = await activeProvider(db);
-      const apiKey = await readApiKey(env, db, target);
-      if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
-      const choice = await modelChoice(db, target, character, profile, nowMs);
-
-      // Se marca antes de llamar al modelo: un fallo no provoca reintentos seguidos.
-      await db.putSetting(digestKey(profile.id), String(nowMs));
-      // Los mensajes crudos solo viven en esta llamada: no se guardan ni se devuelven.
-      const text = await nvidiaChat({
-        baseUrl: LUX_PROVIDERS[target].baseUrl,
-        apiKey,
-        model: choice.model,
-        messages: buildDigestMessages(lines, existing.slice(0, MEMORY_LIMIT).map((item) => item.content)),
-        maxTokens: 700,
-        fetch: deps.fetch,
-      });
-      await recordUsage(db, profile, nowMs, choice);
-      const found = parseDigest(text);
-      const kept = keepDigestItems(found).slice(0, Math.min(DIGEST_MAX_ITEMS, room));
-      if (kept.length > 0) {
-        await api.memoryInsert(
-          profile.id,
-          kept.map((item) => ({
-            kind: item.kind,
-            subject: item.subject,
-            content: item.content,
-            pinned: false,
-            source: 'chat' as const,
-            expiresAt: expiresAtFor(item.kind, false, nowMs),
-            characterId: character.id,
-          }))
-        );
-      }
-      return { status: 200, body: { learned: kept.length, discarded: found.length - kept.length } };
+      return runDigest(db, env, deps, profile, current, raw.messages, nowMs);
     }
 
     // Cola del panel: el bot la pregunta cada pocos segundos con su clave de OBS. Recoger un mensaje lo
@@ -1043,32 +1208,7 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
     if (raw.command === 'spontaneous') {
       const nowMs = (deps.now ?? Date.now)();
       await touchBot(db, profile.id, nowMs);
-      if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
-      if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
-      if (!current.spontaneousEnabled) return { status: 200, body: { skipped: 'spontaneous_off' } };
-
-      const last = await db.setting(spontaneousKey(profile.id));
-      const lastMs = last && Number.isFinite(Number(last)) ? Number(last) : null;
-      const waitMs = lastMs === null ? 0 : Math.max(0, current.spontaneousEveryMin * 60_000 - (nowMs - lastMs));
-      if (waitMs > 0) return { status: 200, body: { skipped: 'too_soon', waitSeconds: Math.ceil(waitMs / 1000) } };
-
-      const lines = normalizeDigestLines(raw.lines);
-      if (lines.length < current.spontaneousMinMessages) {
-        return { status: 200, body: { skipped: 'no_activity', needed: current.spontaneousMinMessages, seen: lines.length } };
-      }
-
-      // Se marca antes de llamar al modelo: un fallo no provoca reintentos seguidos, y no se acumulan los perdidos.
-      await db.putSetting(spontaneousKey(profile.id), String(nowMs));
-      const name = luxDisplayName(current.chatName, current.chatWord);
-      const made = await proactiveText(env, db, deps, profile, current, nowMs, (memories) =>
-        buildSpontaneousMessages({ name, personality: current.personality, language: current.language, replyMax: current.replyMax, memories, lines })
-      );
-      if (!made.ok) return made.result;
-      await enqueueSpeech(db, profile.id, made.reply, made.emotion, 'idle', current);
-      await db.insertReply({ profile_id: profile.id, viewer: null, prompt: '(comentario espontáneo)', reply: made.reply, model: made.model }).catch(() => {
-        console.error('[Lalo lux] no se pudo guardar el registro del comentario espontáneo');
-      });
-      return { status: 200, body: { reply: made.reply, emotion: made.emotion, model: made.model } };
+      return runSpontaneous(db, env, deps, profile, current, raw.lines, nowMs);
     }
 
     // Eventos del canal (seguidor, suscripción, raid, inicio del directo). El bot ya los agrupa por ventana.
@@ -1091,91 +1231,233 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
     }
     if (raw.command !== 'ask') return fail(400, 'bad_command', 'Comando no admitido.');
 
-    if (profile.role !== 'admin' && !profile.luxEnabled) return { status: 200, body: { skipped: 'lux_disabled' } };
-    if (!current.chatEnabled) return { status: 200, body: { skipped: 'chat_off' } };
-    {
-      // El overlay de OBS también lee el chat y llama a !lux, pero no puede escribir en él: si hay un bot vivo, le cede la pregunta.
-      const seenAt = (deps.now ?? Date.now)();
-      if (raw.source === 'overlay') {
-        if (await botOnline(db, profile.id, seenAt)) return { status: 200, body: { skipped: 'bot_active' } };
-      } else {
-        await touchBot(db, profile.id, seenAt);
-      }
-    }
-
-    const message = typeof raw.message === 'string' ? raw.message.trim() : '';
-    if (!message || message.length > LUX_CHAT_MAX) {
-      return fail(400, 'bad_message', `El mensaje tiene que tener entre 1 y ${LUX_CHAT_MAX} caracteres.`);
-    }
-    const viewer = typeof raw.viewer === 'string' && raw.viewer.trim() ? raw.viewer.trim().slice(0, VIEWER_MAX) : 'Espectador';
-    const nowMs = (deps.now ?? Date.now)();
-    const wait = (deps.cooldown ?? chatCooldown).take(`${profile.id}:${viewer.toLowerCase()}`, nowMs);
-    if (!wait.ok) return { status: 200, body: { skipped: 'cooldown', waitSeconds: wait.waitSeconds } };
-
-    const target = await activeProvider(db);
-    const apiKey = await readApiKey(env, db, target);
-    if (!apiKey) return fail(503, 'no_key', `No hay clave de ${LUX_PROVIDERS[target].label} guardada. Configúrala en Integraciones.`);
-    const character = await characterFor(db, profile);
-    const choice = await modelChoice(db, target, character, profile, nowMs);
-    const model = choice.model;
-    const memories = current.memoryEnabled ? await db.memories(profile.id, character.id, MEMORY_LIMIT) : [];
-    const intent = detectIntent(message);
-
-    const topic = detectSongRequest(message);
-    const turn = {
-      viewer,
-      message,
-      memories,
-      personality: current.personality,
-      language: current.language,
-      replyMax: current.replyMax,
-      intent,
-      name: luxDisplayName(current.chatName, current.chatWord),
-    };
-    const text = await nvidiaChat({
-      baseUrl: LUX_PROVIDERS[target].baseUrl,
-      apiKey,
-      model,
-      messages: topic !== null ? buildSongMessages(turn, topic) : buildLuxMessages(turn),
-      maxTokens: topic !== null ? 260 : replyTokens(current.replyMax),
-      fetch: deps.fetch,
-    });
-    await recordUsage(db, profile, nowMs, choice);
-    const isSong = topic !== null;
-    const lyrics = isSong ? normalizeSong(text) : '';
-    const parsed = isSong ? { text: lyrics, emotion: 'normal' } : parseEmotion(text);
-    const emotion = parsed.emotion;
-    const reply = isSong ? songForChat(lyrics) || '…' : (parsed.text || '…').slice(0, current.replyMax);
-    // Solo ElevenLabs canta: con otra voz, Lux responde con la letra en el chat y sin canto.
-    const canSing = isSong && current.voiceEngine === 'elevenlabs';
-
-    await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply, model }).catch(() => {
-      console.error('[Lalo lux] no se pudo guardar el registro de la respuesta del chat');
-    });
-    // En directo, lo que Lux responde en el chat también se oye en OBS.
-    if (isSong) {
-      if (canSing) await enqueueSpeech(db, profile.id, lyrics, 'normal', 'sing', current, LUX_REPLY_DELAY_MS);
-    } else {
-      await enqueueSpeech(db, profile.id, reply, emotion, gestureFor(message, intent), current, LUX_REPLY_DELAY_MS);
-    }
-    return {
-      status: 200,
-      body: {
-        reply,
-        emotion,
-        intent,
-        gesture: isSong ? 'sing' : gestureFor(message, intent),
-        song: isSong,
-        note: isSong && !canSing ? 'sing_needs_elevenlabs' : undefined,
-        model,
-        modelNote: choice.fellBack,
-        voice: { referenceId: current.voiceReferenceId, engine: current.voiceEngine },
-      },
-    };
+    return askInChat(db, env, deps, profile, current, raw, async (viewer, nowMs) => (deps.cooldown ?? chatCooldown).take(`${profile.id}:${viewer.toLowerCase()}`, nowMs));
   } catch (err) {
     if (err instanceof NvidiaError) return nvidiaFailure(err);
     return luxFailure(err, 'lux/chat');
   }
+}
+
+// ---------- Lux desde el bot en la nube (sin pasar por HTTP ni por la clave de OBS) ----------
+
+/** Ajustes de Mi AI del perfil, o null si el servidor no tiene Supabase o falla la lectura. No lanza. */
+export async function luxSettingsForProfile(profileId: string, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<LuxSettings | null> {
+  try {
+    const db = { ...defaultLuxDeps, ...overrides }.db(env);
+    if (!db) return null;
+    return settingsFromRow(await db.settingsRow(profileId));
+  } catch {
+    return null;
+  }
+}
+
+export interface LuxAskInput {
+  viewer: string;
+  message: string;
+  /** Tiempo de espera por espectador. El bot en la nube pasa el persistente (BotDb.takeCooldown). */
+  takeCooldown: ChatCooldownTake;
+}
+
+/**
+ * «Pregunta a Lux como este perfil»: lo mismo que POST /api/lux/chat con command=ask, para el bot en la nube
+ * (el perfil ya lo identificó el canal de Twitch, no hay clave de OBS). Devuelve el mismo resultado que la ruta:
+ * body.reply, o body.skipped (cooldown, lux_disabled, chat_off...), o un error con su estado. No lanza.
+ */
+export async function luxAskForProfile(profileId: string, input: LuxAskInput, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<IntegrationResult> {
+  const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
+  try {
+    const db = deps.db(env);
+    if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+    const profile = await db.profile(profileId);
+    if (!profile) return fail(403, 'no_profile', 'No se encontró tu perfil.');
+    const current = settingsFromRow(await db.settingsRow(profile.id));
+    return await askInChat(db, env, deps, profile, current, { message: input.message, viewer: input.viewer, source: 'bot' }, input.takeCooldown);
+  } catch (err) {
+    if (err instanceof NvidiaError) return nvidiaFailure(err);
+    return luxFailure(err, 'lux/chat');
+  }
+}
+
+/**
+ * !luxon / !luxoff desde el bot en la nube. Quien llama comprueba antes que el autor es el canal o un moderador
+ * (en la ruta HTTP eso lo declara el bot con `privileged`). Devuelve el nuevo estado, o null si no se pudo guardar.
+ */
+export async function luxSwitchForProfile(profileId: string, on: boolean, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<boolean | null> {
+  try {
+    const db = { ...defaultLuxDeps, ...overrides }.db(env);
+    if (!db) return null;
+    const current = settingsFromRow(await db.settingsRow(profileId));
+    await db.saveSettingsRow(rowFromSettings(profileId, { ...current, chatEnabled: on }));
+    return on;
+  } catch (err) {
+    console.error('[Lalo lux] no se pudo cambiar el chat de Lux:', err instanceof Error ? err.message : 'error desconocido');
+    return null;
+  }
+}
+
+/** Lo que el bot en la nube necesita saber, de una sola lectura, para decidir si toca resumir o comentar. */
+export interface LuxProactiveStatus {
+  /** Mi AI está permitida para la cuenta (administrador o Lux activado). */
+  allowed: boolean;
+  /** El streamer tiene activado aprender del chat. */
+  learning: boolean;
+  /** Aprender del chat está activo y ya pasó el tiempo mínimo desde el último resumen. */
+  digestReady: boolean;
+  spontaneous: {
+    /** Permitida, con el chat de Lux encendido y los comentarios espontáneos activos. */
+    enabled: boolean;
+    /** Segundos hasta el próximo comentario permitido (0 = ya toca). */
+    waitSeconds: number;
+    /** Líneas de chat que pide el streamer antes de comentar. */
+    minMessages: number;
+  };
+}
+
+/** Estado de aprendizaje y comentarios espontáneos del perfil, o null si no hay base de datos o falla la lectura. No lanza. */
+export async function luxProactiveStatusForProfile(profileId: string, env: Env = process.env, overrides: Partial<LuxDeps> = {}): Promise<LuxProactiveStatus | null> {
+  const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
+  try {
+    const db = deps.db(env);
+    if (!db) return null;
+    const profile = await db.profile(profileId);
+    if (!profile) return null;
+    const current = settingsFromRow(await db.settingsRow(profile.id));
+    const nowMs = (deps.now ?? Date.now)();
+    const state = await learnState(db, profile, current, nowMs);
+    const last = await db.setting(spontaneousKey(profile.id));
+    const lastMs = last && Number.isFinite(Number(last)) ? Number(last) : null;
+    const waitMs = lastMs === null ? 0 : Math.max(0, current.spontaneousEveryMin * 60_000 - (nowMs - lastMs));
+    return {
+      allowed: state.allowed,
+      learning: state.learning,
+      digestReady: state.ready,
+      spontaneous: {
+        enabled: state.allowed && current.chatEnabled && current.spontaneousEnabled,
+        waitSeconds: Math.ceil(waitMs / 1000),
+        minMessages: current.spontaneousMinMessages,
+      },
+    };
+  } catch (err) {
+    console.error('[Lalo lux] no se pudo leer el estado del aprendizaje:', err instanceof Error ? err.message : 'error desconocido');
+    return null;
+  }
+}
+
+/** Mismo resultado que `command: 'digest'` de la ruta /api/lux/chat, para el bot en la nube (sin HTTP ni clave de OBS). No lanza. */
+export async function luxDigestForProfile(
+  profileId: string,
+  lines: Array<{ viewer: string; text: string }>,
+  env: Env = process.env,
+  overrides: Partial<LuxDeps> = {}
+): Promise<IntegrationResult> {
+  const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
+  try {
+    const db = deps.db(env);
+    if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+    const profile = await db.profile(profileId);
+    if (!profile) return fail(403, 'no_profile', 'No se encontró tu perfil.');
+    const current = settingsFromRow(await db.settingsRow(profile.id));
+    return await runDigest(db, env, deps, profile, current, lines, (deps.now ?? Date.now)());
+  } catch (err) {
+    if (err instanceof NvidiaError) return nvidiaFailure(err);
+    return luxFailure(err, 'lux/chat');
+  }
+}
+
+/** Mismo resultado que `command: 'spontaneous'` de la ruta /api/lux/chat, para el bot en la nube. body.reply = lo que hay que escribir. No lanza. */
+export async function luxSpontaneousForProfile(
+  profileId: string,
+  lines: Array<{ viewer: string; text: string }>,
+  env: Env = process.env,
+  overrides: Partial<LuxDeps> = {}
+): Promise<IntegrationResult> {
+  const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
+  try {
+    const db = deps.db(env);
+    if (!db) return fail(503, 'not_configured', 'Al servidor le faltan variables de Supabase.');
+    const profile = await db.profile(profileId);
+    if (!profile) return fail(403, 'no_profile', 'No se encontró tu perfil.');
+    const current = settingsFromRow(await db.settingsRow(profile.id));
+    const nowMs = (deps.now ?? Date.now)();
+    await touchBot(db, profile.id, nowMs);
+    return await runSpontaneous(db, env, deps, profile, current, lines, nowMs);
+  } catch (err) {
+    if (err instanceof NvidiaError) return nvidiaFailure(err);
+    return luxFailure(err, 'lux/chat');
+  }
+}
+
+/**
+ * La cola del panel («Decir en el chat») y los saludos de seguidor y directo, enviados por el servidor en vez de por el bot
+ * de Python: lo mismo que `command: 'outbox'` + `'outbox_done'` de la ruta /api/lux/chat. Recoge hasta 3 mensajes (los marca
+ * «claimed»), los manda con `send` y marca cada uno como enviado o fallido según lo que devuelva `send`.
+ * No lanza. Un `send` que falla deja el mensaje como «failed»: igual que el bot de Python, no se reintenta.
+ */
+export async function luxOutboxForProfile(
+  profileId: string,
+  send: (text: string) => Promise<boolean | 'retry'>,
+  env: Env = process.env,
+  overrides: Partial<LuxDeps> = {}
+): Promise<{ sent: number; failed: number }> {
+  const deps: LuxDeps = { ...defaultLuxDeps, ...overrides };
+  const result = { sent: 0, failed: 0 };
+  try {
+    const db = deps.db(env);
+    if (!db || !db.outboxClaim || !db.outboxFinish) return result;
+    const profile = await db.profile(profileId);
+    if (!profile) return result;
+    if (profile.role !== 'admin' && !profile.luxEnabled) return result;
+    const nowMs = (deps.now ?? Date.now)();
+    await touchBot(db, profile.id, nowMs);
+    const current = settingsFromRow(await db.settingsRow(profile.id));
+    // Seguidores nuevos e inicio del directo: si ya toca saludarlos, el saludo entra en la cola y sale en esta misma vuelta
+    await flushChannelEvents(db, env, deps, profile, current, nowMs).catch((err: unknown) => {
+      console.error('[Lalo lux] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
+    });
+    const items = await db.outboxClaim(profile.id, 3, new Date(nowMs).toISOString());
+    if (items.length > 0 && db.outboxPrune) {
+      await db.outboxPrune(profile.id, new Date(nowMs - 24 * 3_600_000).toISOString()).catch(() => undefined);
+    }
+    for (const item of items) {
+      let outcome: boolean | 'retry' = false;
+      try {
+        outcome = await send(item.text);
+      } catch {
+        outcome = false;
+      }
+      if (outcome === 'retry' && db.outboxRelease) {
+        // El limitador pidió esperar y no salió nada: vuelve a «pending» y se intentará en otro turno (sin voz todavía)
+        if (await db.outboxRelease(profile.id, item.id).catch(() => false)) continue;
+        outcome = false;
+      }
+      if (item.speak) await enqueueSpeech(db, profile.id, item.text, item.emotion, 'idle', current);
+      const ok = outcome === true;
+      await db.outboxFinish(profile.id, item.id, ok, new Date((deps.now ?? Date.now)()).toISOString()).catch(() => false);
+      if (ok) result.sent += 1;
+      else result.failed += 1;
+    }
+    return result;
+  } catch (err) {
+    console.error('[Lalo lux] cola de mensajes en la nube:', err instanceof Error ? err.message : 'error desconocido');
+    return result;
+  }
+}
+
+/** Carga perezosa, como defaultAfterEnqueue. Sin Supabase o sin la tabla (migración 0041), no hay nada que borrar. */
+async function defaultClearChatLines(profileId: string, env: Env): Promise<void> {
+  const { supabaseChatLines } = await import('../twitch/botChatLines.js');
+  try {
+    await supabaseChatLines(env)?.clear(profileId);
+  } catch (err) {
+    if (err instanceof MigrationMissingError) return;
+    throw err;
+  }
+}
+
+/** Carga perezosa: el bot en la nube importa este módulo, así que no puede importarse al revés al cargar. */
+async function defaultAfterEnqueue(profileId: string, env: Env): Promise<void> {
+  const { pushOutboxNow } = await import('../twitch/botBackground.js');
+  await pushOutboxNow(profileId, env);
 }
 
 /** Mensaje de la cola tal como lo ve el panel: con un estado que no promete más de lo que se sabe. */
@@ -1243,6 +1525,13 @@ async function say(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<In
       emotion = made.emotion;
     }
     const id = await db.outboxInsert({ profile_id: profile.id, text, speak: raw.speak === true, emotion, mode });
+    // Con el bot en la nube encendido el servidor lo envía ya; sigue tras responder al panel. Si el canal usa el bot de Python, no hace nada
+    const kick = (deps.afterEnqueue ?? defaultAfterEnqueue)(profile.id, env).catch(() => undefined);
+    try {
+      waitUntil(kick);
+    } catch {
+      // Sin contexto de Vercel (local, pruebas): el trabajo sigue igualmente en este proceso
+    }
     return { status: 200, body: { id, text, mode, state: 'queued', botOnline: await botOnline(db, profile.id, nowMs) } };
   } catch (err) {
     return luxFailure(err, 'lux/say');

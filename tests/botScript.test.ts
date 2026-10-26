@@ -110,6 +110,11 @@ describe('buildPythonScript', () => {
     expect(script).toContain(`TOKEN = "${TOKEN_PLACEHOLDER}"`);
   });
 
+  it('reconoce los comandos aunque el espectador los escriba con mayúsculas', () => {
+    // TwitchIO distingue mayúsculas por defecto: «!Hola» no encajaría con el comando «hola»
+    expect(buildPythonScript(settings())).toContain('case_insensitive=True');
+  });
+
   it('no deja expresiones de JavaScript dentro de las f-strings', () => {
     const script = buildPythonScript(settings());
     expect(script).not.toContain('twitchIOSettings');

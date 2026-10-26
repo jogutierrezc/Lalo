@@ -300,6 +300,7 @@ export const SUBSCRIPTION_NAMES: Record<string, string> = {
   'channel.channel_points_custom_reward_redemption.add': 'Canjes de puntos',
   'channel.follow': 'Seguidores nuevos',
   'stream.online': 'Inicio del directo',
+  'channel.chat.message': 'Chat del bot en la nube',
 };
 
 /**

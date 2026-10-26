@@ -1021,7 +1021,7 @@
       actor.expression('normal');
     }
 
-    // playAfter: hora ISO a partir de la que puede sonar (las respuestas a comandos esperan 5 s).
+    // playAfter: hora ISO a partir de la que puede sonar (las respuestas a comandos ya no esperan: llegan sin hora).
     const speak = (text, emotion, voice, gesture, playAfter) => {
       const clean = String(text || '').trim().slice(0, 500);
       if (!clean) return;

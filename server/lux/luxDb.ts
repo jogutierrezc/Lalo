@@ -190,10 +190,15 @@ export interface LuxDb extends Partial<LuxMemoryDb> {
   outboxInsert?(row: LuxOutboxRow): Promise<number>;
   /** Los más recientes primero. */
   outboxList?(profileId: string, limit: number): Promise<LuxOutboxItem[]>;
-  /** Pasa a «claimed» los pendientes más antiguos y los devuelve. Cada mensaje sale una sola vez. */
+  /**
+   * Pasa a «claimed» los pendientes más antiguos y los devuelve. Cada mensaje sale una sola vez. También
+   * recoge de nuevo los «claimed» de hace más de OUTBOX_RECLAIM_MS: el servidor se cayó a mitad de camino.
+   */
   outboxClaim?(profileId: string, limit: number, nowIso: string): Promise<LuxOutboxItem[]>;
   /** El bot confirma que lo publicó (o que no pudo). true si era un mensaje recogido de esta cuenta. */
   outboxFinish?(profileId: string, id: number, ok: boolean, nowIso: string): Promise<boolean>;
+  /** Devuelve a «pending» un mensaje recogido que no llegó a salir (límite de envío). true si era un «claimed» de esta cuenta. */
+  outboxRelease?(profileId: string, id: number): Promise<boolean>;
   outboxPrune?(profileId: string, beforeIso: string): Promise<void>;
   /** Voz de TTS del streamer (configs, módulo 'tts'): la que usa el !s del chat. */
   ttsVoice?(profileId: string): Promise<{ referenceId: string | null; engine: string | null }>;
@@ -261,6 +266,15 @@ export interface LuxCharacterModelPatch {
 }
 
 const OUTBOX_COLUMNS = 'id, text, speak, emotion, mode, status, created_at, claimed_at, sent_at';
+
+/** Un mensaje «claimed» que lleva más de esto sin confirmarse se da por perdido y se recoge de nuevo. */
+export const OUTBOX_RECLAIM_MS = 2 * 60_000;
+
+/** Filtro de PostgREST (.or) de lo que se puede recoger: lo pendiente y lo recogido hace demasiado. */
+export function outboxClaimable(nowIso: string): string {
+  const cutoff = new Date(Date.parse(nowIso) - OUTBOX_RECLAIM_MS).toISOString();
+  return `status.eq.pending,and(status.eq.claimed,claimed_at.lt.${cutoff})`;
+}
 
 function outboxFromRow(row: Record<string, unknown>): LuxOutboxItem {
   return {
@@ -463,11 +477,12 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     },
 
     async outboxClaim(profileId, limit, nowIso) {
+      const claimable = outboxClaimable(nowIso);
       const { data: pending, error } = await db
         .from('lux_outbox')
         .select('id')
         .eq('profile_id', profileId)
-        .eq('status', 'pending')
+        .or(claimable)
         .order('id', { ascending: true })
         .limit(limit);
       check(error);
@@ -478,7 +493,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .from('lux_outbox')
         .update({ status: 'claimed', claimed_at: nowIso })
         .eq('profile_id', profileId)
-        .eq('status', 'pending')
+        .or(claimable)
         .in('id', ids)
         .select(OUTBOX_COLUMNS);
       check(updateError);
@@ -489,6 +504,18 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
       const { data, error } = await db
         .from('lux_outbox')
         .update({ status: ok ? 'sent' : 'failed', sent_at: nowIso })
+        .eq('profile_id', profileId)
+        .eq('id', id)
+        .eq('status', 'claimed')
+        .select('id');
+      check(error);
+      return ((data ?? []) as unknown[]).length > 0;
+    },
+
+    async outboxRelease(profileId, id) {
+      const { data, error } = await db
+        .from('lux_outbox')
+        .update({ status: 'pending', claimed_at: null })
         .eq('profile_id', profileId)
         .eq('id', id)
         .eq('status', 'claimed')

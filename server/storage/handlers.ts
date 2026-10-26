@@ -109,7 +109,9 @@ export function missingSupabaseEnv(env: Env): string[] {
 export async function identify(req: ApiRequest, env: Env): Promise<Context | ApiResult> {
   const missing = missingSupabaseEnv(env);
   if (missing.length > 0) {
-    return fail(503, 'server_not_configured', 'Al servidor le faltan variables para comprobar quién eres.', { missing });
+    // Qué variables faltan solo va al registro del servidor: al cliente no se le dan nombres de configuración
+    console.error('[Lalo almacenamiento] Faltan variables de Supabase en el servidor:', missing.join(', '));
+    return fail(503, 'server_not_configured', 'Al servidor le falta configuración para comprobar quién eres.');
   }
   const token = header(req, 'authorization').replace(/^Bearer\s+/i, '').trim();
   if (!token) return fail(401, 'no_session', 'Hay que iniciar sesión.');
@@ -126,7 +128,11 @@ export async function identify(req: ApiRequest, env: Env): Promise<Context | Api
     .select('id, role, status, plan_id, media_folder')
     .eq('id', data.user.id)
     .maybeSingle();
-  if (profile.error) return fail(502, 'profile_read', `No se pudo leer tu perfil: ${profile.error.message}`);
+  if (profile.error) {
+    // El mensaje de Supabase puede nombrar tablas o columnas: solo al registro, sin secretos
+    console.error('[Lalo almacenamiento] No se pudo leer el perfil:', profile.error.code ?? 'error');
+    return fail(502, 'profile_read', 'No se pudo leer tu perfil. Prueba de nuevo en un momento.');
+  }
   if (!profile.data) return fail(403, 'no_profile', 'Esta cuenta no tiene perfil.');
 
   return {

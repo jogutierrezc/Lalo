@@ -7,6 +7,7 @@
  *   /api/spotify/<acción>         ver spotifyRoutes.ts
  *   /api/kofi/<acción o id>       ver kofi.ts (un id largo es el webhook)
  *   /api/riot/<acción>            ver riotRoutes.ts
+ *   /api/twitch/bot               bot de chat en la nube del streamer (grupo «twitch-bot»), ver twitch/botHandlers.ts
  *   /api/integrations/status      (solo administrador) qué le falta al servidor
  */
 
@@ -18,7 +19,13 @@ import { readSpotifyConfig, redirectUri } from './spotify.js';
 import { SPOTIFY_ACTIONS, SPOTIFY_SEATS, handleSpotify, type SpotifyAction } from './spotifyRoutes.js';
 import { elevenKeySlot } from '../elevenlabs.js';
 import { LUX_ACTIONS, handleLux, type LuxAction } from '../lux/handlers.js';
+import { handleBot, setBotChatPort } from '../twitch/botHandlers.js';
+import { createSubscriptionChatPort } from '../twitch/botChatPort.js';
 import { missingSupabase, type Env } from './store.js';
+
+// Conecta la escucha del chat de Twitch al panel del bot. Vercel (api/integraciones.ts) y el servidor local
+// (server/index.ts) entran por este módulo, así que basta con hacerlo aquí, una sola vez.
+setBotChatPort(createSubscriptionChatPort());
 
 /** Estado del servidor para la consola del administrador. Solo dice qué variables faltan, nunca su valor. */
 async function adminStatus(req: IntegrationRequest, env: Env, deps: Deps): Promise<IntegrationResult> {
@@ -75,6 +82,7 @@ export async function handleIntegration(
   }
   if (group === 'riot' && RIOT_ACTIONS.includes(part as RiotAction)) return handleRiot(part as RiotAction, req, env, deps);
   if (group === 'lux' && LUX_ACTIONS.includes(part as LuxAction)) return handleLux(part as LuxAction, req, env);
+  if (group === 'twitch-bot' && part === 'bot') return handleBot(req, env);
   if (group === 'integrations' && part === 'status') return adminStatus(req, env, deps);
   return fail(404, 'not_found', 'Ruta no encontrada.');
 }

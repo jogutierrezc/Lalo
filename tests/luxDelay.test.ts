@@ -30,22 +30,21 @@ function db(profile: LuxProfile, speech: LuxSpeechRow[]) {
   } as unknown as LuxDb;
 }
 
-describe('retraso de 5 segundos', () => {
-  it('el valor es 5 segundos', () => {
-    expect(LUX_REPLY_DELAY_MS).toBe(5_000);
+describe('sin retraso en las respuestas', () => {
+  it('el retraso es 0', () => {
+    expect(LUX_REPLY_DELAY_MS).toBe(0);
   });
 
-  it('una respuesta a un comando del chat se marca para dentro de 5 s', async () => {
+  it('una respuesta a un comando del chat puede sonar de inmediato (sin play_after)', async () => {
     const speech: LuxSpeechRow[] = [];
     const profile: LuxProfile = { id: 'p1', role: 'streamer', luxEnabled: true };
     const env = { INTEGRATIONS_ENC_KEY: VAULT.toString('base64url') };
     const fetch = (async () => new Response(JSON.stringify({ choices: [{ message: { content: 'Hola' } }] }), { status: 200 })) as unknown as typeof globalThis.fetch;
-    const before = Date.now();
     await handleLux('chat', { method: 'POST', headers: {}, query: {}, body: { k: KEY, command: 'ask', viewer: 'ana', message: 'hola' } }, env, {
       db: () => db(profile, speech),
       fetch,
     });
-    const playAt = Date.parse(String(speech[0]?.play_after));
-    expect(playAt - before).toBeGreaterThanOrEqual(LUX_REPLY_DELAY_MS - 1000);
+    expect(speech).toHaveLength(1);
+    expect(speech[0]?.play_after ?? null).toBeNull();
   });
 });
