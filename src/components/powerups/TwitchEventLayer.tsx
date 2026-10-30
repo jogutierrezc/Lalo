@@ -37,7 +37,10 @@ import { NOTICE_APPS, VOICE_APPS, voiceAllowed } from './noticeRules';
 
 /** Cada cuánto se pregunta por eventos con el canal encendido y apagado. */
 export const POLL_ACTIVE_MS = 4000;
-export const POLL_IDLE_MS = 20000;
+export const POLL_IDLE_MS = 45000;
+
+/** Cada cuánto preguntar: rápido con el canal encendido o una capa de Ko-fi; lento si no. */
+export const eventPollDelay = (active: boolean): number => (active ? POLL_ACTIVE_MS : POLL_IDLE_MS);
 
 /** Fuentes que pueden hacer algo con un evento. Las demás (chat, raid...) ni preguntan. */
 const LISTENING_APPS = ['', 'tts', 'all', 'rewards', 'recompensas', 'goals', 'scene', 'roulette', 'ruleta', 'wheel', 'kofi', 'kofigoal', 'kofirecent', 'pets'];
@@ -134,8 +137,16 @@ export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, 
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
+    const isActive = () => loadPowerupsSettings().channelActive || !!live.current.fast;
+    /** Ritmo con el que se programó la próxima consulta: si pasa a activo, se adelanta. */
+    let scheduledActive = true;
+    let running = false;
+
     const tick = async () => {
+      if (running) return;
+      running = true;
       const result = await pollWidgetEvents(key, cursor).catch(() => null);
+      running = false;
       if (stopped) return;
       if (result) {
         result.events.forEach((row) => {
@@ -146,13 +157,24 @@ export const TwitchEventLayer: React.FC<TwitchEventLayerProps> = ({ app, speak, 
         });
         cursor = Math.max(cursor ?? 0, result.cursor);
       }
-      timer = setTimeout(tick, loadPowerupsSettings().channelActive || live.current.fast ? POLL_ACTIVE_MS : POLL_IDLE_MS);
+      scheduledActive = isActive();
+      timer = setTimeout(tick, eventPollDelay(scheduledActive));
     };
     tick();
+
+    // Con el ritmo lento, encender el canal (ajustes que llegan de la nube o del panel) adelanta la consulta
+    const onSettings = () => {
+      if (stopped || running || scheduledActive || !isActive() || !timer) return;
+      clearTimeout(timer);
+      timer = setTimeout(tick, POLL_ACTIVE_MS);
+      scheduledActive = true;
+    };
+    window.addEventListener('storage', onSettings);
 
     return () => {
       stopped = true;
       if (timer) clearTimeout(timer);
+      window.removeEventListener('storage', onSettings);
     };
   }, [listening]);
 

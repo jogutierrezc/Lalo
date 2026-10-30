@@ -5,7 +5,8 @@
  * configuración del streamer con la clave privada `k` de su URL.
  *
  * Al arrancar descarga el paquete completo y lo escribe en localStorage, que es
- * de donde ya leen todas las capas. Después pregunta cada diez segundos solo por
+ * de donde ya leen todas las capas. Después pregunta cada treinta segundos (y al
+ * volver a verse la fuente, si estaba oculta) solo por
  * la fecha del último cambio (una respuesta mínima, para no gastar salida de
  * datos) y vuelve a descargar el paquete únicamente si cambió.
  *
@@ -32,7 +33,7 @@ import { loadPetsSettings } from '../types/pets';
 import { loadGameSettings } from '../types/game';
 import { loadTournamentSettings } from '../types/tournament';
 
-const CHECK_EVERY_MS = 10000;
+export const CHECK_EVERY_MS = 30000;
 /** Sin la función de la fecha, cada cuántas consultas se descarga el paquete entero. */
 const FULL_PULL_EVERY = 3;
 
@@ -140,8 +141,9 @@ export async function startWidgetCloud(key: string): Promise<() => void> {
   }
 
   let inFlight = false;
-  const timer = setInterval(async () => {
-    if (stopped || inFlight) return;
+  const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+  const check = async () => {
+    if (stopped || inFlight || isHidden()) return;
     inFlight = true;
     try {
       const version = await readVersion();
@@ -160,10 +162,17 @@ export async function startWidgetCloud(key: string): Promise<() => void> {
     } finally {
       inFlight = false;
     }
-  }, CHECK_EVERY_MS);
+  };
+  const timer = setInterval(check, CHECK_EVERY_MS);
+  // Fuente de OBS oculta: no se consulta; al volver a verse se consulta al instante
+  const onVisible = () => {
+    if (!isHidden()) void check();
+  };
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
 
   return () => {
     stopped = true;
     clearInterval(timer);
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
   };
 }

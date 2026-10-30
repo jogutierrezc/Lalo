@@ -1,7 +1,17 @@
 import { readFileSync } from 'node:fs';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createCloudTournamentStore, panelTransport, widgetTournamentStore, widgetTransport } from '../src/lib/tournamentCloud';
+import {
+  TOURNAMENT_ACTIVE_WINDOW_MS,
+  TOURNAMENT_IDLE_POLL_MS,
+  TOURNAMENT_MID_POLL_MS,
+  TOURNAMENT_MID_WINDOW_MS,
+  createCloudTournamentStore,
+  panelTransport,
+  tournamentPollDelay,
+  widgetTournamentStore,
+  widgetTransport,
+} from '../src/lib/tournamentCloud';
 import { fetchPublicTournament, registerTeam } from '../src/lib/tournamentSignupApi';
 import { localTournamentStore, type TournamentStore } from '../src/lib/tournamentStore';
 import { DEFAULT_TOURNAMENT_SETTINGS, type TournamentState, emptyTournamentState, normalizeTournamentSettings, normalizeTournamentState } from '../src/types/tournament';
@@ -286,6 +296,77 @@ describe('Torneos: almacén de la nube', () => {
     await vi.advanceTimersByTimeAsync(12000);
     expect(cloud.rpcs.length).toBe(asked);
     store.stop();
+  });
+
+  it('adaptativo: ritmo rápido con actividad, más lento en reposo y vuelve al rápido con un cambio', async () => {
+    vi.useFakeTimers();
+    const start = bracket();
+    const { cloud, client } = fakeCloud({ state: start, version: 1 });
+    const store = createCloudTournamentStore(widgetTransport(client, KEY), { local: memoryStore().store, adaptive: true });
+    const heard = vi.fn();
+    store.subscribe(heard);
+    await vi.advanceTimersByTimeAsync(0);
+    const count = () => cloud.rpcs.length;
+
+    // Primer minuto: cada 3 s (la primera lectura cuenta como cambio)
+    const before = count();
+    await vi.advanceTimersByTimeAsync(60000 - 1);
+    expect(count() - before).toBe(19);
+
+    // Reposo largo: de 6 s y luego de 12 s
+    await vi.advanceTimersByTimeAsync(200000);
+    const rested = count();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(count() - rested).toBe(5);
+
+    // Un cambio ajeno se recoge en la siguiente consulta (como mucho 12 s) y devuelve el ritmo rápido
+    const theirs = win(start, 1, 2000);
+    cloud.row = { state: theirs, version: 2 };
+    await vi.advanceTimersByTimeAsync(12000);
+    expect(heard).toHaveBeenLastCalledWith(theirs, true);
+    const fast = count();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(count() - fast).toBeGreaterThanOrEqual(9);
+    expect(count() - fast).toBeLessThanOrEqual(10);
+    store.stop();
+  });
+
+  it('el retardo adaptativo sube por tramos y nunca baja del ritmo base', () => {
+    expect(tournamentPollDelay(0)).toBe(3000);
+    expect(tournamentPollDelay(TOURNAMENT_ACTIVE_WINDOW_MS - 1)).toBe(3000);
+    expect(tournamentPollDelay(TOURNAMENT_ACTIVE_WINDOW_MS)).toBe(TOURNAMENT_MID_POLL_MS);
+    expect(tournamentPollDelay(TOURNAMENT_MID_WINDOW_MS)).toBe(TOURNAMENT_IDLE_POLL_MS);
+    expect(tournamentPollDelay(10 ** 9, 20000)).toBe(20000);
+  });
+
+  it('pauseHidden: oculto no consulta y al volver a verse consulta al instante', async () => {
+    vi.useFakeTimers();
+    const listeners = new Set<() => void>();
+    let state: 'visible' | 'hidden' = 'hidden';
+    vi.stubGlobal('document', {
+      get visibilityState() {
+        return state;
+      },
+      addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+      removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+    });
+    try {
+      const { cloud, client } = fakeCloud({ state: bracket(), version: 1 });
+      const store = createCloudTournamentStore(widgetTransport(client, KEY), { local: memoryStore().store, pauseHidden: true, adaptive: true });
+      store.subscribe(vi.fn());
+      await vi.advanceTimersByTimeAsync(0);
+      // La lectura inicial se hace aunque esté oculta; después, nada
+      const first = cloud.rpcs.length;
+      await vi.advanceTimersByTimeAsync(120000);
+      expect(cloud.rpcs.length).toBe(first);
+      state = 'visible';
+      listeners.forEach((fn) => fn());
+      await vi.advanceTimersByTimeAsync(0);
+      expect(cloud.rpcs.length).toBe(first + 1);
+      store.stop();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('sin respuesta de la nube sigue como el almacén local y reintenta lo pendiente', async () => {

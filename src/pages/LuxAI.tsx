@@ -228,10 +228,16 @@ export const LuxAI: React.FC = () => {
       });
     };
     load();
-    const timer = setInterval(load, sayWaiting ? 4000 : 20000);
+    // Pestaña oculta: no se consulta; al volver a verse se lee al instante
+    const tick = () => {
+      if (document.visibilityState !== 'hidden') load();
+    };
+    const timer = setInterval(tick, sayWaiting ? 4000 : 20000);
+    document.addEventListener('visibilitychange', tick);
     return () => {
       alive = false;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
     };
   }, [enabled, sayWaiting]);
 

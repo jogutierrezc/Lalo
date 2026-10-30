@@ -41,6 +41,23 @@ import { localTournamentStore, setTournamentStore, tournamentStore, type Tournam
 
 /** Cada cuánto se pregunta por cambios ajenos. */
 export const TOURNAMENT_POLL_MS = 3000;
+/**
+ * Fuente de OBS: el ritmo baja cuando no pasa nada. Tras un cambio (de la nube o
+ * local) se pregunta cada TOURNAMENT_POLL_MS durante ACTIVE_WINDOW_MS; después cada
+ * MID_POLL_MS hasta MID_WINDOW_MS y, en reposo, cada IDLE_POLL_MS. Un cambio
+ * vuelve al ritmo rápido.
+ */
+export const TOURNAMENT_ACTIVE_WINDOW_MS = 60000;
+export const TOURNAMENT_MID_WINDOW_MS = 180000;
+export const TOURNAMENT_MID_POLL_MS = 6000;
+export const TOURNAMENT_IDLE_POLL_MS = 12000;
+
+/** Cuánto esperar a la siguiente consulta según el tiempo sin actividad. */
+export function tournamentPollDelay(quietMs: number, pollMs: number = TOURNAMENT_POLL_MS): number {
+  if (quietMs < TOURNAMENT_ACTIVE_WINDOW_MS) return pollMs;
+  if (quietMs < TOURNAMENT_MID_WINDOW_MS) return Math.max(pollMs, TOURNAMENT_MID_POLL_MS);
+  return Math.max(pollMs, TOURNAMENT_IDLE_POLL_MS);
+}
 /** Lo máximo que la fuente de OBS espera a la primera lectura antes de pintar. */
 const PRIME_TIMEOUT_MS = 2500;
 
@@ -155,8 +172,10 @@ export interface CloudStoreOptions {
   pollMs?: number;
   /** Panel: si la nube aún no tiene estado, sube el de este navegador. */
   seed?: boolean;
-  /** Panel: con la pestaña oculta no se consulta. Las fuentes de OBS consultan siempre. */
+  /** Con la pestaña oculta no se consulta y al volver a verse se consulta al instante. */
   pauseHidden?: boolean;
+  /** Fuente de OBS: el ritmo baja en reposo (ver tournamentPollDelay) y vuelve al rápido con cada cambio. */
+  adaptive?: boolean;
 }
 
 export function createCloudTournamentStore(transport: TournamentTransport, options: CloudStoreOptions = {}): CloudTournamentStore {
@@ -173,7 +192,12 @@ export function createCloudTournamentStore(transport: TournamentTransport, optio
   /** El cambio local más reciente que falta por subir. */
   let pending: TournamentState | null = null;
   let busy: Promise<void> | null = null;
-  let timer: ReturnType<typeof setInterval> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  /** Último cambio visto (de la nube o local): marca el ritmo del modo adaptativo. */
+  let lastActivity = Date.now();
+  const markActive = () => {
+    lastActivity = Date.now();
+  };
   let stopLocal: (() => void) | null = null;
   let stopped = false;
 
@@ -182,6 +206,7 @@ export function createCloudTournamentStore(transport: TournamentTransport, optio
   /** El estado de la nube pasa a ser el de aquí, lo quiera o no quien escucha. */
   const adopt = (state: TournamentState) => {
     current = state;
+    markActive();
     // Copia en este navegador: es lo que se ve al recargar sin conexión, y avisa a las fuentes sin clave abiertas aquí
     local.write(state);
     listeners.forEach((listener) => listener(state, true));
@@ -272,11 +297,18 @@ export function createCloudTournamentStore(transport: TournamentTransport, optio
     if (!hidden() && !stopped) void run();
   };
 
+  const schedule = () => {
+    if (stopped) return;
+    const wait = options.adaptive ? tournamentPollDelay(Date.now() - lastActivity, pollMs) : pollMs;
+    timer = setTimeout(() => {
+      if (!hidden()) void run();
+      schedule();
+    }, wait);
+  };
+
   const startPolling = () => {
     if (timer || stopped) return;
-    timer = setInterval(() => {
-      if (!hidden()) void run();
-    }, pollMs);
+    schedule();
     // Mientras la nube no responde, este almacén reenvía lo que el local recibe (bus y ajustes sincronizados)
     stopLocal = local.subscribe((state) => {
       if (linked) return;
@@ -287,7 +319,7 @@ export function createCloudTournamentStore(transport: TournamentTransport, optio
   };
 
   const stopPolling = () => {
-    if (timer) clearInterval(timer);
+    if (timer) clearTimeout(timer);
     timer = null;
     stopLocal?.();
     stopLocal = null;
@@ -298,6 +330,7 @@ export function createCloudTournamentStore(transport: TournamentTransport, optio
     read: () => current ?? local.read(),
     write: (state) => {
       current = state;
+      markActive();
       local.write(state);
       pending = state;
       // Si hay una tarea en marcha, al terminar se sube lo pendiente
@@ -335,7 +368,8 @@ export function createCloudTournamentStore(transport: TournamentTransport, optio
 export function widgetTournamentStore(client: SupabaseClient | null, key: string | null | undefined): TournamentStore {
   // La misma comprobación que hace la base: una clave más corta no es una clave
   if (!client || !key || key.length < 32) return localTournamentStore;
-  return createCloudTournamentStore(widgetTransport(client, key));
+  // Una fuente de OBS oculta (escena sin mostrar) no consulta; al verse consulta al instante
+  return createCloudTournamentStore(widgetTransport(client, key), { pauseHidden: true, adaptive: true });
 }
 
 const isCloudStore = (store: TournamentStore): store is CloudTournamentStore => typeof (store as Partial<CloudTournamentStore>).stop === 'function';
