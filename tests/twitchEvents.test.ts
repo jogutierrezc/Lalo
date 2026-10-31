@@ -430,6 +430,10 @@ describe('permisos', () => {
     expect(TWITCH_SCOPES).toContain('channel:read:redemptions');
   });
 
+  it('la entrada con Twitch pide los permisos del bot con el nombre del streamer', () => {
+    for (const scope of ['user:read:chat', 'user:write:chat', 'user:bot']) expect(TWITCH_SCOPES).toContain(scope);
+  });
+
   it('detecta qué falta, y distingue «falta» de «no se sabe»', () => {
     expect(missingScopes(null)).toBeNull();
     expect(scopeState(null)).toBe('unknown');

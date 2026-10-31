@@ -68,7 +68,9 @@ export function getPendingCode(): PendingCode | null {
  * rompe la entrada).
  *   - moderator:read:followers: saber de los seguidores nuevos.
  *   - user:write:chat: enviar mensajes al chat.
- *   - channel:bot: que el bot entre en el chat del canal y escriba como bot.
+ *   - channel:bot: que el bot (cuenta Lalo) entre en el chat del canal y escriba como bot.
+ *   - user:read:chat y user:bot: bot en la nube con el nombre del streamer (modo «streamer»):
+ *     EventSub channel.chat.message y Send Chat Message con la propia cuenta del streamer.
  *   - bits:read: saber cuándo se usan Bits (cheers y Power-ups) y leer la lista
  *     de Power-ups personalizados. Solo lectura.
  *   - channel:read:redemptions: saber de los canjes de puntos, también de los
@@ -80,6 +82,8 @@ export const TWITCH_SCOPES = [
   'moderator:read:followers',
   'user:write:chat',
   'channel:bot',
+  'user:read:chat',
+  'user:bot',
   'bits:read',
   'channel:read:redemptions',
 ] as const;

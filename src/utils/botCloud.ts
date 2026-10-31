@@ -117,6 +117,16 @@ export function botErrorMessage(code: string, fallback: string): string {
   return fallback;
 }
 
+/** Qué significa cada cuenta de envío, para la tarjeta «Bot en la nube». */
+export function senderModeHint(mode: 'global' | 'streamer'): string {
+  return mode === 'streamer'
+    ? 'Los mensajes del bot salen con tu nombre. Twitch te pide aceptar tres permisos (leer el chat, escribir y actuar como bot).'
+    : 'Los mensajes salen con la cuenta Lalo. Twitch te pide dejarla entrar en tu chat.';
+}
+
+/** Aviso tras cambiar de cuenta de envío: el bot queda apagado y hay que conectar de nuevo. */
+export const SENDER_MODE_CHANGED = 'Cambiado. El bot quedó apagado: pulsa «Conectar el bot» para dar los permisos de esta opción.';
+
 export type StepState ='done' | 'todo' | 'waiting' | 'unavailable';
 
 export interface BotStep {

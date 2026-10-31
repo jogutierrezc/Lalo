@@ -209,6 +209,45 @@ describe('unsubscribe', () => {
   });
 });
 
+describe('modo streamer: la suscripción lleva el id del propio streamer', () => {
+  it('subscribe crea channel.chat.message con user_id = el streamer, sin necesitar TWITCH_BOT_USER_ID', async () => {
+    const twitch = fakeTwitch([]);
+    expect(await portWith(twitch, { TWITCH_BOT_USER_ID: '' }).subscribe('100', 'streamer')).toEqual({ outcome: 'created', detail: '' });
+    expect(twitch.creates[0]).toMatchObject({ type: 'channel.chat.message', condition: { broadcaster_user_id: '100', user_id: '100' } });
+  });
+
+  it('status solo cuenta la suscripción del modo elegido', async () => {
+    const delStreamer = fakeTwitch([chat('enabled', { user: '100' })]);
+    expect(await portWith(delStreamer).status('100', 'streamer')).toBe('enabled');
+    expect(await portWith(delStreamer).status('100', 'global')).toBe('missing');
+    const deLalo = fakeTwitch([chat('enabled')]);
+    expect(await portWith(deLalo).status('100', 'streamer')).toBe('missing');
+  });
+
+  it('al pasar de modo, la suscripción del otro se quita y se crea la nueva', async () => {
+    const twitch = fakeTwitch([chat('enabled', { id: 'lalo' })]);
+    expect((await portWith(twitch).subscribe('100', 'streamer')).outcome).toBe('created');
+    expect(twitch.log).toEqual(['GET', 'DELETE lalo', 'POST']);
+    expect(twitch.subs.map((sub) => sub.user)).toEqual(['100']);
+  });
+
+  it('403: no_permission con el texto del streamer, sin nombrar channel:bot ni a Lalo', async () => {
+    const result = await portWith(fakeTwitch([], { createStatus: 403 })).subscribe('100', 'streamer');
+    expect(result.outcome).toBe('no_permission');
+    expect(result.detail).toContain('user:read:chat');
+    expect(result.detail).toContain('user:write:chat');
+    expect(result.detail).toContain('user:bot');
+    expect(result.detail).not.toContain('channel:bot');
+    expect(result.detail).not.toContain('Lalo');
+  });
+
+  it('unsubscribe quita la del chat sea del modo que sea', async () => {
+    const twitch = fakeTwitch([chat('enabled', { id: 'a', user: '100' }), chat('enabled', { id: 'b' })]);
+    expect(await portWith(twitch).unsubscribe('100')).toBe(true);
+    expect(twitch.subs).toHaveLength(0);
+  });
+});
+
 describe('conexión con el panel (sin dependencias circulares)', () => {
   const caller: BotCaller = { profileId: 'p1', twitchUserId: '100', twitchLogin: 'canala' };
   const store = (settings: BotSettings): BotDb =>
@@ -227,7 +266,7 @@ describe('conexión con el panel (sin dependencias circulares)', () => {
     const res = await handleBot({ method: 'GET', headers: {}, body: undefined }, process.env, {
       who: async () => caller,
       // Con el bot apagado no se pregunta a Twitch: el estado real solo se ve con el bot encendido
-      db: () => store({ ...DEFAULT_BOT_SETTINGS, enabled: true }),
+      db: () => store({ ...DEFAULT_BOT_SETTINGS, senderMode: 'global', enabled: true }),
     });
     expect(res.body.connection).toMatchObject({ chat: 'enabled' });
   });
@@ -238,7 +277,7 @@ describe('conexión con el panel (sin dependencias circulares)', () => {
     vi.stubGlobal('fetch', twitch.fetch);
     const res = await handleBot({ method: 'POST', headers: {}, body: { action: 'connect' } }, process.env, {
       who: async () => caller,
-      db: () => store(DEFAULT_BOT_SETTINGS),
+      db: () => store({ ...DEFAULT_BOT_SETTINGS, senderMode: 'global' }),
     });
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ outcome: 'created', settings: { enabled: true } });

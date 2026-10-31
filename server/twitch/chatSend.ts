@@ -1,8 +1,11 @@
 /**
  * server/twitch/chatSend.ts
  *
- * Escribe en el chat de Twitch desde el servidor con el bot global "Lalo".
- * Usa el token de APLICACIÓN (appToken de clips.ts) y no guarda tokens de usuario.
+ * Escribe en el chat de Twitch desde el servidor con el bot global "Lalo" o, en modo streamer
+ * (senderMode.ts), con la propia cuenta del streamer: lo único que cambia es el sender_id.
+ * Usa el token de APLICACIÓN (appToken de clips.ts) y no guarda tokens de usuario. Si el emisor
+ * es el dueño del canal no hace falta channel:bot; sí user:write:chat y user:bot del emisor.
+ * El limitador cuenta por sender_id, o sea por cuenta: cada streamer en modo streamer tiene su cupo.
  *
  * Twitch (comprobado en dev.twitch.tv el 2026-10-25):
  *   - POST https://api.twitch.tv/helix/chat/messages con {broadcaster_id, sender_id,
@@ -147,8 +150,10 @@ export function createMemoryLimiter(options: { moderator?: boolean } = {}): Send
 export interface ChatSendInput {
   fetch: Fetch;
   env: Env;
-  /** Cuenta del bot (sender_id). */
+  /** Cuenta que escribe (sender_id): la del bot global o, en modo streamer, la del propio streamer. */
   botUserId: string;
+  /** Se llama con cada trozo justo antes de mandarlo (modo streamer: anotar el texto para descartar su eco). Si lanza, el trozo no sale. */
+  beforePart?: (part: string) => Promise<void>;
   /** Canal donde se escribe (broadcaster_id). */
   broadcasterId: string;
   text: string;
@@ -291,6 +296,15 @@ export async function sendChatMessage(input: ChatSendInput): Promise<ChatSendRes
     }
     if (!taken.ok) {
       return { status: 'rate_limited', waitMs: taken.waitMs, scope: taken.scope, ...progress(0) };
+    }
+
+    // Modo streamer: se anota el texto ANTES de enviarlo para reconocer su eco. Si no se puede anotar, no se envía
+    if (input.beforePart) {
+      try {
+        await input.beforePart(parts[index]);
+      } catch {
+        return { status: 'error', reason: 'echo_mark', ...progress(0) };
+      }
     }
 
     const outcome = await postPart(input, now, parts[index], index === 0 ? input.replyTo : undefined);

@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetClipState } from '../server/twitch/clips';
 import { createChatProcessor, fillResponse, hasPermission, type ChatLux, type ChatProcessorDeps } from '../server/twitch/chatProcessor';
+import { ECHO_SECONDS } from '../server/twitch/senderMode';
 import { createDbLimiter, type LimiterRpc } from '../server/twitch/chatLimiter';
 import { createMemoryLimiter, type SendLimiter } from '../server/twitch/chatSend';
 import { DEFAULT_BOT_SETTINGS, type BotCommand, type BotDb, type BotSettings } from '../server/twitch/botDb';
@@ -66,7 +67,9 @@ const command = (name: string, response: string, permission: BotCommand['permiss
   position: 0,
 });
 
-const on = (prefix = '!'): BotSettings => ({ ...DEFAULT_BOT_SETTINGS, enabled: true, prefix });
+// Los ajustes de las pruebas de siempre son los de la cuenta global Lalo; el modo streamer tiene los suyos (streamerOn)
+const on = (prefix = '!'): BotSettings => ({ ...DEFAULT_BOT_SETTINGS, enabled: true, prefix, senderMode: 'global' });
+const streamerOn = (prefix = '!'): BotSettings => ({ ...on(prefix), senderMode: 'streamer' });
 
 let counter = 0;
 const message = (text: string, extra: Partial<ChatMessageEvent> = {}): ChatMessageEvent => ({
@@ -302,13 +305,39 @@ describe('bot apagado, prefijo y aislamiento', () => {
     ]);
   });
 
-  it('el modo «streamer» está reservado: no responde con la cuenta global', async () => {
+  it('el modo «streamer» responde con la cuenta del streamer, no con la global', async () => {
     const { handler, net } = setup({
-      settings: { [PROFILE_A]: { ...on(), senderMode: 'streamer' } },
+      settings: { [PROFILE_A]: streamerOn() },
       commands: { [PROFILE_A]: [command('hola', 'hi')] },
     });
     await handler(message('!hola'), env);
-    expect(net.sent).toHaveLength(0);
+    expect(net.sent).toHaveLength(1);
+    expect(net.sent[0]).toMatchObject({ broadcaster_id: '100', sender_id: '100', message: 'hi' });
+  });
+
+  it('el modo «streamer» funciona sin TWITCH_BOT_USER_ID', async () => {
+    const { handler, net } = setup({
+      settings: { [PROFILE_A]: streamerOn(), [PROFILE_B]: on() },
+      commands: { [PROFILE_A]: [command('hola', 'hi')], [PROFILE_B]: [command('hola', 'hi')] },
+    });
+    const sinBot = { ...env, TWITCH_BOT_USER_ID: '' };
+    await handler(message('!hola'), sinBot);
+    await handler(message('!hola', { broadcasterId: '200', broadcasterLogin: 'canalB' }), sinBot);
+    // El canal en modo global sin cuenta Lalo no escribe; el del streamer sí
+    expect(net.sent.map((item) => [item.broadcaster_id, item.sender_id])).toEqual([['100', '100']]);
+  });
+
+  it('cada canal escribe con su cuenta según su modo', async () => {
+    const { handler, net } = setup({
+      settings: { [PROFILE_A]: streamerOn(), [PROFILE_B]: on() },
+      commands: { [PROFILE_A]: [command('hola', 'hi')], [PROFILE_B]: [command('hola', 'hi')] },
+    });
+    await handler(message('!hola'), env);
+    await handler(message('!hola', { broadcasterId: '200', broadcasterLogin: 'canalB' }), env);
+    expect(net.sent.map((item) => [item.broadcaster_id, item.sender_id])).toEqual([
+      ['100', '100'],
+      ['200', BOT],
+    ]);
   });
 });
 
@@ -323,9 +352,72 @@ describe('mensajes del propio bot (sin bucle)', () => {
     expect(store.takes).toHaveLength(0);
   });
 
-  it('sin TWITCH_BOT_USER_ID no escribe nada', async () => {
+  it('sin TWITCH_BOT_USER_ID, un canal en modo global no escribe nada', async () => {
     const { handler, net } = setup({ commands: { [PROFILE_A]: [command('hola', 'hi')] } });
     await handler(message('!hola'), { ...env, TWITCH_BOT_USER_ID: '' });
+    expect(net.sent).toHaveLength(0);
+  });
+
+  it('modo streamer: la respuesta del bot sale con el nombre del streamer y su eco se descarta (sin bucle)', async () => {
+    const { handler, net } = setup({ settings: { [PROFILE_A]: streamerOn() }, commands: { [PROFILE_A]: [command('hola', '!hola')] } });
+    await handler(message('!hola'), env);
+    expect(net.sent).toHaveLength(1);
+    expect(net.sent[0].sender_id).toBe('100');
+    // El eco vuelve por EventSub como un mensaje del propio streamer, con el mismo texto (en otro Message-Id)
+    await handler(message('!hola', { chatterId: '100', chatterLogin: 'canala', chatterName: 'CanalA', isBroadcaster: true }), env);
+    expect(net.sent).toHaveLength(1);
+    // Aunque Twitch lo reentregue
+    await handler(message('!hola', { chatterId: '100', chatterLogin: 'canala', chatterName: 'CanalA', isBroadcaster: true }), env);
+    expect(net.sent).toHaveLength(1);
+  });
+
+  it('modo streamer: un comando que el streamer escribe a mano sí se atiende', async () => {
+    const { handler, net } = setup({ settings: { [PROFILE_A]: streamerOn() }, commands: { [PROFILE_A]: [command('hola', 'hi'), command('solocanal', 'ok', 'broadcaster')] } });
+    await handler(message('!solocanal', { chatterId: '100', chatterLogin: 'canala', chatterName: 'CanalA', isBroadcaster: true }), env);
+    expect(net.sent.map((item) => item.message)).toEqual(['ok']);
+  });
+
+  it('modo streamer: la IA contesta con el nombre del streamer y su eco no se vuelve a contestar', async () => {
+    const lux = fakeLux();
+    const { handler, net } = setup({ settings: { [PROFILE_A]: streamerOn() }, lux });
+    await handler(message('!lux hola'), env);
+    expect(net.sent).toHaveLength(1);
+    expect(net.sent[0]).toMatchObject({ sender_id: '100', message: 'respuesta a hola' });
+    await handler(message('respuesta a hola', { chatterId: '100', chatterLogin: 'canala', isBroadcaster: true }), env);
+    expect(net.sent).toHaveLength(1);
+    expect(lux.asks).toHaveLength(1);
+  });
+
+  it('modo streamer: el eco se reconoce por el texto de cada trozo, y pasado el plazo el mismo texto a mano vuelve a valer', async () => {
+    const { handler, net, store } = setup({ settings: { [PROFILE_A]: streamerOn() }, commands: { [PROFILE_A]: [command('eco', '!eco')] } });
+    await handler(message('!eco'), env);
+    expect(net.sent).toHaveLength(1);
+    const mano = () => message('!eco', { chatterId: '100', chatterLogin: 'canala', isBroadcaster: true });
+    await handler(mano(), env);
+    expect(net.sent).toHaveLength(1);
+    store.tick(ECHO_SECONDS + 1);
+    await handler(mano(), env);
+    expect(net.sent).toHaveLength(2);
+  });
+
+  it('modo streamer: si no se puede anotar el texto, no se envía (antes que arriesgar un bucle)', async () => {
+    const settings = { [PROFILE_A]: streamerOn() };
+    const store = fakeDb({ settings, commands: { [PROFILE_A]: [command('hola', 'hi')] } });
+    const original = store.db.takeCooldown;
+    store.db.takeCooldown = async (id, viewer, key, seconds) => {
+      if (viewer === 'echo') throw new Error('base caída');
+      return original(id, viewer, key, seconds);
+    };
+    const net = fakeFetch();
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const handler = createChatProcessor({ db: () => store.db, profileId: async (id) => CHANNELS[id] ?? null, limiter: () => createMemoryLimiter(), lux: fakeLux().lux, fetch: net.fetch, sleep: async () => undefined });
+    await handler(message('!hola'), env);
+    expect(net.sent).toHaveLength(0);
+  });
+
+  it('el bot global tampoco se contesta en un canal en modo streamer', async () => {
+    const { handler, net } = setup({ settings: { [PROFILE_A]: streamerOn() }, commands: { [PROFILE_A]: [command('hola', 'hi')] } });
+    await handler(message('!hola', { chatterId: BOT, chatterLogin: 'lalo' }), env);
     expect(net.sent).toHaveLength(0);
   });
 

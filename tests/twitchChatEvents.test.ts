@@ -174,6 +174,38 @@ describe('suscripción channel.chat.message', () => {
     expect(result.detail).toContain('Lalo');
   });
 
+  it('modo streamer: user_id es el propio streamer y no hace falta TWITCH_BOT_USER_ID', async () => {
+    const { fetcher, calls } = fakeFetch(202);
+    const result = await createOne(chatWanted, '1337', config(''), { fetch: fetcher, now: () => 1 }, '1337');
+    expect(result.outcome).toBe('created');
+    const post = calls.find((call) => call.url.includes('helix/eventsub/subscriptions'));
+    expect(post?.body).toMatchObject({ type: 'channel.chat.message', condition: { broadcaster_user_id: '1337', user_id: '1337' } });
+  });
+
+  it('modo streamer: el 403 pide los tres permisos del streamer y no nombra channel:bot ni a Lalo', async () => {
+    const result = await createOne(chatWanted, '1337', config('555'), { fetch: fakeFetch(403).fetcher, now: () => 1 }, '1337');
+    expect(result.outcome).toBe('no_permission');
+    for (const scope of ['user:read:chat', 'user:write:chat', 'user:bot']) expect(result.detail).toContain(scope);
+    expect(result.detail).not.toContain('channel:bot');
+    expect(result.detail).not.toContain('Lalo');
+  });
+
+  it('ownSubscriptions filtra por el user_id del modo y devuelve quién lee el chat', () => {
+    const item = (user: string) => ({
+      id: user,
+      type: EVENT_TYPES.chat,
+      version: '1',
+      status: 'enabled',
+      condition: { broadcaster_user_id: '1337', user_id: user },
+      transport: { method: 'webhook', callback },
+      created_at: '2026-10-25T10:00:00Z',
+    });
+    const both = [item('1337'), item('555')];
+    expect(ownSubscriptions(both, '1337', callback, '1337').map((sub) => sub.userId)).toEqual(['1337']);
+    expect(ownSubscriptions(both, '1337', callback, '555').map((sub) => sub.userId)).toEqual(['555']);
+    expect(ownSubscriptions(both, '1337', callback, '').map((sub) => sub.userId)).toEqual(['1337', '555']);
+  });
+
   it('409 es que ya existía y otro código es error', async () => {
     expect((await createOne(chatWanted, '1337', config('555'), { fetch: fakeFetch(409).fetcher, now: () => 1 })).outcome).toBe('already');
     expect((await createOne(chatWanted, '1337', config('555'), { fetch: fakeFetch(500).fetcher, now: () => 1 })).outcome).toBe('error');

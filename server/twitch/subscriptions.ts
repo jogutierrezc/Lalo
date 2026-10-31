@@ -34,6 +34,8 @@
  *     aplicación, la cuenta Lalo debe haber concedido a la aplicación user:read:chat, user:write:chat
  *     y user:bot, y el streamer channel:bot; si no, Twitch responde 403. Sin coste de suscripción
  *     (comprobado en la referencia de EventSub, 2026-10-25). NO está probado contra Twitch real.
+ *     Modo streamer (senderMode.ts): user_id es el propio streamer (= broadcaster_user_id); él concede
+ *     user:read:chat, user:write:chat y user:bot al iniciar sesión y NO hace falta channel:bot.
  *
  * No se guarda ningún token de usuario en el servidor: no hace falta.
  *
@@ -65,7 +67,10 @@ export const WANTED: readonly WantedSubscription[] = [
   { type: EVENT_TYPES.chat, version: '1', scope: 'channel:bot', bot: true },
 ];
 
-/** La condición que Twitch exige a cada tipo. */
+/**
+ * La condición que Twitch exige a cada tipo. En el chat, `botUserId` es el user_id de la suscripción: la cuenta Lalo
+ * (modo global) o el propio streamer (modo streamer, ver senderMode.ts).
+ */
 export function conditionFor(wanted: WantedSubscription, twitchUserId: string, botUserId = ''): Record<string, string> {
   if (wanted.bot) return { broadcaster_user_id: twitchUserId, user_id: botUserId };
   return wanted.moderator
@@ -151,6 +156,8 @@ export interface TwitchSubscription {
   type: string;
   status: string;
   createdAt: string | null;
+  /** user_id de la condición (solo el chat lo lleva): quién lee el chat con esta suscripción. */
+  userId?: string;
 }
 
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -172,7 +179,15 @@ export function ownSubscriptions(data: unknown, twitchUserId: string, callback: 
     // Con user_id, solo cuenta la que lee el chat como la cuenta Lalo (si no se sabe cuál es, vale cualquiera con user_id)
     if (wanted.bot && (typeof condition.user_id !== 'string' || (botUserId && condition.user_id !== botUserId))) return [];
     if (transport.method !== 'webhook' || transport.callback !== callback) return [];
-    return [{ id: str(item.id), type: str(item.type), status: str(item.status), createdAt: str(item.created_at) || null }];
+    return [
+      {
+        id: str(item.id),
+        type: str(item.type),
+        status: str(item.status),
+        createdAt: str(item.created_at) || null,
+        ...(wanted.bot ? { userId: str(condition.user_id) } : {}),
+      },
+    ];
   });
 }
 
@@ -189,7 +204,11 @@ export function summarize(found: readonly TwitchSubscription[]): SubscriptionRow
   });
 }
 
-export async function listOwn(twitchUserId: string, config: Config, deps: Deps): Promise<TwitchSubscription[]> {
+/**
+ * `chatUserId` filtra la suscripción del chat por su user_id (por defecto, la cuenta Lalo de la configuración).
+ * Con '' vale cualquiera: sirve para encontrar y quitar la de otro modo de envío.
+ */
+export async function listOwn(twitchUserId: string, config: Config, deps: Deps, chatUserId: string = config.botUserId): Promise<TwitchSubscription[]> {
   const found: TwitchSubscription[] = [];
   let after = '';
   // Un canal tiene seis suscripciones; el tope de páginas solo evita un bucle
@@ -197,7 +216,7 @@ export async function listOwn(twitchUserId: string, config: Config, deps: Deps):
     const res = await helix('GET', after ? { user_id: twitchUserId, after } : { user_id: twitchUserId }, undefined, config, deps);
     if (!res.ok) throw new Error(`Twitch respondió con el código ${res.status} al listar las suscripciones.`);
     const body = (await res.json()) as { data?: unknown; pagination?: { cursor?: unknown } };
-    found.push(...ownSubscriptions(body.data, twitchUserId, config.callback, config.botUserId));
+    found.push(...ownSubscriptions(body.data, twitchUserId, config.callback, chatUserId));
     after = str(body.pagination?.cursor);
     if (!after) break;
   }
@@ -210,8 +229,18 @@ export async function deleteOne(id: string, config: Config, deps: Deps): Promise
   return res.ok || res.status === 404;
 }
 
-export async function createOne(wanted: WantedSubscription, twitchUserId: string, config: Config, deps: Deps): Promise<{ outcome: CreateOutcome; detail: string }> {
-  if (wanted.bot && !config.botUserId) {
+/**
+ * `chatUserId`: user_id de la suscripción del chat (por defecto, la cuenta Lalo). Si es el propio canal
+ * es el modo streamer: el 403 significa que el streamer no concedió user:read:chat, user:write:chat y user:bot.
+ */
+export async function createOne(
+  wanted: WantedSubscription,
+  twitchUserId: string,
+  config: Config,
+  deps: Deps,
+  chatUserId: string = config.botUserId
+): Promise<{ outcome: CreateOutcome; detail: string }> {
+  if (wanted.bot && !chatUserId) {
     return { outcome: 'skipped', detail: 'Falta configurar TWITCH_BOT_USER_ID (la cuenta de Twitch de Lalo) en el servidor.' };
   }
   const res = await helix(
@@ -220,7 +249,7 @@ export async function createOne(wanted: WantedSubscription, twitchUserId: string
     {
       type: wanted.type,
       version: wanted.version,
-      condition: conditionFor(wanted, twitchUserId, config.botUserId),
+      condition: conditionFor(wanted, twitchUserId, chatUserId),
       transport: { method: 'webhook', callback: config.callback, secret: config.secret },
     },
     config,
@@ -228,6 +257,9 @@ export async function createOne(wanted: WantedSubscription, twitchUserId: string
   );
   if (res.status === 202 || res.ok) return { outcome: 'created', detail: '' };
   if (res.status === 409) return { outcome: 'already', detail: '' };
+  if (res.status === 403 && wanted.bot && chatUserId === twitchUserId) {
+    return { outcome: 'no_permission', detail: 'Falta que aceptes los permisos del chat (user:read:chat, user:write:chat y user:bot) para tu cuenta.' };
+  }
   if (res.status === 403 && wanted.bot) {
     return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope} del streamer o la autorización de la cuenta Lalo (user:read:chat, user:write:chat y user:bot).` };
   }

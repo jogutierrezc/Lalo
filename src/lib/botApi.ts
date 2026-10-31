@@ -15,10 +15,14 @@ import { botErrorMessage, isUuid, serverId } from '../utils/botCloud';
 
 const PATH = '/api/twitch/bot';
 
+/** Con qué cuenta escribe el bot: el nombre del streamer ('streamer') o la cuenta Lalo ('global'). */
+export type BotSenderModeView = 'global' | 'streamer';
+
 export interface BotSettingsView {
   enabled: boolean;
   prefix: string;
   welcomeMessage: string;
+  senderMode: BotSenderModeView;
 }
 
 export interface BotCommandView {
@@ -48,6 +52,8 @@ export interface BotConnectionView {
   twitchLogin: string;
   chat: BotChatStatus;
   enabled: boolean;
+  /** El servidor tiene la cuenta Lalo: solo entonces se ofrece «Con la cuenta Lalo». */
+  globalAvailable: boolean;
 }
 
 export interface BotSnapshot {
@@ -82,6 +88,7 @@ export function readSettings(value: unknown): BotSettingsView {
     enabled: raw.enabled === true,
     prefix: typeof raw.prefix === 'string' && raw.prefix ? raw.prefix : '!',
     welcomeMessage: typeof raw.welcomeMessage === 'string' ? raw.welcomeMessage : '',
+    senderMode: raw.senderMode === 'global' ? 'global' : 'streamer',
   };
 }
 
@@ -104,6 +111,7 @@ export function readConnection(value: unknown): BotConnectionView {
     twitchLogin: typeof raw.twitchLogin === 'string' ? raw.twitchLogin : '',
     chat: CHAT_STATUS.includes(raw.chat as BotChatStatus) ? (raw.chat as BotChatStatus) : 'unavailable',
     enabled: raw.enabled === true,
+    globalAvailable: raw.globalAvailable === true,
   };
 }
 
@@ -127,6 +135,19 @@ export async function botSaveSettings(settings: Partial<BotSettingsView>): Promi
   const res = friendly(await call(PATH, 'POST', { action: 'saveSettings', settings }));
   if (!res.ok) return res;
   return { ok: true, data: readSettings(res.data.settings) };
+}
+
+/**
+ * Cambia con qué cuenta escribe el bot. El servidor apaga el bot y quita la escucha anterior: hay que pulsar
+ * «Conectar el bot» otra vez (el user_id de la suscripción cambia).
+ */
+export async function botSetSenderMode(senderMode: BotSenderModeView): Promise<ApiOutcome<{ settings: BotSettingsView; connection: BotConnectionView | null }>> {
+  const res = friendly(await call(PATH, 'POST', { action: 'saveSettings', settings: { senderMode } }));
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    data: { settings: readSettings(res.data.settings), connection: isObject(res.data.connection) ? readConnection(res.data.connection) : null },
+  };
 }
 
 /** Crea o cambia un comando. Devuelve el comando tal como quedó (nombre limpio e id). */

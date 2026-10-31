@@ -21,7 +21,9 @@ import {
   botDisconnect,
   botSaveCommand,
   botSaveSettings,
+  botSetSenderMode,
   botStatus,
+  type BotSenderModeView,
   type BotCommandView,
   type BotConnectResult,
   type BotConnectionView,
@@ -41,7 +43,7 @@ export interface BotRow extends Omit<BotCommandView, 'id'> {
 export type BotPhase = 'loading' | 'ready' | 'error';
 
 const SAVE_DELAY_MS = 450;
-const DEFAULT_SETTINGS: BotSettingsView = { enabled: false, prefix: '!', welcomeMessage: '' };
+const DEFAULT_SETTINGS: BotSettingsView = { enabled: false, prefix: '!', welcomeMessage: '', senderMode: 'streamer' };
 
 /** Los comandos de este navegador solo se importan si ninguna cuenta los ha llevado ya a la nube. */
 function canImport(profileId: string): boolean {
@@ -398,6 +400,25 @@ export function useBotCloud(active: boolean, profileId: string, local: LocalBotD
     }
   }, [commitSettings, flushPending]);
 
+  /** Cambia con qué cuenta escribe el bot. El servidor lo apaga y quita la escucha: hay que conectar de nuevo. Devuelve el fallo, si lo hay. */
+  const changeSenderMode = useCallback(
+    async (mode: BotSenderModeView): Promise<string> => {
+      if (mode === settingsRef.current.senderMode) return '';
+      setBusy(true);
+      try {
+        await flushPending();
+        const res = await botSetSenderMode(mode);
+        if (!res.ok) return res.message;
+        commitSettings({ ...settingsRef.current, senderMode: res.data.settings.senderMode, enabled: res.data.settings.enabled });
+        if (res.data.connection) setConnection(res.data.connection);
+        return '';
+      } finally {
+        setBusy(false);
+      }
+    },
+    [commitSettings, flushPending]
+  );
+
   /** Vuelve a leer el estado de la conexión (sin tocar la lista que se está editando). Devuelve el fallo, si lo hay. */
   const refreshConnection = useCallback(async (): Promise<string> => {
     const res = await botStatus();
@@ -425,6 +446,7 @@ export function useBotCloud(active: boolean, profileId: string, local: LocalBotD
     busy,
     connect,
     disconnect,
+    changeSenderMode,
     refreshConnection,
   };
 }

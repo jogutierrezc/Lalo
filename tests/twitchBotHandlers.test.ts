@@ -99,6 +99,8 @@ function fakeLines() {
 
 interface FakeChat extends BotChatPort {
   calls: string[];
+  /** Modo con el que se llamó a status y subscribe. */
+  modes: string[];
   state: BotChatStatus;
   outcome: BotConnectOutcome;
   removed: boolean;
@@ -107,12 +109,14 @@ interface FakeChat extends BotChatPort {
 function fakeChat(): FakeChat {
   const chat: FakeChat = {
     calls: [],
+    modes: [],
     state: 'missing',
     outcome: 'created',
     removed: true,
-    async status(id) { chat.calls.push(`status:${id}`); return chat.state; },
-    async subscribe(id) {
+    async status(id, mode) { chat.calls.push(`status:${id}`); chat.modes.push(`status:${mode}`); return chat.state; },
+    async subscribe(id, mode) {
       chat.calls.push(`subscribe:${id}`);
+      chat.modes.push(`subscribe:${mode}`);
       if (chat.outcome === 'created' || chat.outcome === 'already') chat.state = 'pending';
       return { outcome: chat.outcome, detail: '' };
     },
@@ -136,7 +140,7 @@ const session = (req: { headers: Record<string, string | string[] | undefined> }
   return token === 'Bearer ana' ? ANA : token === 'Bearer ben' ? BEN : null;
 };
 
-function setup(chat: BotChatPort = fakeChat(), options: { rates?: boolean } = {}) {
+function setup(chat: BotChatPort = fakeChat(), options: { rates?: boolean; env?: Record<string, string> } = {}) {
   const db = memoryDb(options);
   const { lines, cleared } = fakeLines();
   const deps: Partial<BotDeps> = {
@@ -147,7 +151,7 @@ function setup(chat: BotChatPort = fakeChat(), options: { rates?: boolean } = {}
     now: () => clock.now,
   };
   const as = (who: 'ana' | 'ben' | null) => async (method: string, body?: Record<string, unknown>) =>
-    handleBot({ method, headers: who ? { authorization: `Bearer ${who}` } : {}, body }, {}, deps);
+    handleBot({ method, headers: who ? { authorization: `Bearer ${who}` } : {}, body }, options.env ?? {}, deps);
   return { db, chat: chat as FakeChat, as, cleared };
 }
 
@@ -180,9 +184,9 @@ describe('lectura', () => {
     const { as } = setup();
     const res = await as('ana')('GET');
     expect(res.status).toBe(200);
-    expect(res.body.settings).toMatchObject({ enabled: false, prefix: '!', senderMode: 'global' });
+    expect(res.body.settings).toMatchObject({ enabled: false, prefix: '!', senderMode: 'streamer' });
     expect(res.body.commands).toEqual([]);
-    expect(res.body.connection).toEqual({ hasChannel: true, twitchLogin: 'ana', chat: 'missing', enabled: false });
+    expect(res.body.connection).toEqual({ hasChannel: true, twitchLogin: 'ana', chat: 'missing', enabled: false, globalAvailable: false });
   });
 
   it('POST status equivale a GET', async () => {
@@ -295,11 +299,11 @@ describe('aislamiento entre streamers', () => {
 });
 
 describe('ajustes', () => {
-  it('mezcla con lo guardado, valida el prefijo y el saludo, y no deja cambiar senderMode', async () => {
+  it('mezcla con lo guardado y valida el prefijo y el saludo; un perfil nuevo nace en modo streamer', async () => {
     const { as } = setup();
     await as('ana')('POST', { action: 'saveSettings', settings: { welcomeMessage: ' hola ' } });
     const res = await as('ana')('POST', { action: 'saveSettings', settings: { prefix: '?', senderMode: 'streamer' } });
-    expect(res.body.settings).toEqual({ enabled: false, prefix: '?', welcomeMessage: 'hola', senderMode: 'global' });
+    expect(res.body.settings).toEqual({ enabled: false, prefix: '?', welcomeMessage: 'hola', senderMode: 'streamer' });
     expect((await as('ana')('POST', { action: 'saveSettings', settings: { prefix: 'a b' } })).body.code).toBe('prefix');
     expect((await as('ana')('POST', { action: 'saveSettings', settings: { prefix: '' } })).body.code).toBe('prefix');
     expect((await as('ana')('POST', { action: 'saveSettings', settings: { welcomeMessage: 'x'.repeat(501) } })).body.code).toBe('welcome');
@@ -315,7 +319,7 @@ describe('conexión', () => {
     expect(res.body.authorize).toBeNull();
     expect(chat.calls).toContain('subscribe:111');
     expect(res.body.settings).toMatchObject({ enabled: true });
-    expect(res.body.connection).toEqual({ hasChannel: true, twitchLogin: 'ana', chat: 'pending', enabled: true });
+    expect(res.body.connection).toEqual({ hasChannel: true, twitchLogin: 'ana', chat: 'pending', enabled: true, globalAvailable: false });
     expect((await as('ben')('GET')).body.settings).toMatchObject({ enabled: false });
   });
 
@@ -325,8 +329,18 @@ describe('conexión', () => {
     const res = await as('ana')('POST', { action: 'connect' });
     expect(res.status).toBe(200);
     expect(res.body.outcome).toBe('no_permission');
-    expect(res.body.authorize).toEqual({ scopes: ['channel:bot'] });
+    // Perfil nuevo = modo streamer: los tres permisos del propio streamer, no channel:bot
+    expect(res.body.authorize).toEqual({ scopes: ['user:read:chat', 'user:write:chat', 'user:bot'] });
     expect(res.body.settings).toMatchObject({ enabled: false });
+  });
+
+  it('en modo global, sin el permiso se pide channel:bot', async () => {
+    const { chat, as, db } = setup(fakeChat(), { env: { TWITCH_BOT_USER_ID: '999' } });
+    await db.saveSettings('ana-id', { senderMode: 'global' });
+    chat.outcome = 'no_permission';
+    const res = await as('ana')('POST', { action: 'connect' });
+    expect(res.body.authorize).toEqual({ scopes: ['channel:bot'] });
+    expect(chat.modes).toContain('subscribe:global');
   });
 
   it('un fallo de Twitch no enciende el bot', async () => {
@@ -423,6 +437,61 @@ describe('conexión', () => {
   });
 });
 
+describe('modo de envío (senderMode)', () => {
+  const GLOBAL_ENV = { TWITCH_BOT_USER_ID: '999' };
+
+  it('solo acepta «global» y «streamer»', async () => {
+    const { as } = setup(fakeChat(), { env: GLOBAL_ENV });
+    for (const bad of ['otro', '', 5, null, {}]) {
+      const res = await as('ana')('POST', { action: 'saveSettings', settings: { senderMode: bad } });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('sender_mode');
+    }
+    expect((await as('ana')('POST', { action: 'saveSettings', settings: { senderMode: 'global' } })).status).toBe(200);
+  });
+
+  it('«global» solo si el servidor tiene TWITCH_BOT_USER_ID', async () => {
+    const { as, db } = setup();
+    const res = await as('ana')('POST', { action: 'saveSettings', settings: { senderMode: 'global' } });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('sender_mode');
+    expect(db.patches).toEqual([]);
+  });
+
+  it('el panel sabe si se ofrece la cuenta Lalo', async () => {
+    expect(((await setup().as('ana')('GET')).body.connection as { globalAvailable: boolean }).globalAvailable).toBe(false);
+    expect(((await setup(fakeChat(), { env: GLOBAL_ENV }).as('ana')('GET')).body.connection as { globalAvailable: boolean }).globalAvailable).toBe(true);
+  });
+
+  it('cambiar de modo apaga el bot, da de baja la escucha anterior y pide conectar de nuevo', async () => {
+    const { chat, as, cleared } = setup(fakeChat(), { env: GLOBAL_ENV });
+    await as('ana')('POST', { action: 'connect' });
+    expect(chat.modes).toContain('subscribe:streamer');
+    const res = await as('ana')('POST', { action: 'saveSettings', settings: { senderMode: 'global' } });
+    expect(res.status).toBe(200);
+    expect(res.body.settings).toMatchObject({ senderMode: 'global', enabled: false });
+    expect(res.body.connection).toMatchObject({ enabled: false, chat: 'missing' });
+    expect(chat.calls).toContain('unsubscribe:111');
+    expect(cleared).toContain('ana-id');
+    // Al conectar de nuevo se usa el modo nuevo
+    clock.now += 10_000;
+    await as('ana')('POST', { action: 'connect' });
+    expect(chat.modes.filter((item) => item.startsWith('subscribe'))).toEqual(['subscribe:streamer', 'subscribe:global']);
+  });
+
+  it('guardar el mismo modo no toca la escucha', async () => {
+    const { chat, as } = setup(fakeChat(), { env: GLOBAL_ENV });
+    await as('ana')('POST', { action: 'saveSettings', settings: { senderMode: 'streamer', enabled: true } });
+    expect(chat.calls).toEqual([]);
+  });
+
+  it('el modo es por streamer', async () => {
+    const { as } = setup(fakeChat(), { env: GLOBAL_ENV });
+    await as('ana')('POST', { action: 'saveSettings', settings: { senderMode: 'global' } });
+    expect((await as('ben')('GET')).body.settings).toMatchObject({ senderMode: 'streamer' });
+  });
+});
+
 describe('privacidad: líneas del chat', () => {
   it('apagar el bot al guardar ajustes borra las líneas; encenderlo o cambiar otra cosa, no', async () => {
     const { as, cleared } = setup();
@@ -458,7 +527,8 @@ describe('actualizaciones parciales (sin pisar cambios concurrentes)', () => {
     const { as, db } = setup();
     await as('ana')('POST', { action: 'saveSettings', settings: { welcomeMessage: ' hola ' } });
     await as('ana')('POST', { action: 'saveSettings', settings: { prefix: '?', senderMode: 'streamer', enabled: 'sí' } });
-    expect(db.patches).toEqual([{ welcomeMessage: 'hola' }, { prefix: '?' }]);
+    // El primero crea la fila: nace con el modo por defecto. El segundo ya no lo repite
+    expect(db.patches).toEqual([{ welcomeMessage: 'hola', senderMode: 'streamer' }, { prefix: '?' }]);
   });
 
   it('connect y disconnect tocan solo enabled', async () => {
@@ -466,7 +536,7 @@ describe('actualizaciones parciales (sin pisar cambios concurrentes)', () => {
     await as('ana')('POST', { action: 'connect' });
     clock.now += 10_000;
     await as('ana')('POST', { action: 'disconnect' });
-    expect(db.patches).toEqual([{ enabled: true }, { enabled: false }]);
+    expect(db.patches).toEqual([{ enabled: true, senderMode: 'streamer' }, { enabled: false }]);
   });
 });
 

@@ -1,8 +1,9 @@
 # Bot de chat en la nube: puesta en marcha
 
 Guía para quien despliega Lalo (no para el streamer). El bot de chat de Twitch deja de ser un script de Python en el
-ordenador de cada streamer y pasa a vivir en el servidor, con **una cuenta de bot global, «Lalo»**, un **token de
-aplicación** y **ningún token de usuario guardado**.
+ordenador de cada streamer y pasa a vivir en el servidor, con un **token de aplicación** y **ningún token de usuario guardado**. Cada
+canal elige con qué cuenta escribe: **el nombre del propio streamer** (por defecto en perfiles nuevos, ver «Modo streamer») o **una cuenta
+de bot global, «Lalo»** (secciones 1 y 2).
 
 Qué hace el servidor, y dónde está:
 
@@ -31,7 +32,7 @@ Nueva para el bot en la nube:
 
 | Variable | Para qué |
 | --- | --- |
-| `TWITCH_BOT_USER_ID` | **Id numérico** de Twitch de la cuenta Lalo (no su nombre de usuario). Es el `user_id` de la suscripción y el `sender_id` de los mensajes; también sirve para que el bot no se conteste a sí mismo. Sin ella, el servidor responde **503 `chat_unavailable`** con el mensaje «El bot en la nube todavía no está disponible en este servidor» al pulsar Conectar (el nombre de la variable solo sale en el registro del servidor, nunca al cliente) y no se escribe nada. |
+| `TWITCH_BOT_USER_ID` | Solo para el modo «cuenta Lalo». **Id numérico** de Twitch de la cuenta Lalo (no su nombre de usuario). Es el `user_id` de la suscripción y el `sender_id` de los mensajes; también sirve para que el bot no se conteste a sí mismo. Sin ella, el servidor responde **503 `chat_unavailable`** con el mensaje «El bot en la nube todavía no está disponible en este servidor» al pulsar Conectar (el nombre de la variable solo sale en el registro del servidor, nunca al cliente) y no se escribe nada. |
 
 La clave de NVIDIA de Mi AI sigue en el almacén cifrado de siempre (`INTEGRATIONS_ENC_KEY`); el bot en la nube la usa
 igual que el panel.
@@ -66,6 +67,42 @@ Los tres están en la referencia de EventSub (`channel.chat.message`) y de «Sen
 > **A comprobar al desplegar:** que Twitch acepte la suscripción con token de aplicación y estos permisos concedidos solo por
 > el flujo anterior. Está escrito según la documentación; no lo he podido probar contra Twitch.
 
+## 2 bis. Modo streamer (sin cuenta bot)
+
+El bot escribe con la **propia cuenta de cada streamer**: los mensajes de la IA y de los comandos salen con su nombre. No hace
+falta `TWITCH_BOT_USER_ID` ni la cuenta Lalo, y sigue sin guardarse ningún token de usuario.
+
+**Qué cambia respecto al modo global**
+
+- La suscripción `channel.chat.message` se crea con `user_id` = el id de Twitch del streamer (= `broadcaster_user_id`), y los envíos
+  (`POST helix/chat/messages`) llevan `sender_id` = el streamer. Todo está centralizado en `server/twitch/senderMode.ts`
+  (`senderIdFor`).
+- Permisos: el propio streamer concede a la aplicación `user:read:chat`, `user:write:chat` y `user:bot` al iniciar sesión
+  (están en `TWITCH_SCOPES`, `src/lib/cloud.ts`; `channel:bot` se sigue pidiendo). Si falta alguno, Conectar responde `no_permission`
+  con `authorize.scopes` = esos tres y el panel lo lleva a Twitch.
+- Límite de envíos: el limitador (0040) ya cuenta por `sender_id`, así que cada streamer tiene su propio cupo (20 mensajes cada
+  30 s por cuenta y, por seguridad, 6 por canal en 30 s). No hay cambios de base de datos para esto.
+- **Antieco.** El bot escribe como el streamer, así que sus respuestas vuelven por EventSub como mensajes del propio streamer. Antes
+  de enviar cada trozo se anota en `twitch_bot_cooldowns` (`viewer = echo`, clave `echo:` + hash del texto, 20 s) y, al llegar un
+  mensaje del streamer, si su texto está anotado se descarta. Los comandos que el streamer escribe a mano (`!wwoff`, etc.) se
+  atienden con normalidad. Si no se puede anotar (base caída), el mensaje no se envía. Coste conocido: un mensaje a mano idéntico a
+  uno que el bot acaba de enviar (en 20 s) se ignora. La purga (0041) limpia estas marcas.
+
+**Pasos para el streamer**
+
+1. Cerrar sesión y volver a entrar con Twitch (para conceder `user:read:chat` y `user:bot`).
+2. Estudio del bot → «Bot en la nube» → «El bot escribe» → «Con el nombre del streamer» (valor por defecto en perfiles nuevos).
+3. «Conectar el bot». Cambiar de opción apaga el bot y quita la escucha anterior: hay que pulsar Conectar otra vez.
+
+**Perfiles existentes**: no cambian solos. Los que ya tenían ajustes siguen en `global` hasta que elijan otra opción. La migración
+`0042_twitch_bot_sender_streamer.sql` solo cambia el valor por defecto de las filas nuevas (`streamer`); el servidor ya lo manda al
+crear la fila, así que funciona aunque 0042 no se haya aplicado.
+
+> **A comprobar al desplegar:** la documentación de EventSub dice que con token de aplicación `channel.chat.message` exige
+> `user:read:chat` y `user:bot` del usuario que chatea, y `channel:bot` del dueño del canal **o** que sea moderador. No pude
+> confirmar en la referencia de Send Chat Message que el dueño del canal quede exento de `channel:bot`; por eso `channel:bot` se
+> sigue pidiendo al iniciar sesión. Nada de esto está probado contra Twitch real.
+
 ## 3. Migraciones
 
 Aplícalas en Supabase (SQL Editor o `supabase db push`), en orden, después de 0001–0038. Se pueden repetir sin romper nada:
@@ -78,6 +115,7 @@ Aplícalas en Supabase (SQL Editor o `supabase db push`), en orden, después de 
   hora ya vive en los ajustes de Mi AI.
 - `0040_twitch_bot_limiter.sql`: contador de envíos de la cuenta del bot (el límite sobrevive entre peticiones): 1 por segundo y
   **6 por canal** en 30 s (para que un canal o un espectador no agote el cupo de todos), dentro de los 20 de la cuenta.
+- `0042_twitch_bot_sender_streamer.sql`: el valor por defecto de `sender_mode` pasa a `streamer` para filas nuevas (el check de 0039 ya lo admitía). No toca filas existentes.
 - `0041_twitch_bot_chat_lines.sql`: búfer rodante de líneas del chat (hasta 200 por streamer, nada de más de 24 h) y la función
   de purga `purge_twitch_bot_data()`. Solo `service_role`.
 
@@ -103,7 +141,7 @@ Si falta alguna, el panel responde «falta aplicar la migración» o el bot se c
 
 ## 4. Cada streamer: volver a iniciar sesión
 
-La suscripción pide el permiso `channel:bot` **del streamer** (que Lalo entre en su chat). Ya está en `TWITCH_SCOPES`
+En modo global, la suscripción pide el permiso `channel:bot` **del streamer** (que Lalo entre en su chat). Ya está en `TWITCH_SCOPES`
 (`src/lib/cloud.ts`), pero quien inició sesión antes de añadirlo no lo concedió. Hasta que cierre sesión y vuelva a entrar con
 Twitch, «Conectar» en la tarjeta «Bot en la nube» responde «falta permiso» (403 de Twitch) y el panel se lo pide de nuevo.
 
@@ -183,5 +221,4 @@ Todo el código tiene pruebas con bases, `fetch` y limitadores falsos (`tests/tw
   de `subscriptions.ts`). Hoy los sigue saludando solo el script de Python por IRC (`event_raw_usernotice`).
 - **El comando `!s` (voz en OBS).** Depende del panel local y de OBS; el bot en la nube no lo atiende.
 - Mensaje de bienvenida al entrar en el canal (`welcomeMessage`): depende de IRC y no tiene equivalente en la nube todavía.
-- Cuenta de envío propia de cada streamer (`sender_mode = 'streamer'`): reservada, no existe.
 - Cuenta de bot moderadora para subir el tope de envíos.

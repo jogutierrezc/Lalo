@@ -3,7 +3,8 @@
  *
  * Lo que el script de Python hacía con bucles (lux_outbox_loop, lux_digest_loop y lux_spontaneous_loop) y el
  * servidor no puede hacer solo, porque no recuerda entre peticiones. Dos piezas, solo para los canales con el
- * bot en la nube encendido (twitch_bot_settings.enabled y sender_mode 'global'):
+ * bot en la nube encendido (twitch_bot_settings.enabled), con la cuenta del modo de envío del canal
+ * (cuenta Lalo o el propio streamer, ver senderMode.ts):
  *
  *   1. La cola de mensajes. El servidor envía él mismo, con sendChatMessage y el limitador, lo que el streamer
  *      escribe en Mi AI («Decir en el chat») y los saludos de seguidor y directo (server/lux/channelEvents.ts):
@@ -36,7 +37,8 @@ import { createClient } from '@supabase/supabase-js';
 import type { Env } from '../integrations/store.js';
 import type { LuxProactiveStatus } from '../lux/handlers.js';
 import { isOwnBotMessage, type ChatMessageEvent } from './eventsub.js';
-import { supabaseBotDb, type BotDb } from './botDb.js';
+import { supabaseBotDb, type BotDb, type BotSenderMode } from './botDb.js';
+import { echoMarkerFor, senderIdFor } from './senderMode.js';
 import { CHAT_LINE_TEXT_MAX, CHAT_LINE_VIEWER_MAX, supabaseChatLines, type ChatLinesDb } from './botChatLines.js';
 import { sendChatMessage, type SendLimiter } from './chatSend.js';
 import { supabaseLimiter } from './chatLimiter.js';
@@ -164,7 +166,14 @@ export function storableLine(text: string, prefix: string): string | null {
 const isIgnoredBot = (login: string): boolean => LUX_IGNORE.includes(login.toLowerCase());
 
 /** Envía un texto como la cuenta del bot a ese canal. true solo si Twitch lo aceptó. */
-function senderFor(deps: BackgroundDeps, env: Env, botUserId: string, broadcasterId: string): OutboxSend | null {
+function senderFor(
+  deps: BackgroundDeps,
+  env: Env,
+  botUserId: string,
+  broadcasterId: string,
+  /** Modo streamer: anota cada trozo para descartar su eco al volver por EventSub (senderMode.ts). */
+  beforePart?: (part: string) => Promise<void>
+): OutboxSend | null {
   const limiter = (deps.limiter ?? defaultLimiter)(env);
   if (!limiter) return null;
   return async (text) => {
@@ -173,6 +182,7 @@ function senderFor(deps: BackgroundDeps, env: Env, botUserId: string, broadcaste
         fetch: deps.fetch ?? ((...args) => fetch(...args)),
         env,
         botUserId,
+        beforePart,
         broadcasterId,
         text,
         limiter,
@@ -200,15 +210,16 @@ function senderFor(deps: BackgroundDeps, env: Env, botUserId: string, broadcaste
  */
 export async function pushOutboxNow(profileId: string, env: Env = process.env, deps: BackgroundDeps = {}): Promise<void> {
   try {
-    const botUserId = (env.TWITCH_BOT_USER_ID ?? '').trim();
-    if (!botUserId) return;
     const db = (deps.db ?? defaultDb)(env);
     if (!db) return;
     const settings = await db.settings(profileId);
-    if (!settings || !settings.enabled || settings.senderMode !== 'global') return;
+    if (!settings || !settings.enabled) return;
     const broadcasterId = await (deps.twitchUserId ?? defaultTwitchUserId)(profileId, env);
     if (!broadcasterId) return;
-    const send = senderFor(deps, env, botUserId, broadcasterId);
+    // Quién escribe: la cuenta Lalo, o el propio streamer en modo streamer
+    const botUserId = senderIdFor(settings, broadcasterId, env);
+    if (!botUserId) return;
+    const send = senderFor(deps, env, botUserId, broadcasterId, echoMarkerFor(settings.senderMode, db, profileId));
     if (!send) return;
     await (deps.lux ?? defaultBackgroundLux).outbox(profileId, send, env);
   } catch (err) {
@@ -224,7 +235,10 @@ export interface BackgroundInput {
   /** Dueño del canal, con el bot en la nube ya comprobado como encendido y de envío global. */
   profileId: string;
   prefix: string;
+  /** Cuenta que escribe en el canal (sender_id): la cuenta Lalo o el propio streamer. */
   botUserId: string;
+  /** Por defecto 'global'. En 'streamer' el procesador ya descartó el eco del bot, y los mensajes del streamer sí cuentan. */
+  senderMode?: BotSenderMode;
 }
 
 export interface ChatBackground {
@@ -239,6 +253,9 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
   // Solo para no leer la base en cada mensaje; en otra instancia se empieza de cero y no pasa nada
   const lastOutbox = new Map<string, number>();
   const statuses = new Map<string, { at: number; status: LuxProactiveStatus | null }>();
+
+  /** Antieco del modo streamer para los envíos de este canal (undefined en modo global). */
+  const marker = (input: BackgroundInput) => echoMarkerFor(input.senderMode ?? 'global', getDb(input.env), input.profileId);
 
   /** Candado entre instancias: dos avisos a la vez en instancias distintas no llaman los dos a la IA. */
   async function lock(input: BackgroundInput, key: 'digest' | 'spont', seconds: number): Promise<boolean> {
@@ -281,7 +298,7 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
       input.profileId,
       pending.map((line) => line.id)
     );
-    const send = senderFor(deps, input.env, input.botUserId, input.event.broadcasterId);
+    const send = senderFor(deps, input.env, input.botUserId, input.event.broadcasterId, marker(input));
     if (send) await send(reply);
   }
 
@@ -294,7 +311,7 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
     if (last === undefined || now - last >= OUTBOX_GAP_MS || now < last) {
       lastOutbox.set(profileId, now);
       if (lastOutbox.size > 500) lastOutbox.delete(lastOutbox.keys().next().value as string);
-      const send = senderFor(deps, env, input.botUserId, event.broadcasterId);
+      const send = senderFor(deps, env, input.botUserId, event.broadcasterId, marker(input));
       if (send) await lux.outbox(profileId, send, env);
     }
 
@@ -331,8 +348,9 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
 
   return {
     async afterMessage(input) {
-      // Un mensaje del propio bot nunca llega aquí (el procesador lo descarta), pero por si acaso no se guarda ni se comenta
-      if (isOwnBotMessage(input.event, input.botUserId)) return;
+      // Un mensaje del propio bot nunca llega aquí (el procesador lo descarta), pero por si acaso no se guarda ni se comenta.
+      // En modo streamer el bot y el streamer son la misma cuenta: aquí no se puede distinguir, el antieco ya lo hizo el procesador
+      if (input.senderMode !== 'streamer' && isOwnBotMessage(input.event, input.botUserId)) return;
       try {
         await run(input);
       } catch (err) {

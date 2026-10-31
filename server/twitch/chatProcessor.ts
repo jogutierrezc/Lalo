@@ -4,11 +4,13 @@
  * El bot de chat en la nube: convierte cada mensaje que llega por EventSub
  * (channel.chat.message, ver eventsub.ts) en la respuesta del bot, sin script de Python.
  * Es el ChatHandler que se pasa a handleEventsub. Replica lo que hace el script de
- * src/components/bot/pythonScript.ts, con la cuenta global «Lalo» (TWITCH_BOT_USER_ID),
- * token de aplicación y ningún token de usuario guardado.
+ * src/components/bot/pythonScript.ts, con la cuenta global «Lalo» (TWITCH_BOT_USER_ID) o,
+ * en modo streamer, con la propia cuenta del streamer (senderMode.ts); token de aplicación
+ * y ningún token de usuario guardado.
  *
  * Para cada mensaje, en este orden:
- *   1. Ignora los de la propia cuenta del bot (si no, se respondería a sí mismo).
+ *   1. Ignora los de la propia cuenta del bot (si no, se respondería a sí mismo). En modo streamer el bot
+ *      es el streamer: se descartan solo los mensajes suyos que el bot acaba de enviar (antieco), no los que escribe a mano.
  *   2. Busca al streamer dueño del canal (profiles.twitch_user_id, cuenta activa).
  *   3. Si su bot está apagado (twitch_bot_settings.enabled), no hace nada.
  *   4. Si el texto no empieza por SU prefijo, no hace nada.
@@ -47,7 +49,8 @@ import { luxDisplayName } from '../lux/displayName.js';
 import { sanitizeChatOutput } from '../lux/outputFilter.js';
 import type { LuxSettings } from '../lux/settings.js';
 import { isOwnBotMessage, type ChatHandler, type ChatMessageEvent } from './eventsub.js';
-import { supabaseBotDb, BOT_DEFAULT_PREFIX, type BotDb } from './botDb.js';
+import { supabaseBotDb, BOT_DEFAULT_PREFIX, type BotDb, type BotSenderMode } from './botDb.js';
+import { echoMarkerFor, globalBotId, isBotEcho, isFromSender, senderIdFor } from './senderMode.js';
 import { sendChatMessage, type ChatSendResult, type SendLimiter } from './chatSend.js';
 import { supabaseLimiter } from './chatLimiter.js';
 import { createChatBackground, type ChatBackground } from './botBackground.js';
@@ -186,16 +189,17 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
 
   /** Lo que se sabe de un mensaje que sí es de un canal con el bot en la nube encendido. */
   interface Gate {
+    /** Cuenta que escribe en este canal (sender_id): la cuenta Lalo o, en modo streamer, el propio streamer. */
     botUserId: string;
+    senderMode: BotSenderMode;
     db: BotDb;
     profileId: string;
     prefix: string;
   }
 
   async function gate(event: ChatMessageEvent, env: Env): Promise<Gate | null> {
-    const botUserId = (env.TWITCH_BOT_USER_ID ?? '').trim();
-    // Sin cuenta de bot no hay quién escriba; y sin ella tampoco se puede reconocer al propio bot
-    if (!botUserId || isOwnBotMessage(event, botUserId)) return null;
+    // Los mensajes de la cuenta global Lalo nunca se atienden, sea cual sea el modo del canal
+    if (isOwnBotMessage(event, globalBotId(env))) return null;
 
     const db = getDb(env);
     if (!db) return null;
@@ -203,12 +207,20 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
     if (!profileId) return null;
     const settings = await db.settings(profileId);
     if (!settings || !settings.enabled) return null;
-    // 'streamer' (cada uno con su cuenta) está reservado y aún no existe: no se responde con la cuenta global
-    if (settings.senderMode !== 'global') return null;
-    return { botUserId, db, profileId, prefix: settings.prefix || BOT_DEFAULT_PREFIX };
+    // Quién escribe en este canal; sin cuenta de envío (modo global sin TWITCH_BOT_USER_ID) no hay quién conteste
+    const botUserId = senderIdFor(settings, event.broadcasterId, env);
+    if (!botUserId) return null;
+    if (settings.senderMode === 'streamer') {
+      // El bot escribe como el streamer: sus respuestas vuelven por aquí como mensajes del streamer. Los que
+      // el bot acaba de enviar (marca antieco de senderMode.ts) se descartan; los que escribe a mano, no
+      if (isFromSender(event, botUserId) && (await isBotEcho(db, profileId, event))) return null;
+    } else if (isOwnBotMessage(event, botUserId)) {
+      return null;
+    }
+    return { botUserId, senderMode: settings.senderMode, db, profileId, prefix: settings.prefix || BOT_DEFAULT_PREFIX };
   }
 
-  async function respond(event: ChatMessageEvent, env: Env, { botUserId, db, profileId, prefix }: Gate): Promise<void> {
+  async function respond(event: ChatMessageEvent, env: Env, { botUserId, senderMode, db, profileId, prefix }: Gate): Promise<void> {
     const text = event.text.trim();
     if (!text.startsWith(prefix)) return;
 
@@ -231,6 +243,7 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
           fetch: doFetch,
           env,
           botUserId,
+          beforePart: echoMarkerFor(senderMode, db, profileId),
           broadcasterId: event.broadcasterId,
           text: message,
           limiter,
@@ -315,7 +328,14 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
     if (!found) return;
     // Aunque la respuesta fallara, la cola y el aprendizaje siguen. afterMessage no lanza
     try {
-      await background.afterMessage({ event, env, profileId: found.profileId, prefix: found.prefix, botUserId: found.botUserId });
+      await background.afterMessage({
+        event,
+        env,
+        profileId: found.profileId,
+        prefix: found.prefix,
+        botUserId: found.botUserId,
+        senderMode: found.senderMode,
+      });
     } catch (err) {
       logError('trabajo de fondo del chat', err);
     }

@@ -379,7 +379,7 @@ describe('red de seguridad de la cola, con cada mensaje', () => {
 // ---------- Procesador: el trabajo de fondo se engancha ----------
 
 describe('chatProcessor llama al trabajo de fondo', () => {
-  const on: BotSettings = { ...DEFAULT_BOT_SETTINGS, enabled: true };
+  const on: BotSettings = { ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'global' };
   function setup(settings: BotSettings | null, extra: Partial<Parameters<typeof createChatProcessor>[0]> = {}) {
     const afterMessage = vi.fn(async () => undefined);
     const db = { settings: async () => settings, commands: async () => [], takeCooldown: async () => ({ ok: true }) } as unknown as BotDb;
@@ -404,19 +404,34 @@ describe('chatProcessor llama al trabajo de fondo', () => {
     expect(afterMessage).toHaveBeenCalledWith(expect.objectContaining({ profileId: PROFILE, prefix: '!', botUserId: BOT }));
   });
 
-  it('no con el bot apagado, ni de modo «streamer», ni con un mensaje del propio bot', async () => {
+  it('no con el bot apagado, ni con un mensaje del propio bot, ni sin ajustes', async () => {
     const off = setup({ ...on, enabled: false });
     await off.handler(message('hola'), env);
-    const streamer = setup({ ...on, senderMode: 'streamer' });
-    await streamer.handler(message('hola'), env);
     const own = setup(on);
     await own.handler(message('hola', { chatterId: BOT }), env);
     const none = setup(null);
     await none.handler(message('hola'), env);
     expect(off.afterMessage).not.toHaveBeenCalled();
-    expect(streamer.afterMessage).not.toHaveBeenCalled();
     expect(own.afterMessage).not.toHaveBeenCalled();
     expect(none.afterMessage).not.toHaveBeenCalled();
+  });
+
+  it('modo «streamer»: el fondo recibe la cuenta del streamer como emisora; el eco del bot no llega', async () => {
+    const { handler, afterMessage } = setup({ ...on, senderMode: 'streamer' });
+    await handler(message('hola'), { ...env, TWITCH_BOT_USER_ID: '' });
+    expect(afterMessage).toHaveBeenCalledWith(expect.objectContaining({ botUserId: '100', senderMode: 'streamer' }));
+    // Un mensaje a mano del streamer cuenta (no hay marca de eco: la base falsa concede todo)
+    await handler(message('otra cosa', { chatterId: '100', isBroadcaster: true }), env);
+    expect(afterMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('modo «streamer»: un mensaje marcado como eco del bot no llega al fondo', async () => {
+    const afterMessage = vi.fn(async () => undefined);
+    const db = { settings: async () => ({ ...on, senderMode: 'streamer' as const }), commands: async () => [], takeCooldown: async () => ({ ok: false as const, waitSeconds: 10 }) } as unknown as BotDb;
+    const lux: ChatLux = { settings: async () => null, ask: async () => ({ status: 200, body: {} }), setEnabled: async () => true };
+    const handler = createChatProcessor({ db: () => db, profileId: async () => PROFILE, limiter: () => openLimiter, lux, fetch: fakeFetch().fetch, background: { afterMessage } });
+    await handler(message('hola', { chatterId: '100', isBroadcaster: true }), env);
+    expect(afterMessage).not.toHaveBeenCalled();
   });
 
   it('aunque falle la respuesta, el trabajo de fondo sigue; y si falla el fondo, el procesador no lanza', async () => {
@@ -619,7 +634,7 @@ describe('luxProactiveStatusForProfile y las acciones sin HTTP', () => {
 describe('pushOutboxNow: enviar ya, solo con el bot en la nube', () => {
   function pushDeps(settings: BotSettings | null, outbox = vi.fn(async (_id: string, send: (t: string) => Promise<boolean>) => ({ sent: (await send('hola')) ? 1 : 0, failed: 0 }))) {
     const net = fakeFetch();
-    const db = { settings: async () => settings } as unknown as BotDb;
+    const db = { settings: async () => settings, takeCooldown: async () => ({ ok: true as const }) } as unknown as BotDb;
     const made = fakeBackgroundLux({ outbox });
     return {
       outbox,
@@ -629,26 +644,41 @@ describe('pushOutboxNow: enviar ya, solo con el bot en la nube', () => {
   }
 
   it('con el bot en la nube encendido envía la cola al canal del streamer', async () => {
-    const { deps, net, outbox } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true });
+    const { deps, net, outbox } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'global' as const });
     await pushOutboxNow(PROFILE, env, deps);
     expect(outbox).toHaveBeenCalledTimes(1);
     expect(net.sent).toEqual([{ broadcaster_id: '100', sender_id: BOT, message: 'hola' }]);
   });
 
-  it('apagado, modo «streamer», sin ajustes o sin cuenta de bot: no toca la cola (sigue siendo del bot de Python)', async () => {
-    for (const settings of [{ ...DEFAULT_BOT_SETTINGS, enabled: false }, { ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'streamer' as const }, null]) {
+  it('modo «streamer»: envía la cola con la cuenta del propio streamer, sin necesitar TWITCH_BOT_USER_ID', async () => {
+    const { deps, net, outbox } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'streamer' });
+    await pushOutboxNow(PROFILE, { ...env, TWITCH_BOT_USER_ID: '' }, deps);
+    expect(outbox).toHaveBeenCalledTimes(1);
+    expect(net.sent).toEqual([{ broadcaster_id: '100', sender_id: '100', message: 'hola' }]);
+  });
+
+  it('modo «streamer»: si no se puede anotar el eco, el mensaje no sale', async () => {
+    const { deps, net } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'streamer' });
+    const broken = { settings: async () => ({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'streamer' as const }), takeCooldown: async () => Promise.reject(new Error('caída')) } as unknown as BotDb;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await pushOutboxNow(PROFILE, env, { ...deps, db: () => broken });
+    expect(net.sent).toHaveLength(0);
+  });
+
+  it('apagado, sin ajustes o sin cuenta de bot (modo global): no toca la cola (sigue siendo del bot de Python)', async () => {
+    for (const settings of [{ ...DEFAULT_BOT_SETTINGS, enabled: false }, null]) {
       const { deps, outbox } = pushDeps(settings);
       await pushOutboxNow(PROFILE, env, deps);
       expect(outbox).not.toHaveBeenCalled();
     }
-    const { deps, outbox } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true });
+    const { deps, outbox } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'global' as const });
     await pushOutboxNow(PROFILE, { ...env, TWITCH_BOT_USER_ID: '' }, deps);
     expect(outbox).not.toHaveBeenCalled();
   });
 
   it('un canal sin id de Twitch o un fallo de la base no lanza', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const noChannel = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true });
+    const noChannel = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'global' as const });
     await expect(pushOutboxNow(PROFILE, env, { ...noChannel.deps, twitchUserId: async () => null })).resolves.toBeUndefined();
     expect(noChannel.outbox).not.toHaveBeenCalled();
     await expect(pushOutboxNow(PROFILE, env, { ...noChannel.deps, db: () => ({ settings: async () => Promise.reject(new Error('caída')) }) as unknown as BotDb })).resolves.toBeUndefined();
@@ -656,7 +686,7 @@ describe('pushOutboxNow: enviar ya, solo con el bot en la nube', () => {
 
   it('el limitador sigue mandando: sin hueco, el mensaje no sale', async () => {
     const closed: SendLimiter = { take: async () => ({ ok: false, waitMs: 20_000, scope: 'account' }) };
-    const { deps, net } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true });
+    const { deps, net } = pushDeps({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'global' as const });
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     await pushOutboxNow(PROFILE, env, { ...deps, limiter: () => closed });
     expect(net.sent).toHaveLength(0);
@@ -797,7 +827,7 @@ describe('salida de la IA y cola perdida', () => {
         return { sent: 0, failed: 0 };
       },
     }).lux;
-    const settings = (): Promise<BotSettings> => Promise.resolve({ ...DEFAULT_BOT_SETTINGS, enabled: true });
+    const settings = (): Promise<BotSettings> => Promise.resolve({ ...DEFAULT_BOT_SETTINGS, enabled: true, senderMode: 'global' });
     const base = {
       lux,
       db: () => ({ settings }) as unknown as BotDb,

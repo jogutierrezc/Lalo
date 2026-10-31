@@ -30,7 +30,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** true si es un UUID (los ids de comando lo son; cualquier otra cosa se rechaza antes de tocar la base). */
 export const isUuid = (value: unknown): value is string => typeof value === 'string' && UUID.test(value);
 
-/** 'global' = la cuenta del bot de la plataforma. 'streamer' queda reservado para más adelante. */
+/** 'global' = la cuenta del bot de la plataforma. 'streamer' = la propia cuenta del streamer (ver senderMode.ts). */
 export type BotSenderMode = 'global' | 'streamer';
 
 export interface BotSettings {
@@ -40,12 +40,12 @@ export interface BotSettings {
   senderMode: BotSenderMode;
 }
 
-/** Ajustes de un streamer que aún no ha guardado nada. */
+/** Ajustes de un streamer que aún no ha guardado nada. Los perfiles nuevos envían con su propio nombre; los que ya tenían fila siguen como estaban. */
 export const DEFAULT_BOT_SETTINGS: BotSettings = {
   enabled: false,
   prefix: BOT_DEFAULT_PREFIX,
   welcomeMessage: '',
-  senderMode: 'global',
+  senderMode: 'streamer',
 };
 
 export interface BotCommand {

@@ -29,6 +29,7 @@ import {
   type TwitchSubscription,
 } from './subscriptions.js';
 import type { BotChatPort, BotChatStatus } from './botHandlers.js';
+import type { BotSenderMode } from './botDb.js';
 
 const CHAT = WANTED.find((entry) => entry.type === EVENT_TYPES.chat);
 
@@ -56,28 +57,37 @@ export function createSubscriptionChatPort(options: ChatPortDeps = {}): BotChatP
   // El entorno se lee en cada llamada: en Vercel las variables ya están, y así las pruebas pueden cambiarlas
   const configOf = (): Config | null => readEventsConfig(options.env ?? process.env).config;
 
+  /** user_id de la suscripción: el propio streamer en modo streamer, la cuenta Lalo en modo global ('' si no está configurada). */
+  const chatUserOf = (twitchUserId: string, mode: BotSenderMode, config: Config): string => (mode === 'streamer' ? twitchUserId : config.botUserId);
+
   return {
-    async status(twitchUserId) {
+    async status(twitchUserId, mode = 'global') {
       const config = configOf();
       if (!config || !CHAT) return 'unavailable';
       try {
-        return translateStatus(bestOf(await listOwn(twitchUserId, config, deps)));
+        // Una suscripción del otro modo (user_id distinto) no cuenta: hay que conectar de nuevo
+        return translateStatus(bestOf(await listOwn(twitchUserId, config, deps, chatUserOf(twitchUserId, mode, config))));
       } catch {
         return 'error';
       }
     },
 
-    async subscribe(twitchUserId) {
+    async subscribe(twitchUserId, mode = 'global') {
       const config = configOf();
       if (!config || !CHAT) {
         return { outcome: 'skipped', detail: 'Al servidor le falta configuración para recibir eventos de Twitch (ver supabase/BOT-NUBE.md).' };
       }
       try {
-        const mine = (await listOwn(twitchUserId, config, deps)).filter((item) => item.type === CHAT.type);
-        if (mine.some((item) => ALIVE.includes(item.status))) return { outcome: 'already', detail: '' };
+        const chatUser = chatUserOf(twitchUserId, mode, config);
+        // Todas las del chat, con cualquier user_id: las de otro modo de envío se quitan para no duplicar respuestas
+        const mine = (await listOwn(twitchUserId, config, deps, '')).filter((item) => item.type === CHAT.type);
+        const right = mine.filter((item) => !chatUser || item.userId === chatUser);
+        const wrong = mine.filter((item) => !right.includes(item));
+        for (const old of wrong) await deleteOne(old.id, config, deps);
+        if (right.some((item) => ALIVE.includes(item.status))) return { outcome: 'already', detail: '' };
         // Las caídas (permiso revocado, demasiados fallos...) se quitan antes de volver a crear
-        for (const dead of mine) await deleteOne(dead.id, config, deps);
-        return await createOne(CHAT, twitchUserId, config, deps);
+        for (const dead of right) await deleteOne(dead.id, config, deps);
+        return await createOne(CHAT, twitchUserId, config, deps, chatUser);
       } catch {
         return { outcome: 'error', detail: 'No se pudo hablar con Twitch. Prueba de nuevo en un momento.' };
       }
@@ -87,7 +97,8 @@ export function createSubscriptionChatPort(options: ChatPortDeps = {}): BotChatP
       const config = configOf();
       if (!config || !CHAT) return false;
       try {
-        const mine = (await listOwn(twitchUserId, config, deps)).filter((item) => item.type === CHAT.type);
+        // Quita la del chat sea cual sea su user_id (modo global o streamer)
+        const mine = (await listOwn(twitchUserId, config, deps, '')).filter((item) => item.type === CHAT.type);
         let all = true;
         for (const item of mine) all = (await deleteOne(item.id, config, deps)) && all;
         return all;

@@ -42,7 +42,7 @@ import {
 } from '../components/bot/pythonScript';
 import { luxGetSettings } from '../lib/luxApi';
 import { signInWithTwitch } from '../lib/cloud';
-import { botSteps, type StepState } from '../utils/botCloud';
+import { SENDER_MODE_CHANGED, botSteps, senderModeHint, type StepState } from '../utils/botCloud';
 import { rememberLuxBot } from '../lib/luxBotRecord';
 import '../styles/inicio-bot.css';
 
@@ -231,7 +231,7 @@ export const TwitchIOStudio: React.FC = () => {
       return;
     }
     if (res.outcome === 'no_permission') {
-      // El permiso se pide con el mismo inicio de sesión de Twitch de siempre (incluye channel:bot)
+      // El permiso se pide con el mismo inicio de sesión de Twitch de siempre (incluye channel:bot y los permisos del modo streamer)
       setStepMessage('Twitch necesita que aceptes el permiso del bot. Te llevamos a Twitch; cuando vuelvas, pulsa «Conectar el bot» otra vez.');
       try {
         await signInWithTwitch({ returnHere: true });
@@ -245,6 +245,12 @@ export const TwitchIOStudio: React.FC = () => {
       return;
     }
     setStepMessage('Hecho. Twitch tarda unos segundos en comprobar la conexión: pulsa «Volver a consultar».');
+  };
+
+  const changeSender = async (mode: 'global' | 'streamer') => {
+    setStepMessage('');
+    const problem = await bot.changeSenderMode(mode);
+    setStepMessage(problem || SENDER_MODE_CHANGED);
   };
 
   const disconnectBot = async () => {
@@ -490,6 +496,23 @@ export const TwitchIOStudio: React.FC = () => {
                       {activeAction}
                     </li>
                   </ol>
+
+                  <div className="cab-field">
+                    <label className="cab-label" htmlFor={`${uid}-sender`}>
+                      El bot escribe
+                    </label>
+                    <select
+                      id={`${uid}-sender`}
+                      className="cab-inp"
+                      value={bot.settings.senderMode}
+                      disabled={bot.busy}
+                      onChange={(event) => void changeSender(event.target.value === 'global' ? 'global' : 'streamer')}
+                    >
+                      <option value="streamer">Con el nombre del streamer</option>
+                      {(bot.connection?.globalAvailable || bot.settings.senderMode === 'global') && <option value="global">Con la cuenta Lalo</option>}
+                    </select>
+                    <p className="cab-hint">{senderModeHint(bot.settings.senderMode)}</p>
+                  </div>
 
                   {stepMessage && (
                     <p className="cab-note" role="status">

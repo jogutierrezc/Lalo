@@ -200,7 +200,7 @@ describe('ajustes', () => {
     for (const prefix of ['', ' ', 'a b', '123456']) {
       await expect(db.saveSettings('s1', { prefix })).rejects.toMatchObject({ code: 'prefix' });
     }
-    expect(DEFAULT_BOT_SETTINGS).toMatchObject({ prefix: '!', senderMode: 'global', enabled: false });
+    expect(DEFAULT_BOT_SETTINGS).toMatchObject({ prefix: '!', senderMode: 'streamer', enabled: false });
   });
 });
 

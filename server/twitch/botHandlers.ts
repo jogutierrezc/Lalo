@@ -7,7 +7,9 @@
  *
  *   GET                                  ajustes + comandos + estado de la conexión
  *   POST { action: 'status' }            lo mismo que GET
- *   POST { action: 'saveSettings', settings: { enabled?, prefix?, welcomeMessage? } }
+ *   POST { action: 'saveSettings', settings: { enabled?, prefix?, welcomeMessage?, senderMode? } }
+ *        senderMode: 'streamer' (el bot escribe con el nombre del streamer) o 'global' (cuenta Lalo, solo si hay
+ *        TWITCH_BOT_USER_ID). Cambiarlo apaga el bot y quita la escucha anterior: hay que pulsar Conectar otra vez.
  *   POST { action: 'saveCommand', command: { id?, name, response, permission?, enabled?, position? } }
  *   POST { action: 'deleteCommand', id }
  *   POST { action: 'connect' }           da de alta la escucha del chat y enciende el bot
@@ -27,7 +29,8 @@
  * navegador con Supabase (signInWithTwitch en src/lib/cloud.ts, que pide
  * TWITCH_SCOPES, y entre ellos channel:bot). El servidor no inventa otra URL de
  * autorización: 'connect' devuelve en `authorize` los permisos que debe pedir el
- * panel con ese mismo mecanismo cuando Twitch contesta que falta el permiso.
+ * panel con ese mismo mecanismo cuando Twitch contesta que falta el permiso: channel:bot en modo
+ * global; user:read:chat, user:write:chat y user:bot en modo streamer (STREAMER_SCOPES).
  *
  * DEPENDENCIA INYECTADA (la conecta el capitán): `BotChatPort`, el estado y el
  * alta/baja de la suscripción channel.chat.message del canal. Vive en
@@ -48,12 +51,16 @@ import {
   supabaseBotDb,
   validPrefix,
   type BotDb,
+  type BotSenderMode,
   type BotSettings,
 } from './botDb.js';
 import { supabaseChatLines, type ChatLinesDb } from './botChatLines.js';
+import { STREAMER_SCOPES, globalBotId } from './senderMode.js';
 
-/** Permiso que el streamer concede a Lalo para que el bot entre en su chat. */
+/** Permiso que el streamer concede a Lalo para que el bot (cuenta global) entre en su chat. */
 export const BOT_SCOPE = 'channel:bot';
+/** Modos de envío que acepta el panel. */
+export const SENDER_MODES: readonly BotSenderMode[] = ['global', 'streamer'];
 /** Tope de comandos por streamer: evita llenar la base desde un cliente descontrolado. */
 export const BOT_COMMANDS_MAX = 100;
 /** Espera entre dos peticiones de conectar o desconectar de la misma cuenta (cada una habla con Twitch): 12 por minuto. */
@@ -70,11 +77,14 @@ export type BotConnectOutcome = 'created' | 'already' | 'no_permission' | 'error
 
 /** Lo que el capitán conecta con subscriptions.ts. Todas las funciones reciben el id de Twitch del canal que sale de la sesión. */
 export interface BotChatPort {
-  /** Estado de la suscripción channel.chat.message de ese canal. */
-  status(twitchUserId: string): Promise<BotChatStatus>;
-  /** Da de alta la suscripción (idempotente). `no_permission` = el streamer aún no concedió channel:bot. */
-  subscribe(twitchUserId: string): Promise<{ outcome: BotConnectOutcome; detail: string }>;
-  /** Quita la suscripción. true si quedó sin ella. */
+  /** Estado de la suscripción channel.chat.message de ese canal para ese modo de envío (user_id distinto = otra suscripción). */
+  status(twitchUserId: string, mode?: BotSenderMode): Promise<BotChatStatus>;
+  /**
+   * Da de alta la suscripción (idempotente) y quita la del otro modo. `no_permission` = falta el permiso: channel:bot del
+   * streamer y la autorización de la cuenta Lalo (modo global), o user:read:chat, user:write:chat y user:bot del streamer (modo streamer).
+   */
+  subscribe(twitchUserId: string, mode?: BotSenderMode): Promise<{ outcome: BotConnectOutcome; detail: string }>;
+  /** Quita la suscripción, sea del modo que sea. true si quedó sin ella. */
   unsubscribe(twitchUserId: string): Promise<boolean>;
 }
 
@@ -158,6 +168,8 @@ export interface BotConnection {
   chat: BotChatStatus;
   /** Paso 3: el streamer lo tiene encendido. */
   enabled: boolean;
+  /** El servidor tiene la cuenta Lalo (TWITCH_BOT_USER_ID): solo entonces se ofrece el modo global. */
+  globalAvailable: boolean;
 }
 
 /**
@@ -169,36 +181,45 @@ async function connectionOf(
   settings: BotSettings,
   chat: BotChatPort,
   now: number,
+  env: Env,
   forced?: BotChatStatus
 ): Promise<BotConnection> {
   let status: BotChatStatus = 'unavailable';
   const id = caller.twitchUserId;
+  // La suscripción cambia con el modo de envío (user_id distinto): el estado recordado también
+  const cacheKey = `${id}:${settings.senderMode}`;
   if (id && forced) {
     status = forced;
-    statusCache.set(id, { at: now, status });
+    statusCache.set(cacheKey, { at: now, status });
   } else if (id && !settings.enabled) {
     status = 'missing';
   } else if (id) {
-    const known = statusCache.get(id);
+    const known = statusCache.get(cacheKey);
     if (known && now >= known.at && now - known.at < STATUS_CACHE_MS) {
       status = known.status;
     } else {
       try {
-        status = await chat.status(id);
+        status = await chat.status(id, settings.senderMode);
       } catch {
         status = 'error';
       }
-      statusCache.set(id, { at: now, status });
+      statusCache.set(cacheKey, { at: now, status });
       if (statusCache.size > 500) statusCache.delete(statusCache.keys().next().value as string);
     }
   }
-  return { hasChannel: Boolean(id), twitchLogin: caller.twitchLogin, chat: status, enabled: settings.enabled };
+  return { hasChannel: Boolean(id), twitchLogin: caller.twitchLogin, chat: status, enabled: settings.enabled, globalAvailable: globalBotId(env) !== '' };
 }
 
-async function snapshot(caller: BotCaller, db: BotDb, chat: BotChatPort, now: number): Promise<ApiResult> {
+/** Olvida el estado recordado de ese canal en los dos modos. */
+function forgetStatus(twitchUserId: string): void {
+  statusCache.delete(`${twitchUserId}:global`);
+  statusCache.delete(`${twitchUserId}:streamer`);
+}
+
+async function snapshot(caller: BotCaller, db: BotDb, chat: BotChatPort, now: number, env: Env): Promise<ApiResult> {
   const settings = (await db.settings(caller.profileId)) ?? DEFAULT_BOT_SETTINGS;
   const commands = await db.commands(caller.profileId);
-  return { status: 200, body: { settings, commands, connection: await connectionOf(caller, settings, chat, now) } };
+  return { status: 200, body: { settings, commands, connection: await connectionOf(caller, settings, chat, now, env) } };
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -210,6 +231,8 @@ const DB_ERROR_TEXT: Record<string, string> = {
   prefix: 'El prefijo debe tener de 1 a 5 caracteres, sin espacios.',
   duplicate: 'Ya tienes un comando con ese nombre.',
   not_found: 'Ese comando no existe.',
+  sender_mode: 'El modo de envío debe ser «global» o «streamer».',
+  sender_global: 'La cuenta Lalo no está disponible en este servidor: usa el nombre del streamer.',
   id: 'El identificador del comando no es válido.',
 };
 
@@ -242,7 +265,7 @@ export async function handleBot(req: ApiRequest, env: Env = process.env, overrid
 
     if (method === 'GET') {
       if (await limited('api_status', BOT_STATUS_COOLDOWN_SECONDS)) return busy();
-      return await snapshot(caller, db, chat, deps.now());
+      return await snapshot(caller, db, chat, deps.now(), env);
     }
 
     const body = bodyOf(req);
@@ -250,7 +273,7 @@ export async function handleBot(req: ApiRequest, env: Env = process.env, overrid
 
     if (action === 'status') {
       if (await limited('api_status', BOT_STATUS_COOLDOWN_SECONDS)) return busy();
-      return await snapshot(caller, db, chat, deps.now());
+      return await snapshot(caller, db, chat, deps.now(), env);
     }
 
     if (action === 'saveSettings') {
@@ -267,11 +290,40 @@ export async function handleBot(req: ApiRequest, env: Env = process.env, overrid
         patch.welcomeMessage = welcome;
       }
       if (typeof input.enabled === 'boolean') patch.enabled = input.enabled;
-      // senderMode no se acepta del panel: 'global' es la única cuenta de envío disponible hoy
+
+      // Un perfil sin ajustes guardados nace con el modo por defecto (el streamer), sin depender del default de la columna
+      const current = await db.settings(caller.profileId);
+      if (!current) patch.senderMode = DEFAULT_BOT_SETTINGS.senderMode;
+
+      // Modo de envío: solo 'global' o 'streamer'; 'global' únicamente si el servidor tiene la cuenta Lalo
+      let modeChanged = false;
+      if (input.senderMode !== undefined) {
+        if (typeof input.senderMode !== 'string' || !(SENDER_MODES as readonly string[]).includes(input.senderMode)) {
+          return fail(400, 'sender_mode', DB_ERROR_TEXT.sender_mode);
+        }
+        const mode = input.senderMode as BotSenderMode;
+        if (mode === 'global' && !globalBotId(env)) return fail(400, 'sender_mode', DB_ERROR_TEXT.sender_global);
+        if (mode !== (current ?? DEFAULT_BOT_SETTINGS).senderMode) {
+          modeChanged = true;
+          patch.senderMode = mode;
+          // La suscripción del chat lleva el modo (su user_id): se apaga el bot y hay que conectar de nuevo
+          patch.enabled = false;
+        }
+      }
+
+      if (modeChanged && caller.twitchUserId) {
+        // Primero se apaga (el procesador ignora los canales apagados) y después se quita la escucha anterior
+        await db.saveSettings(caller.profileId, { enabled: false });
+        await chat.unsubscribe(caller.twitchUserId);
+        forgetStatus(caller.twitchUserId);
+      }
       const saved = await db.saveSettings(caller.profileId, patch);
       // Apagar el bot borra lo que se guardó del chat
       if (patch.enabled === false) await clearLines(deps, env, caller.profileId);
-      return { status: 200, body: { settings: saved } };
+      return {
+        status: 200,
+        body: { settings: saved, ...(modeChanged ? { connection: await connectionOf(caller, saved, chat, deps.now(), env) } : {}) },
+      };
     }
 
     if (action === 'saveCommand') {
@@ -316,28 +368,34 @@ export async function handleBot(req: ApiRequest, env: Env = process.env, overrid
         const saved = await db.saveSettings(caller.profileId, { enabled: false });
         await clearLines(deps, env, caller.profileId);
         const removed = await chat.unsubscribe(caller.twitchUserId);
-        const connection = await connectionOf(caller, saved, chat, deps.now(), removed ? 'missing' : 'error');
+        const connection = await connectionOf(caller, saved, chat, deps.now(), env, removed ? 'missing' : 'error');
         return { status: 200, body: { removed, settings: saved, connection } };
       }
 
-      const result = await chat.subscribe(caller.twitchUserId);
+      // El modo de envío decide qué cuenta lee y escribe el chat (user_id de la suscripción)
+      const row = await db.settings(caller.profileId);
+      const mode = (row ?? DEFAULT_BOT_SETTINGS).senderMode;
+      const result = await chat.subscribe(caller.twitchUserId, mode);
       if (result.outcome === 'skipped') {
         // El detalle puede nombrar variables del servidor: va al registro, no al cliente
         console.error('[Lalo bot] la escucha del chat no está disponible:', result.detail.slice(0, 200));
         return fail(503, 'chat_unavailable', 'El bot en la nube todavía no está disponible en este servidor.');
       }
       const ok = result.outcome === 'created' || result.outcome === 'already';
-      const saved = ok ? await db.saveSettings(caller.profileId, { enabled: true }) : ((await db.settings(caller.profileId)) ?? DEFAULT_BOT_SETTINGS);
-      statusCache.delete(caller.twitchUserId);
+      // Un perfil sin fila nace con el modo por defecto, que es el que se acaba de usar
+      const saved = ok
+        ? await db.saveSettings(caller.profileId, row ? { enabled: true } : { enabled: true, senderMode: mode })
+        : (row ?? DEFAULT_BOT_SETTINGS);
+      forgetStatus(caller.twitchUserId);
       return {
         status: 200,
         body: {
           outcome: result.outcome,
           detail: result.detail,
           // Sin el permiso, el panel lo pide con signInWithTwitch (mismo mecanismo que el inicio de sesión)
-          authorize: result.outcome === 'no_permission' ? { scopes: [BOT_SCOPE] } : null,
+          authorize: result.outcome === 'no_permission' ? { scopes: mode === 'streamer' ? [...STREAMER_SCOPES] : [BOT_SCOPE] } : null,
           settings: saved,
-          connection: await connectionOf(caller, saved, chat, deps.now()),
+          connection: await connectionOf(caller, saved, chat, deps.now(), env),
         },
       };
     }

@@ -46,6 +46,8 @@ interface FakeSub {
   id: string;
   type: string;
   status: string;
+  /** user_id de la suscripción del chat (por defecto, la cuenta Lalo). */
+  user?: string;
 }
 
 const versionOf = (type: string) => WANTED.find((entry) => entry.type === type)!.version;
@@ -67,7 +69,7 @@ function fakeTwitch(initial: FakeSub[]) {
           status: sub.status,
           condition: {
             broadcaster_user_id: '100',
-            ...(sub.type === EVENT_TYPES.chat ? { user_id: BOT } : {}),
+            ...(sub.type === EVENT_TYPES.chat ? { user_id: sub.user ?? BOT } : {}),
             ...(sub.type === EVENT_TYPES.follow ? { moderator_user_id: '100' } : {}),
           },
           transport: { method: 'webhook', callback: CALLBACK },
@@ -133,6 +135,18 @@ describe('el panel de eventos ignora el chat del bot', () => {
     expect(res.status).toBe(200);
     expect(twitch.creates).not.toContain(EVENT_TYPES.chat);
     expect(twitch.creates.length).toBe(WANTED.filter((entry) => !entry.bot).length);
+  });
+
+  it('la escucha del chat en modo streamer (user_id = el propio streamer) tampoco se toca ni se muestra', async () => {
+    const twitch = fakeTwitch([
+      { id: 'chat-streamer', type: EVENT_TYPES.chat, status: 'enabled', user: '100' },
+      { id: 'bits1', type: EVENT_TYPES.bits, status: 'enabled' },
+    ]);
+    const got = await handleSubscriptions(request('GET'), env, { fetch: twitch.fetch, now: () => 1 });
+    expect((got.body.subscriptions as Array<{ type: string }>).some((row) => row.type === EVENT_TYPES.chat)).toBe(false);
+    resetSubscriptionState();
+    await handleSubscriptions(request('POST', { action: 'delete' }), env, { fetch: twitch.fetch, now: () => 1 });
+    expect(twitch.subs.map((sub) => sub.id)).toEqual(['chat-streamer']);
   });
 
   it('summarize no trae el chat aunque la lista lo traiga', () => {
