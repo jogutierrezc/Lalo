@@ -234,7 +234,7 @@ export const TwitchIOStudio: React.FC = () => {
       // El permiso se pide con el mismo inicio de sesión de Twitch de siempre (incluye channel:bot)
       setStepMessage('Twitch necesita que aceptes el permiso del bot. Te llevamos a Twitch; cuando vuelvas, pulsa «Conectar el bot» otra vez.');
       try {
-        await signInWithTwitch();
+        await signInWithTwitch({ returnHere: true });
       } catch (err) {
         setStepMessage(err instanceof Error ? `No se pudo abrir Twitch: ${err.message}` : 'No se pudo abrir Twitch.');
       }

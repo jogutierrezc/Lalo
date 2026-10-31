@@ -67,6 +67,7 @@ import { parseRutaLegal } from './legal/logica';
 import { CloudProvider, useCloudSession } from './hooks/useCloudSession';
 import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
 import { isCloudEnabled } from './lib/supabase';
+import { takeReturnHash } from './lib/cloud';
 import { hasTwitchIdentity } from './lib/access';
 import { bienvenidaHechaAqui, necesitaRecorrido } from './lib/recorrido';
 import { selectPanelTournamentStore, startWidgetTournament } from './lib/tournamentCloud';
@@ -239,6 +240,12 @@ function resolveRoute(): AppRoute {
 
 const Routes: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(resolveRoute);
+
+  // Al volver de Twitch se aterriza en la raíz: se regresa a la página desde la que se salió
+  useEffect(() => {
+    const back = takeReturnHash();
+    if (back && !window.location.hash) window.location.hash = back;
+  }, []);
 
   useEffect(() => {
     const handleLocationChange = () => {

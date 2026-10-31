@@ -84,7 +84,37 @@ export const TWITCH_SCOPES = [
   'channel:read:redemptions',
 ] as const;
 
-export async function signInWithTwitch(): Promise<void> {
+/** Página desde la que se fue a Twitch, para volver a ella (el login siempre regresa a la raíz). */
+const RETURN_KEY = 'lalo_return_hash';
+const RETURN_TTL_MS = 10 * 60 * 1000;
+
+function rememberReturnHash(): void {
+  const hash = window.location.hash;
+  if (!hash || hash === '#') return;
+  try {
+    sessionStorage.setItem(RETURN_KEY, JSON.stringify({ hash, at: Date.now() }));
+  } catch {
+    // Sin almacenamiento de sesión: se vuelve a la página inicial
+  }
+}
+
+/** La página guardada antes de ir a Twitch, una sola vez y si no caducó. Null si no hay. */
+export function takeReturnHash(): string | null {
+  try {
+    const raw = sessionStorage.getItem(RETURN_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(RETURN_KEY);
+    const saved = JSON.parse(raw) as { hash?: unknown; at?: unknown };
+    if (typeof saved.hash !== 'string' || typeof saved.at !== 'number') return null;
+    return Date.now() - saved.at < RETURN_TTL_MS && saved.hash.startsWith('#') ? saved.hash : null;
+  } catch {
+    return null;
+  }
+}
+
+/** `returnHere`: al volver de Twitch, regresar a la página actual en vez de a la raíz. */
+export async function signInWithTwitch(options: { returnHere?: boolean } = {}): Promise<void> {
+  if (options.returnHere) rememberReturnHash();
   const { error } = await client().auth.signInWithOAuth({
     provider: 'twitch',
     options: {
