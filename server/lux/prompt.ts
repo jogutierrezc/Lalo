@@ -31,7 +31,7 @@ export function wrapChatData(lines: readonly string[]): string {
 
 /** Lo que sigue a «Eres <nombre>» en el sistema. */
 const SYSTEM_BODY =
-  ', un personaje de un directo de Twitch. Responde en español. Piensa lo que te preguntan y da una respuesta con fondo: razona, da un ejemplo o un dato concreto si ayuda, y aprovecha el límite de caracteres sin rellenar.';
+  ', un personaje de un directo de Twitch. Responde en español. Piensa lo que te preguntan y da una respuesta con fondo: razona, da un ejemplo o un dato concreto si ayuda, y aprovecha el límite de caracteres sin rellenar. Escribe solo lo que dirías en voz alta al chat: nunca narres acciones, gestos ni expresiones entre asteriscos (como *sonríe* o *se ajusta el chaleco*), ni uses asteriscos.';
 
 /** Sistema de respaldo, sin nombre elegido por el creador. */
 export const PLACEHOLDER_SYSTEM = `Eres MI AI${SYSTEM_BODY}`;

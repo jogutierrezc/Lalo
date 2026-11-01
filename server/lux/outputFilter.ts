@@ -7,7 +7,9 @@
  * Por eso se quitan, sin avisar:
  *   - enlaces y dominios (http://, www., nombre.com, nombre.tv/ruta...);
  *   - menciones «@usuario»: se queda el nombre sin la arroba, para no avisar a nadie. La única
- *     arroba que se conserva es la inicial del espectador al que se responde, si la hay.
+ *     arroba que se conserva es la inicial del espectador al que se responde, si la hay;
+ *   - acciones de rol entre asteriscos («*se ajusta el chaleco con una sonrisa fría*»): el bot solo
+ *     responde al chat, no narra gestos. La negrita («**así**») conserva el texto.
  *
  * No es un filtro de insultos ni de contenido (eso es del modelo y de AutoMod de Twitch). No entiende
  * enlaces escritos para esquivarlo («ejemplo punto com»): reduce el daño, no lo elimina.
@@ -22,6 +24,10 @@ const WWW = /\bwww\.\S+/gi;
 const BARE_DOMAIN = new RegExp(`\\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.)+(?:${TLDS})\\b(?:[/?#]\\S*)?`, 'gi');
 /** «@nombre» (las arrobas sueltas también se quitan). */
 const MENTION = /@+(\w{1,25})?/g;
+/** «**negrita**»: se queda el texto, sin los asteriscos. */
+const BOLD = /\*\*([^*]+)\*\*/g;
+/** «*acción de rol*»: se quita entera. Los modelos de personaje las escriben solos («*sonríe con frialdad*»). */
+const ROLEPLAY_ACTION = /\*[^*]*\*/g;
 
 export interface OutputFilterOptions {
   /** Espectador al que se responde: su «@nombre» inicial se conserva. */
@@ -46,6 +52,9 @@ export function sanitizeChatOutput(text: string, options: OutputFilterOptions = 
   }
 
   rest = rest
+    .replace(BOLD, '$1')
+    .replace(ROLEPLAY_ACTION, ' ')
+    .replace(/\*+/g, '')
     .replace(URL_WITH_SCHEME, ' ')
     .replace(WWW, ' ')
     .replace(BARE_DOMAIN, ' ')

@@ -34,6 +34,19 @@ describe('sanitizeChatOutput', () => {
     expect(sanitizeChatOutput('hola @ana', { viewer: 'ana' })).toBe('hola ana');
   });
 
+  it('quita las acciones de rol entre asteriscos y conserva lo que se dice', () => {
+    expect(
+      sanitizeChatOutput('*Se ajusta el chaleco de Zaun con una sonrisa fría mientras apunta un dedo hacia la pantalla, los ojos brillando con hambre de venganza* Hola, Ana.')
+    ).toBe('Hola, Ana.');
+    expect(sanitizeChatOutput('Claro que sí *sonríe* vamos allá *guiña un ojo*')).toBe('Claro que sí vamos allá');
+    expect(sanitizeChatOutput('*solo una acción*')).toBe('');
+  });
+
+  it('la negrita conserva el texto y un asterisco suelto se quita', () => {
+    expect(sanitizeChatOutput('Esto es **muy** bueno')).toBe('Esto es muy bueno');
+    expect(sanitizeChatOutput('2 * 3 es seis')).toBe('2 3 es seis');
+  });
+
   it('deja el texto normal como está (con puntuación y acentos) y colapsa espacios', () => {
     expect(sanitizeChatOutput('  ¡Qué buen   directo, de verdad!  ')).toBe('¡Qué buen directo, de verdad!');
     expect(sanitizeChatOutput('Son las 3.5 de la tarde. Nos vemos.')).toBe('Son las 3.5 de la tarde. Nos vemos.');
