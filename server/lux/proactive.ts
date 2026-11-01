@@ -10,10 +10,9 @@
 import type { ChatMessage } from './nvidia.js';
 import type { LuxMemoryRow } from './luxDb.js';
 import { EMOTION_INSTRUCTION } from './emotion.js';
-import { CHAT_DATA_RULE, systemFor, wrapChatData } from './prompt.js';
+import { CHAT_DATA_RULE, languageRule, systemFor, wrapChatData } from './prompt.js';
+import type { LuxLanguage } from './settings.js';
 import type { ChatLine } from './digest.js';
-
-const LANGUAGE_NAMES = { es: 'español', en: 'inglés', pt: 'portugués' } as const;
 
 /** Frases del chat que se pasan al modelo en un comentario espontáneo. */
 export const SPONTANEOUS_LINES_MAX = 40;
@@ -151,7 +150,7 @@ interface ProactiveBase {
   /** Nombre visible de la IA (displayName.ts). */
   name: string;
   personality?: string;
-  language?: 'es' | 'en' | 'pt';
+  language?: LuxLanguage;
   replyMax?: number;
   memories: LuxMemoryRow[];
 }
@@ -160,7 +159,7 @@ interface ProactiveBase {
 function baseMessages(base: ProactiveBase, task: string[]): ChatMessage[] {
   const lines = [systemFor(base.name)];
   if (base.personality) lines.push(`Personalidad del personaje: ${base.personality}`);
-  if (base.language) lines.push(`Responde siempre en ${LANGUAGE_NAMES[base.language]}.`);
+  lines.push(languageRule(base.language ?? 'es', true));
   if (base.replyMax) lines.push(`No superes ${base.replyMax} caracteres.`);
   lines.push(...task);
   lines.push(EMOTION_INSTRUCTION);

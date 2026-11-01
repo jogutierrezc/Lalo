@@ -114,7 +114,7 @@ export async function luxPublishRelease(note: string): Promise<ApiOutcome<LuxRel
 export interface LuxSettingsView {
   personality: string;
   replyMax: number;
-  language: 'es' | 'en' | 'pt';
+  language: 'auto' | 'es' | 'en' | 'fr' | 'pt' | 'it';
   memoryEnabled: boolean;
   obsSize: number;
   voiceReferenceId: string | null;

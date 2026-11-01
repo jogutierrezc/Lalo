@@ -72,7 +72,7 @@ describe('validación de ajustes', () => {
   it('rechaza cada campo fuera de rango con el campo señalado', () => {
     expect(normalizeLuxSettings({ replyMax: 10 })).toMatchObject({ ok: false, field: 'replyMax' });
     expect(normalizeLuxSettings({ replyMax: 120.5 })).toMatchObject({ ok: false, field: 'replyMax' });
-    expect(normalizeLuxSettings({ language: 'fr' })).toMatchObject({ ok: false, field: 'language' });
+    expect(normalizeLuxSettings({ language: 'de' })).toMatchObject({ ok: false, field: 'language' });
     expect(normalizeLuxSettings({ memoryEnabled: 'sí' })).toMatchObject({ ok: false, field: 'memoryEnabled' });
     expect(normalizeLuxSettings({ obsSize: 5 })).toMatchObject({ ok: false, field: 'obsSize' });
     expect(normalizeLuxSettings({ personality: 'a'.repeat(601) })).toMatchObject({ ok: false, field: 'personality' });

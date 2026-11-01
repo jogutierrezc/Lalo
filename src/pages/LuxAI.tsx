@@ -78,9 +78,12 @@ const SAY_STATE: Record<LuxSayState, string> = {
 };
 const PERSONALITY_MAX = 600;
 const LANGUAGES: { value: LuxSettingsView['language']; label: string }[] = [
+  { value: 'auto', label: 'Automático (el idioma de cada espectador)' },
   { value: 'es', label: 'Español' },
   { value: 'en', label: 'Inglés' },
+  { value: 'fr', label: 'Francés' },
   { value: 'pt', label: 'Portugués' },
+  { value: 'it', label: 'Italiano' },
 ];
 
 interface Turn {

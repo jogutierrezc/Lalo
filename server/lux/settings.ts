@@ -8,7 +8,8 @@
 import { LUX_CHAT_WORD_DEFAULT, validateChatWord } from './chatCommands.js';
 import { validateChatName } from './displayName.js';
 
-export const LUX_LANGUAGES = ['es', 'en', 'pt'] as const;
+/** «auto»: contesta en el idioma de quien escribe. Los demás fijan el idioma del canal. */
+export const LUX_LANGUAGES = ['auto', 'es', 'en', 'fr', 'pt', 'it'] as const;
 export type LuxLanguage = (typeof LUX_LANGUAGES)[number];
 
 export const LUX_LIMITS = {
