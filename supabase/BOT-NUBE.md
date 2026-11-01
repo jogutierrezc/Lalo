@@ -222,3 +222,21 @@ Todo el código tiene pruebas con bases, `fetch` y limitadores falsos (`tests/tw
 - **El comando `!s` (voz en OBS).** Depende del panel local y de OBS; el bot en la nube no lo atiende.
 - Mensaje de bienvenida al entrar en el canal (`welcomeMessage`): depende de IRC y no tiene equivalente en la nube todavía.
 - Cuenta de bot moderadora para subir el tope de envíos.
+
+## Cobro con PayPal: vencimientos y webhook
+
+Migración `0046_paypal_billing.sql`. El plan de pago se da solo con un pago confirmado por webhook
+(`PAYMENT.SALE.COMPLETED`) y caduca en `profiles.plan_expires_at`. La función SQL `billing_expire_due()` devuelve al plan
+por defecto a quien venció sin renovar (no toca planes sin fecha, p. ej. los asignados a mano).
+
+Se ejecuta de tres formas, que se pueden combinar:
+
+1. **Al leer el estado**: `GET /api/paypal/status` la llama antes de responder (siempre activa).
+2. **Vercel Cron** (ya en `vercel.json`, a diario a las 04:05 UTC): llama a `GET /api/paypal/expire`. Requiere la variable
+   `CRON_SECRET` en Vercel; Vercel la envía como `Authorization: Bearer <CRON_SECRET>`.
+3. **Supabase Cron** (opcional, si `pg_cron` está activa):
+   `select cron.schedule('billing-expire-due', '5 4 * * *', $$select public.billing_expire_due()$$);`
+
+Variables: `PAYPAL_ENV`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `CRON_SECRET`. Webhook de PayPal:
+`https://TU-DOMINIO/api/paypal/webhook`. Tras fijar precios en el panel, el administrador pulsa «Sincronizar»
+(`POST /api/paypal/admin-sync`). Al pasar de sandbox a live hay que sincronizar de nuevo: los ids de plan de PayPal no valen entre entornos.

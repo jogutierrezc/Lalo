@@ -18,6 +18,7 @@ import type { MediaFileRow, PlanRow, ProfileUsageRow } from '../lib/cloudTypes';
 import { StorageApiError, deleteMediaFile, uploadMediaFile } from '../lib/storageApi';
 import { UPLOAD_ALLOWED_MIME, checkUpload } from '../../server/storage/limits';
 import { UsageMeter } from '../components/UsageMeter';
+import { MiPlan } from '../components/billing/MiPlan';
 import '../styles/admin.css';
 
 const KIND_LABEL: Record<MediaFileRow['kind'], string> = { image: 'imagen', video: 'vídeo', audio: 'sonido' };
@@ -434,6 +435,8 @@ export const Account: React.FC = () => {
                 Cerrar sesión
               </button>
             </section>
+
+            <MiPlan />
           </div>
         )}
       </div>

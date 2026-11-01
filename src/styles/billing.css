@@ -1,0 +1,633 @@
+/* ==========================================================================
+   Cobro con PayPal: ventana de pago, sección «Mi plan» y «Planes y precios».
+   La ventana es de cristal oscuro, igual que la pantalla de acceso.
+   Solo se animan transform y opacidad; con «reducir movimiento» no hay desplazamientos.
+   ========================================================================== */
+
+/* ---------- Estado (Mi plan) y chips ---------- */
+
+.bil-estado {
+  display: grid;
+  gap: 14px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.bil-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--cb-line, rgb(255 255 255 / 0.22));
+  border-radius: 999px;
+  color: var(--cb-mut, #d2c8ec);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.bil-chip[data-tone='ok'] {
+  border-color: transparent;
+  background: var(--cb-ok-bg, #1f3a2c);
+  color: var(--cb-ok, #7fe6a9);
+}
+.bil-chip[data-tone='warn'] {
+  border-color: transparent;
+  background: var(--cb-warn-bg, #40351a);
+  color: var(--cb-warn, #ffc861);
+}
+.bil-chip[data-tone='bad'] {
+  border-color: transparent;
+  background: var(--cb-bad-bg, #43201e);
+  color: var(--cb-bad, #ffaba4);
+}
+
+.bil-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Ventana de pago ---------- */
+
+.bil-root {
+  --bil-panel: #1c1038;
+  --bil-cristal: rgb(24 12 52 / 0.92);
+  --bil-line: rgb(255 255 255 / 0.16);
+  --bil-line-fuerte: rgb(255 255 255 / 0.3);
+  --bil-fg: #f3eeff;
+  --bil-mut: #c1b6e2;
+  --bil-tw: #9146ff;
+  --bil-tw-claro: #bf94ff;
+  --bil-ok: #7fe6a9;
+  --bil-ok-bg: #1f3a2c;
+  --bil-bad: #ffaba4;
+  --bil-pp: #ffc439;
+  --bil-pp-ink: #1a1405;
+  --bil-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px));
+  background: transparent;
+  overflow-y: auto;
+}
+
+.bil-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(10 3 28 / 0.78);
+}
+
+.bil-win {
+  position: relative;
+  width: 100%;
+  max-width: 920px;
+  border: 1px solid var(--bil-line-fuerte);
+  border-radius: 22px;
+  background: var(--bil-cristal);
+  color: var(--bil-fg);
+  box-shadow: 0 40px 90px -30px rgb(0 0 0 / 0.7);
+  overflow: hidden;
+}
+.bil-win:focus {
+  outline: none;
+}
+.bil-win :focus-visible,
+.bil-win :focus-visible + .bil-plan-in {
+  outline: 2px solid var(--bil-tw-claro);
+  outline-offset: 3px;
+}
+
+.bil-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 16px 24px;
+  border-bottom: 1px solid var(--bil-line);
+}
+.bil-top h1 {
+  margin: 0;
+  margin-right: auto;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.bil-caps {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--bil-mut);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.bil-x {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px -8px 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--bil-fg);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 160ms var(--bil-ease), background-color 160ms var(--bil-ease);
+}
+.bil-x:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) and (pointer: fine) {
+  .bil-x:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+}
+
+.bil-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+}
+.bil-izq,
+.bil-der {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  min-width: 0;
+  padding: 24px;
+}
+.bil-der {
+  gap: 18px;
+  border-left: 1px solid var(--bil-line);
+  background: rgb(10 3 28 / 0.4);
+}
+@media (max-width: 760px) {
+  .bil-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bil-der {
+    border-left: 0;
+    border-top: 1px solid var(--bil-line);
+  }
+  .bil-top,
+  .bil-izq,
+  .bil-der {
+    padding: 16px;
+  }
+}
+
+.bil-fs {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.bil-fs legend {
+  padding: 0;
+  margin-bottom: 10px;
+}
+
+/* Planes */
+.bil-planes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.bil-plan {
+  position: relative;
+  display: block;
+}
+.bil-plan input,
+.bil-per input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.bil-plan-in {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  height: 100%;
+  min-height: 44px;
+  padding: 14px 16px;
+  border: 1px solid var(--bil-line);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.03);
+  transition: border-color 160ms var(--bil-ease), background-color 160ms var(--bil-ease), transform 160ms var(--bil-ease);
+}
+.bil-plan-in b {
+  font-size: 19px;
+  line-height: 1.1;
+}
+.bil-plan-in small {
+  color: var(--bil-mut);
+  font-size: 13px;
+}
+.bil-plan input:checked + .bil-plan-in {
+  border-color: var(--bil-tw-claro);
+  background: rgb(145 70 255 / 0.18);
+  box-shadow: 0 0 0 1px var(--bil-tw-claro) inset;
+}
+.bil-plan:active .bil-plan-in {
+  transform: scale(0.97);
+}
+
+/* Selector de periodo con indicador deslizante */
+.bil-seg {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  padding: 4px;
+  border: 1px solid var(--bil-line);
+  border-radius: 14px;
+  background: rgb(10 3 28 / 0.55);
+}
+.bil-ind {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 4);
+  border-radius: 10px;
+  background: var(--bil-tw);
+  box-shadow: 0 6px 20px -6px var(--bil-tw);
+  pointer-events: none;
+}
+.bil-per {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 11px 2px 10px;
+  border-radius: 10px;
+  text-align: center;
+  transition: transform 160ms var(--bil-ease);
+}
+.bil-per:active {
+  transform: scale(0.97);
+}
+.bil-per b {
+  font-size: 15px;
+  line-height: 1.1;
+}
+.bil-per span {
+  color: var(--bil-mut);
+  font-size: 12px;
+}
+.bil-per input:checked ~ b,
+.bil-per input:checked ~ span {
+  color: #fff;
+}
+.bil-per .bil-ahorro {
+  color: var(--bil-ok);
+  font-size: 11px;
+  font-weight: 600;
+}
+.bil-per input:checked ~ .bil-ahorro {
+  color: #fff;
+}
+.bil-per input:focus-visible ~ b {
+  text-decoration: underline;
+}
+.bil-per[data-off='true'] {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.bil-num {
+  font-variant-numeric: tabular-nums;
+}
+.bil-nota {
+  margin: 0;
+  color: var(--bil-mut);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Resumen */
+.bil-res-nombre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bil-res-nombre h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.bil-win .bil-chip {
+  border-color: transparent;
+  background: rgb(145 70 255 / 0.22);
+  color: var(--bil-tw-claro);
+}
+.bil-precio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+.bil-monto {
+  font-size: clamp(40px, 7vw, 54px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.bil-cada {
+  color: var(--bil-mut);
+  font-size: 14px;
+}
+.bil-filas {
+  display: grid;
+  margin: 0;
+}
+.bil-filas div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--bil-line);
+  font-size: 14px;
+}
+.bil-filas dt {
+  color: var(--bil-mut);
+}
+.bil-filas dd {
+  margin: 0;
+  font-weight: 500;
+  text-align: right;
+}
+.bil-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #43201e;
+  color: var(--bil-bad);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.bil-pp {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--bil-pp);
+  color: var(--bil-pp-ink);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 160ms var(--bil-ease), opacity 160ms var(--bil-ease);
+}
+.bil-pp svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.bil-pp:active {
+  transform: scale(0.97);
+}
+.bil-pp:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bil-pp:hover:not(:disabled) {
+    opacity: 0.92;
+  }
+}
+
+/* Seguimiento */
+.bil-flujo {
+  display: grid;
+  gap: 24px;
+  justify-items: center;
+  padding: 28px 24px 32px;
+  text-align: center;
+}
+.bil-flujo h2 {
+  margin: 8px 0 0;
+  font-size: clamp(24px, 4vw, 32px);
+  text-wrap: balance;
+}
+.bil-flujo p {
+  margin: 0;
+}
+.bil-pasos {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 480px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.bil-paso {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--bil-line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.03);
+  transition: border-color 200ms var(--bil-ease), background-color 200ms var(--bil-ease);
+}
+.bil-paso b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.bil-paso small {
+  color: var(--bil-mut);
+  font-size: 12.5px;
+}
+.bil-pt {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--bil-line-fuerte);
+  border-radius: 50%;
+}
+.bil-pt svg {
+  opacity: 0;
+  color: #0b2316;
+}
+.bil-paso[data-state='active'] {
+  border-color: var(--bil-tw-claro);
+}
+.bil-paso[data-state='active'] .bil-pt {
+  border-color: var(--bil-tw-claro);
+  border-top-color: transparent;
+  animation: bil-gira 0.9s linear infinite;
+}
+.bil-paso[data-state='done'] {
+  border-color: rgb(127 230 169 / 0.5);
+  background: var(--bil-ok-bg);
+}
+.bil-paso[data-state='done'] .bil-pt {
+  border-color: var(--bil-ok);
+  background: var(--bil-ok);
+}
+.bil-paso[data-state='done'] .bil-pt svg {
+  opacity: 1;
+}
+@keyframes bil-gira {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bil-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.bil-btn {
+  min-height: 44px;
+  padding: 9px 16px;
+  border: 1px solid var(--bil-line-fuerte);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--bil-fg);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 160ms var(--bil-ease), background-color 160ms var(--bil-ease);
+}
+.bil-btn:active {
+  transform: scale(0.97);
+}
+.bil-btn.bil-pri {
+  border-color: var(--bil-tw);
+  background: var(--bil-tw);
+  color: #fff;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bil-btn:hover {
+    background: rgb(255 255 255 / 0.12);
+  }
+  .bil-btn.bil-pri:hover {
+    background: #a366ff;
+  }
+}
+
+/* ---------- Planes y precios (administrador) ---------- */
+
+.bil-admin-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bil-admin-top h2 {
+  margin: 0;
+}
+.bil-admin-top .bil-acciones {
+  justify-content: flex-end;
+}
+.bil-tabla-wrap {
+  overflow-x: auto;
+}
+.bil-tabla {
+  width: 100%;
+  min-width: 660px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.bil-tabla thead th {
+  padding: 0 10px 12px;
+  color: var(--cb-mut, #d2c8ec);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.bil-tabla td,
+.bil-tabla tbody th {
+  padding: 12px 10px;
+  border-top: 1px solid var(--cb-line, rgb(255 255 255 / 0.22));
+  text-align: left;
+  vertical-align: top;
+}
+.bil-plan-nombre {
+  font-size: 17px;
+  font-weight: 700;
+}
+.bil-celda {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bil-check {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  accent-color: var(--acc, #9146ff);
+  cursor: pointer;
+}
+.bil-precio-in {
+  width: 92px;
+  min-height: 36px;
+}
+.bil-sub {
+  display: block;
+  margin-top: 4px;
+  color: var(--cb-mut, #d2c8ec);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.bil-sub[data-kind='saved'] {
+  color: var(--cb-ok, #7fe6a9);
+}
+.bil-sub[data-kind='error'] {
+  color: var(--cb-bad, #ffaba4);
+}
+.bil-pp-id {
+  color: #bf94ff;
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+/* ---------- Movimiento reducido ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .bil-paso[data-state='active'] .bil-pt {
+    animation-duration: 3s;
+  }
+  .bil-x,
+  .bil-pp,
+  .bil-btn,
+  .bil-per,
+  .bil-plan-in {
+    transition: none;
+  }
+}

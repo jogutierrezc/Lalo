@@ -17,6 +17,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Activity,
+  CreditCard,
   FileText,
   Gauge,
   HardDrive,
@@ -49,6 +50,7 @@ import { ResumenSection } from '../../pages/admin/ResumenSection';
 import { UsoSection } from '../../pages/admin/UsoSection';
 import { CodigosSection } from '../../pages/admin/CodigosSection';
 import { LimitesSection } from '../../pages/admin/LimitesSection';
+import { PreciosSection } from '../../pages/admin/PreciosSection';
 import { AlmacenamientoSection } from '../../pages/admin/AlmacenamientoSection';
 import { StreamersSection } from '../../pages/admin/StreamersSection';
 import { VocesSection } from '../../pages/admin/VocesSection';
@@ -62,6 +64,7 @@ const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> =
   uso: Activity,
   codigos: Ticket,
   limites: Gauge,
+  precios: CreditCard,
   almacenamiento: HardDrive,
   voces: Mic,
   personajes: Sparkles,
@@ -274,6 +277,7 @@ export const AdminShell: React.FC = () => {
           {section === 'uso' && <UsoSection data={data} ownId={profile?.id ?? null} />}
           {section === 'codigos' && overview && <CodigosSection data={data} />}
           {section === 'limites' && <LimitesSection data={data} />}
+          {section === 'precios' && <PreciosSection />}
           {section === 'almacenamiento' && <AlmacenamientoSection data={data} />}
           {section === 'voces' && <VocesSection data={data} />}
           {section === 'personajes' && <PersonajesSection />}
