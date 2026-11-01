@@ -2292,6 +2292,7 @@
           after = data.last;
           if (data.tts) window.luxTts = data.tts;
           if (typeof data.volume === 'number') window.luxVolume = data.volume;
+          if (data.chat && typeof data.chat.word === 'string') window.luxChat = data.chat;
         } catch {
           // Sin conexión, se vuelve a intentar en el siguiente ciclo.
         }
@@ -2360,8 +2361,13 @@
           if (spoken) window.luxSpeak(user + ' dice: ' + spoken, 'normal', window.luxTts || {}, 'idle');
           return;
         }
-        if (text === '!lux' || text.startsWith('!lux ')) {
-          const message = text.slice(4).trim();
+        // La palabra la elige el creador (por defecto «lux»); !lux sigue valiendo si dejó el alias activado.
+        const chat = window.luxChat || { word: 'lux', alias: true };
+        const words = chat.alias && chat.word !== 'lux' ? [chat.word, 'lux'] : [chat.word];
+        const lower = text.toLowerCase();
+        const head = words.map((w) => '!' + w).find((h) => lower === h || lower.startsWith(h + ' '));
+        if (head) {
+          const message = text.slice(head.length).trim();
           if (message) post({ command: 'ask', viewer: user, message });
           return;
         }

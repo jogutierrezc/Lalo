@@ -104,12 +104,13 @@ describe('frases para OBS', () => {
     speech.push({ id: 1, profile_id: 'p1', text: 'vieja', emotion: 'normal', gesture: 'idle', voice_reference_id: null, voice_engine: null });
 
     const start = await handleLux('speech', getRequest({ k: WIDGET_KEY }), env, { db: () => db });
-    expect(start.body).toMatchObject({ items: [], last: 1 });
+    expect(start.body).toMatchObject({ items: [], last: 1, chat: { word: 'lux', alias: true } });
 
     speech.push({ id: 2, profile_id: 'p1', text: 'nueva', emotion: 'feliz', gesture: 'bow', voice_reference_id: 'voz', voice_engine: 'fish' });
     const next = await handleLux('speech', getRequest({ k: WIDGET_KEY, after: '1' }), env, { db: () => db });
     expect(next.body.items).toEqual([{ id: 2, text: 'nueva', emotion: 'feliz', gesture: 'bow', voice: { referenceId: 'voz', engine: 'fish' } }]);
     expect(next.body.last).toBe(2);
+    expect(next.body.chat).toEqual({ word: 'lux', alias: true });
   });
 
   it('una clave de OBS falsa no recibe nada', async () => {

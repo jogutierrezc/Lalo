@@ -1944,6 +1944,11 @@ async function modelLibrary(req: IntegrationRequest, env: Env, deps: LuxDeps): P
  * así el overlay no repite frases viejas al abrirse. Se autoriza con la clave de OBS.
  * Cada respuesta lleva el personaje activo (avatar, color y gestos): el overlay se pinta con él.
  */
+/** La palabra con la que se llama a Lux y si !lux sigue de alias: el overlay de OBS la necesita para leer el chat. */
+function chatWordOf(settings: LuxSettings): { word: string; alias: boolean } {
+  return { word: settings.chatWord, alias: settings.chatAlias };
+}
+
 async function speech(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<IntegrationResult> {
   if (req.method.toUpperCase() !== 'GET') return fail(405, 'method', 'Esta ruta solo admite GET.');
   const db = deps.db(env);
@@ -1960,15 +1965,15 @@ async function speech(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
     const afterRaw = req.query.after;
     if (afterRaw === undefined || afterRaw === '') {
       const tts = db.ttsVoice ? await db.ttsVoice(profile.id) : { referenceId: null, engine: null };
-      const volume = settingsFromRow(await db.settingsRow(profile.id)).voiceVolume;
-      return { status: 200, body: { items: [], last: await db.latestSpeechId(profile.id), tts, volume, character } };
+      const settings = settingsFromRow(await db.settingsRow(profile.id));
+      return { status: 200, body: { items: [], last: await db.latestSpeechId(profile.id), tts, volume: settings.voiceVolume, chat: chatWordOf(settings), character } };
     }
     const after = Number(afterRaw);
     if (!Number.isInteger(after) || after < 0) return fail(400, 'bad_after', 'El parámetro after no es válido.');
     const items = profile.role === 'admin' || profile.luxEnabled ? await db.speechSince(profile.id, after) : [];
     const tts = db.ttsVoice ? await db.ttsVoice(profile.id) : { referenceId: null, engine: null };
-    const volume = settingsFromRow(await db.settingsRow(profile.id)).voiceVolume;
-    return { status: 200, body: { items, last: items.length ? items[items.length - 1].id : after, tts, volume, character } };
+    const settings = settingsFromRow(await db.settingsRow(profile.id));
+    return { status: 200, body: { items, last: items.length ? items[items.length - 1].id : after, tts, volume: settings.voiceVolume, chat: chatWordOf(settings), character } };
   } catch (err) {
     return luxFailure(err, 'lux/speech');
   }
