@@ -11,9 +11,48 @@
  *   - acciones de rol entre asteriscos («*se ajusta el chaleco con una sonrisa fría*»): el bot solo
  *     responde al chat, no narra gestos. La negrita («**así**») conserva el texto.
  *
- * No es un filtro de insultos ni de contenido (eso es del modelo y de AutoMod de Twitch). No entiende
+ * Además, red de seguridad (siempre activa, también sin modo pique): si el texto lleva un término de la lista
+ * de FORBIDDEN_TERMS (insultos discriminatorios y amenazas explícitas), no sale nada.
+ *
+ * No es un filtro general de contenido (eso es del modelo y de AutoMod de Twitch). No entiende
  * enlaces escritos para esquivarlo («ejemplo punto com»): reduce el daño, no lo elimina.
  */
+
+/**
+ * Términos que nunca deben salir al chat: insultos discriminatorios (slurs) y amenazas explícitas, en español
+ * e inglés. Un solo sitio para ampliar. Cada entrada es un fragmento de expresión regular sobre texto en
+ * minúsculas y sin tildes; se compara con límites de palabra, así «retardo» o «spice» no saltan. Se evitan a
+ * propósito las palabras con uso normal (apodos, «marica» coloquial, «negro»...): esto es una red de seguridad,
+ * no un censor, y lo que no cubre lo cubre la guía del prompt y AutoMod de Twitch.
+ */
+export const FORBIDDEN_TERMS: readonly string[] = [
+  // Insultos por origen, raza, orientación o discapacidad (es)
+  'maricon(es|azo)?', 'sudaca(s)?', 'negrata(s)?', 'mongolo(s)?', 'subnormal(es)?', 'retrasad[oa](s)? mental(es)?', 'machorra(s)?',
+  // Idem (en)
+  'nigg(er|a)(s)?', 'faggot(s)?', 'tranny', 'trannies', 'chink(s)?', 'spic(s)?', 'wetback(s)?', 'paki(s)?', 'retard(s|ed)?', 'dyke(s)?',
+  // Amenazas y llamados a hacerse daño (es)
+  'te voy a (matar|asesinar|violar)', 'voy a (matarte|asesinarte|violarte)', 'ojala (te )?(mueras|mueran)', 'suicidate',
+  'te voy a (buscar|encontrar) (y|para)', 'se donde vives',
+  // Idem (en)
+  'kill yourself', 'kys', '(i|i will|im going to|ill) (kill|rape|murder) you', 'i know where you live', 'go (die|hang yourself)',
+];
+
+/** Sin tildes ni mayúsculas, y sin apóstrofos, para comparar con la lista. */
+function foldForMatch(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ');
+}
+
+const FORBIDDEN = new RegExp(`(?:^|\\s)(?:${FORBIDDEN_TERMS.join('|')})(?=\\s|$)`);
+
+/** true si el texto lleva algún término prohibido. */
+export function hasForbiddenTerm(text: string): boolean {
+  return FORBIDDEN.test(` ${foldForMatch(text)} `);
+}
 
 /** Extensiones de dominio que se tratan como enlace aunque no lleven http. */
 const TLDS =
@@ -64,5 +103,6 @@ export function sanitizeChatOutput(text: string, options: OutputFilterOptions = 
     .trim();
 
   if (!rest) return '';
+  if (hasForbiddenTerm(rest)) return '';
   return lead ? `${lead} ${rest}` : rest;
 }

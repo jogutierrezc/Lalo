@@ -46,6 +46,8 @@ const DEFAULTS: LuxSettingsView = {
   replyMax: 200,
   language: 'es',
   memoryEnabled: true,
+  threadEnabled: true,
+  banter: 'off',
   obsSize: 40,
   voiceReferenceId: null,
   voiceEngine: null,
@@ -84,6 +86,11 @@ const LANGUAGES: { value: LuxSettingsView['language']; label: string }[] = [
   { value: 'fr', label: 'Francés' },
   { value: 'pt', label: 'Portugués' },
   { value: 'it', label: 'Italiano' },
+];
+
+const BANTER_OPTIONS: { value: LuxSettingsView['banter']; label: string }[] = [
+  { value: 'off', label: 'Responder con calma' },
+  { value: 'pique', label: 'Picar al estilo LoL' },
 ];
 
 interface Turn {
@@ -653,6 +660,33 @@ export const LuxAI: React.FC = () => {
                   disabled={busy || saved === null}
                   onChange={(next) => update('memoryEnabled', next)}
                 />
+                <Toggle
+                  label="Recordar la conversación"
+                  checked={draft.threadEnabled}
+                  disabled={busy || saved === null}
+                  onChange={(next) => update('threadEnabled', next)}
+                />
+                <p className="cab-hint">
+                  Lux recuerda lo último que hablaste con cada espectador (hasta 6 mensajes de los últimos 10 minutos) para entender un «¿y por qué?». Es temporal y solo lo ve el servidor.
+                </p>
+                <Field label="Cuando alguien me provoca" htmlFor="lux-banter">
+                  <select
+                    id="lux-banter"
+                    className="cab-inp"
+                    value={draft.banter}
+                    disabled={busy || saved === null}
+                    onChange={(e) => update('banter', e.target.value as LuxSettingsView['banter'])}
+                  >
+                    {BANTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <p className={draft.banter === 'pique' ? 'cab-note' : 'cab-hint'} role={draft.banter === 'pique' ? 'status' : undefined}>
+                  Atención: el bot escribe con la cuenta de la plataforma delante de todos los canales. «Picar al estilo LoL» solo contesta con burlas de jugador a quien lo provoca, nunca con insultos por origen, género, orientación, aspecto, salud o familia, pero un exceso puede traer sanciones de Twitch.
+                </p>
                 <Toggle
                   label="Lux aprende del chat"
                   checked={draft.chatLearning}

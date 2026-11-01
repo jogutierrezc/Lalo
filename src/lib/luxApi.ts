@@ -116,6 +116,10 @@ export interface LuxSettingsView {
   replyMax: number;
   language: 'auto' | 'es' | 'en' | 'fr' | 'pt' | 'it';
   memoryEnabled: boolean;
+  /** Recordar la conversación reciente con cada espectador (migración 0044). Activado por defecto. */
+  threadEnabled: boolean;
+  /** Cómo responde a las provocaciones: «off» con calma, «pique» al estilo League of Legends (migración 0045). */
+  banter: 'off' | 'pique';
   obsSize: number;
   voiceReferenceId: string | null;
   voiceEngine: 'fish' | 'elevenlabs' | null;

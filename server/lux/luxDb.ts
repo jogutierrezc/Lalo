@@ -13,6 +13,7 @@ import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { MEMORY_SAVED_MAX, type LuxMemoryKind, type LuxMemorySource } from './memory.js';
 import type { LuxAvatar, LuxCharacter, LuxGestureId, LuxModelOrigin } from './characters.js';
 import type { LibraryModel, ReviewStatus } from './modelLibrary.js';
+import { LUX_THREAD_TTL_MS, LUX_THREAD_TURNS, trimThread, type LuxThreadMessage } from './thread.js';
 
 export interface LuxProfile {
   id: string;
@@ -168,7 +169,18 @@ export interface LuxMemoryDb {
   memoryPrune(profileId: string, nowIso: string): Promise<void>;
 }
 
-export interface LuxDb extends Partial<LuxMemoryDb> {
+/**
+ * Hilo por espectador (migración 0044). Solo el servidor lo lee y lo escribe (clave de servicio).
+ * La retención (LUX_THREAD_TURNS turnos, LUX_THREAD_TTL_MS) la aplican ambas operaciones.
+ */
+export interface LuxThreadDb {
+  /** Turnos vigentes de ese espectador, del más antiguo al más reciente (ya recortados). */
+  threadRecent(profileId: string, viewer: string, nowMs: number): Promise<LuxThreadMessage[]>;
+  /** Guarda un mensaje y su respuesta, y poda: los caducados del streamer y lo que pase del tope de ese espectador. */
+  threadSave(profileId: string, viewer: string, pair: { user: string; assistant: string }, nowMs: number): Promise<void>;
+}
+
+export interface LuxDb extends Partial<LuxMemoryDb>, Partial<LuxThreadDb> {
   /** Valor de app_settings, o null si no existe. */
   setting(key: string): Promise<string | null>;
   /** Escribe el valor; con null, borra la clave. */
@@ -632,6 +644,47 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     async memoryPrune(profileId, nowIso) {
       const { error } = await db.from('lux_memories').delete().eq('profile_id', profileId).eq('pinned', false).lt('expires_at', nowIso);
       check(error);
+    },
+
+    async threadRecent(profileId, viewer, nowMs) {
+      const { data, error } = await db
+        .from('lux_viewer_turns')
+        .select('role, content, created_at')
+        .eq('profile_id', profileId)
+        .eq('viewer', viewer)
+        .gte('created_at', new Date(nowMs - LUX_THREAD_TTL_MS).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(LUX_THREAD_TURNS);
+      check(error);
+      const rows = ((data ?? []) as Array<{ role: string; content: string; created_at: string }>)
+        .filter((row) => row.role === 'user' || row.role === 'assistant')
+        .map((row) => ({ role: row.role as 'user' | 'assistant', content: String(row.content), at: Date.parse(row.created_at) }));
+      return trimThread(rows, nowMs);
+    },
+
+    async threadSave(profileId, viewer, pair, nowMs) {
+      const { error } = await db.from('lux_viewer_turns').insert([
+        { profile_id: profileId, viewer, role: 'user', content: pair.user, created_at: new Date(nowMs).toISOString() },
+        // 1 ms después, para que la respuesta quede siempre detrás de la pregunta al ordenar
+        { profile_id: profileId, viewer, role: 'assistant', content: pair.assistant, created_at: new Date(nowMs + 1).toISOString() },
+      ]);
+      check(error);
+      // Poda: lo caducado de todo el canal, y lo que sobra de este espectador (más allá del tope)
+      const expired = await db.from('lux_viewer_turns').delete().eq('profile_id', profileId).lt('created_at', new Date(nowMs - LUX_THREAD_TTL_MS).toISOString());
+      check(expired.error);
+      const extra = await db
+        .from('lux_viewer_turns')
+        .select('id')
+        .eq('profile_id', profileId)
+        .eq('viewer', viewer)
+        .order('created_at', { ascending: false })
+        .range(LUX_THREAD_TURNS, LUX_THREAD_TURNS + 49);
+      check(extra.error);
+      const ids = ((extra.data ?? []) as Array<{ id: number }>).map((row) => row.id);
+      if (ids.length > 0) {
+        const removed = await db.from('lux_viewer_turns').delete().in('id', ids);
+        check(removed.error);
+      }
     },
 
     async characters() {

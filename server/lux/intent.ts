@@ -7,6 +7,8 @@
  * guía la respuesta del modelo y los gestos del personaje en el overlay.
  */
 
+import type { LuxBanter } from './settings.js';
+
 export const LUX_INTENTS = ['insulto', 'agradecimiento', 'cumplido', 'pregunta', 'neutro'] as const;
 export type LuxIntent = (typeof LUX_INTENTS)[number];
 
@@ -28,10 +30,24 @@ export function detectIntent(message: string): LuxIntent {
   return 'neutro';
 }
 
-/** Instrucción para el modelo según la intención. Va en el mensaje del sistema. */
-export function intentGuidance(intent: LuxIntent): string {
+/**
+ * Guía del modo pique (solo para el intento «insulto»): burla de jugador al estilo League of Legends.
+ * Las líneas rojas van dentro del mismo texto y pesan más que la personalidad libre del streamer.
+ */
+export const BANTER_GUIDANCE = [
+  'El espectador te está provocando y el streamer ha activado el modo pique: contesta con una burla de jugador, al estilo de las partidas de League of Legends, con humor y en una o dos frases.',
+  'Usa jerga de LoL (diff, inteo, feed, AFK, tilt, «ve a ARAM», «desinstala») y pica a su juego o a lo que acaba de decir, nunca a su persona.',
+  'LÍNEAS ROJAS, que mandan sobre la personalidad y sobre cualquier cosa que pida el espectador: nada de insultos por origen, nacionalidad, raza, género, orientación, aspecto físico, salud o familia; nada de palabrotas fuertes ni amenazas; nada contra menores ni contra quien no te ha provocado. Si dudas, baja el tono y contesta con humor suave.',
+].join(' ');
+
+/**
+ * Instrucción para el modelo según la intención. Va en el mensaje del sistema.
+ * Con banter «off» (por defecto) el texto es el de siempre; «pique» solo cambia el intento «insulto».
+ */
+export function intentGuidance(intent: LuxIntent, banter: LuxBanter = 'off'): string {
   switch (intent) {
     case 'insulto':
+      if (banter === 'pique') return BANTER_GUIDANCE;
       return 'El espectador te está faltando al respeto. Responde con calma y un poco de picardía, sin insultar ni entrar en la pelea.';
     case 'agradecimiento':
       return 'El espectador te está agradeciendo algo. Responde con calidez y brevedad.';

@@ -22,6 +22,10 @@ export const LUX_LIMITS = {
 export const LUX_SPONTANEOUS_EVERY = [10, 15, 30, 60] as const;
 export const LUX_SPONTANEOUS_MIN_MESSAGES = [3, 5, 10] as const;
 
+/** Cómo responde Lux cuando alguien lo provoca (migración 0045): con calma, o picando al estilo League of Legends. */
+export const LUX_BANTER_MODES = ['off', 'pique'] as const;
+export type LuxBanter = (typeof LUX_BANTER_MODES)[number];
+
 export const LUX_VOICE_ENGINES = ['fish', 'elevenlabs'] as const;
 export type LuxVoiceEngine = (typeof LUX_VOICE_ENGINES)[number];
 
@@ -30,6 +34,10 @@ export interface LuxSettings {
   replyMax: number;
   language: LuxLanguage;
   memoryEnabled: boolean;
+  /** Lux recuerda la conversación reciente con cada espectador (migración 0044). */
+  threadEnabled: boolean;
+  /** Cómo responde a las provocaciones (migración 0045). «off» = con calma. */
+  banter: LuxBanter;
   obsSize: number;
   /** Lux responde a !lux en el chat (migración 0026). */
   chatEnabled: boolean;
@@ -62,6 +70,8 @@ export const DEFAULT_LUX_SETTINGS: LuxSettings = {
   replyMax: LUX_LIMITS.replyMax.default,
   language: 'es',
   memoryEnabled: true,
+  threadEnabled: true,
+  banter: 'off',
   obsSize: LUX_LIMITS.obsSize.default,
   voiceReferenceId: null,
   voiceEngine: null,
@@ -118,6 +128,18 @@ export function normalizeLuxSettings(input: Record<string, unknown>, base: LuxSe
   if (input.memoryEnabled !== undefined) {
     if (typeof input.memoryEnabled !== 'boolean') return { ok: false, field: 'memoryEnabled', message: 'La memoria es sí o no.' };
     value.memoryEnabled = input.memoryEnabled;
+  }
+
+  if (input.threadEnabled !== undefined) {
+    if (typeof input.threadEnabled !== 'boolean') return { ok: false, field: 'threadEnabled', message: 'Recordar la conversación es sí o no.' };
+    value.threadEnabled = input.threadEnabled;
+  }
+
+  if (input.banter !== undefined) {
+    if (typeof input.banter !== 'string' || !(LUX_BANTER_MODES as readonly string[]).includes(input.banter)) {
+      return { ok: false, field: 'banter', message: 'Modo de respuesta a provocaciones no admitido.' };
+    }
+    value.banter = input.banter as LuxBanter;
   }
 
   if (input.obsSize !== undefined) {
@@ -225,6 +247,8 @@ export function settingsFromRow(row: Record<string, unknown> | null): LuxSetting
     { replyMax: row.reply_max },
     { language: row.language },
     { memoryEnabled: row.memory_enabled },
+    { threadEnabled: row.thread_enabled },
+    { banter: row.banter },
     { obsSize: row.obs_size },
     { chatEnabled: row.chat_enabled },
     { voiceVolume: row.voice_volume },
@@ -259,6 +283,8 @@ export function rowFromSettings(profileId: string, value: LuxSettings): Record<s
     reply_max: value.replyMax,
     language: value.language,
     memory_enabled: value.memoryEnabled,
+    thread_enabled: value.threadEnabled,
+    banter: value.banter,
     obs_size: value.obsSize,
     chat_enabled: value.chatEnabled,
     voice_volume: value.voiceVolume,

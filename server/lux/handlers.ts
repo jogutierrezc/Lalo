@@ -52,6 +52,7 @@ import { LUX_CHAT_MAX, LuxCooldown } from './chatCommands.js';
 import { RELEASE_SETTING, nextRelease, parseRelease } from './release.js';
 import { luxDisplayName } from './displayName.js';
 import { sanitizeChatOutput } from './outputFilter.js';
+import { LUX_THREAD_CONTENT_MAX, threadViewerKey, type LuxThreadMessage } from './thread.js';
 import {
   BOT_ONLINE_MS,
   EVENT_MIN_GAP_MS,
@@ -880,6 +881,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
     const model = choice.model;
     const ajustes: LuxSettings = settingsFromRow(await db.settingsRow(profile.id));
     const memories = ajustes.memoryEnabled ? await db.memories(profile.id, character.id, MEMORY_LIMIT) : [];
+    const thread = await loadThread(db, profile.id, ajustes.threadEnabled, viewer, nowMs);
 
     const topic = detectSongRequest(message);
     const turn = {
@@ -890,6 +892,8 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
       language: ajustes.language,
       replyMax: ajustes.replyMax,
       intent,
+      banter: ajustes.banter,
+      thread,
       name: luxDisplayName(ajustes.chatName, ajustes.chatWord),
     };
     const text = await nvidiaChat({
@@ -906,6 +910,8 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
     const parsed = isSong ? { text: lyrics, emotion: 'normal' } : parseEmotion(text);
     const emotion = parsed.emotion;
     const clipped = isSong ? songForChat(lyrics) || '…' : (parsed.text || '…').slice(0, ajustes.replyMax);
+    // El hilo guarda solo lo que pasa el filtro del chat; si el filtro lo vacía, no se guarda nada
+    if (!isSong) await saveThread(db, profile.id, ajustes.threadEnabled, viewer, message, sanitizeChatOutput(parsed.text, { viewer: viewer ?? undefined }).slice(0, ajustes.replyMax), nowMs);
     const canSing = isSong && ajustes.voiceEngine === 'elevenlabs';
 
     // Registro de la respuesta: si falla, la respuesta igualmente se entrega.
@@ -938,6 +944,28 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
   } catch (err) {
     if (err instanceof NvidiaError) return nvidiaFailure(err);
     return luxFailure(err, 'lux/reply');
+  }
+}
+
+/** Hilo reciente de un espectador. Un fallo al leerlo nunca rompe la respuesta: se sigue sin hilo. */
+async function loadThread(db: LuxDb, profileId: string, enabled: boolean, viewer: string | null, nowMs: number): Promise<LuxThreadMessage[]> {
+  if (!enabled || !viewer || !db.threadRecent) return [];
+  try {
+    return await db.threadRecent(profileId, threadViewerKey(viewer), nowMs);
+  } catch {
+    console.error('[Lalo lux] no se pudo leer el hilo del espectador');
+    return [];
+  }
+}
+
+/** Guarda el mensaje y la respuesta (ya filtrada) en el hilo. Sin respuesta no guarda; un fallo nunca rompe la respuesta. */
+async function saveThread(db: LuxDb, profileId: string, enabled: boolean, viewer: string | null, message: string, reply: string, nowMs: number): Promise<void> {
+  const answer = reply.trim();
+  if (!enabled || !viewer || !db.threadSave || !answer || answer === '…') return;
+  try {
+    await db.threadSave(profileId, threadViewerKey(viewer), { user: message.slice(0, LUX_THREAD_CONTENT_MAX), assistant: answer.slice(0, LUX_THREAD_CONTENT_MAX) }, nowMs);
+  } catch {
+    console.error('[Lalo lux] no se pudo guardar el hilo del espectador');
   }
 }
 
@@ -987,6 +1015,9 @@ async function askInChat(
   const model = choice.model;
   const memories = current.memoryEnabled ? await db.memories(profile.id, character.id, MEMORY_LIMIT) : [];
   const intent = detectIntent(message);
+  // Sin nombre de espectador («Espectador» es solo el de respaldo) no hay hilo: mezclaría a desconocidos
+  const threadViewer = typeof raw.viewer === 'string' && raw.viewer.trim() ? viewer : null;
+  const thread = await loadThread(db, profile.id, current.threadEnabled, threadViewer, nowMs);
 
   const topic = detectSongRequest(message);
   const turn = {
@@ -997,6 +1028,8 @@ async function askInChat(
     language: current.language,
     replyMax: current.replyMax,
     intent,
+    banter: current.banter,
+    thread,
     name: luxDisplayName(current.chatName, current.chatWord),
   };
   const text = await nvidiaChat({
@@ -1012,7 +1045,10 @@ async function askInChat(
   const lyrics = isSong ? normalizeSong(text) : '';
   const parsed = isSong ? { text: lyrics, emotion: 'normal' } : parseEmotion(text);
   const emotion = parsed.emotion;
-  const reply = isSong ? songForChat(lyrics) || '…' : sanitizeChatOutput(parsed.text, { viewer }).slice(0, current.replyMax) || '…';
+  const filtered = isSong ? '' : sanitizeChatOutput(parsed.text, { viewer }).slice(0, current.replyMax);
+  const reply = isSong ? songForChat(lyrics) || '…' : filtered || '…';
+  // El hilo guarda la respuesta ya filtrada; sin respuesta (o canción) no se guarda nada
+  if (!isSong) await saveThread(db, profile.id, current.threadEnabled, threadViewer, message, filtered, nowMs);
   // Solo ElevenLabs canta: con otra voz, Lux responde con la letra en el chat y sin canto.
   const canSing = isSong && current.voiceEngine === 'elevenlabs';
 
