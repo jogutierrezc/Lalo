@@ -9,6 +9,7 @@ import {
   normalizeAppearance,
   appearanceFromParams,
   stickerDataUri,
+  ALERT_STYLES,
   DEFAULT_APPEARANCE,
   MAX_STICKER_BYTES,
 } from '../src/utils/appearance';
@@ -67,6 +68,16 @@ describe('appearance — Apariencia del widget', () => {
       normalizeAppearance({ alertStyle: 'otro', accent: 'x', position: 'zz', scale: 9, energy: 1, stickerSvg: '<script>' })
     ).toEqual({ ...DEFAULT_APPEARANCE, scale: 1.3 });
     expect(normalizeAppearance({ alertStyle: 'sticker', stickerSvg: SVG }).stickerSvg).toBe(SVG);
+  });
+
+  it('acepta los estilos pixel y descarta ids inválidos', () => {
+    ['arcade', 'aventura', 'dialogo', 'arcadeDialogo', 'aventuraDialogo'].forEach((id) => {
+      expect(normalizeAppearance({ alertStyle: id }).alertStyle).toBe(id);
+      expect(ALERT_STYLES.some((s) => s.id === id)).toBe(true);
+      expect(appearanceFromParams((k) => (k === 'style' ? id : null))).toEqual({ alertStyle: id });
+    });
+    expect(ALERT_STYLES).toHaveLength(9);
+    expect(normalizeAppearance({ alertStyle: 'Arcade ' }).alertStyle).toBe(DEFAULT_APPEARANCE.alertStyle);
   });
 
   it('lee de la URL solo los parámetros válidos', () => {

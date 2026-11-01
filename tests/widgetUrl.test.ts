@@ -38,6 +38,13 @@ describe('OBS Widget URL Builder', () => {
       expect(url).toContain('accent=00f5ff');
     });
 
+    it('lleva los estilos pixel en style=', () => {
+      ['arcade', 'aventura', 'dialogo', 'arcadeDialogo', 'aventuraDialogo'].forEach((id) => {
+        const url = buildWidgetUrl(origin, { ...DEFAULT_SETTINGS, channel: 'x', alertStyle: id as TTSSettings['alertStyle'] });
+        expect(url).toContain(`style=${id}`);
+      });
+    });
+
     it('incluye listas de moderación si están configuradas', () => {
       const customSettings: TTSSettings = {
         ...DEFAULT_SETTINGS,

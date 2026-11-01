@@ -73,6 +73,13 @@ describe('Stream Alerts Module', () => {
       expect(loaded.alertStyle).toBe('bocadillo');
     });
 
+    it('conserva los estilos pixel al guardar y cargar', () => {
+      ['arcade', 'aventura', 'dialogo', 'arcadeDialogo', 'aventuraDialogo'].forEach((id) => {
+        saveAlertsSettings({ ...DEFAULT_ALERTS_SETTINGS, alertStyle: id as StreamAlertsSettings['alertStyle'] });
+        expect(loadAlertsSettings().alertStyle).toBe(id);
+      });
+    });
+
     it('admite configuración de video transparente y screenShake por evento', () => {
       const custom: StreamAlertsSettings = {
         ...DEFAULT_ALERTS_SETTINGS,

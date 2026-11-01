@@ -9,7 +9,7 @@
  * que llega por URL o BroadcastChannel se normaliza aquí antes de usarse.
  */
 
-export type AlertStyle = 'cabina' | 'bocadillo' | 'subtitulo' | 'sticker';
+export type AlertStyle = 'cabina' | 'bocadillo' | 'subtitulo' | 'sticker' | 'arcade' | 'aventura' | 'dialogo' | 'arcadeDialogo' | 'aventuraDialogo';
 export type AlertPosition = 'tl' | 'tc' | 'tr' | 'bl' | 'bc' | 'br';
 export type AlertEnergy = 'calma' | 'normal' | 'hype';
 
@@ -27,6 +27,11 @@ export const ALERT_STYLES: { id: AlertStyle; name: string; description: string }
   { id: 'bocadillo', name: 'Bocadillo', description: 'Globo de cómic que sale del avatar.' },
   { id: 'subtitulo', name: 'Subtítulo', description: 'Solo texto, tipo karaoke.' },
   { id: 'sticker', name: 'Sticker', description: 'El SVG de tu canal, animado.' },
+  { id: 'arcade', name: 'Arcade', description: 'Aviso pixel art con un invasor que camina.' },
+  { id: 'aventura', name: 'Aventura', description: 'Pantalla de juego con un héroe que corre.' },
+  { id: 'dialogo', name: 'Diálogo', description: 'Caja de RPG que escribe el mensaje.' },
+  { id: 'arcadeDialogo', name: 'Arcade con diálogo', description: 'Arcade con el mensaje escrito letra a letra.' },
+  { id: 'aventuraDialogo', name: 'Aventura con diálogo', description: 'Aventura con el mensaje escrito letra a letra.' },
 ];
 
 export const ALERT_POSITIONS: { id: AlertPosition; name: string }[] = [
