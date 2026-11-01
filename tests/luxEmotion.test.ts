@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { LUX_EMOTIONS, parseEmotion } from '../server/lux/emotion';
+import { EMOTION_INSTRUCTION, LUX_EMOTIONS, parseEmotion } from '../server/lux/emotion';
 import { normalizeLuxSettings } from '../server/lux/settings';
 
 describe('emociones', () => {
@@ -14,7 +14,7 @@ describe('emociones', () => {
     expect(parseEmotion('¡Qué bien! [feliz]')).toEqual({ text: '¡Qué bien!', emotion: 'feliz' });
   });
 
-  it('una etiqueta desconocida se ignora y la emoción es normal', () => {
+  it('una etiqueta desconocida se quita y la emoción es normal', () => {
     expect(parseEmotion('Hola [aburrida]')).toEqual({ text: 'Hola', emotion: 'normal' });
   });
 
@@ -22,8 +22,32 @@ describe('emociones', () => {
     expect(parseEmotion('Hola a todos')).toEqual({ text: 'Hola a todos', emotion: 'normal' });
   });
 
-  it('la etiqueta solo cuenta al final del texto', () => {
-    expect(parseEmotion('[triste] no sé qué decir')).toEqual({ text: '[triste] no sé qué decir', emotion: 'normal' });
+  it('la etiqueta cuenta en cualquier posición y no queda en el texto', () => {
+    expect(parseEmotion('[triste] no sé qué decir')).toEqual({ text: 'no sé qué decir', emotion: 'triste' });
+    expect(parseEmotion('Pues [sorprendida] no lo esperaba')).toEqual({ text: 'Pues no lo esperaba', emotion: 'sorprendida' });
+  });
+
+  it('entiende masculino, mayúsculas, tildes y sinónimos', () => {
+    expect(parseEmotion('Ya basta [molesto]').emotion).toBe('molesta');
+    expect(parseEmotion('Hola [Feliz]').emotion).toBe('feliz');
+    expect(parseEmotion('Mmm [mágica]').emotion).toBe('magica');
+    expect(parseEmotion('Wow [sorprendido]').emotion).toBe('sorprendida');
+    expect(parseEmotion('La la la [canta]').emotion).toBe('alegre');
+    expect(parseEmotion('Grr [enojado]').emotion).toBe('molesta');
+  });
+
+  it('con varias etiquetas manda la última reconocida y todas se quitan', () => {
+    expect(parseEmotion('[feliz] Hola [canta] a todos [molesto]')).toEqual({ text: 'Hola a todos', emotion: 'molesta' });
+  });
+
+  it('sin etiqueta intuye por risas y emojis', () => {
+    expect(parseEmotion('jajaja qué bueno').emotion).toBe('alegre');
+    expect(parseEmotion('me da pena 😢').emotion).toBe('triste');
+  });
+
+  it('el prompt pide palabras exactas con una pista de cuándo usar cada una', () => {
+    expect(EMOTION_INSTRUCTION).toContain('molesta (');
+    expect(EMOTION_INSTRUCTION).toContain('femenino');
   });
 
   it('los ids coinciden con las diez expresiones del personaje', () => {
