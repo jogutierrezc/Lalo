@@ -24,6 +24,7 @@ import { useCloudSession } from '../hooks/useCloudSession';
 import { rpc, setCaminoElegido, setPendingCode, signInAdmin, signInWithTwitch } from '../lib/cloud';
 import { hasTwitchIdentity, readInviteCode } from '../lib/access';
 import { INVITE_PROBLEM, outcomeMessage } from '../lib/accesoMensajes';
+import { validCodePlanText } from '../lib/invitesLogic';
 import { pasoAnterior, pasoSiguiente, type Camino } from '../lib/recorrido';
 import type { InviteStatus } from '../lib/cloudTypes';
 import { LateralRecorrido, MarcoRecorrido, TarjetaPlan, TituloPaso, usePasoAnimado } from '../components/recorrido/piezas';
@@ -40,7 +41,9 @@ interface AccessProps {
 }
 
 export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
-  const { session, profile, outcome, error, redeem, refresh, signOut, loading } = useCloudSession();
+  const { session, profile, outcome, error, redeem, refresh, signOut, loading, invitesRequired } = useCloudSession();
+  // Entrada abierta: Twitch basta y el código es una opción. Mientras no se sabe, se actúa como siempre
+  const abierta = invitesRequired === false;
   const uid = useId();
   // Código que llega en un enlace de invitación (?codigo=)
   const [invited] = useState(() => readInviteCode(window.location.search));
@@ -147,7 +150,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
     try {
       const [row] = await rpc('check_invite', { p_code: clean });
       if (!row || row.status !== 'valid') setProblem(INVITE_PROBLEM[(row?.status as Exclude<InviteStatus, 'valid'>) || 'not_found']);
-      else setValidPlan(row.plan_name || 'Tu plan');
+      else setValidPlan(validCodePlanText(row.plan_name, row.plan_months));
     } catch (err) {
       setProblem(err instanceof Error ? `No se pudo comprobar el código: ${err.message}` : 'No se pudo comprobar el código.');
     }
@@ -186,7 +189,15 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
           <b>Sin contraseña nueva.</b> Entras con tu cuenta de Twitch.
         </li>
         <li>
-          <b>Solo con invitación.</b> El registro pide un código de invitación.
+          {abierta ? (
+            <>
+              <b>Entrada abierta.</b> Entras con Twitch, sin código. Si tienes uno, te da más plan.
+            </>
+          ) : (
+            <>
+              <b>Solo con invitación.</b> El registro pide un código de invitación.
+            </>
+          )}
         </li>
         <li>
           <b>Tu configuración te sigue.</b> Se guarda en tu cuenta y llega a OBS.
@@ -309,7 +320,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
             </div>
             <p>
               <button type="button" className="studio-link" onClick={() => go('codigo', 'co')}>
-                Prefiero empezar con mi código de invitación
+                {abierta ? 'Tengo un código de invitación' : 'Prefiero empezar con mi código de invitación'}
               </button>
             </p>
             <div className="acc-links">

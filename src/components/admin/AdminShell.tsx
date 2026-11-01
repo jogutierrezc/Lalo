@@ -28,6 +28,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
+  Receipt,
   Sparkles,
   Ticket,
   Users,
@@ -51,6 +52,7 @@ import { UsoSection } from '../../pages/admin/UsoSection';
 import { CodigosSection } from '../../pages/admin/CodigosSection';
 import { LimitesSection } from '../../pages/admin/LimitesSection';
 import { PreciosSection } from '../../pages/admin/PreciosSection';
+import { SuscripcionesSection } from '../../pages/admin/SuscripcionesSection';
 import { AlmacenamientoSection } from '../../pages/admin/AlmacenamientoSection';
 import { StreamersSection } from '../../pages/admin/StreamersSection';
 import { VocesSection } from '../../pages/admin/VocesSection';
@@ -65,6 +67,7 @@ const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> =
   codigos: Ticket,
   limites: Gauge,
   precios: CreditCard,
+  suscripciones: Receipt,
   almacenamiento: HardDrive,
   voces: Mic,
   personajes: Sparkles,
@@ -278,6 +281,7 @@ export const AdminShell: React.FC = () => {
           {section === 'codigos' && overview && <CodigosSection data={data} />}
           {section === 'limites' && <LimitesSection data={data} />}
           {section === 'precios' && <PreciosSection />}
+          {section === 'suscripciones' && <SuscripcionesSection />}
           {section === 'almacenamiento' && <AlmacenamientoSection data={data} />}
           {section === 'voces' && <VocesSection data={data} />}
           {section === 'personajes' && <PersonajesSection />}

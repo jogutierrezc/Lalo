@@ -12,8 +12,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { isCloudEnabled, supabase } from '../lib/supabase';
-import { fetchOwnProfile, getPendingCode, rpc, setPendingCode, signOut as cloudSignOut } from '../lib/cloud';
-import type { ProfileRow, RedeemInviteResult, RedeemRecoveryResult } from '../lib/cloudTypes';
+import { fetchInvitesRequired, fetchOwnProfile, getPendingCode, rpc, setPendingCode, signOut as cloudSignOut } from '../lib/cloud';
+import type { ClaimOpenAccessResult, ProfileRow, RedeemInviteResult, RedeemRecoveryResult } from '../lib/cloudTypes';
 import { pullConfigsToLocal, setCloudProfile } from '../lib/cloudConfig';
 import { hasTwitchIdentity } from '../lib/access';
 
@@ -30,6 +30,10 @@ interface CloudSession {
   /** Resultado del último canje de código, para explicarlo en la pantalla de acceso. */
   outcome: RedeemOutcome | null;
   error: string | null;
+  /** ¿Se pide código de invitación para entrar? null mientras se pregunta. Se sabe también sin sesión. */
+  invitesRequired: boolean | null;
+  /** Con la entrada abierta, activa el perfil pendiente con el plan por defecto y lo vuelve a leer. */
+  claimOpenAccess: () => Promise<ClaimOpenAccessResult | 'error'>;
   refresh: () => Promise<void>;
   redeem: (kind: 'invite' | 'recovery', code: string) => Promise<RedeemOutcome>;
   signOut: () => Promise<void>;
@@ -42,6 +46,8 @@ const CloudContext = createContext<CloudSession>({
   profile: null,
   outcome: null,
   error: null,
+  invitesRequired: null,
+  claimOpenAccess: async () => 'error',
   refresh: async () => {},
   redeem: async () => ({ kind: 'error', message: 'La nube no está configurada.' }),
   signOut: async () => {},
@@ -56,6 +62,12 @@ export const CloudProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [outcome, setOutcome] = useState<RedeemOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
   const redeemingRef = useRef(false);
+  const claimingRef = useRef(false);
+  // Id del perfil para el que ya se pidió la entrada abierta
+  const claimedForRef = useRef<string | null>(null);
+  // Ya se intentó canjear un código: si falló, no se entra solo por la puerta abierta
+  const triedCodeRef = useRef(false);
+  const [invitesRequired, setInvitesRequired] = useState<boolean | null>(null);
   // Cuenta cuya configuración ya está en este navegador
   const [syncedFor, setSyncedFor] = useState<string | null>(null);
 
@@ -70,6 +82,7 @@ export const CloudProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const redeem = useCallback(
     async (kind: 'invite' | 'recovery', code: string): Promise<RedeemOutcome> => {
+      triedCodeRef.current = true;
       let result: RedeemOutcome;
       try {
         result =
@@ -86,6 +99,30 @@ export const CloudProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     },
     [loadProfile]
   );
+
+  // Si hacen falta invitaciones o no: se puede preguntar sin sesión
+  useEffect(() => {
+    if (!isCloudEnabled) return;
+    let alive = true;
+    fetchInvitesRequired().then((required) => {
+      if (alive) setInvitesRequired(required);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const claimOpenAccess = useCallback(async (): Promise<ClaimOpenAccessResult | 'error'> => {
+    try {
+      const result = await rpc('claim_open_access', {});
+      const user = (await supabase?.auth.getUser())?.data.user;
+      if (user) await loadProfile(user.id);
+      return result;
+    } catch (err) {
+      setError(err instanceof Error ? `No se pudo abrir tu cuenta: ${err.message}` : 'No se pudo abrir tu cuenta.');
+      return 'error';
+    }
+  }, [loadProfile]);
 
   // Sesión inicial y cambios de sesión
   useEffect(() => {
@@ -129,6 +166,24 @@ export const CloudProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   }, [session, profile, redeem]);
 
+  // Entrada abierta: un perfil nuevo (pendiente) pasa a activo sin código. Si venía con un código
+  // por canjear (invitación o recuperación) o ya se intentó uno, se respeta: no se activa por detrás.
+  // Se intenta una sola vez por perfil en la sesión: si el servidor no dice 'ok' (no_twitch,
+  // invites_required) no se reintenta, porque cada lectura del perfil crea un objeto nuevo.
+  const profileId = profile?.id ?? null;
+  const profileStatus = profile?.status ?? null;
+  useEffect(() => {
+    if (invitesRequired !== false || !session || !profileId || profileStatus !== 'pending') return;
+    if (!hasTwitchIdentity(session.user) || claimingRef.current || redeemingRef.current) return;
+    if (getPendingCode() || triedCodeRef.current) return;
+    if (claimedForRef.current === profileId) return;
+    claimedForRef.current = profileId;
+    claimingRef.current = true;
+    claimOpenAccess().finally(() => {
+      claimingRef.current = false;
+    });
+  }, [invitesRequired, session, profileId, profileStatus, claimOpenAccess]);
+
   // Marca la última visita de las cuentas activas
   const activeId = profile?.status === 'active' ? profile.id : null;
   useEffect(() => {
@@ -171,6 +226,8 @@ export const CloudProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       profile,
       outcome,
       error,
+      invitesRequired,
+      claimOpenAccess,
       refresh: async () => {
         if (session) await loadProfile(session.user.id);
       },
@@ -180,7 +237,7 @@ export const CloudProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         await cloudSignOut();
       },
     }),
-    [loading, syncing, session, profile, outcome, error, loadProfile, redeem]
+    [loading, syncing, session, profile, outcome, error, invitesRequired, claimOpenAccess, loadProfile, redeem]
   );
 
   return <CloudContext.Provider value={value}>{children}</CloudContext.Provider>;
