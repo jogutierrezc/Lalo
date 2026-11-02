@@ -73,6 +73,7 @@ import { setActiveVoice } from '../utils/activeVoice';
 import type { RewardsLayerHandle } from '../components/recompensas/RewardsLayer';
 import { RewardsWidgetLayer, rewardsSettingsForWidget } from '../components/recompensas/RewardsWidgetLayer';
 import { TwitchEventLayer } from '../components/powerups/TwitchEventLayer';
+import { DoneOverlayLayer } from '../components/done/DoneOverlayLayer';
 import { MusicWidgetLayer, MusicWidgetLayerHandle } from '../components/integraciones/MusicWidgetLayer';
 import { KofiWidgetLayer, KofiWidgetLayerHandle } from '../components/integraciones/KofiWidgetLayer';
 import { kofiSettingsForWidget, musicSettingsForWidget, withKofiDesign, withMusicDesign } from '../components/integraciones/widgetSettings';
@@ -1937,6 +1938,9 @@ export const Widget: React.FC = () => {
 
       {/* Recompensas: sonidos, placas y vídeos por puntos de canal o bits */}
       {showRewards && <RewardsWidgetLayer ref={rewardsRef} />}
+
+      {/* Done AI: asistente del canal (app=done o dentro de «Todo en uno») */}
+      {(appParam === 'done' || appParam === 'all') && <DoneOverlayLayer widgetKey={getURLParam('k') || ''} channel={activeChannel} />}
 
       {/* Canal de eventos de Twitch: Power-ups, Bits para las metas y canjes de puntos sin texto */}
       <TwitchEventLayer
