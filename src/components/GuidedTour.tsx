@@ -24,6 +24,8 @@ export interface GuidedTourProps {
   onClose: () => void;
   id?: string;
   appName?: string;
+  /** Se llama justo antes de pasar a otro paso: permite cambiar de pestaña para que el módulo del paso exista. */
+  onStep?: (step: TourStep) => void;
 }
 
 const TOUR_DONE_KEY = 'lalo_tts_tour_done';
@@ -108,6 +110,7 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({
   onClose,
   id = 'ajustes',
   appName,
+  onStep,
 }) => {
   const [index, setIndex] = useState(0);
   const ringRef = useRef<HTMLDivElement | null>(null);
@@ -216,14 +219,16 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({
       close();
     } else {
       playTourCue(false);
+      onStep?.(steps[index + 1]);
       setIndex((i) => i + 1);
     }
-  }, [isLast, close]);
+  }, [isLast, close, onStep, steps, index]);
 
   const back = useCallback(() => {
     playTourCue(false);
+    onStep?.(steps[Math.max(0, index - 1)]);
     setIndex((i) => Math.max(0, i - 1));
-  }, []);
+  }, [onStep, steps, index]);
 
   // Control por teclado: Esc para cerrar, Flechas para avanzar/retroceder (salvo si se está escribiendo)
   useEffect(() => {

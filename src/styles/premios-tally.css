@@ -1,0 +1,291 @@
+/* ==========================================================================
+   Alertas y premios con identidad Tally (Alertas, Recompensas, Power-ups,
+   Mascotas). Se activa con la clase .ptl del armazón VentanaPestanas.
+
+   Cómo funciona: redefine los tokens de Cabina (--cb-*, --ui) con los de Tally
+   dentro de .ptl, así los controles ya existentes (.cab-inp, .cab-seg,
+   .cab-tog...) pasan a Tally sin tocar el CSS que otras páginas siguen usando.
+   Regla del rojo: solo la acción principal y lo «en vivo»; los errores van con
+   borde discontinuo, icono y texto claro. Movimiento: cubic-bezier(.23,1,.32,1),
+   hasta 300 ms, hover solo con puntero fino y «reducir movimiento» respetado.
+   ========================================================================== */
+
+.ptl.cab {
+  --acc: var(--tally-red);
+  --acc-ink: #fff;
+  --cb-bg: var(--tally-dark);
+  --cb-panel: var(--tally-onyx);
+  --cb-surface: var(--tally-onyx-2);
+  --cb-line: var(--tally-line);
+  --cb-off: var(--tally-off);
+  --cb-fg: var(--tally-white);
+  --cb-mut: var(--tally-muted);
+  --cb-bad: var(--tally-error);
+  --ui: var(--tally-red);
+  --ui-ink: #fff;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  display: grid;
+  gap: 0;
+  align-content: start;
+  min-height: 0;
+  background: transparent;
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+  font-size: 0.9375rem;
+}
+
+/* ---------- Armazón ---------- */
+.ptl-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--tally-dark);
+}
+.ptl-nav {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--tally-line);
+}
+.ptl-body {
+  container: ptl / inline-size;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  padding: 16px;
+}
+.ptl-main {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.ptl-main > .tui-tabpanel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.ptl-rail,
+.ptl-dock {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  align-content: start;
+}
+/* Estrecho: el panel fijo sube arriba para que la vista previa no se pierda */
+.ptl-dock {
+  order: -1;
+}
+@container ptl (min-width: 720px) {
+  .ptl-body[data-rail] {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+  .ptl-body[data-rail] .ptl-dock {
+    grid-column: 1 / -1;
+  }
+}
+@container ptl (min-width: 1000px) {
+  .ptl-body {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  }
+  .ptl-body[data-rail] {
+    grid-template-columns: 210px minmax(0, 1fr) minmax(300px, 360px);
+  }
+  .ptl-body[data-rail] .ptl-dock {
+    grid-column: auto;
+  }
+  .ptl-dock {
+    order: 0;
+    position: sticky;
+    top: 100px;
+  }
+}
+
+/* ---------- Módulos y textos ---------- */
+.ptl .cab-mod {
+  gap: 16px;
+  padding: 18px;
+  border-radius: 12px;
+  background: var(--tally-onyx);
+}
+.ptl .cab-mod h2 {
+  font-family: var(--tally-disp);
+  font-stretch: 100%;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.ptl .cab-label {
+  font-stretch: 100%;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--tally-white);
+}
+.ptl .cab-hint,
+.ptl .cab-note {
+  color: var(--tally-muted);
+  font-size: 0.8125rem;
+}
+.ptl .cab-mono {
+  font-family: var(--tally-mono);
+}
+.ptl .cab-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--tally-error-line);
+  border-radius: 6px;
+  color: var(--tally-error);
+}
+.ptl .cab-error::before {
+  content: '!';
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-family: var(--tally-mono);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* ---------- Controles ---------- */
+.ptl .cab-inp {
+  height: 38px;
+  border-radius: 8px;
+  background: var(--tally-onyx-2);
+  transition: border-color 140ms ease;
+}
+.ptl textarea.cab-inp {
+  height: auto;
+}
+.ptl :focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 2px;
+}
+.ptl .cab-btn,
+.ptl .cab-btn2 {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-family: var(--tally-ui);
+  font-size: 0.8125rem;
+}
+.ptl .cab-btn {
+  border: 1px solid var(--tally-red);
+  background: var(--tally-red);
+  color: #fff;
+}
+.ptl .cab-btn2 {
+  border: 1px solid var(--tally-off);
+  background: transparent;
+  color: var(--tally-white);
+}
+.ptl .cab-btn-sm {
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: 0.75rem;
+}
+.ptl .cab-seg {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--tally-onyx);
+}
+.ptl .cab-seg button {
+  min-height: 34px;
+  border-radius: 0;
+  border-right: 1px solid var(--tally-line);
+  font-family: var(--tally-ui);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.ptl .cab-seg button:last-child {
+  border-right: 0;
+}
+.ptl .cab-seg button[aria-pressed='true'] {
+  background: var(--tally-red);
+  color: #fff;
+  font-weight: 700;
+}
+.ptl .cab-tog:checked::after {
+  background: #fff;
+}
+.ptl .cab-range output {
+  font-family: var(--tally-mono);
+  font-size: 0.75rem;
+  color: var(--tally-muted);
+}
+.ptl .cab-range input {
+  accent-color: var(--tally-red);
+}
+.ptl .cab-sw button[aria-pressed='true'],
+.ptl .cab-pos button[aria-pressed='true'] {
+  outline-color: var(--tally-white);
+}
+.ptl .cab-stage {
+  border-radius: 10px;
+}
+
+/* Lista del riel: fila elegida con barra fina, no con relleno */
+.ptl .cab-rows {
+  border-radius: 10px;
+  border-color: var(--tally-line);
+  background: var(--tally-dark);
+}
+.ptl .cab-row {
+  position: relative;
+}
+.ptl .cab-row[data-current] {
+  background: var(--tally-onyx-2);
+}
+.ptl .cab-row[data-current]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tally-white);
+}
+.ptl .studio-details {
+  border-top-color: var(--tally-line);
+}
+.ptl .studio-details > summary {
+  font-stretch: 100%;
+  font-family: var(--tally-disp);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.ptl .studio-tier {
+  border-radius: 8px;
+}
+
+/* ---------- Movimiento ---------- */
+@media (hover: hover) and (pointer: fine) {
+  .ptl .cab-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  .ptl .cab-btn2:hover:not(:disabled) {
+    background: #2a3037;
+    border-color: var(--tally-muted);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ptl .cab-btn,
+  .ptl .cab-btn2,
+  .ptl .cab-tog,
+  .ptl .cab-tog::after,
+  .ptl .cab-seg button,
+  .ptl .cab-sw button {
+    transition: none;
+  }
+}
