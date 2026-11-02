@@ -21,6 +21,7 @@ import { useCloudSession } from '../hooks/useCloudSession';
 import { completeOnboarding, fetchOwnPlan, getCaminoElegido, getPendingCode } from '../lib/cloud';
 import { outcomeMessage } from '../lib/accesoMensajes';
 import { bienvenidaHechaAqui, claveBienvenida, lineasDelPlan, pasoConSesion, type PasoId, type PasoNarrado } from '../lib/recorrido';
+import { pedirBienvenidaNueva } from '../lib/fundadores';
 import { alertasActivas, guardarCanal, limpiarCanal } from '../lib/recorridoCanal';
 import { loadSettings } from '../types/settings';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
@@ -66,7 +67,9 @@ interface BienvenidaProps {
 }
 
 export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar, aceptacion }) => {
-  const { session, profile, outcome, error, redeem, refresh, signOut, loading } = useCloudSession();
+  const { session, profile, outcome, error, redeem, refresh, signOut, loading, invitesRequired, claimOpenAccess } = useCloudSession();
+  // Entrada abierta: el código es opcional y se puede seguir sin él
+  const abierta = invitesRequired === false;
   const uid = useId();
   const perfilId = profile?.id ?? '';
   const activo = profile?.status === 'active';
@@ -189,6 +192,21 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
     setBusy(false);
   };
 
+  /** Entrada abierta: sigue con el plan por defecto. El perfil activo saca solo del paso del código. */
+  const seguirSinCodigo = async () => {
+    setBusy(true);
+    setProblem(null);
+    const result = await claimOpenAccess();
+    if (result !== 'ok' && result !== 'not_pending') {
+      setProblem(
+        result === 'invites_required'
+          ? 'Ahora mismo hace falta un código de invitación para entrar.'
+          : 'No se pudo abrir tu cuenta. Inténtalo de nuevo.'
+      );
+    }
+    setBusy(false);
+  };
+
   const guardarYSeguir = (configurar: boolean) => {
     if (login) {
       guardarCanal(login, configurar ? { voz, estilo, comando, avisos } : undefined);
@@ -198,6 +216,8 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
   };
 
   const terminar = async () => {
+    // Al abrir el panel sale la bienvenida de Tally Studio, una sola vez (src/lib/fundadores.ts)
+    pedirBienvenidaNueva(perfilId);
     // Segundo intento tras un fallo: ya está recordado en este navegador
     if (cierre) {
       onTerminar(perfilId);
@@ -329,8 +349,9 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
             <form onSubmit={canjear}>
               <TituloPaso>Tu código de invitación</TituloPaso>
               <p className="cab-hint">
-                La cuenta de {nombre} aún no está registrada en Lalo. Escribe el código que te dio quien administra
-                Lalo. Empieza por LALO-.
+                {abierta
+                  ? `La cuenta de ${nombre} puede entrar sin código. Si tienes uno, escríbelo: te da más plan. Empieza por LALO-.`
+                  : `La cuenta de ${nombre} aún no está registrada en Lalo. Escribe el código que te dio quien administra Lalo. Empieza por LALO-.`}
               </p>
               <div className="cab-field">
                 <label className="cab-label" htmlFor={`${uid}-code`}>
@@ -355,6 +376,11 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
                 <button type="submit" className="cab-btn" disabled={busy}>
                   {busy ? 'Comprobando' : 'Comprobar código'}
                 </button>
+                {abierta && (
+                  <button type="button" className="cab-btn2" disabled={busy} onClick={seguirSinCodigo}>
+                    Seguir sin código
+                  </button>
+                )}
               </div>
               <div className="acc-links">
                 <button type="button" className="studio-link" onClick={onRecuperar}>

@@ -25,6 +25,7 @@ export type AdminSection =
   | 'codigos'
   | 'limites'
   | 'precios'
+  | 'suscripciones'
   | 'almacenamiento'
   | 'voces'
   | 'personajes'
@@ -38,6 +39,7 @@ export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'codigos', label: 'Códigos de invitación' },
   { id: 'limites', label: 'Límites' },
   { id: 'precios', label: 'Planes y precios' },
+  { id: 'suscripciones', label: 'Suscripciones' },
   { id: 'almacenamiento', label: 'Almacenamiento' },
   { id: 'voces', label: 'Voces' },
   { id: 'personajes', label: 'Personajes' },
@@ -450,4 +452,54 @@ export function passwordChangeProblem(error: AuthErrorLike): string {
     return 'No se pudo conectar con la nube. Revisa tu conexión y vuelve a probar.';
   }
   return `No se pudo cambiar la clave: ${error.message || 'error desconocido'}`;
+}
+
+// ---------- Planes nuevos (admin_create_plan, migración 0048) ----------
+
+export interface NewPlanInput {
+  id: string;
+  name: string;
+  storageLimitBytes: number;
+  maxFileBytes: number;
+  maxFiles: number;
+  luxMonthlyCredits?: number;
+  luxMaxModels?: number | null;
+}
+
+export type NewPlanCheck = { ok: true; value: Required<NewPlanInput> } | { ok: false; error: string };
+
+export const PLAN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** Normaliza un nombre de plan a un identificador válido («Plan Pro!» -> «plan-pro»). */
+export function slugifyPlanId(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+}
+
+const isCount = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
+const INT_MAX = 2147483647;
+
+/** Valida los datos de un plan nuevo antes de llamar a admin_create_plan. El servidor vuelve a validar. */
+export function validateNewPlan(input: NewPlanInput): NewPlanCheck {
+  const id = input.id.trim().toLowerCase();
+  const name = input.name.trim();
+  if (!PLAN_ID_PATTERN.test(id)) return { ok: false, error: 'El identificador solo admite letras minúsculas, números y guiones (hasta 40).' };
+  if (name.length < 1 || name.length > 40) return { ok: false, error: 'El nombre debe tener entre 1 y 40 caracteres.' };
+  if (!isCount(input.storageLimitBytes)) return { ok: false, error: 'El almacenamiento debe ser un entero de 0 o más.' };
+  if (!isCount(input.maxFileBytes)) return { ok: false, error: 'El tamaño máximo por archivo debe ser un entero de 0 o más.' };
+  if (!isCount(input.maxFiles) || input.maxFiles > INT_MAX) return { ok: false, error: 'El número de archivos debe ser un entero de 0 o más.' };
+  const credits = input.luxMonthlyCredits ?? 0;
+  if (!isCount(credits) || credits > INT_MAX) return { ok: false, error: 'Los créditos mensuales deben ser un entero de 0 o más.' };
+  const models = input.luxMaxModels ?? null;
+  if (models !== null && (!isCount(models) || models > INT_MAX)) return { ok: false, error: 'El máximo de modelos debe ser un entero de 0 o más.' };
+  return {
+    ok: true,
+    value: { id, name, storageLimitBytes: input.storageLimitBytes, maxFileBytes: input.maxFileBytes, maxFiles: input.maxFiles, luxMonthlyCredits: credits, luxMaxModels: models },
+  };
 }
