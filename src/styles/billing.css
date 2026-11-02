@@ -631,3 +631,33 @@
     transition: none;
   }
 }
+
+/* Botones de PayPal (SDK): reservan su sitio para que la ventana no salte al cargar */
+.bil-sdk {
+  display: grid;
+  gap: 8px;
+  min-height: 56px;
+}
+.bil-sdk[data-state='ready'] {
+  animation: bil-sdk-in 0.3s var(--bil-ease) both;
+}
+@keyframes bil-sdk-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bil-sdk[data-state='ready'] {
+    animation: none;
+  }
+}
+.bil-codigo {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}

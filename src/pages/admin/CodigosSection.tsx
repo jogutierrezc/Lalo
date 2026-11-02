@@ -13,8 +13,34 @@ import { INVITE_SUBJECT, buildInviteLink, buildInviteMailto, buildInviteMessage,
 import { inviteState } from '../../lib/adminLogic';
 import { rpc } from '../../lib/cloud';
 import type { InviteCodeRow } from '../../lib/cloudTypes';
+import {
+  DEFAULT_CODE_MONTHS,
+  MAX_CODE_MONTHS,
+  MONTH_PRESETS,
+  activePlans,
+  codePlanLabel,
+  codeSummary,
+  parseCodeMonths,
+  quickPlan,
+  rpcErrorMessage,
+} from '../../lib/invitesLogic';
 import { formatDate } from './adminFormat';
+import { InvitacionesSwitch } from './InvitacionesSwitch';
 import type { AdminData } from './useAdminData';
+
+/** La frase del resumen con «Plan X por N meses» en negrita. */
+const SummaryText: React.FC<{ text: string }> = ({ text }) => {
+  const head = text.indexOf('Plan ');
+  const tail = text.indexOf(' sin costo');
+  if (head < 0 || tail < head) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, head)}
+      <b>{text.slice(head, tail)}</b>
+      {text.slice(tail)}
+    </>
+  );
+};
 
 export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
   const { invites, plans, planName, reload, setError } = data;
@@ -24,6 +50,10 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
 
   // Formulario de código nuevo
   const [newPlan, setNewPlan] = useState('');
+  const [preset, setPreset] = useState<number>(DEFAULT_CODE_MONTHS);
+  const [otherMonths, setOtherMonths] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [formProblem, setFormProblem] = useState<string | null>(null);
   const [newUses, setNewUses] = useState(1);
   const [newDays, setNewDays] = useState(7);
   const [newNote, setNewNote] = useState('');
@@ -35,7 +65,14 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
   const messageRef = useRef<HTMLTextAreaElement | null>(null);
   const recipientRef = useRef<HTMLInputElement | null>(null);
 
-  const fail = (err: unknown, fallback: string) => setError(err instanceof Error ? err.message : fallback);
+  const fail = (err: unknown, fallback: string) => setFormProblem(rpcErrorMessage(err, fallback));
+
+  // Los planes archivados no se pueden regalar
+  const offered = activePlans(plans);
+  const quick = quickPlan(plans);
+  const selectedPlan = offered.find((plan) => plan.id === newPlan) ?? quick;
+  const months = otherMonths.trim() !== '' ? parseCodeMonths(otherMonths) : preset;
+  const planLabel = selectedPlan?.name ?? 'por defecto';
 
   const openShare = (id: string, focus: boolean) => {
     setShareId(id);
@@ -44,15 +81,17 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
     if (focus) setTimeout(() => recipientRef.current?.focus(), 0);
   };
 
-  const createInvite = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const create = async (planId: string | null, planMonths: number, uses: number) => {
+    setCreating(true);
+    setFormProblem(null);
     try {
       const expires = newDays > 0 ? new Date(Date.now() + newDays * 86400000).toISOString() : null;
       const created = await rpc('admin_create_invite', {
-        p_plan: newPlan || null,
-        p_max_uses: Math.max(1, newUses),
+        p_plan: planId,
+        p_max_uses: Math.max(1, uses),
         p_expires_at: expires,
         p_note: newNote.trim() || null,
+        p_plan_months: planMonths,
       });
       setNewNote('');
       setNotice(`Código ${created.code} creado. Abajo tienes la invitación para compartirlo.`);
@@ -62,6 +101,25 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
     } catch (err) {
       fail(err, 'No se pudo crear el código.');
     }
+    setCreating(false);
+  };
+
+  const createInvite = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (months === null) {
+      setFormProblem(`Escribe de 1 a ${MAX_CODE_MONTHS} meses.`);
+      return;
+    }
+    create(selectedPlan?.id ?? null, months, newUses);
+  };
+
+  // Atajo: el primer plan de pago visible, 3 meses, 1 uso
+  const createQuick = () => {
+    setNewPlan(quick?.id ?? '');
+    setPreset(DEFAULT_CODE_MONTHS);
+    setOtherMonths('');
+    setNewUses(1);
+    create(quick?.id ?? null, DEFAULT_CODE_MONTHS, 1);
   };
 
   const revokeInvite = async (id: string) => {
@@ -70,7 +128,7 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
       if (shareId === id) setShareId(null);
       await reload();
     } catch (err) {
-      fail(err, 'No se pudo revocar el código.');
+      setError(rpcErrorMessage(err, 'No se pudo revocar el código.'));
     }
   };
 
@@ -122,21 +180,77 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
         </p>
       )}
 
+      <InvitacionesSwitch />
+
       <form className="cab-mod" onSubmit={createInvite}>
-        <h2>Generar código</h2>
-        <div className="flex flex-wrap items-end gap-4">
+        <h2>Crear código con plan temporal</h2>
+        <p className="cab-hint">
+          El código da un plan sin costo durante los meses que elijas. Al terminar, la cuenta vuelve al plan gratis, o sigue en el plan de pago si
+          se suscribió con PayPal mientras tanto.
+        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="cab-btn2" disabled={creating || !quick} onClick={createQuick}>
+            Plan gratis de 3 meses
+          </button>
+          <span className="cab-hint">Atajo: {quick ? `Plan ${quick.name}` : 'plan por defecto'}, 3 meses, 1 uso.</span>
+        </div>
+        <div className="adm-form-grid">
           <div className="cab-field">
             <label className="cab-label" htmlFor={`${uid}-plan`}>
-              Plan
+              Plan que otorga
             </label>
-            <select id={`${uid}-plan`} className="cab-inp" value={newPlan} onChange={(e) => setNewPlan(e.target.value)}>
-              <option value="">Plan por defecto</option>
-              {plans.map((plan) => (
+            <select
+              id={`${uid}-plan`}
+              className="cab-inp"
+              value={selectedPlan?.id ?? ''}
+              onChange={(e) => setNewPlan(e.target.value)}
+            >
+              {offered.length === 0 && <option value="">Plan por defecto</option>}
+              {offered.map((plan) => (
                 <option key={plan.id} value={plan.id}>
                   {plan.name}
                 </option>
               ))}
             </select>
+          </div>
+          <div className="cab-field">
+            <span className="cab-label" id={`${uid}-meses`}>
+              Meses de plan
+            </span>
+            <div className="adm-meses" role="radiogroup" aria-labelledby={`${uid}-meses`}>
+              {MONTH_PRESETS.map((value) => (
+                <label key={value}>
+                  <input
+                    type="radio"
+                    name={`${uid}-m`}
+                    value={value}
+                    checked={otherMonths.trim() === '' && preset === value}
+                    onChange={() => {
+                      setPreset(value);
+                      setOtherMonths('');
+                      setFormProblem(null);
+                    }}
+                  />
+                  {value}
+                </label>
+              ))}
+              <label className="adm-otro">
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_CODE_MONTHS}
+                  inputMode="numeric"
+                  placeholder="Otro"
+                  aria-label={`Otra cantidad de meses (1 a ${MAX_CODE_MONTHS})`}
+                  aria-invalid={otherMonths.trim() !== '' && months === null ? true : undefined}
+                  value={otherMonths}
+                  onChange={(e) => {
+                    setOtherMonths(e.target.value);
+                    setFormProblem(null);
+                  }}
+                />
+              </label>
+            </div>
           </div>
           <div className="cab-field">
             <label className="cab-label" htmlFor={`${uid}-uses`}>
@@ -154,17 +268,18 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
           </div>
           <div className="cab-field">
             <label className="cab-label" htmlFor={`${uid}-days`}>
-              Caduca
+              El código se puede canjear durante
             </label>
             <select id={`${uid}-days`} className="cab-inp" value={newDays} onChange={(e) => setNewDays(Number(e.target.value))}>
               <option value={7}>En 7 días</option>
               <option value={30}>En 30 días</option>
+              <option value={90}>En 90 días</option>
               <option value={0}>Sin caducidad</option>
             </select>
           </div>
-          <div className="cab-field min-w-[180px] flex-1">
+          <div className="cab-field adm-form-wide">
             <label className="cab-label" htmlFor={`${uid}-note`}>
-              Para quién (opcional)
+              Nota interna (opcional)
             </label>
             <input
               id={`${uid}-note`}
@@ -175,12 +290,26 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
               onChange={(e) => setNewNote(e.target.value)}
             />
           </div>
-          <button type="submit" className="cab-btn">
-            Generar
-          </button>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="submit" className="cab-btn" disabled={creating || months === null}>
+            {creating ? 'Creando' : 'Crear código'}
+          </button>
+          <span className="adm-resumen" role="status">
+            {months === null ? (
+              `Escribe de 1 a ${MAX_CODE_MONTHS} meses.`
+            ) : (
+              <SummaryText text={codeSummary(planLabel, months, Math.max(1, newUses))} />
+            )}
+          </span>
+        </div>
+        {formProblem && (
+          <p className="cab-error" role="alert">
+            {formProblem}
+          </p>
+        )}
         <p className="cab-hint">
-          «Para quién» es una nota solo para ti: no se envía ni aparece en la invitación. Lalo no guarda correos.
+          «Nota interna» es solo para ti: no se envía ni aparece en la invitación. Lalo no guarda correos.
         </p>
       </form>
 
@@ -288,7 +417,7 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
                     <td className="cab-mono">
                       <b>{invite.code}</b>
                     </td>
-                    <td>{planName(invite.plan_id)}</td>
+                    <td>{codePlanLabel(planName(invite.plan_id), invite.plan_months)}</td>
                     <td className="cab-mono">
                       {invite.used_count} de {invite.max_uses}
                     </td>

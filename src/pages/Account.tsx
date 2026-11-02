@@ -19,6 +19,7 @@ import { StorageApiError, deleteMediaFile, uploadMediaFile } from '../lib/storag
 import { UPLOAD_ALLOWED_MIME, checkUpload } from '../../server/storage/limits';
 import { UsageMeter } from '../components/UsageMeter';
 import { MiPlan } from '../components/billing/MiPlan';
+import { PanelFundador } from '../components/welcome/PanelFundador';
 import '../styles/admin.css';
 
 const KIND_LABEL: Record<MediaFileRow['kind'], string> = { image: 'imagen', video: 'vídeo', audio: 'sonido' };
@@ -436,6 +437,7 @@ export const Account: React.FC = () => {
               </button>
             </section>
 
+            <PanelFundador />
             <MiPlan />
           </div>
         )}
