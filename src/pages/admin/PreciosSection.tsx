@@ -152,6 +152,7 @@ export const PreciosSection: React.FC = () => {
                 <tr key={plan.id}>
                   <th scope="row" className="bil-plan-nombre">
                     {plan.name}
+                    {plan.archived && <small className="bil-sub"> Archivado</small>}
                   </th>
                   {BILLING_PERIODS.map((m) => (
                     <PriceCell key={m} plan={plan} months={m} feedback={feedback[cellKey(plan.id, m)]} onSave={saveCell} />

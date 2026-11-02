@@ -29,9 +29,18 @@ export function outcomeMessage(outcome: ResultadoCanje | null): string | null {
     if (outcome.result === 'no_twitch') {
       return 'Los códigos de invitación son para cuentas que entran con Twitch. Cierra sesión y entra con Twitch.';
     }
-    return outcome.result === 'not_pending'
-      ? 'Tu cuenta ya estaba registrada; el código no se ha gastado.'
-      : INVITE_PROBLEM[outcome.result];
+    switch (outcome.result) {
+      case 'not_pending':
+        return 'Tu cuenta ya estaba registrada; el código no se ha gastado.';
+      case 'has_paid_plan':
+        return 'Ya tienes una suscripción de pago activa; el código no se ha gastado. Úsalo cuando termine tu suscripción.';
+      case 'has_plan':
+        return 'Tu cuenta ya tiene un plan fijo; el código no se ha gastado.';
+      case 'already_redeemed':
+        return 'Ya canjeaste este código antes.';
+      default:
+        return INVITE_PROBLEM[outcome.result];
+    }
   }
   switch (outcome.result) {
     case 'expired':

@@ -69,6 +69,7 @@ import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
 import { isCloudEnabled } from './lib/supabase';
 import { takeReturnHash } from './lib/cloud';
 import { hasTwitchIdentity } from './lib/access';
+import { BienvenidaTally } from './components/welcome/BienvenidaTally';
 import { bienvenidaHechaAqui, necesitaRecorrido } from './lib/recorrido';
 import { selectPanelTournamentStore, startWidgetTournament } from './lib/tournamentCloud';
 import { parseSignupRoute } from './utils/tournamentSignup';
@@ -349,7 +350,8 @@ const Routes: React.FC = () => {
   // El administrador no es un streamer: solo ve su consola, escriba la dirección que escriba
   if (cloud.enabled && cloud.profile?.role === 'admin') return <AdminShell />;
 
-  switch (currentRoute) {
+  // Bienvenida de Tally Studio (fundadores y cuentas nuevas): se monta sobre la página
+  const pagina = (() => { switch (currentRoute) {
     case 'cuenta':
       return <Account />;
     case 'nube':
@@ -395,7 +397,13 @@ const Routes: React.FC = () => {
     case 'catalogo':
     default:
       return <Catalog />;
-  }
+  } })();
+  return (
+    <>
+      {pagina}
+      <BienvenidaTally />
+    </>
+  );
 };
 
 export const App: React.FC = () => (
