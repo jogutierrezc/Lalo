@@ -8,7 +8,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { Boton, Campo, Pill, Rango, Segmented, Switch, TabPanel, Tabs } from '../components/tally-ui';
+import { Boton, Campo, Rango, Segmented, Switch, TabPanel, Tabs } from '../components/tally-ui';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { useObsActions } from '../components/shell/obsActions';
 import { getDoneReadKey, isDoneDemo } from '../lib/doneClient';
@@ -143,7 +143,6 @@ export const DoneAssistant: React.FC = () => {
   return (
     <div className="done-win">
       <div className="done-win-head">
-        <Pill tone="live">Nuevo</Pill>
         <span className="sp" />
         <span className="done-status" data-state={state} role="status">
           {state === 'error' && <AlertTriangle size={14} aria-hidden="true" />}

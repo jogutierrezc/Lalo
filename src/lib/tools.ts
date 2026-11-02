@@ -331,7 +331,6 @@ export const TOOLS: ToolDef[] = [
     hash: '#done',
     phase: 'late',
     match: (hash) => /^(done|asistente)([?/]|$)/.test(hash),
-    isNew: true,
     component: lazy(() => import('../pages/DoneAssistant').then((m) => ({ default: m.DoneAssistant }))),
   },
 ];
