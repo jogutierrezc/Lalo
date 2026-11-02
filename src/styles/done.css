@@ -65,6 +65,8 @@
 .done-status button { font: inherit; color: inherit; background: none; border: 0; text-decoration: underline; cursor: pointer; padding: 0; }
 .done-win-main { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); min-height: 0; }
 .done-win-form { padding: 16px; display: grid; gap: 16px; align-content: start; overflow: auto; border-right: 1px solid var(--tally-line); min-height: 0; }
+/* La barra de pestañas se queda arriba al desplazar el formulario (si no, se pierde al bajar por la galería) */
+.done-tabs-sticky { position: sticky; top: 0; z-index: 5; margin: -16px -16px 0; padding: 16px 16px 8px; background: var(--tally-dark); border-bottom: 1px solid var(--tally-line); }
 .done-win-prev { padding: 16px; display: grid; gap: 12px; align-content: start; background: #14171a; overflow: auto; min-height: 0; }
 @container (max-width: 820px) {
   .done-win-main { grid-template-columns: 1fr; }

@@ -294,7 +294,11 @@ export async function doneSynthesize(text: string, key: string | null, voice: Do
 }
 
 /** URL del GLB de un modelo para el overlay (R2 privado, con la clave de OBS). */
-export const doneModelUrl = (key: string, modelId: string): string => `/api/lux/mascota-model?k=${encodeURIComponent(key)}&m=${encodeURIComponent(modelId)}`;
+export const doneModelUrl = (key: string, modelId: string): string =>
+  // La clave de lectura (dr.…) solo la entiende la ruta de Done; la clave de OBS, la de Lux (sirve cualquier modelo de la biblioteca)
+  key.startsWith('dr.')
+    ? `/api/done/model?k=${encodeURIComponent(key)}&m=${encodeURIComponent(modelId)}`
+    : `/api/lux/mascota-model?k=${encodeURIComponent(key)}&m=${encodeURIComponent(modelId)}`;
 
 /* ---------- Biblioteca de modelos (compartida con Lux) ---------- */
 

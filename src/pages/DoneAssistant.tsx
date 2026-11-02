@@ -122,7 +122,8 @@ export const DoneAssistant: React.FC = () => {
 
   const channel = profile?.twitch_login ?? (isDoneDemo() ? 'gaby_live' : '');
   const channelId = profile?.twitch_user_id ?? (isDoneDemo() ? '482915' : '');
-  const widgetKey = getDoneReadKey() ?? profile?.widget_key ?? '';
+  // La galería y la vista previa piden modelos de toda la biblioteca: usan la clave de OBS (la de lectura solo sirve el modelo activo)
+  const widgetKey = profile?.widget_key ?? getDoneReadKey() ?? '';
   const entry = useMemo(() => resolveEntry(catalog, settings), [catalog, settings]);
 
   const cmdValue = cmd ?? settings.commandWord;
