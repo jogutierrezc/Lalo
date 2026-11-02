@@ -10,6 +10,7 @@
  */
 
 import { supabase } from './supabase';
+import { noServerMessage } from './serverMessage';
 import type { MediaFileRow } from './cloudTypes';
 
 const publicBase = (import.meta.env.VITE_R2_PUBLIC_BASE_URL ?? '').trim().replace(/\/+$/, '');
@@ -68,7 +69,7 @@ async function call<T>(path: string, method: 'GET' | 'POST', body?: unknown): Pr
   if (!parsed || typeof parsed !== 'object') {
     // Sin el servidor en marcha, quien responde es la propia página, no una ruta de /api
     throw new StorageApiError(
-      'El servidor de Lalo no respondió a esta ruta. En local hay que arrancar con «npm run dev:all».',
+      noServerMessage(),
       'no_server',
       res.status
     );

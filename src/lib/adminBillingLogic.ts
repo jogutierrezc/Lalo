@@ -16,7 +16,7 @@
  *   - reembolsos y reversos: los de los últimos 30 días.
  */
 
-import { paymentConcept, receiptNumber, saleStatus, shortHash } from './paymentsLogic';
+import { paymentConcept, receiptNumber, saleStatus, shortHash } from './paymentsLogic.js';
 import type { PaymentStatus } from './paymentsApi';
 
 export const SOON_DAYS = 7;

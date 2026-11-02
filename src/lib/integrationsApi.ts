@@ -13,13 +13,13 @@
  */
 
 import { supabase } from './supabase';
+import { noServerMessage, serverFailedMessage } from './serverMessage';
 import { readKofiRecent, type KofiRecent } from '../../server/integrations/kofiRules';
 import { parseSnapshot, type GameSnapshot } from '../utils/gameAlerts';
 import { parseNowResponse, type NowResponse } from '../utils/musicRules';
 
 export type ApiOutcome<T> = { ok: true; data: T } | { ok: false; code: string; message: string; missing: string[] };
 
-const NO_SERVER = 'El servidor de Lalo no respondió. En local hace falta arrancarlo con «npm run dev:all».';
 const fallo = (code: string, message: string, missing: string[] = []): ApiOutcome<never> => ({ ok: false, code, message, missing });
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
 
@@ -38,13 +38,14 @@ export async function call(path: string, method: 'GET' | 'POST', body?: Record<s
       signal: AbortSignal.timeout(20000),
     });
     const parsed = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!parsed) return fallo('no_server', NO_SERVER);
+    // Respuesta que no es JSON (HTML o 500 de la plataforma): el servidor falló, no está apagado
+    if (!parsed) return fallo('no_server', res.status >= 500 || res.headers.get('content-type')?.includes('text/html') ? serverFailedMessage() : noServerMessage());
     if (!res.ok) {
-      return fallo(typeof parsed.code === 'string' ? parsed.code : 'server', typeof parsed.error === 'string' ? parsed.error : NO_SERVER, strings(parsed.missing));
+      return fallo(typeof parsed.code === 'string' ? parsed.code : 'server', typeof parsed.error === 'string' ? parsed.error : noServerMessage(), strings(parsed.missing));
     }
     return { ok: true, data: parsed };
   } catch {
-    return fallo('no_server', NO_SERVER);
+    return fallo('no_server', noServerMessage());
   }
 }
 

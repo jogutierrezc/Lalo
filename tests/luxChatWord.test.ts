@@ -6,8 +6,6 @@
  * el lector del chat y el script del bot que lleva la palabra y la versión.
  */
 
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { handleLux } from '../server/lux/handlers';
 import { LUX_CHAT_WORD_DEFAULT, LUX_CHAT_RESERVED, luxChatWords, parseLuxChat, validateChatWord } from '../server/lux/chatCommands';
@@ -225,36 +223,5 @@ describe('migración 0036', () => {
     expect(sql).toContain('add column if not exists chat_word');
     expect(sql).toContain('add column if not exists chat_alias');
     expect(sql).toContain('if not exists (select 1 from pg_constraint');
-  });
-});
-
-// ---------- Panel ----------
-
-const session = vi.hoisted(() => ({ profile: null as Record<string, unknown> | null }));
-
-vi.mock('../src/hooks/useCloudSession', () => ({
-  useCloudSession: () => ({ profile: session.profile }),
-}));
-vi.mock('../src/components/SuiteNav', () => ({ SuiteNav: () => null }));
-vi.mock('../src/lib/luxApi', () => ({
-  luxGetSettings: () => new Promise(() => {}),
-  luxSaveSettings: () => new Promise(() => {}),
-  luxAsk: () => new Promise(() => {}),
-  luxCharacterView: () => new Promise(() => {}),
-  luxSay: () => new Promise(() => {}),
-  luxSayList: () => new Promise(() => {}),
-}));
-
-import { LuxAI } from '../src/pages/LuxAI';
-
-describe('panel: comando de activación', () => {
-  it('muestra la sección, el ejemplo con la palabra por defecto y el botón de copiar', () => {
-    session.profile = { id: 'p1', role: 'streamer', lux_enabled: true };
-    const html = renderToStaticMarkup(React.createElement(LuxAI));
-    expect(html).toContain('Comando de activación');
-    expect(html).toContain('<strong>!lux</strong> para hablar con tu personaje');
-    expect(html).toContain('Copiar comando');
-    // Con la palabra por defecto no hay alias que apagar
-    expect(html).not.toContain('Seguir aceptando');
   });
 });

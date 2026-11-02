@@ -19,12 +19,13 @@ import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { RaidLayer, RaidLayerHandle } from '../components/raid/RaidLayer';
 import { Ajuste, BotonCopiar, Deslizador, Escenario, Modulo, Nota, Opcion, Pista } from '../components/enpantalla/kit';
 import { VentanaPestanas, pasosConPestana } from '../components/enpantalla/VentanaPestanas';
-import { Boton, Segmented } from '../components/tally-ui';
+import { Boton } from '../components/tally-ui';
 import { useRaidSettings } from '../hooks/useRaidSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { ANNOUNCER_VOICE_ID, DEFAULT_RAID_TEMPLATE, RAID_FRAMES, RAID_LIMITS, encodeRaidSettings, normalizeRaidSettings } from '../types/raid';
 import { loadSettings } from '../types/settings';
+import { noServerMessage } from '../lib/serverMessage';
 import { RaidSampleKind, normalizeLogin, parseClipRef, readClipResponse, sampleGreeting, welcomeText } from '../utils/raidLogic';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import '../styles/raid.css';
@@ -280,7 +281,7 @@ export const RaidStudio: React.FC = () => {
           {server.kind === 'missing' &&
             `El servidor aún no puede buscar cortos: le falta ${missingText}. Mientras tanto, el saludo sale con la placa sola. Quien administra el servidor la añade en sus variables de entorno.`}
           {server.kind === 'unknown' &&
-            'No se pudo preguntar al servidor si puede buscar cortos. En local hace falta arrancarlo con «npm run dev:all». Sin él, el saludo sale con la placa sola.'}
+            `No se pudo preguntar al servidor si puede buscar cortos. ${noServerMessage()} Mientras tanto, el saludo sale con la placa sola.`}
         </Nota>
       </Modulo>
 

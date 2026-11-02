@@ -8,6 +8,7 @@
 
 import { isCloudEnabled, supabase } from './supabase';
 import { rpc } from './cloud';
+import { noServerMessage } from './serverMessage';
 import type { AdminVoiceRow, PublicVoiceRow, VoiceState } from './cloudTypes';
 import { pickCatalogue, presetCatalogue, resolveSavedVoice, type VoiceCatalogue } from './voicesLogic';
 import { encodeVoiceEnvelope, type VoiceEnvelopeMeta } from '../../server/voices/rules';
@@ -115,7 +116,6 @@ export class VoiceApiError extends Error {
   }
 }
 
-const NO_SERVER = 'El servidor de Lalo no respondió a esta ruta. En local hay que arrancar con «npm run dev:all».';
 
 async function sessionToken(): Promise<string> {
   if (!supabase) throw new VoiceApiError('La nube no está configurada en este despliegue.', 'cloud_off', 0);
@@ -129,7 +129,7 @@ function errorFrom(status: number, parsed: unknown): VoiceApiError {
   if (!parsed || typeof parsed !== 'object') {
     // Vercel corta los cuerpos de más de 4,5 MB antes de que lleguen a la función
     if (status === 413) return new VoiceApiError('El servidor rechazó el envío por pesar demasiado (413).', 'too_large', 413);
-    return new VoiceApiError(NO_SERVER, 'no_server', status);
+    return new VoiceApiError(noServerMessage(), 'no_server', status);
   }
   const info = parsed as { error?: string; code?: string; canCatalogOnly?: unknown };
   return new VoiceApiError(

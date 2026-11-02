@@ -22,6 +22,7 @@
  */
 
 import { supabase } from './supabase';
+import { noServerMessage } from './serverMessage';
 import type { CachedPowerup } from '../types/powerups';
 import { parseCustomPowerups } from '../utils/twitchEvents';
 
@@ -109,7 +110,7 @@ export async function callSubscriptions(action?: 'create' | 'delete'): Promise<S
     if (!res.ok || !body) {
       return fallo(
         typeof body?.code === 'string' ? body.code : 'server',
-        typeof body?.error === 'string' ? body.error : 'El servidor de Lalo no respondió. En local hace falta arrancarlo con «npm run dev:all».',
+        typeof body?.error === 'string' ? body.error : noServerMessage(),
         Array.isArray(body?.missing) ? body.missing.filter((item): item is string => typeof item === 'string') : []
       );
     }
@@ -119,7 +120,7 @@ export async function callSubscriptions(action?: 'create' | 'delete'): Promise<S
       results: Array.isArray(body.results) ? (body.results as { type: string; outcome: string; detail: string }[]) : [],
     };
   } catch {
-    return fallo('server', 'El servidor de Lalo no respondió. En local hace falta arrancarlo con «npm run dev:all».');
+    return fallo('server', noServerMessage());
   }
 }
 
