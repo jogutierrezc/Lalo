@@ -11,6 +11,11 @@
  *
  * La barra lateral se monta en <body> para que ninguna animación de la página
  * la desplace; por eso lleva la clase .cab, que le da los tokens del tema.
+ *
+ * Tally Studio: mientras el cascarón está montado, <body> lleva la clase
+ * .tally (ver src/styles/tally.css). Los widgets y overlays de OBS no montan
+ * este componente, así que su aspecto no cambia. El indicador «En vivo» solo
+ * se muestra si la página indica que hay directo (prop `live`).
  */
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -50,6 +55,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { ThemeSwitch } from './ThemeSwitch';
+import { TallyLogo } from './brand/TallyLogo';
 import { buildSuiteWidgetUrl, WidgetAppType } from '../utils/widgetUrl';
 import { loadSettings } from '../types/settings';
 import { encodeChatSettings, loadChatSettings } from '../types/chat';
@@ -99,6 +105,8 @@ interface SuiteNavProps {
   saved?: boolean;
   onOpenTour?: () => void;
   tourAvailable?: boolean;
+  /** Hay directo en marcha. Sin él no se muestra el indicador «En vivo». */
+  live?: boolean;
 }
 
 interface NavItem {
@@ -250,6 +258,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   saved = true,
   onOpenTour,
   tourAvailable = false,
+  live = false,
 }) => {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -299,10 +308,11 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
   };
 
   // La página deja sitio a la barra lateral a través de clases en <body>
+  // y el tema Tally Studio se activa con la clase .tally, solo mientras el cascarón está montado
   useLayoutEffect(() => {
-    document.body.classList.add('has-side');
+    document.body.classList.add('has-side', 'tally');
     return () => {
-      document.body.classList.remove('has-side', 'side-collapsed');
+      document.body.classList.remove('has-side', 'side-collapsed', 'tally');
     };
   }, []);
 
@@ -390,9 +400,14 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
       aria-label="Módulos del panel"
     >
       <div className="shell-brand">
-        <a href="#dashboard" className="shell-logo" title="Lalo Stream Suite">
-          <span>L</span>
-          <b className="shell-lab">Lalo Suite</b>
+        <a href="#dashboard" className="tally-brand" aria-label="Tally Studio, ir al inicio" title="Tally Studio">
+          <TallyLogo size={20} decorativo />
+          {live && (
+            <span className="tally-live" role="status">
+              <i aria-hidden="true" />
+              En vivo
+            </span>
+          )}
         </a>
         <button type="button" className="cab-icon shell-close" aria-label="Cerrar menú" onClick={() => setDrawerOpen(false)}>
           <X className="h-4 w-4" />
@@ -465,7 +480,7 @@ export const SuiteNav: React.FC<SuiteNavProps> = ({
         >
           <Menu className="h-5 w-5" />
         </button>
-        <h1 className="shell-title">{current?.label || 'Lalo Suite'}</h1>
+        <h1 className="shell-title">{current?.label || 'Tally Studio'}</h1>
       </div>
 
       <div className="shell-actions">
