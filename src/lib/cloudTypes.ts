@@ -38,6 +38,8 @@ export interface PlanRow {
   lux_monthly_credits?: number;
   /** Nº máximo de modelos propios de Mi AI por creador (migración 0035). Null = ninguno. */
   lux_max_models?: number | null;
+  /** Desde 0048: plan archivado. No sale en el catálogo ni en códigos nuevos; quien lo tiene lo conserva. */
+  archived?: boolean;
 }
 
 export interface ProfileRow {
@@ -54,6 +56,8 @@ export interface ProfileRow {
   invite_code_id: string | null;
   created_at: string;
   last_seen_at: string | null;
+  /** Desde 0046: hasta cuándo vale el plan (pago o código con duración). null = sin vencimiento. */
+  plan_expires_at?: string | null;
   /** Desde 0006: cuándo terminó la bienvenida. Falta si la migración no está aplicada. */
   onboarded_at?: string | null;
   /** Desde 0018: el administrador le activó ElevenLabs. */
@@ -66,6 +70,12 @@ export interface ProfileRow {
   last_widget_at?: string | null;
   /** Desde 0019: tope diario de caracteres en ElevenLabs (0 = sin límite). */
   elevenlabs_daily_chars?: number;
+  /** Desde 0052: número de Creador Fundador. Null o ausente = no es fundador. */
+  founder_number?: number | null;
+  /** Desde 0052: cuándo vio la bienvenida de la app. */
+  welcome_seen_at?: string | null;
+  /** Desde 0052: cuándo activó el regalo del plan Creadores Iniciales. */
+  founder_gift_claimed_at?: string | null;
 }
 
 export interface InviteCodeRow {
@@ -79,6 +89,8 @@ export interface InviteCodeRow {
   note: string | null;
   created_by: string | null;
   created_at: string;
+  /** Desde 0047: meses que dura el plan al canjear (1 a 36). null = sin vencimiento. */
+  plan_months?: number | null;
 }
 
 export interface InviteRedemptionRow {
@@ -165,10 +177,25 @@ export type InviteStatus = 'valid' | 'expired' | 'used_up' | 'revoked' | 'not_fo
 export interface CheckInviteRow {
   status: InviteStatus;
   plan_name: string | null;
+  /** Desde 0047: duración del plan en meses; null = sin vencimiento. */
+  plan_months?: number | null;
 }
 
-/** redeem_invite(p_code) */
-export type RedeemInviteResult = 'ok' | 'not_pending' | 'no_twitch' | Exclude<InviteStatus, 'valid'>;
+/**
+ * redeem_invite(p_code). Desde 0047 también: has_paid_plan (suscripción de PayPal vigente),
+ * has_plan (plan fijo distinto del de por defecto) y already_redeemed (ya canjeó ese código).
+ */
+export type RedeemInviteResult =
+  | 'ok'
+  | 'not_pending'
+  | 'no_twitch'
+  | 'has_paid_plan'
+  | 'has_plan'
+  | 'already_redeemed'
+  | Exclude<InviteStatus, 'valid'>;
+
+/** claim_open_access(): activa un perfil pendiente cuando las invitaciones están desactivadas. */
+export type ClaimOpenAccessResult = 'ok' | 'invites_required' | 'not_pending' | 'no_twitch';
 
 /** redeem_recovery_code(p_code) */
 export type RedeemRecoveryResult =
@@ -300,6 +327,9 @@ export interface AdminUsageReport {
 export interface RpcArgs {
   check_invite: { p_code: string };
   redeem_invite: { p_code: string };
+  invites_required: Record<string, never>;
+  admin_set_invites_required: { p_required: boolean };
+  claim_open_access: Record<string, never>;
   redeem_recovery_code: { p_code: string };
   rotate_widget_key: Record<string, never>;
   touch_profile: Record<string, never>;
@@ -313,7 +343,19 @@ export interface RpcArgs {
     p_max_uses?: number;
     p_expires_at?: string | null;
     p_note?: string | null;
+    /** Desde 0047: null o 1 a 36. La pantalla de códigos usa 3 por defecto. */
+    p_plan_months?: number | null;
   };
+  admin_create_plan: {
+    p_id: string;
+    p_name: string;
+    p_storage_limit_bytes: number;
+    p_max_file_bytes: number;
+    p_max_files: number;
+    p_lux_monthly_credits?: number;
+    p_lux_max_models?: number | null;
+  };
+  admin_archive_plan: { p_id: string; p_archived: boolean };
   admin_revoke_invite: { p_invite: string };
   admin_set_profile: {
     p_profile: string;
@@ -337,12 +379,20 @@ export interface RpcArgs {
   admin_set_eleven_active_slot: { p_slot: number };
   admin_set_streamer_voice: { p_profile: string; p_reference_id: string; p_engine: 'fish' | 'elevenlabs' };
   dismiss_elevenlabs_invite: Record<string, never>;
+  /** Desde 0047. */
+  mark_welcome_seen: Record<string, never>;
+  founder_gift_config: Record<string, never>;
+  claim_founder_gift: Record<string, never>;
+  admin_set_founder_gift: { p_plan: string; p_months: number };
 }
 
 /** Resultado de cada RPC (lo que llega en `data`). */
 export interface RpcResult {
   check_invite: CheckInviteRow[];
   redeem_invite: RedeemInviteResult;
+  invites_required: boolean;
+  admin_set_invites_required: boolean;
+  claim_open_access: ClaimOpenAccessResult;
   redeem_recovery_code: RedeemRecoveryResult;
   rotate_widget_key: string;
   touch_profile: null;
@@ -352,6 +402,8 @@ export interface RpcResult {
   admin_overview: AdminOverview;
   admin_usage_report: AdminUsageReport;
   admin_create_invite: InviteCodeRow;
+  admin_create_plan: PlanRow;
+  admin_archive_plan: PlanRow;
   admin_revoke_invite: null;
   admin_set_profile: ProfileRow;
   admin_set_elevenlabs: ProfileRow;
@@ -373,4 +425,11 @@ export interface RpcResult {
   admin_voices: AdminVoiceRow[];
   admin_set_voice_visible: null;
   admin_set_default_voice: null;
+  /** Desde 0052: la fecha en que quedó guardada la bienvenida vista. */
+  mark_welcome_seen: string | null;
+  /** Desde 0052: { plan_id, plan_name, months }. */
+  founder_gift_config: unknown;
+  /** Desde 0052: 'ok' | 'already_claimed' | 'not_founder' | 'has_plan' | 'not_active'. */
+  claim_founder_gift: string;
+  admin_set_founder_gift: unknown;
 }

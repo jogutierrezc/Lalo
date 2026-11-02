@@ -22,6 +22,8 @@ import type {
   TermsAcceptanceRow,
 } from './cloudTypes';
 
+import { validateNewPlan, type NewPlanInput } from './adminLogic';
+
 function client() {
   if (!supabase) throw new Error('La nube no está configurada en este despliegue.');
   return supabase;
@@ -241,6 +243,18 @@ export async function fetchOwnMedia(profileId: string): Promise<MediaFileRow[]> 
 
 // ---------- Administración ----------
 
+/**
+ * ¿Hace falta código de invitación para entrar? Se puede preguntar sin sesión.
+ * Si no se puede saber (sin red, migración 0047 sin aplicar) se asume que sí: lo seguro.
+ */
+export async function fetchInvitesRequired(): Promise<boolean> {
+  try {
+    return (await rpc('invites_required', {})) !== false;
+  } catch {
+    return true;
+  }
+}
+
 export async function fetchPlans(): Promise<PlanRow[]> {
   const { data, error } = await client().from('plans').select('*').order('storage_limit_bytes');
   if (error) throw new Error(error.message);
@@ -250,6 +264,27 @@ export async function fetchPlans(): Promise<PlanRow[]> {
 export async function updatePlan(id: string, patch: Partial<Omit<PlanRow, 'id'>>): Promise<void> {
   const { error } = await client().from('plans').update(patch).eq('id', id);
   if (error) throw new Error(error.message);
+}
+
+/** Crea un plan nuevo (nunca el predeterminado). Valida antes de llamar; el servidor vuelve a validar. */
+export async function createPlan(input: NewPlanInput): Promise<PlanRow> {
+  const check = validateNewPlan(input);
+  if (!check.ok) throw new Error(check.error);
+  const v = check.value;
+  return rpc('admin_create_plan', {
+    p_id: v.id,
+    p_name: v.name,
+    p_storage_limit_bytes: v.storageLimitBytes,
+    p_max_file_bytes: v.maxFileBytes,
+    p_max_files: v.maxFiles,
+    p_lux_monthly_credits: v.luxMonthlyCredits,
+    p_lux_max_models: v.luxMaxModels,
+  });
+}
+
+/** Archiva o reactiva un plan. El predeterminado no se puede archivar. No existe «borrar». */
+export function archivePlan(id: string, archived: boolean): Promise<PlanRow> {
+  return rpc('admin_archive_plan', { p_id: id, p_archived: archived });
 }
 
 export async function fetchInvites(): Promise<InviteCodeRow[]> {

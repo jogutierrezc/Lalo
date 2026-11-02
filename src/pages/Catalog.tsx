@@ -11,28 +11,12 @@
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
-import {
-  BellRing,
-  Bot,
-  Check,
-  Clapperboard,
-  Coffee,
-  Coins,
-  Copy,
-  Gamepad2,
-  Layers,
-  Medal,
-  MessagesSquare,
-  Mic,
-  Music,
-  PawPrint,
-  Play,
-  Swords,
-  Target,
-  Trophy,
-  Zap,
-} from 'lucide-react';
-import { SuiteNav, layerParamsForWidget } from '../components/SuiteNav';
+import { Check, Copy, Play } from 'lucide-react';
+import { SuiteNav } from '../components/SuiteNav';
+import { layerParamsForWidget } from '../components/shell/obsActions';
+import { PlanCard } from '../components/shell/PlanCard';
+import { useOpenTool } from '../components/shell/views';
+import { OBS_SOURCES, TOOLS as REGISTRY, type ToolId } from '../lib/tools';
 import { Field } from '../components/studio/StudioKit';
 import { useSettings } from '../hooks/useSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
@@ -40,21 +24,9 @@ import { playAlertAudio } from '../utils/alertsAudio';
 import { postBus } from '../utils/bus';
 import { buildSuiteWidgetUrl, WidgetAppType } from '../utils/widgetUrl';
 import { loadSettings, TTSSettings } from '../types/settings';
-import { loadAlertsSettings } from '../types/alerts';
-import { loadRewardsSettings } from '../types/rewards';
-import { loadGoalsSettings } from '../types/goals';
-import { loadRouletteSettings } from '../types/roulette';
-import { loadTwitchIOSettings } from '../types/twitchio';
-import { loadStudioSettings } from '../types/studio';
-import { loadPowerupsSettings } from '../types/powerups';
-import { loadPetsSettings } from '../types/pets';
-import { loadTournamentSettings } from '../types/tournament';
-import { loadMusicSettings } from '../types/music';
-import { loadKofiSettings } from '../types/kofi';
-import { loadGameSettings } from '../types/game';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
-import { ToolId, toolStatusFrom } from '../components/inicio/toolStatus';
 import { PrimerosPasos } from '../components/recorrido/PrimerosPasos';
+import { useToolStatus } from '../components/inicio/useToolStatus';
 import '../styles/inicio-bot.css';
 
 const TOUR_ID = 'catalogo';
@@ -80,260 +52,104 @@ const CATALOG_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-interface Tool {
-  id: ToolId;
-  name: string;
-  text: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  /** Prueba de un clic. Solo envía un aviso de demostración. */
-  test?: (settings: TTSSettings) => void;
-}
+/** Pruebas de un clic de cada herramienta. Solo envían un aviso de demostración. */
+type ToolTest = (settings: TTSSettings) => void;
 
-const TOOLS: Tool[] = [
-  {
-    id: 'tts',
-    name: 'Voz del chat',
-    text: 'Lee en voz alta los mensajes del chat que tú decidas.',
-    href: '#tts',
-    icon: Mic,
+const TESTS: Partial<Record<ToolId, ToolTest>> = {
+  alertas: (settings) => {
+    playAlertAudio('synth-bell', 0.85);
+    postBus({
+      type: 'ALERT_TRIGGER',
+      alert: {
+        id: `test-${Date.now()}`,
+        eventType: 'follow',
+        user: settings.channel || 'NuevoSeguidor',
+        detail: '¡Acaba de seguirte!',
+        text: '¡Gracias por unirte a la tripulación!',
+        style: settings.alertStyle,
+        accent: settings.accent,
+        soundType: 'synth-bell',
+        duration: 4,
+      },
+    });
   },
-  {
-    id: 'alertas',
-    name: 'Alertas',
-    text: 'Avisos en pantalla cuando alguien te sigue, se suscribe, envía bits o hace una raid.',
-    href: '#alertas',
-    icon: BellRing,
-    test: (settings) => {
-      playAlertAudio('synth-bell', 0.85);
-      postBus({
-        type: 'ALERT_TRIGGER',
-        alert: {
-          id: `test-${Date.now()}`,
-          eventType: 'follow',
-          user: settings.channel || 'NuevoSeguidor',
-          detail: '¡Acaba de seguirte!',
-          text: '¡Gracias por unirte a la tripulación!',
-          style: settings.alertStyle,
-          accent: settings.accent,
-          soundType: 'synth-bell',
-          duration: 4,
+  recompensas: () => {
+    playAlertAudio('arcade-chime', 0.85);
+    postBus({
+      type: 'REWARD_TRIGGER',
+      reward: {
+        id: `reward-test-${Date.now()}`,
+        user: 'EspectadorPro',
+        rewardName: '¡Lluvia de Confeti Neón!',
+        noticeText: '¡EspectadorPro desató una lluvia de confeti en el stream!',
+        position: 'fullscreen',
+        scale: 1.0,
+        volume: 0.85,
+        screenShake: true,
+        accentColor: '#f59e0b',
+        soundType: 'arcade-chime',
+        duration: 5,
+      },
+    });
+  },
+  metas: () => {
+    playAlertAudio('retro-fanfare', 0.85);
+    postBus({
+      type: 'GOAL_CELEBRATE',
+      celebration: {
+        goalId: 'demo-goal',
+        title: 'Meta de demostración',
+        victorySoundType: 'retro-fanfare',
+        screenShake: true,
+        confetti: true,
+        duration: 5,
+      },
+    });
+  },
+  ruleta: () => {
+    playAlertAudio('arcade-chime', 0.85);
+    postBus({
+      type: 'ROULETTE_SPIN',
+      spin: {
+        id: `test-spin-${Date.now()}`,
+        user: 'EspectadorDemo',
+        winnerSegment: {
+          id: 'demo-seg',
+          text: '¡15 flexiones en directo!',
+          color: '#ff2d46',
+          category: 'fitness',
+          durationSec: 45,
+          enabled: true,
         },
-      });
-    },
+        winnerIndex: 0,
+        totalActiveSegments: 6,
+        finalRotation: 2160 + 330,
+        spinDurationSec: 5.5,
+        screenShake: true,
+        confetti: true,
+        victorySoundType: 'arcade-chime',
+        showWinnerBanner: true,
+        winnerBannerDurationSec: 8,
+      },
+    });
   },
-  {
-    id: 'recompensas',
-    name: 'Recompensas',
-    text: 'Vídeos, sonidos y efectos cuando alguien canjea puntos del canal.',
-    href: '#recompensas',
-    icon: Coins,
-    test: () => {
-      playAlertAudio('arcade-chime', 0.85);
-      postBus({
-        type: 'REWARD_TRIGGER',
-        reward: {
-          id: `reward-test-${Date.now()}`,
-          user: 'EspectadorPro',
-          rewardName: '¡Lluvia de Confeti Neón!',
-          noticeText: '¡EspectadorPro desató una lluvia de confeti en el stream!',
-          position: 'fullscreen',
-          scale: 1.0,
-          volume: 0.85,
-          screenShake: true,
-          accentColor: '#f59e0b',
-          soundType: 'arcade-chime',
-          duration: 5,
-        },
-      });
-    },
+  encuestas: () => {
+    playAlertAudio('synth-bell', 0.85);
+    postBus({
+      type: 'POLL_STATE_UPDATE',
+      state: {
+        title: 'Batalla de demostración: ¿pizza o tacos?',
+        optionA: { id: 'opt-a', label: 'Pizza italiana', color: '#00e5ff', accentGlow: '#00e5ff', votes: 14 },
+        optionB: { id: 'opt-b', label: 'Tacos al pastor', color: '#ff0055', accentGlow: '#ff0055', votes: 10 },
+        totalDurationSec: 45,
+        timeLeftSec: 45,
+        isActive: true,
+        winner: null,
+        leader: 'A',
+      },
+    });
   },
-  {
-    id: 'powerups',
-    name: 'Power-ups',
-    text: 'Sonidos, vídeos o voz cuando alguien usa un Power-up de Bits en el canal.',
-    href: '#powerups',
-    icon: Zap,
-  },
-  {
-    id: 'mascotas',
-    name: 'Mascotas',
-    text: 'Tu personaje reacciona con voz y emociones a canjes, bits, raids y menciones.',
-    href: '#mascotas',
-    icon: PawPrint,
-  },
-  {
-    id: 'torneos',
-    name: 'Torneos',
-    text: 'Llaves de eliminación directa en vivo con narrador y página de inscripción.',
-    href: '#torneos',
-    icon: Medal,
-  },
-  {
-    id: 'metas',
-    name: 'Metas',
-    text: 'Barras de progreso de seguidores, suscripciones o bits, con celebración al llegar.',
-    href: '#metas',
-    icon: Target,
-    test: () => {
-      playAlertAudio('retro-fanfare', 0.85);
-      postBus({
-        type: 'GOAL_CELEBRATE',
-        celebration: {
-          goalId: 'demo-goal',
-          title: 'Meta de demostración',
-          victorySoundType: 'retro-fanfare',
-          screenShake: true,
-          confetti: true,
-          duration: 5,
-        },
-      });
-    },
-  },
-  {
-    id: 'ruleta',
-    name: 'Ruleta',
-    text: 'Rueda de retos y castigos que el chat puede hacer girar.',
-    href: '#ruleta',
-    icon: Gamepad2,
-    test: () => {
-      playAlertAudio('arcade-chime', 0.85);
-      postBus({
-        type: 'ROULETTE_SPIN',
-        spin: {
-          id: `test-spin-${Date.now()}`,
-          user: 'EspectadorDemo',
-          winnerSegment: {
-            id: 'demo-seg',
-            text: '¡15 flexiones en directo!',
-            color: '#ff2d46',
-            category: 'fitness',
-            durationSec: 45,
-            enabled: true,
-          },
-          winnerIndex: 0,
-          totalActiveSegments: 6,
-          finalRotation: 2160 + 330,
-          spinDurationSec: 5.5,
-          screenShake: true,
-          confetti: true,
-          victorySoundType: 'arcade-chime',
-          showWinnerBanner: true,
-          winnerBannerDurationSec: 8,
-        },
-      });
-    },
-  },
-  {
-    id: 'encuestas',
-    name: 'Batallas',
-    text: 'Votaciones entre dos opciones que el chat decide escribiendo su voto.',
-    href: '#encuestas',
-    icon: Swords,
-    test: () => {
-      playAlertAudio('synth-bell', 0.85);
-      postBus({
-        type: 'POLL_STATE_UPDATE',
-        state: {
-          title: 'Batalla de demostración: ¿pizza o tacos?',
-          optionA: { id: 'opt-a', label: 'Pizza italiana', color: '#00e5ff', accentGlow: '#00e5ff', votes: 14 },
-          optionB: { id: 'opt-b', label: 'Tacos al pastor', color: '#ff0055', accentGlow: '#ff0055', votes: 10 },
-          totalDurationSec: 45,
-          timeLeftSec: 45,
-          isActive: true,
-          winner: null,
-          leader: 'A',
-        },
-      });
-    },
-  },
-  {
-    id: 'chat',
-    name: 'Chat',
-    text: 'El chat de tu canal en pantalla, con plantillas, destacados y moderación visible.',
-    href: '#chat',
-    icon: MessagesSquare,
-  },
-  {
-    id: 'raid',
-    name: 'Raids',
-    text: 'Saludo a quien llega con una raid, con un corto de su canal, y comandos !so y !clip para moderadores.',
-    href: '#raid',
-    icon: Clapperboard,
-  },
-  {
-    id: 'studio',
-    name: 'Studio',
-    text: 'Editor visual de escenas a 1920 × 1080 para combinar capas, textos, cámaras y temporizadores.',
-    href: '#studio',
-    icon: Layers,
-  },
-  {
-    id: 'twitchio',
-    name: 'Bot',
-    text: 'Comandos del chat con respuestas automáticas.',
-    href: '#twitchio',
-    icon: Bot,
-  },
-  {
-    id: 'musica',
-    name: 'Ahora suena',
-    text: 'Muestra la canción actual con diseños animados y comandos de chat.',
-    href: '#musica',
-    icon: Music,
-  },
-  {
-    id: 'kofi',
-    name: 'Ko-fi',
-    text: 'Alertas de donaciones, membresías y pedidos de tienda, con barra de meta y apoyos recientes.',
-    href: '#kofi',
-    icon: Coffee,
-  },
-  {
-    id: 'juego',
-    name: 'Alertas de juego',
-    text: 'Avisos automáticos de victorias, rachas, subidas de rango y pentakills en League of Legends.',
-    href: '#juego',
-    icon: Trophy,
-  },
-];
-
-const SOURCES: { app: WidgetAppType; name: string; note: string; recommended?: boolean }[] = [
-  { app: 'all', name: 'Todo en uno', note: 'Una sola fuente con todas las capas', recommended: true },
-  { app: 'tts', name: 'Voz', note: 'Mensajes leídos en voz alta' },
-  { app: 'alerts', name: 'Alertas', note: 'Follows, suscripciones, bits y raids' },
-  { app: 'rewards', name: 'Recompensas', note: 'Sonidos, placas y vídeos por puntos o bits' },
-  { app: 'pets', name: 'Mascota', note: 'Tu personaje reacciona con voz a canjes, bits y al chat' },
-  { app: 'goals', name: 'Metas', note: 'Barras de progreso' },
-  { app: 'roulette', name: 'Ruleta', note: 'Rueda de retos y castigos' },
-  { app: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
-  { app: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
-  { app: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
-  { app: 'music', name: 'Ahora suena', note: 'La canción que estás escuchando' },
-  { app: 'kofi', name: 'Alertas de Ko-fi', note: 'Donaciones, membresías, pedidos y comisiones' },
-  { app: 'kofigoal', name: 'Meta de Ko-fi', note: 'Lo recaudado, en barra o en depósito' },
-  { app: 'kofirecent', name: 'Últimos apoyos de Ko-fi', note: 'Lista corta de quien te apoyó' },
-  { app: 'game', name: 'Alertas de juego', note: 'Victorias, rango y jugadas de tu cuenta de Riot' },
-  { app: 'tournament', name: 'Torneo', note: 'La llave, la tabla y el campeón de tu torneo' },
-];
-
-/** Lee lo guardado de cada herramienta para decir cuánto hay activo. */
-function readToolStatus() {
-  return toolStatusFrom({
-    alerts: loadAlertsSettings(),
-    rewards: loadRewardsSettings(),
-    goals: loadGoalsSettings(),
-    roulette: loadRouletteSettings(),
-    bot: loadTwitchIOSettings(),
-    studio: loadStudioSettings(),
-    powerups: loadPowerupsSettings(),
-    pets: loadPetsSettings(),
-    tournament: loadTournamentSettings(),
-    music: loadMusicSettings(),
-    kofi: loadKofiSettings(),
-    game: loadGameSettings(),
-  });
-}
+};
 
 export const Catalog: React.FC = () => {
   const { settings, update, saved } = useSettings();
@@ -341,7 +157,8 @@ export const Catalog: React.FC = () => {
   const uid = useId();
 
   const [tourOpen, setTourOpen] = useState(false);
-  const [toolStatus, setToolStatus] = useState(readToolStatus);
+  const toolStatus = useToolStatus();
+  const openTool = useOpenTool();
   const [testNote, setTestNote] = useState<string | null>(null);
   const [copied, setCopied] = useState<WidgetAppType | null>(null);
   const [copyFailed, setCopyFailed] = useState<{ name: string; url: string } | null>(null);
@@ -352,17 +169,6 @@ export const Catalog: React.FC = () => {
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const channel = settings.channel.trim();
-
-  // Refresca el estado de cada herramienta cuando termina de bajar la nube o cambia localStorage
-  useEffect(() => {
-    setToolStatus(readToolStatus());
-  }, [cloud.loading]);
-
-  useEffect(() => {
-    const refreshStatus = () => setToolStatus(readToolStatus());
-    window.addEventListener('storage', refreshStatus);
-    return () => window.removeEventListener('storage', refreshStatus);
-  }, []);
 
   // La guía se abre sola la primera vez; después se accede desde el botón de la cabecera
   useEffect(() => {
@@ -379,9 +185,10 @@ export const Catalog: React.FC = () => {
     []
   );
 
-  const runTest = (tool: Tool) => {
-    if (!tool.test) return;
-    tool.test(settings);
+  const runTest = (tool: (typeof REGISTRY)[number]) => {
+    const test = TESTS[tool.id];
+    if (!test) return;
+    test(settings);
     setTestNote(`Prueba de ${tool.name} enviada.`);
     if (testTimer.current) clearTimeout(testTimer.current);
     testTimer.current = setTimeout(() => setTestNote(null), 4000);
@@ -389,7 +196,7 @@ export const Catalog: React.FC = () => {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
-  const copySource = async (source: (typeof SOURCES)[number]) => {
+  const copySource = async (source: (typeof OBS_SOURCES)[number]) => {
     if (!channel) {
       setAskedWithoutChannel(true);
       setCopyFailed(null);
@@ -414,6 +221,27 @@ export const Catalog: React.FC = () => {
     }
   };
 
+  const renderSource = (source: (typeof OBS_SOURCES)[number]) => (
+    <li key={source.app} className="cab-row">
+      <div className="min-w-0">
+        <p className="inicio-tool-name">
+          {source.name}
+          {source.recommended && <span className="cab-chip">Recomendada</span>}
+        </p>
+        <p className="cab-hint">{source.note}</p>
+      </div>
+      <button
+        type="button"
+        className={`${source.recommended ? 'cab-btn' : 'cab-btn2'} cab-btn-sm`}
+        aria-label={`Copiar URL de ${source.name}`}
+        onClick={() => copySource(source)}
+      >
+        {copied === source.app ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+        <span>{copied === source.app ? 'Copiada' : 'Copiar URL'}</span>
+      </button>
+    </li>
+  );
+
   return (
     <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
@@ -425,6 +253,9 @@ export const Catalog: React.FC = () => {
           tourAvailable={!tourOpen}
         />
 
+        {/* ---------- Tu suscripción: días restantes ---------- */}
+        <PlanCard />
+
         {/* ---------- Primeros pasos: lo que queda de la bienvenida (solo con cuenta en la nube) ---------- */}
         {cloud.profile?.status === 'active' && cloud.profile.role === 'streamer' && (
           <PrimerosPasos perfilId={cloud.profile.id} variante="inicio" />
@@ -435,7 +266,7 @@ export const Catalog: React.FC = () => {
           <section className="cab-mod" data-tour="inicio-herramientas">
             <h2>Herramientas</h2>
             <ul className="cab-rows !max-h-none">
-              {TOOLS.map((tool) => {
+              {REGISTRY.map((tool) => {
                 const Icon = tool.icon;
                 const status = toolStatus[tool.id];
                 return (
@@ -453,7 +284,7 @@ export const Catalog: React.FC = () => {
                       <p className="cab-hint">{tool.text}</p>
                     </div>
                     <div className="inicio-tool-actions">
-                      {tool.test && (
+                      {TESTS[tool.id] && (
                         <button
                           type="button"
                           className="cab-btn2 cab-btn-sm"
@@ -464,7 +295,15 @@ export const Catalog: React.FC = () => {
                           <span>Probar</span>
                         </button>
                       )}
-                      <a className="cab-btn cab-btn-sm no-underline" href={tool.href} aria-label={`Abrir ${tool.name}`}>
+                      <a
+                        className="cab-btn cab-btn-sm no-underline"
+                        href={tool.hash}
+                        aria-label={`Abrir ${tool.name}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          openTool(tool.id, event.currentTarget);
+                        }}
+                      >
                         Abrir
                       </a>
                     </div>
@@ -516,31 +355,14 @@ export const Catalog: React.FC = () => {
               </p>
 
               <ul className="cab-rows !max-h-none">
-                {SOURCES.map((source) => (
-                  <li key={source.app} className="cab-row">
-                    <div className="min-w-0">
-                      <p className="inicio-tool-name">
-                        {source.name}
-                        {source.recommended && <span className="cab-chip">Recomendada</span>}
-                      </p>
-                      <p className="cab-hint">{source.note}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`${source.recommended ? 'cab-btn' : 'cab-btn2'} cab-btn-sm`}
-                      aria-label={`Copiar URL de ${source.name}`}
-                      onClick={() => copySource(source)}
-                    >
-                      {copied === source.app ? (
-                        <Check className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <Copy className="h-4 w-4" aria-hidden="true" />
-                      )}
-                      <span>{copied === source.app ? 'Copiada' : 'Copiar URL'}</span>
-                    </button>
-                  </li>
-                ))}
+                {OBS_SOURCES.filter((source) => source.recommended).map((source) => renderSource(source))}
               </ul>
+              <details className="inicio-fuentes">
+                <summary className="link">Ver fuentes individuales</summary>
+                <ul className="cab-rows !max-h-none">
+                  {OBS_SOURCES.filter((source) => !source.recommended).map((source) => renderSource(source))}
+                </ul>
+              </details>
 
               {!channel && (
                 <p className={askedWithoutChannel ? 'cab-error' : 'cab-hint'} role={askedWithoutChannel ? 'alert' : undefined}>
