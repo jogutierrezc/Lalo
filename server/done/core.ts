@@ -16,7 +16,8 @@ import { activeModel, activeProvider, readApiKey } from '../lux/keyVault.js';
 import { supabaseLuxDb, type LuxDb, type LuxProfile } from '../lux/luxDb.js';
 import { NvidiaError, nvidiaChat, LUX_PROVIDERS, type ChatMessage, type LuxProvider, type NvidiaFetch } from '../lux/nvidia.js';
 import { MODEL_CONFIG_SETTING, monthOf, parseModelConfig, pickModel, type PickResult } from '../lux/models.js';
-import { pickCharacter, visibleCharacters, type LuxCharacter } from '../lux/characters.js';
+import { BUILTIN_CHARACTER, type LuxCharacter } from '../lux/characters.js';
+import { DONE_GESTURES } from '../../src/lib/doneSettings.js';
 import { effectiveModel, overlayViewFor, type EffectiveModel } from '../lux/effectiveModel.js';
 import { visibleTo, type LibraryModel } from '../lux/modelLibrary.js';
 import { replyTokens } from '../lux/prompt.js';
@@ -109,14 +110,18 @@ export async function loadActor(stores: Stores, profile: LuxProfile): Promise<Ac
 
 // ---------- Personaje, modelo 3D, modelo de IA y consumo ----------
 
-/** Personaje de Done: el que eligió el creador entre los que ve (los sin dueño y los suyos), o el por defecto. */
-export async function characterOf(lux: LuxDb, actor: Actor): Promise<LuxCharacter> {
-  const list = lux.characters ? await lux.characters() : [];
-  return pickCharacter(visibleCharacters(list, actor.profile.id), actor.settings.characterId);
+/**
+ * Personaje de Done. characterId: 'lux', 'svg:done|cam|faro|sombra' (dibujos) o 'glb:<id>' (modelo 3D, con modelId); null = 'svg:done'.
+ * Todos hacen los 11 gestos. El modelo de IA lo decide pickModel (el por defecto del proveedor), no el personaje.
+ */
+export async function characterOf(_lux: LuxDb, actor: Actor): Promise<LuxCharacter> {
+  const id = actor.settings.characterId ?? 'svg:done';
+  return { ...BUILTIN_CHARACTER, id, name: DONE_NAME, avatar: id as LuxCharacter['avatar'], gestures: [...DONE_GESTURES], model: null };
 }
 
-/** Modelo 3D efectivo: el de la biblioteca que eligió el creador (si lo ve) o el del personaje. */
+/** Modelo 3D efectivo: solo con 'glb:<id>' y un modelId que la cuenta ve (biblioteca compartida con Lux, o Riot). */
 export async function effectiveOf(lux: LuxDb, actor: Actor, character: LuxCharacter): Promise<EffectiveModel | null> {
+  if (!character.id.startsWith('glb:')) return null;
   let chosen: LibraryModel | null = null;
   if (actor.settings.modelId) {
     const characters = lux.characters ? await lux.characters() : [];
@@ -129,7 +134,19 @@ export async function effectiveOf(lux: LuxDb, actor: Actor, character: LuxCharac
 /** Lo que el overlay dibuja: avatar, color y gestos del personaje, con el modelo efectivo. Sin claves. */
 export async function overlayCharacter(lux: LuxDb, actor: Actor) {
   const character = await characterOf(lux, actor);
-  return { character, view: overlayViewFor(character, await effectiveOf(lux, actor, character)) };
+  const effective = await effectiveOf(lux, actor, character);
+  const base = overlayViewFor(character, effective);
+  // Resuelto para el overlay: tipo (dibujo o modelo 3D), id del modelo si lo hay, color y gestos permitidos. Sin claves.
+  const view = {
+    id: actor.settings.characterId ?? 'svg:done',
+    kind: effective ? ('glb' as const) : ('svg' as const),
+    modelId: effective ? effective.id : null,
+    avatar: base.avatar,
+    color: base.color,
+    gestures: base.gestures,
+    licenseNotice: base.licenseNotice,
+  };
+  return { character, view };
 }
 
 async function budgetOf(lux: LuxDb, profile: LuxProfile): Promise<number | null> {

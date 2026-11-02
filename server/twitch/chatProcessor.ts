@@ -45,6 +45,11 @@ import { createClient } from '@supabase/supabase-js';
 import type { Env } from '../integrations/store.js';
 import type { CommandPermission } from '../../src/types/twitchio.js';
 import { LUX_CHAT_COOLDOWN_MS, luxChatWords, parseLuxChat } from '../lux/chatCommands.js';
+import { CHAT_COOLDOWN_MS, CHAT_MESSAGE_MAX } from '../chat/sharedRules.js';
+import { doneCommandWords } from '../../src/lib/doneSettings.js';
+import type { DoneSettings } from '../../src/lib/doneTypes.js';
+import type { DoneAskInput } from '../done/forProfile.js';
+import { createDoneSender } from './doneSender.js';
 import { luxDisplayName } from '../lux/displayName.js';
 import { sanitizeChatOutput } from '../lux/outputFilter.js';
 import type { LuxSettings } from '../lux/settings.js';
@@ -78,7 +83,34 @@ export interface ChatLux {
   setEnabled(profileId: string, on: boolean, env: Env): Promise<boolean | null>;
 }
 
+/** Lo que el procesador necesita de Done. Por defecto sale de server/done/handlers.ts (carga perezosa). */
+export interface ChatDone {
+  settings(profileId: string, env: Env): Promise<{ settings: DoneSettings; allowed: boolean } | null>;
+  ask(profileId: string, input: DoneAskInput, env: Env): Promise<LuxAnswer>;
+  setEnabled(profileId: string, on: boolean, env: Env): Promise<boolean | null>;
+}
+
+/** Clave del cooldown de Done en twitch_bot_cooldowns. */
+export const DONE_COOLDOWN_KEY = 'done';
+
+const defaultDone: ChatDone = {
+  async settings(profileId, env) {
+    const { doneSettingsForProfile } = await import('../done/handlers.js');
+    return doneSettingsForProfile(profileId, env);
+  },
+  async ask(profileId, input, env) {
+    const { doneAskForProfile } = await import('../done/handlers.js');
+    const result = await doneAskForProfile(profileId, input, env);
+    return { status: result.status, body: (result.body ?? {}) as Record<string, unknown> };
+  },
+  async setEnabled(profileId, on, env) {
+    const { doneSwitchForProfile } = await import('../done/handlers.js');
+    return doneSwitchForProfile(profileId, on, env);
+  },
+};
+
 export interface ChatProcessorDeps {
+  done?: ChatDone;
   db?: (env: Env) => BotDb | null;
   /** Perfil (cuenta activa de Lalo) dueño del canal de Twitch, o null. */
   profileId?: (broadcasterId: string, env: Env) => Promise<string | null>;
@@ -182,6 +214,7 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
   const findProfile = deps.profileId ?? defaultProfileId;
   const getLimiter = deps.limiter ?? defaultLimiter;
   const lux = deps.lux ?? defaultLux;
+  const doneApi = deps.done ?? defaultDone;
   const doFetch: Fetch = deps.fetch ?? ((...args) => fetch(...args));
   const background =
     deps.background ??
@@ -216,8 +249,68 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
       if (isFromSender(event, botUserId) && (await isBotEcho(db, profileId, event))) return null;
     } else if (isOwnBotMessage(event, botUserId)) {
       return null;
+    } else if (isFromSender(event, event.broadcasterId) && (await isBotEcho(db, profileId, event))) {
+      // Done puede escribir con la cuenta del creador aunque el canal use la global: su eco también se descarta
+      return null;
     }
     return { botUserId, senderMode: settings.senderMode, db, profileId, prefix: settings.prefix || BOT_DEFAULT_PREFIX };
+  }
+
+  /**
+   * Done: !<palabra> y el alias !done, !doneon y !doneoff. Mismas reglas que el bot de Python (server/chat/sharedRules.ts): el
+   * servidor decide cooldown de 5 s, aviso de espera y aviso de fallo, y devuelve `reply` o `notice`. Escribe con la cuenta que
+   * eligió el creador (writeAs, ver doneSender.ts). true si el mensaje era de Done.
+   */
+  async function respondDone(
+    event: ChatMessageEvent,
+    env: Env,
+    { botUserId, db, profileId, prefix }: Pick<Gate, 'botUserId' | 'senderMode' | 'db' | 'profileId' | 'prefix'>,
+    settings: DoneSettings,
+    text: string,
+    allowed: (key: string) => Promise<boolean>
+  ): Promise<boolean> {
+    const lower = text.toLowerCase();
+    const on = lower === `${prefix}doneon`;
+    const off = lower === `${prefix}doneoff`;
+    const words = doneCommandWords(settings.commandWord, settings.keepAlias);
+    const word = words.find((item) => lower === `${prefix}${item}` || lower.startsWith(`${prefix}${item} `));
+    if (!on && !off && !word) return false;
+
+    const limiter = getLimiter(env);
+    const send = limiter
+      ? createDoneSender({ fetch: doFetch, env, db, limiter, profileId, broadcasterId: event.broadcasterId, writeAs: settings.writeAs, channelSenderId: botUserId, now: deps.now, sleep: deps.sleep, pauseMs: deps.pauseMs })
+      : null;
+    const say = async (message: string): Promise<void> => {
+      if (send) await send(message);
+    };
+
+    if (on || off) {
+      if (!(event.isMod || event.isBroadcaster)) {
+        if (await allowed('doneperm')) await say(`@${event.chatterName} solo el canal o los moderadores pueden hacerlo.`);
+        return true;
+      }
+      const saved = await doneApi.setEnabled(profileId, on, env);
+      if (saved !== null) await say(saved ? 'Done responderá en el chat.' : 'Done dejará de responder en el chat.');
+      return true;
+    }
+    if (!settings.enabled) return true;
+    const message = text.slice(prefix.length + (word as string).length).trim();
+    if (!message) {
+      if (await allowed(`done:${lower.slice(prefix.length)}`)) await say(`@${event.chatterName} escribe tu mensaje después de ${prefix}${settings.commandWord}.`);
+      return true;
+    }
+    const viewer = event.chatterLogin || event.chatterName;
+    const answer = await doneApi.ask(
+      profileId,
+      { viewer, message: message.slice(0, CHAT_MESSAGE_MAX), takeCooldown: () => db.takeCooldown(profileId, event.chatterLogin || event.chatterId, DONE_COOLDOWN_KEY, CHAT_COOLDOWN_MS / 1000) },
+      env
+    );
+    const reply = typeof answer.body.reply === 'string' ? sanitizeChatOutput(answer.body.reply, { viewer }) : '';
+    const notice = typeof answer.body.notice === 'string' ? answer.body.notice : '';
+    if (reply) await say(reply);
+    else if (notice) await say(notice);
+    else console.info(`[Lalo bot] Done no respondió: ${typeof answer.body.skipped === 'string' ? answer.body.skipped : `estado ${answer.status}`}`);
+    return true;
   }
 
   async function respond(event: ChatMessageEvent, env: Env, { botUserId, senderMode, db, profileId, prefix }: Gate): Promise<void> {
@@ -257,6 +350,13 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
       }
       if (result.status !== 'sent') console.warn(`[Lalo bot] mensaje no enviado: ${result.status}`);
     };
+
+    // ----- Done -----
+    const doneInfo = await doneApi.settings(profileId, env);
+    if (doneInfo && doneInfo.allowed) {
+      const handled = await respondDone(event, env, { botUserId, senderMode, db, profileId, prefix }, doneInfo.settings, text, allowed);
+      if (handled) return;
+    }
 
     // ----- Mi AI -----
     const luxSettings = await lux.settings(profileId, env);

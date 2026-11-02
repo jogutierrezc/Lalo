@@ -445,6 +445,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .from('lux_speech')
         .select('id, text, emotion, gesture, voice_reference_id, voice_engine, play_after')
         .eq('profile_id', profileId)
+        .eq('agent', 'lux')
         .gt('id', afterId)
         .order('id', { ascending: true })
         .limit(20);
@@ -464,6 +465,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .from('lux_speech')
         .select('id')
         .eq('profile_id', profileId)
+        .eq('agent', 'lux')
         .order('id', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -482,6 +484,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .from('lux_outbox')
         .select(OUTBOX_COLUMNS)
         .eq('profile_id', profileId)
+        .eq('agent', 'lux')
         .order('id', { ascending: false })
         .limit(limit);
       check(error);
@@ -494,6 +497,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .from('lux_outbox')
         .select('id')
         .eq('profile_id', profileId)
+        .eq('agent', 'lux')
         .or(claimable)
         .order('id', { ascending: true })
         .limit(limit);
@@ -505,6 +509,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
         .from('lux_outbox')
         .update({ status: 'claimed', claimed_at: nowIso })
         .eq('profile_id', profileId)
+        .eq('agent', 'lux')
         .or(claimable)
         .in('id', ids)
         .select(OUTBOX_COLUMNS);
@@ -537,7 +542,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     },
 
     async outboxPrune(profileId, beforeIso) {
-      const { error } = await db.from('lux_outbox').delete().eq('profile_id', profileId).lt('created_at', beforeIso);
+      const { error } = await db.from('lux_outbox').delete().eq('profile_id', profileId).eq('agent', 'lux').lt('created_at', beforeIso);
       check(error);
     },
 
@@ -551,7 +556,7 @@ export function supabaseLuxDb(env: Env): LuxDb | null {
     },
 
     async pruneSpeech(profileId, beforeIso) {
-      const { error } = await db.from('lux_speech').delete().eq('profile_id', profileId).lt('created_at', beforeIso);
+      const { error } = await db.from('lux_speech').delete().eq('profile_id', profileId).eq('agent', 'lux').lt('created_at', beforeIso);
       check(error);
     },
 

@@ -53,7 +53,7 @@ export async function sayRoute(req: IntegrationRequest, env: Env, deps: DoneDeps
     const mode = raw.mode === 'ai' ? 'ai' : raw.mode === 'literal' ? 'literal' : null;
     if (!mode) return fail(400, 'bad_mode', 'Elige si el texto va tal cual o lo redacta Done.');
     // Saltos de línea y caracteres de control fuera: un mensaje del chat es una sola línea
-    const input = (typeof raw.text === 'string' ? raw.text : '').replace(/[\u0000-\u001f\u007f  ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const input = (typeof raw.text === 'string' ? raw.text : '').replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim();
     const limit = mode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX;
     if (!input || input.length > limit) return fail(400, 'bad_message', `El texto tiene que tener entre 1 y ${limit} caracteres.`);
     // «/ban», «.timeout»...: con la cuenta del canal o de un moderador, Twitch los ejecutaría como órdenes

@@ -1,21 +1,18 @@
 /**
  * server/done/doneDb.ts
  *
- * Lo que Done lee y escribe en sus tablas de Supabase (migración 0054), siempre con la clave de servicio.
- * Va detrás de una interfaz para que las pruebas usen una memoria. Lo que Done COMPARTE con Lux (perfil,
- * personajes, biblioteca de modelos, plan y créditos, ajustes de app_settings) se lee con LuxDb, no aquí.
- *
- * SIN PROBAR contra Supabase real.
+ * Lo que Done lee y escribe en Supabase: las MISMAS tablas de Lux (migración 0054: solo columnas nuevas, ninguna tabla).
+ * Va detrás de una interfaz para que las pruebas usen una memoria.
  */
 
 import { createClient } from '@supabase/supabase-js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { DONE_EMOTIONS, DONE_GESTURES } from '../../src/lib/doneSettings.js';
 import type { DoneEmotion, DoneGesture, DoneKind, DoneSpeech } from '../../src/lib/doneTypes.js';
-import { MEMORY_SAVED_MAX, type LuxMemoryKind, type LuxMemorySource } from '../lux/memory.js';
-import type { LuxMemoryItem, LuxMemoryRow, LuxOutboxStatus } from '../lux/luxDb.js';
-import { outboxClaimable } from '../lux/luxDb.js';
-import { LUX_THREAD_TTL_MS, LUX_THREAD_TURNS, trimThread, type LuxThreadMessage } from '../lux/thread.js';
+import type { LuxMemoryKind, LuxMemorySource } from '../lux/memory.js';
+import { outboxClaimable, supabaseLuxDb, type LuxDb, type LuxMemoryItem, type LuxMemoryRow, type LuxOutboxStatus } from '../lux/luxDb.js';
+import { pickCharacter, visibleCharacters } from '../lux/characters.js';
+import type { LuxThreadMessage } from '../lux/thread.js';
 
 export interface DoneReplyRow {
   profile_id: string;
@@ -75,7 +72,7 @@ export interface DoneOutboxItem {
 export interface DoneDb {
   /** Fila de done_settings, o null si el creador nunca guardó ajustes. */
   settingsRow(profileId: string): Promise<Record<string, unknown> | null>;
-  saveSettingsRow(row: Record<string, unknown>): Promise<void>;
+  saveSettingsRow(row: { profile_id: string; done_settings: Record<string, unknown> }): Promise<void>;
   /** profiles.done_enabled (el administrador puede apagarlo por cuenta). Sin columna o sin perfil: true. */
   doneEnabled(profileId: string): Promise<boolean>;
   /** widget_key del perfil: SOLO para derivar y comprobar la clave de lectura. Nunca sale en una respuesta. */
@@ -111,7 +108,13 @@ export interface DoneDb {
   outboxPrune(profileId: string, beforeIso: string): Promise<void>;
 }
 
-// ---------- Supabase ----------
+// ---------- Supabase: las MISMAS tablas de Lux, con el discriminador agent ----------
+//
+// Compartido con Lux tal cual: lux_memories (con el personaje activo de Lux), lux_viewer_turns, lux_usage_monthly.
+// Separado con `agent` ('lux' | 'done'): lux_speech y lux_outbox. Ajustes: lux_settings.done_settings (jsonb).
+// Los eventos pendientes viajan en lux_outbox como un texto «[[event]]{json}» (agent 'done'): la tabla exige texto no vacío.
+
+const EVENT_PREFIX = '[[event]]';
 
 const MISSING_CODES = ['42P01', '42883', '42703', 'PGRST205', 'PGRST202', 'PGRST204'];
 
@@ -125,32 +128,29 @@ const emotionOf = (value: unknown): DoneEmotion => ((DONE_EMOTIONS as readonly s
 const gestureOf = (value: unknown): DoneGesture | null => ((DONE_GESTURES as readonly string[]).includes(String(value)) ? (String(value) as DoneGesture) : null);
 const kindOf = (value: unknown): DoneKind => (['chat', 'event', 'spontaneous', 'say'].includes(String(value)) ? (String(value) as DoneKind) : 'chat');
 
-const MEMORY_COLUMNS = 'id, kind, subject, content, pinned, source, created_at, expires_at';
-const OUTBOX_COLUMNS = 'id, kind, text, speak, emotion, gesture, mode, payload, status, created_at, claimed_at, sent_at';
-
-function memoryFromRow(row: Record<string, unknown>): LuxMemoryItem {
-  return {
-    id: String(row.id),
-    kind: row.kind as LuxMemoryKind,
-    subject: (row.subject as string | null) ?? null,
-    content: String(row.content),
-    pinned: row.pinned === true,
-    source: row.source === 'chat' ? 'chat' : row.source === 'admin' ? 'admin' : 'manual',
-    createdAt: String(row.created_at),
-    expiresAt: (row.expires_at as string | null) ?? null,
-  };
-}
+const OUTBOX_COLUMNS = 'id, text, speak, emotion, mode, status, created_at, claimed_at, sent_at';
 
 function outboxFromRow(row: Record<string, unknown>): DoneOutboxItem {
+  const raw = String(row.text ?? '');
+  const isEvent = raw.startsWith(EVENT_PREFIX);
+  let payload: Record<string, unknown> | null = null;
+  if (isEvent) {
+    try {
+      const parsed: unknown = JSON.parse(raw.slice(EVENT_PREFIX.length));
+      payload = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      payload = null;
+    }
+  }
   return {
     id: Number(row.id),
-    kind: row.kind === 'event' ? 'event' : 'say',
-    text: String(row.text ?? ''),
+    kind: isEvent ? 'event' : 'say',
+    text: isEvent ? '' : raw,
     speak: row.speak === true,
     emotion: emotionOf(row.emotion),
-    gesture: gestureOf(row.gesture),
+    gesture: null,
     mode: row.mode === 'ai' ? 'ai' : 'literal',
-    payload: row.payload && typeof row.payload === 'object' ? (row.payload as Record<string, unknown>) : null,
+    payload,
     status: (['pending', 'claimed', 'sent', 'failed'].includes(String(row.status)) ? String(row.status) : 'pending') as LuxOutboxStatus,
     createdAt: String(row.created_at),
     claimedAt: (row.claimed_at as string | null) ?? null,
@@ -161,17 +161,28 @@ function outboxFromRow(row: Record<string, unknown>): DoneOutboxItem {
 export function supabaseDoneDb(env: Env): DoneDb | null {
   const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
   const key = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
-  if (!url || !key) return null;
+  const maybeLux = supabaseLuxDb(env);
+  if (!url || !key || !maybeLux) return null;
+  const lux: LuxDb = maybeLux;
   const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const memory = lux as Required<Pick<LuxDb, 'memoryList' | 'memoryGet' | 'memoryInsert' | 'memoryUpdate' | 'memoryDelete' | 'memoryPrune' | 'threadRecent' | 'threadSave'>> & LuxDb;
 
-  /** Recoge de forma atómica las filas que cumplen el filtro: el UPDATE repite el filtro, así dos peticiones no se llevan la misma. */
-  async function claim(profileId: string, kind: 'say' | 'event', ids: number[], nowIso: string): Promise<DoneOutboxItem[]> {
+  /** Los recuerdos de Done son los de Lux: los del personaje activo de la cuenta en Lux. */
+  async function characterId(profileId: string): Promise<string> {
+    const profile = await lux.profile(profileId);
+    const list = lux.characters ? await lux.characters() : [];
+    return pickCharacter(visibleCharacters(list, profileId), profile?.luxCharacterId ?? null).id;
+  }
+
+  const base = () => db.from('lux_outbox');
+
+  /** Recoge de forma atómica: el UPDATE repite el filtro, así dos peticiones no se llevan la misma fila. */
+  async function claim(profileId: string, ids: number[], nowIso: string): Promise<DoneOutboxItem[]> {
     if (ids.length === 0) return [];
-    const { data, error } = await db
-      .from('done_outbox')
+    const { data, error } = await base()
       .update({ status: 'claimed', claimed_at: nowIso })
       .eq('profile_id', profileId)
-      .eq('kind', kind)
+      .eq('agent', 'done')
       .or(outboxClaimable(nowIso))
       .in('id', ids)
       .select(OUTBOX_COLUMNS);
@@ -181,13 +192,14 @@ export function supabaseDoneDb(env: Env): DoneDb | null {
 
   return {
     async settingsRow(profileId) {
-      const { data, error } = await db.from('done_settings').select('*').eq('profile_id', profileId).maybeSingle();
+      const { data, error } = await db.from('lux_settings').select('done_settings').eq('profile_id', profileId).maybeSingle();
       check(error);
-      return (data as Record<string, unknown> | null) ?? null;
+      const value = (data as { done_settings?: unknown } | null)?.done_settings;
+      return value && typeof value === 'object' && Object.keys(value).length > 0 ? (value as Record<string, unknown>) : null;
     },
 
     async saveSettingsRow(row) {
-      const { error } = await db.from('done_settings').upsert(row, { onConflict: 'profile_id' });
+      const { error } = await db.from('lux_settings').upsert({ profile_id: row.profile_id, done_settings: row.done_settings }, { onConflict: 'profile_id' });
       check(error);
     },
 
@@ -205,20 +217,28 @@ export function supabaseDoneDb(env: Env): DoneDb | null {
     },
 
     async insertReply(row) {
-      const { error } = await db.from('done_replies').insert(row);
-      check(error);
+      await lux.insertReply(row);
     },
 
     async insertSpeech(row) {
-      const { error } = await db.from('done_speech').insert(row);
+      const { error } = await db.from('lux_speech').insert({
+        profile_id: row.profile_id,
+        text: row.text,
+        emotion: row.emotion,
+        gesture: row.gesture ?? 'idle',
+        agent: 'done',
+        viewer: row.viewer,
+        kind: row.kind,
+      });
       check(error);
     },
 
     async speechSince(profileId, afterId, limit) {
       const { data, error } = await db
-        .from('done_speech')
+        .from('lux_speech')
         .select('id, text, emotion, gesture, viewer, kind, created_at')
         .eq('profile_id', profileId)
+        .eq('agent', 'done')
         .gt('id', afterId)
         .order('id', { ascending: true })
         .limit(limit);
@@ -235,138 +255,63 @@ export function supabaseDoneDb(env: Env): DoneDb | null {
     },
 
     async latestSpeechId(profileId) {
-      const { data, error } = await db.from('done_speech').select('id').eq('profile_id', profileId).order('id', { ascending: false }).limit(1).maybeSingle();
+      const { data, error } = await db.from('lux_speech').select('id').eq('profile_id', profileId).eq('agent', 'done').order('id', { ascending: false }).limit(1).maybeSingle();
       check(error);
       return data ? Number((data as { id: number }).id) : 0;
     },
 
     async pruneSpeech(profileId, beforeIso) {
-      const { error } = await db.from('done_speech').delete().eq('profile_id', profileId).lt('created_at', beforeIso);
+      const { error } = await db.from('lux_speech').delete().eq('profile_id', profileId).eq('agent', 'done').lt('created_at', beforeIso);
       check(error);
     },
 
     async memories(profileId, limit) {
-      const { data, error } = await db
-        .from('done_memories')
-        .select('kind, subject, content')
-        .eq('profile_id', profileId)
-        .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-        .order('pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      check(error);
-      return ((data ?? []) as Array<{ kind: LuxMemoryRow['kind']; subject: string | null; content: string }>).map((row) => ({
-        kind: row.kind,
-        subject: row.subject,
-        content: row.content,
-      }));
+      return lux.memories(profileId, await characterId(profileId), limit);
     },
-
     async memoryList(profileId) {
-      const { data, error } = await db
-        .from('done_memories')
-        .select(MEMORY_COLUMNS)
-        .eq('profile_id', profileId)
-        .order('pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(MEMORY_SAVED_MAX);
-      check(error);
-      return ((data ?? []) as Array<Record<string, unknown>>).map(memoryFromRow);
+      return memory.memoryList(profileId, await characterId(profileId));
     },
-
     async memoryGet(profileId, id) {
-      const { data, error } = await db.from('done_memories').select(MEMORY_COLUMNS).eq('id', id).eq('profile_id', profileId).maybeSingle();
-      check(error);
-      return data ? memoryFromRow(data as Record<string, unknown>) : null;
+      return memory.memoryGet(profileId, await characterId(profileId), id);
     },
-
     async memoryInsert(profileId, rows) {
-      const { error } = await db.from('done_memories').insert(
-        rows.map((row) => ({
-          profile_id: profileId,
-          kind: row.kind,
-          subject: row.subject,
-          content: row.content,
-          pinned: row.pinned,
-          source: row.source,
-          expires_at: row.expiresAt,
-        }))
-      );
-      check(error);
+      const cid = await characterId(profileId);
+      await memory.memoryInsert(profileId, rows.map((row) => ({ ...row, characterId: cid })));
     },
-
     async memoryUpdate(profileId, id, patch) {
-      const change: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (patch.content !== undefined) change.content = patch.content;
-      if (patch.pinned !== undefined) change.pinned = patch.pinned;
-      if (patch.expiresAt !== undefined) change.expires_at = patch.expiresAt;
-      const { data, error } = await db.from('done_memories').update(change).eq('id', id).eq('profile_id', profileId).select('id');
-      check(error);
-      return (data ?? []).length > 0;
+      return memory.memoryUpdate(profileId, await characterId(profileId), id, patch);
     },
-
     async memoryDelete(profileId, id) {
-      const { data, error } = await db.from('done_memories').delete().eq('id', id).eq('profile_id', profileId).select('id');
-      check(error);
-      return (data ?? []).length > 0;
+      return memory.memoryDelete(profileId, await characterId(profileId), id);
     },
-
     async memoryPrune(profileId, nowIso) {
-      const { error } = await db.from('done_memories').delete().eq('profile_id', profileId).eq('pinned', false).lt('expires_at', nowIso);
-      check(error);
+      await memory.memoryPrune(profileId, nowIso);
     },
 
+    // Hilo por espectador: la tabla de Lux, compartida
     async threadRecent(profileId, viewer, nowMs) {
-      const { data, error } = await db
-        .from('done_viewer_turns')
-        .select('role, content, created_at')
-        .eq('profile_id', profileId)
-        .eq('viewer', viewer)
-        .gte('created_at', new Date(nowMs - LUX_THREAD_TTL_MS).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(LUX_THREAD_TURNS);
-      check(error);
-      const rows = ((data ?? []) as Array<{ role: string; content: string; created_at: string }>)
-        .filter((row) => row.role === 'user' || row.role === 'assistant')
-        .map((row) => ({ role: row.role as 'user' | 'assistant', content: String(row.content), at: Date.parse(row.created_at) }));
-      return trimThread(rows, nowMs);
+      return memory.threadRecent(profileId, viewer, nowMs);
     },
-
     async threadSave(profileId, viewer, pair, nowMs) {
-      const { error } = await db.from('done_viewer_turns').insert([
-        { profile_id: profileId, viewer, role: 'user', content: pair.user, created_at: new Date(nowMs).toISOString() },
-        { profile_id: profileId, viewer, role: 'assistant', content: pair.assistant, created_at: new Date(nowMs + 1).toISOString() },
-      ]);
-      check(error);
-      const expired = await db.from('done_viewer_turns').delete().eq('profile_id', profileId).lt('created_at', new Date(nowMs - LUX_THREAD_TTL_MS).toISOString());
-      check(expired.error);
-      const extra = await db
-        .from('done_viewer_turns')
-        .select('id')
-        .eq('profile_id', profileId)
-        .eq('viewer', viewer)
-        .order('created_at', { ascending: false })
-        .range(LUX_THREAD_TURNS, LUX_THREAD_TURNS + 49);
-      check(extra.error);
-      const ids = ((extra.data ?? []) as Array<{ id: number }>).map((row) => row.id);
-      if (ids.length > 0) {
-        const removed = await db.from('done_viewer_turns').delete().in('id', ids);
-        check(removed.error);
-      }
+      await memory.threadSave(profileId, viewer, pair, nowMs);
     },
 
     async outboxInsert(row) {
-      const { data, error } = await db.from('done_outbox').insert(row).select('id').single();
+      const text = row.kind === 'event' ? `${EVENT_PREFIX}${JSON.stringify(row.payload ?? {})}`.slice(0, 500) : row.text;
+      const { data, error } = await base()
+        .insert({ profile_id: row.profile_id, text, speak: row.speak, emotion: row.emotion, mode: row.mode, agent: 'done' })
+        .select('id')
+        .single();
       check(error);
       return Number((data as { id: number }).id);
     },
 
     async outboxList(profileId, limit) {
-      const { data, error } = await db
-        .from('done_outbox')
+      const { data, error } = await base()
         .select(OUTBOX_COLUMNS)
         .eq('profile_id', profileId)
-        .eq('kind', 'say')
+        .eq('agent', 'done')
+        .not('text', 'like', `${EVENT_PREFIX}%`)
         .order('id', { ascending: false })
         .limit(limit);
       check(error);
@@ -374,37 +319,37 @@ export function supabaseDoneDb(env: Env): DoneDb | null {
     },
 
     async outboxClaim(profileId, limit, nowIso) {
-      const { data, error } = await db
-        .from('done_outbox')
+      const { data, error } = await base()
         .select('id')
         .eq('profile_id', profileId)
-        .eq('kind', 'say')
+        .eq('agent', 'done')
+        .not('text', 'like', `${EVENT_PREFIX}%`)
         .or(outboxClaimable(nowIso))
         .order('id', { ascending: true })
         .limit(limit);
       check(error);
-      return claim(profileId, 'say', ((data ?? []) as Array<{ id: number }>).map((row) => row.id), nowIso);
+      return claim(profileId, ((data ?? []) as Array<{ id: number }>).map((row) => row.id), nowIso);
     },
 
     async eventsClaim(profileId, olderThanIso, nowIso) {
-      const { data, error } = await db
-        .from('done_outbox')
+      const { data, error } = await base()
         .select('id')
         .eq('profile_id', profileId)
-        .eq('kind', 'event')
+        .eq('agent', 'done')
+        .like('text', `${EVENT_PREFIX}%`)
         .lte('created_at', olderThanIso)
         .or(outboxClaimable(nowIso))
         .order('id', { ascending: true })
         .limit(20);
       check(error);
-      return claim(profileId, 'event', ((data ?? []) as Array<{ id: number }>).map((row) => row.id), nowIso);
+      return claim(profileId, ((data ?? []) as Array<{ id: number }>).map((row) => row.id), nowIso);
     },
 
     async outboxFinish(profileId, id, ok, nowIso) {
-      const { data, error } = await db
-        .from('done_outbox')
+      const { data, error } = await base()
         .update({ status: ok ? 'sent' : 'failed', sent_at: nowIso })
         .eq('profile_id', profileId)
+        .eq('agent', 'done')
         .eq('id', id)
         .eq('status', 'claimed')
         .select('id');
@@ -413,10 +358,10 @@ export function supabaseDoneDb(env: Env): DoneDb | null {
     },
 
     async outboxRelease(profileId, id) {
-      const { data, error } = await db
-        .from('done_outbox')
+      const { data, error } = await base()
         .update({ status: 'pending', claimed_at: null })
         .eq('profile_id', profileId)
+        .eq('agent', 'done')
         .eq('id', id)
         .eq('status', 'claimed')
         .select('id');
@@ -425,7 +370,7 @@ export function supabaseDoneDb(env: Env): DoneDb | null {
     },
 
     async outboxPrune(profileId, beforeIso) {
-      const { error } = await db.from('done_outbox').delete().eq('profile_id', profileId).lt('created_at', beforeIso);
+      const { error } = await base().delete().eq('profile_id', profileId).eq('agent', 'done').lt('created_at', beforeIso);
       check(error);
     },
   };

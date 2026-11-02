@@ -6,8 +6,8 @@
  * El contrato de tipos está en doneTypes.ts.
  */
 
-import { ALERT_STYLES } from '../utils/appearance';
-import { DONE_DEFAULTS, type DoneEmotion, type DoneGesture, type DoneSettings } from './doneTypes';
+import { ALERT_STYLES } from '../utils/appearance.js';
+import { DONE_DEFAULTS, type DoneEmotion, type DoneGesture, type DoneSettings } from './doneTypes.js';
 
 export const DONE_EMOTIONS: readonly DoneEmotion[] = ['normal', 'habla', 'emocionada', 'grita', 'feliz', 'alegre', 'triste', 'molesta', 'sorprendida', 'magica'];
 export const DONE_GESTURES: readonly DoneGesture[] = ['wave', 'spin', 'dance', 'jump', 'sing', 'bow', 'ult', 'pride', 'nod', 'shrug', 'arms_up'];
@@ -61,7 +61,9 @@ export function doneCommandWords(word: string = DONE_COMMAND_DEFAULT, keepAlias 
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isInt = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value);
+/** Personajes: 'lux', los dibujos propios 'svg:*' o un modelo 'glb:<id>' (con modelId = id). null equivale a 'svg:done'. */
+export const CHARACTER_ID = /^(lux|svg:(done|cam|faro|sombra)|glb:[a-z0-9-]{1,64})$/;
+const isInt =(value: unknown): value is number => typeof value === 'number' && Number.isInteger(value);
 const oneOf = <T extends string | number>(list: readonly T[], value: unknown): value is T => (list as readonly unknown[]).includes(value);
 
 /** Ids de los estilos de texto de la voz del chat (ALERT_STYLES). */
@@ -148,15 +150,15 @@ export function validateDoneSettings(
     value.spontaneousMinMessages = input.spontaneousMinMessages;
   }
 
-  for (const field of ['characterId', 'modelId'] as const) {
-    if (input[field] === undefined) continue;
-    if (input[field] === null || input[field] === '') {
-      value[field] = null;
-    } else if (typeof input[field] === 'string' && UUID.test(input[field] as string)) {
-      value[field] = (input[field] as string).toLowerCase();
-    } else {
-      return bad(field, field === 'characterId' ? 'El personaje elegido no es válido.' : 'El modelo elegido no es válido.');
-    }
+  if (input.characterId !== undefined) {
+    if (input.characterId === null || input.characterId === '') value.characterId = null;
+    else if (typeof input.characterId === 'string' && CHARACTER_ID.test(input.characterId)) value.characterId = input.characterId;
+    else return bad('characterId', 'El personaje elegido no es válido.');
+  }
+  if (input.modelId !== undefined) {
+    if (input.modelId === null || input.modelId === '') value.modelId = null;
+    else if (typeof input.modelId === 'string' && UUID.test(input.modelId)) value.modelId = input.modelId.toLowerCase();
+    else return bad('modelId', 'El modelo elegido no es válido.');
   }
 
   if (input.obsSize !== undefined) {

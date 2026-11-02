@@ -3,6 +3,9 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/integraciones.ts": { "maxDuration": 30 }
+  },
   "crons": [
     { "path": "/api/paypal/expire", "schedule": "5 4 * * *" }
   ],

@@ -11,7 +11,6 @@
 import { fail, type IntegrationRequest, type IntegrationResult } from '../integrations/http.js';
 import type { Env } from '../integrations/store.js';
 import { doneCommandWords, validateDoneSettings } from '../../src/lib/doneSettings.js';
-import { visibleCharacters } from '../lux/characters.js';
 import { visibleTo } from '../lux/modelLibrary.js';
 import { riotModels } from '../lux/handlers.js';
 import { settingsFromRow as luxSettingsFromRow } from '../lux/settings.js';
@@ -56,13 +55,7 @@ export async function settingsRoute(req: IntegrationRequest, env: Env, deps: Don
     if (!check.ok) return fail(400, 'bad_settings', check.message, { field: check.field });
     const next = check.value;
 
-    // El personaje y el modelo tienen que ser de los que esta cuenta ve (biblioteca compartida con Lux)
-    if (next.characterId !== actor.settings.characterId && next.characterId) {
-      const characters = stores.lux.characters ? await stores.lux.characters() : [];
-      if (!visibleCharacters(characters, profile.id).some((item) => item.id === next.characterId)) {
-        return fail(400, 'bad_settings', 'El personaje elegido no está disponible para tu cuenta.', { field: 'characterId' });
-      }
-    }
+    // El modelo 3D tiene que ser de los que esta cuenta ve (biblioteca compartida con Lux)
     if (next.modelId !== actor.settings.modelId && next.modelId) {
       const characters = stores.lux.characters ? await stores.lux.characters() : [];
       const rows = stores.lux.libraryModels ? await stores.lux.libraryModels() : [];

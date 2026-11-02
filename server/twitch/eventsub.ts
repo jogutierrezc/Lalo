@@ -423,6 +423,18 @@ const deliverToLux: Deliver = async (profileId, event, env) => {
   } else if (event.kind === 'stream_online') {
     recorded = await luxRecordChannelEvent(profileId, { kind: 'start', streamId: String(event.payload.streamId ?? '') }, env);
   }
+  // Done recibe los mismos avisos (seguidor e inicio del directo): deja una fila de evento en su cola, que se agrupa y se saluda
+  const { doneRecordChannelEvent } = await import('../done/handlers.js');
+  let doneRecorded = '';
+  if (event.kind === 'follow') {
+    doneRecorded = await doneRecordChannelEvent(profileId, { kind: 'follow', user: String(event.payload.user ?? '') }, env);
+  } else if (event.kind === 'stream_online') {
+    doneRecorded = await doneRecordChannelEvent(profileId, { kind: 'start', streamId: String(event.payload.streamId ?? '') }, env);
+  }
+  if (doneRecorded === 'queued') {
+    const { pushDoneOutboxNow } = await import('./botBackground.js');
+    keepAliveOnVercel(pushDoneOutboxNow(profileId, env));
+  }
   if (recorded !== 'queued') return;
   // Con el bot en la nube encendido, el saludo sale ya si está listo (el de inicio de directo lo está; el de seguidores espera a
   // que se calme el grupo y sale con el siguiente mensaje del chat). La IA tarda: sigue tras responder a Twitch. Sin bot en la nube no hace nada
