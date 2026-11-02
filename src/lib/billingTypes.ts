@@ -24,6 +24,8 @@ export interface CatalogPlan {
 export interface BillingCatalog {
   enabled: boolean;
   env: 'sandbox' | 'live';
+  /** PAYPAL_CLIENT_ID (público): para cargar el SDK de botones. Vacío si el cobro no está activo. */
+  clientId?: string;
   plans: CatalogPlan[];
 }
 
@@ -51,6 +53,7 @@ export interface AdminPriceCell {
 export interface AdminPlan {
   id: string;
   name: string;
+  archived: boolean;
   prices: Record<PeriodKey, AdminPriceCell>;
 }
 
@@ -59,7 +62,47 @@ export interface AdminPrices {
   synced: boolean;
 }
 
+export type SubscribeFlow = 'redirect' | 'sdk';
+
 export interface SubscribeResult {
+  /** Vacío en el flujo 'sdk'. */
   approveUrl: string;
   subscriptionId: string;
+}
+
+export interface AdminSubscription {
+  id: string;
+  profileId: string;
+  twitchLogin: string | null;
+  displayName: string | null;
+  planId: string;
+  planName: string;
+  months: number;
+  status: SubscriptionStatus;
+  startedAt: string | null;
+  paidUntil: string | null;
+  lastPaymentAt: string | null;
+  priceUsd: number;
+}
+
+export type SubscriptionTotals = Record<SubscriptionStatus, number>;
+
+/** Perfil con plan por código vigente (plan_expires_at futuro y sin suscripción de pago). */
+export interface CodeAccess {
+  profileId: string;
+  twitchLogin: string | null;
+  displayName: string | null;
+  planId: string;
+  planName: string;
+  expiresAt: string;
+  inviteCode: string | null;
+}
+
+export interface AdminSubscriptions {
+  subscriptions: AdminSubscription[];
+  totals: SubscriptionTotals;
+  /** Solo viene relleno en la primera página (sin before). */
+  codeAccess: CodeAccess[];
+  /** Cursor para pedir la página siguiente (before); null si no hay más. */
+  nextBefore: string | null;
 }
