@@ -11,7 +11,7 @@ import React, { useRef } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { reduced } from '../../utils/alertMotion';
-import { formatDateEs, formatMoney } from '../../lib/billingLogic';
+import { formatDateEs } from '../../lib/billingLogic';
 import { STATE_LABEL, STATE_TONE, type PlanSummary } from '../../lib/planDays';
 import { Card, Pill } from '../tally-ui';
 import { usePlanSummary } from './usePlanSummary';
@@ -25,12 +25,14 @@ const TONE_COLOR = { ok: '#3ddc97', warn: '#ffb020', bad: '#ff8a8a', gift: '#f5f
 /** Frase que acompaña al anillo. */
 export function planSentence(p: PlanSummary): string {
   const end = p.endsAt ? formatDateEs(p.endsAt) : '';
+  const renewal = formatDateEs(p.nextChargeAt ?? p.endsAt);
+  const price = p.nextChargeUsd != null ? ` por USD ${p.nextChargeUsd.toFixed(2)}` : '';
   switch (p.state) {
     case 'activo':
       if (p.origin === 'code') return `Acceso por código hasta el ${end}. No se renueva solo.`;
-      return `Se renueva solo el ${end}${p.nextChargeUsd != null ? ` por ${formatMoney(p.nextChargeUsd)}` : ''} con PayPal.`;
+      return `Se renueva solo el ${renewal}${price} con PayPal.`;
     case 'porvencer':
-      if (p.renews) return `Se renueva el ${end}${p.nextChargeUsd != null ? ` por ${formatMoney(p.nextChargeUsd)}` : ''} con PayPal.`;
+      if (p.renews) return `Se renueva el ${renewal}${price} con PayPal.`;
       return `No se renueva. Tienes acceso hasta el ${end}.`;
     case 'gracia':
       return `No pudimos cobrar tu pago. Actualiza PayPal antes del ${end} para no perder el plan.`;

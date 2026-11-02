@@ -40,6 +40,8 @@ export interface SummarizeInput {
   codeAccess?: CodeAccessInfo | null;
   /** Precio del periodo en dólares, si se conoce (para el próximo cobro). */
   priceUsd?: number | null;
+  /** Próximo cobro según el servidor (GET /api/paypal/payments). Manda sobre priceUsd y paidUntil. */
+  nextCharge?: { date: string; amount: number } | null;
   now?: number | Date;
 }
 
@@ -91,8 +93,8 @@ export function summarizePlan(input: SummarizeInput): PlanSummary {
         totalDays: total,
         endsAt,
         renews: true,
-        nextChargeAt: endsAt,
-        nextChargeUsd: input.priceUsd ?? null,
+        nextChargeAt: toMs(input.nextCharge?.date) != null ? input.nextCharge!.date : endsAt,
+        nextChargeUsd: input.nextCharge?.amount ?? input.priceUsd ?? null,
       };
     }
     if (sub.status === 'cancelled' && days > 0) {

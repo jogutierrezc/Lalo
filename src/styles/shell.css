@@ -540,3 +540,13 @@ body.has-side .tally-app .cab:not(.shell-side) {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Mensaje de error del historial de pagos: borde discontinuo y texto, nunca rojo sólido */
+.tally-note-bad {
+  border: 1px dashed currentColor;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.tally-receipt code {
+  font-size: 12px;
+}

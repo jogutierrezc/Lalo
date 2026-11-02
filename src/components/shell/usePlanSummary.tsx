@@ -13,11 +13,18 @@ import { fetchPlans } from '../../lib/cloud';
 import { billingCatalog, billingStatus } from '../../lib/billingApi';
 import type { BillingCatalog, BillingStatus } from '../../lib/billingTypes';
 import { summarizePlan, type PlanSummary } from '../../lib/planDays';
+import { usePayments, type PaymentsResult } from '../../lib/usePayments';
 
 const FREE: PlanSummary = summarizePlan({ profile: null });
 const PlanContext = createContext<PlanSummary>(FREE);
 
 export const usePlanSummary = (): PlanSummary => useContext(PlanContext);
+
+const NO_PAYMENTS: PaymentsResult = { rows: [], nextCharge: null, state: 'vacio', error: null, reload: () => {} };
+const PaymentsContext = createContext<PaymentsResult>(NO_PAYMENTS);
+
+/** Historial de pagos compartido (lo lee PlanProvider una sola vez). */
+export const usePaymentsData = (): PaymentsResult => useContext(PaymentsContext);
 
 export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const cloud = useCloudSession();
@@ -53,12 +60,26 @@ export const PlanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [active, profileId, planId, expires]);
 
+  // Una sola lectura del historial para toda la ventana: alimenta la tarjeta de días y Plan y pagos.
+  const payments = usePayments(active);
+  const nextCharge = payments.nextCharge;
+
   const summary = useMemo(() => {
     if (!active || !profile) return FREE;
     const subscription = status?.subscription ?? null;
     const price = subscription ? catalog?.plans.find((p) => p.id === subscription.planId)?.prices[String(subscription.months) as '1'] : null;
-    return summarizePlan({ profile, planName, subscription, priceUsd: price ?? null });
-  }, [active, profile, status, catalog, planName]);
+    return summarizePlan({
+      profile,
+      planName,
+      subscription,
+      priceUsd: price ?? null,
+      nextCharge: nextCharge ? { date: nextCharge.date, amount: nextCharge.amount } : null,
+    });
+  }, [active, profile, status, catalog, planName, nextCharge]);
 
-  return <PlanContext.Provider value={summary}>{children}</PlanContext.Provider>;
+  return (
+    <PlanContext.Provider value={summary}>
+      <PaymentsContext.Provider value={payments}>{children}</PaymentsContext.Provider>
+    </PlanContext.Provider>
+  );
 };

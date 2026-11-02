@@ -15,7 +15,7 @@ import { Plug } from 'lucide-react';
 import { connectionTools, toolsByGroup, type ToolDef } from '../../lib/tools';
 import { useToolStatus } from '../inicio/useToolStatus';
 import { PaymentHistory } from '../billing/PaymentHistory';
-import { usePayments } from '../../lib/usePayments';
+import { usePaymentsData } from './usePlanSummary';
 import { useToast } from '../tally-ui';
 import { PlanCard } from './PlanCard';
 import { MAX_WINDOWS, useWindows } from './windowStore';
@@ -102,12 +102,12 @@ export const ConexionesView: React.FC = () => {
 };
 
 export const PlanView: React.FC = () => {
-  const payments = usePayments();
+  const payments = usePaymentsData();
   return (
     <div className="tally-page">
       <div className="tally-grid2">
         <PlanCard showCta={false} />
-        <PaymentHistory rows={payments.rows} state={payments.state} />
+        <PaymentHistory rows={payments.rows} state={payments.state} error={payments.error} onRetry={payments.reload} />
       </div>
       <Suspense fallback={null}>
         <Account />

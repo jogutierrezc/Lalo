@@ -86,3 +86,16 @@ describe('daysLeftText', () => {
     expect(daysLeftText(summarizePlan({ profile, subscription: sub({ status: 'expired' }), now: NOW }))).toBe('Plan terminado');
   });
 });
+
+describe('summarizePlan con próximo cobro del servidor', () => {
+  it('el nextCharge manda sobre el precio del catálogo y la fecha de fin', () => {
+    const s = summarizePlan({ profile, subscription: sub({}), priceUsd: 30, nextCharge: { date: at(25), amount: 27 }, now: NOW });
+    expect(s).toMatchObject({ state: 'activo', nextChargeUsd: 27, nextChargeAt: at(25), days: 23 });
+  });
+
+  it('sin nextCharge o con fecha inválida conserva el comportamiento anterior', () => {
+    const s = summarizePlan({ profile, subscription: sub({}), priceUsd: 30, nextCharge: { date: 'no-fecha', amount: 27 }, now: NOW });
+    expect(s.nextChargeAt).toBe(at(23));
+    expect(s.nextChargeUsd).toBe(27);
+  });
+});
