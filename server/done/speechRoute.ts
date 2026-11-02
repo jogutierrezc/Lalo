@@ -19,13 +19,21 @@ import { profileIdOfReadKey, verifyReadKey } from './readKey.js';
 
 const SPEECH_PAGE = 20;
 
-/** Cuenta dueña de la clave de lectura, o null. La clave de OBS completa NO vale aquí. */
+/**
+ * Cuenta dueña de la clave, o null. Vale la clave de lectura (`dr.…`) y también la clave de OBS (`k`): la fuente
+ * única de OBS lleva `k` en su enlace, así que el overlay lee con ella. Para escribir en el chat (chatRoute) la
+ * clave de lectura sigue siendo de solo lectura.
+ */
 export async function actorForReadKey(stores: Stores, key: string): Promise<Actor | null> {
   const id = profileIdOfReadKey(key);
-  if (!id) return null;
-  const widgetKey = await stores.done.widgetKeyOf(id);
-  if (!widgetKey || !verifyReadKey(key, id, widgetKey)) return null;
-  const profile = await stores.lux.profile(id);
+  if (id) {
+    const widgetKey = await stores.done.widgetKeyOf(id);
+    if (!widgetKey || !verifyReadKey(key, id, widgetKey)) return null;
+    const profile = await stores.lux.profile(id);
+    return profile ? loadActor(stores, profile) : null;
+  }
+  if (!key || key.length > 128 || !stores.lux.profileByWidgetKey) return null;
+  const profile = await stores.lux.profileByWidgetKey(key);
   return profile ? loadActor(stores, profile) : null;
 }
 

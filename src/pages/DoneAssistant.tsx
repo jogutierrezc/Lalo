@@ -152,7 +152,9 @@ export const DoneAssistant: React.FC = () => {
       </div>
       <div className="done-win-main">
         <div className="done-win-form">
-          <Tabs label="Ajustes de Done" tabs={TABS} value={tab} onChange={setTab} idBase="done" />
+          <div className="done-tabs-sticky">
+            <Tabs label="Ajustes de Done" tabs={TABS} value={tab} onChange={setTab} idBase="done" />
+          </div>
           {(loadError || error) && (
             <p className="done-err" role="alert">
               <AlertTriangle size={14} aria-hidden="true" />

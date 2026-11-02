@@ -216,14 +216,15 @@ describe('ajustes', () => {
 });
 
 describe('clave de lectura del overlay', () => {
-  it('vale para speech; la clave de OBS, una falsa o la de otro creador no', async () => {
+  it('vale para speech, y la clave de OBS (k) también; una falsa o la de otro creador no', async () => {
     const { e, overrides } = await setup(aiReply('x'));
     const readKey = deriveReadKey(streamer.id, WIDGET_KEY);
     const ok = await handleDone('speech', get({ k: readKey }), e, overrides);
     expect(ok.status).toBe(200);
     expect(ok.body).toHaveProperty('items');
     expect(ok.body).toHaveProperty('character');
-    expect((await handleDone('speech', get({ k: WIDGET_KEY }), e, overrides)).status).toBe(401);
+    expect((await handleDone('speech', get({ k: WIDGET_KEY }), e, overrides)).status).toBe(200);
+    expect((await handleDone('speech', get({ k: 'una-clave-falsa' }), e, overrides)).status).toBe(401);
     expect((await handleDone('speech', get({ k: `${readKey.slice(0, -2)}xx` }), e, overrides)).status).toBe(401);
     expect((await handleDone('speech', get({ k: deriveReadKey(streamer.id, 'otra-widget-key') }), e, overrides)).status).toBe(401);
   });
