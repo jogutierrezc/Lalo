@@ -11,8 +11,11 @@
  *   !luxoff                el canal o un moderador las apaga
  */
 
-export const LUX_CHAT_MAX = 300;
-export const LUX_CHAT_COOLDOWN_MS = 5_000;
+import { CHAT_COOLDOWN_MS, CHAT_MESSAGE_MAX } from '../chat/sharedRules.js';
+
+/** Los valores viven en server/chat/sharedRules.ts: son los mismos de Lux y de Done. */
+export const LUX_CHAT_MAX = CHAT_MESSAGE_MAX;
+export const LUX_CHAT_COOLDOWN_MS = CHAT_COOLDOWN_MS;
 
 /** Palabra por defecto: la que ya conocen los espectadores. */
 export const LUX_CHAT_WORD_DEFAULT = 'lux';
