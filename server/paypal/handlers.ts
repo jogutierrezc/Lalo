@@ -11,6 +11,10 @@
  *   admin-prices GET/POST (admin) precios por plan y periodo
  *   admin-subscriptions GET (admin) suscripciones, totales y accesos por código (?before=<nextBefore> para paginar; cursor opaco "<updated_at>|<id>")
  *   admin-sync   POST  (admin) crea en PayPal el Product y los Billing Plans que falten
+ *   payments     GET   historial de pagos del creador (máx. 100) y su próximo cobro; sin ids de PayPal
+ *   admin-inbox  GET   (admin) bandeja de pagos: ítems que requieren atención, por urgencia
+ *   admin-inbox-resolve POST (admin) { key, note? } marca un ítem de la bandeja como resuelto (con bitácora)
+ *   admin-billing-summary GET (admin) facturación: ingresos de 6 meses, renovaciones, cobros fallidos, desglose y recibos (?receipts=N, máx. 50)
  *   webhook      POST  avisos de PayPal (sin sesión; se verifica la firma con PayPal)
  *   expire       GET/POST  tarea diaria (Vercel Cron, con CRON_SECRET): devuelve al plan por defecto a quien venció
  *
@@ -24,9 +28,11 @@ import { publicBase } from '../integrations/kofi.js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { createPaypalClient, paypalEnvOf, paypalMissing, PaypalError, readPaypalConfig, type PaypalClient } from './client.js';
 import { DuplicateSubscriptionError, supabasePaypalDb, type AdminCursor, type PaypalDb, type PriceRow, type SubscriptionRow } from './db.js';
+import { supabaseReportsDb, type ReportsDb } from './reportsDb.js';
+import { adminBillingSummaryBody, adminInboxBody, adminInboxResolve, paymentsBody } from './reports.js';
 import { BILLING_CURRENCY, PERIODS, applyTransition, hasAccess, isPeriod, isStaleEvent, pendingVerdict, subscribeBlock, transitionFor, type SubStatus, type SubscribeBlock } from './logic.js';
 
-export const PAYPAL_ACTIONS = ['catalog', 'subscribe', 'confirm', 'status', 'cancel', 'admin-prices', 'admin-sync', 'admin-subscriptions', 'webhook', 'expire'] as const;
+export const PAYPAL_ACTIONS = ['catalog', 'subscribe', 'confirm', 'status', 'cancel', 'admin-prices', 'admin-sync', 'admin-subscriptions', 'payments', 'admin-inbox', 'admin-inbox-resolve', 'admin-billing-summary', 'webhook', 'expire'] as const;
 export type PaypalAction = (typeof PAYPAL_ACTIONS)[number];
 
 const PRODUCT_SETTING = (mode: string) => `paypal_product_id_${mode}`;
@@ -669,7 +675,8 @@ export async function handlePaypal(
   req: IntegrationRequest,
   env: Env,
   deps: Deps = defaultDeps,
-  dbOverride?: PaypalDb | null
+  dbOverride?: PaypalDb | null,
+  reportsOverride?: ReportsDb | null
 ): Promise<IntegrationResult> {
   const method = req.method.toUpperCase();
   try {
@@ -710,6 +717,23 @@ export async function handlePaypal(
         if (action === 'subscribe') return await subscribe(req, env, db, client, caller.id, now);
         if (action === 'confirm') return await confirm(req, db, client, caller.id, now);
         return await cancel(db, client, caller.id, now);
+      }
+      case 'payments': {
+        if (method !== 'GET') return fail(405, 'method', 'Esta ruta solo admite GET.');
+        const reports = reportsOverride === undefined ? supabaseReportsDb(env) : reportsOverride;
+        if (!reports) return fail(503, 'not_configured', 'Al servidor le faltan variables para hablar con la base de datos.');
+        return await paymentsBody(db, reports, caller.id, now);
+      }
+      case 'admin-inbox':
+      case 'admin-inbox-resolve':
+      case 'admin-billing-summary': {
+        if (caller.role !== 'admin') return fail(403, 'not_admin', 'Solo para administradores.');
+        if (method !== (action === 'admin-inbox-resolve' ? 'POST' : 'GET')) return fail(405, 'method', `Esta ruta solo admite ${action === 'admin-inbox-resolve' ? 'POST' : 'GET'}.`);
+        const reports = reportsOverride === undefined ? supabaseReportsDb(env) : reportsOverride;
+        if (!reports) return fail(503, 'not_configured', 'Al servidor le faltan variables para hablar con la base de datos.');
+        if (action === 'admin-inbox') return await adminInboxBody(db, reports, now);
+        if (action === 'admin-inbox-resolve') return await adminInboxResolve(req, db, reports, caller.id, now);
+        return await adminBillingSummaryBody(req, reports, now);
       }
       case 'admin-prices':
       case 'admin-sync':
