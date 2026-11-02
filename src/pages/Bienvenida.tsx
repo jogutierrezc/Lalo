@@ -21,6 +21,7 @@ import { useCloudSession } from '../hooks/useCloudSession';
 import { completeOnboarding, fetchOwnPlan, getCaminoElegido, getPendingCode } from '../lib/cloud';
 import { outcomeMessage } from '../lib/accesoMensajes';
 import { bienvenidaHechaAqui, claveBienvenida, lineasDelPlan, pasoConSesion, type PasoId, type PasoNarrado } from '../lib/recorrido';
+import { pedirBienvenidaNueva } from '../lib/fundadores';
 import { alertasActivas, guardarCanal, limpiarCanal } from '../lib/recorridoCanal';
 import { loadSettings } from '../types/settings';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
@@ -215,6 +216,8 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
   };
 
   const terminar = async () => {
+    // Al abrir el panel sale la bienvenida de Tally Studio, una sola vez (src/lib/fundadores.ts)
+    pedirBienvenidaNueva(perfilId);
     // Segundo intento tras un fallo: ya está recordado en este navegador
     if (cierre) {
       onTerminar(perfilId);
