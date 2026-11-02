@@ -29,7 +29,8 @@ export const RIOT_DISCLAIMER_ES =
 
 const DEFAULT_PLATFORM = 'la1';
 
-export const RiotCard: React.FC = () => {
+/** `enVentana`: la ficha está dentro de la ventana de Alertas de juego y no necesita el enlace «Ajustar las alertas». */
+export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false }) => {
   const cloud = useCloudSession();
   const uid = useId();
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
@@ -263,9 +264,11 @@ export const RiotCard: React.FC = () => {
             <button type="button" className="cab-btn2 cab-btn-sm" disabled={busy} onClick={unlink}>
               Desvincular
             </button>
-            <a className="cab-btn2 cab-btn-sm" href="#juego">
-              Ajustar las alertas
-            </a>
+            {!enVentana && (
+              <a className="cab-btn2 cab-btn-sm" href="#juego">
+                Ajustar las alertas
+              </a>
+            )}
           </div>
         </>
       )}

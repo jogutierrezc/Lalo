@@ -1,11 +1,13 @@
 /**
  * src/components/integraciones/ServiceCard.tsx
  *
- * Marco común de una ficha de servicio en «Integraciones»: sigla, nombre y
- * estado. La sigla es texto: aquí no se dibuja el logotipo de nadie.
+ * Marco común de una ficha de servicio en «Conexiones»: sigla, nombre y
+ * estado. La sigla es texto: aquí no se dibuja el logotipo de nadie. Usa la
+ * tarjeta de Tally (clase tui-card) y las reglas de .ept-ficha.
  */
 
 import React from 'react';
+import '../../styles/enpantalla-tally.css';
 
 export type CardTone = 'on' | 'soon' | 'warn';
 
@@ -17,7 +19,7 @@ export const ServiceCard: React.FC<{
   adminOnly?: boolean;
   children: React.ReactNode;
 }> = ({ mark, name, status, tone, adminOnly, children }) => (
-  <section className="cab-mod ic">
+  <section className="tui-card ept-ficha ic">
     <div className="ic-h">
       <span className="ic-m" aria-hidden="true">
         {mark}
