@@ -13,6 +13,8 @@
 import { fail, type IntegrationRequest, type IntegrationResult } from '../integrations/http.js';
 import type { Env } from '../integrations/store.js';
 import { fetchPrivateModel } from '../lux/mascotaModel.js';
+import { riotModels } from '../lux/handlers.js';
+import { visibleTo } from '../lux/modelLibrary.js';
 import { doneCommandWords } from '../../src/lib/doneSettings.js';
 import { doneFailure, loadActor, notConfigured, openStores, overlayCharacter, effectiveOf, characterOf, type Actor, type DoneDeps, type Stores } from './core.js';
 import { profileIdOfReadKey, verifyReadKey } from './readKey.js';
@@ -35,6 +37,14 @@ export async function actorForReadKey(stores: Stores, key: string): Promise<Acto
   if (!key || key.length > 128 || !stores.lux.profileByWidgetKey) return null;
   const profile = await stores.lux.profileByWidgetKey(key);
   return profile ? loadActor(stores, profile) : null;
+}
+
+/** Modelo de la biblioteca (de Riot, compartido, aprobado o propio, con archivo) que esta cuenta puede ver, o null. */
+async function visibleLibraryModel(stores: Stores, profileId: string, id: string): Promise<{ id: string; modelKey: string } | null> {
+  const characters = stores.lux.characters ? await stores.lux.characters() : [];
+  const rows = stores.lux.libraryModels ? await stores.lux.libraryModels() : [];
+  const found = visibleTo([...riotModels(characters), ...rows], profileId).find((model) => model.id === id);
+  return found && found.modelKey ? { id: found.id, modelKey: found.modelKey } : null;
 }
 
 const badKey = (): IntegrationResult => fail(401, 'bad_read_key', 'El enlace de la fuente de OBS no es válido.');
@@ -92,12 +102,18 @@ export async function modelRoute(req: IntegrationRequest, env: Env, deps: DoneDe
     const actor = await actorForReadKey(stores, (req.query.k ?? '').trim());
     if (!actor) return badKey();
     if (!actor.allowed) return fail(403, 'done_disabled', 'Done no está activado para tu cuenta.');
-    const character = await characterOf(stores.lux, actor);
-    const effective = await effectiveOf(stores.lux, actor, character);
     const asked = req.query.m;
-    // Si el overlay pide otro id (?m=), 404: así la caché del navegador no mezcla modelos
-    if (!effective || (asked !== undefined && asked !== effective.id)) return fail(404, 'no_model', 'Esta cuenta no tiene un modelo 3D para su personaje.');
-    const read = await (deps.modelBytes ?? fetchPrivateModel)(env, effective.modelKey);
+    // Con ?m=<id> se sirve cualquier modelo de la biblioteca que esta cuenta puede ver (compartido, aprobado o suyo):
+    // la galería y la vista previa piden varios. Sin ?m=, o si ese id no es visible, vale el modelo efectivo.
+    let target: { id: string; modelKey: string } | null = asked ? await visibleLibraryModel(stores, actor.profile.id, asked) : null;
+    if (!target) {
+      const character = await characterOf(stores.lux, actor);
+      const effective = await effectiveOf(stores.lux, actor, character);
+      // Si piden otro id que no es visible, 404: así la caché del navegador no mezcla modelos
+      if (!effective || (asked !== undefined && asked !== effective.id)) return fail(404, 'no_model', 'Esta cuenta no tiene un modelo 3D para su personaje.');
+      target = effective;
+    }
+    const read = await (deps.modelBytes ?? fetchPrivateModel)(env, target.modelKey);
     if (!read.ok) {
       if (read.reason === 'not_configured') return fail(503, 'models_bucket', 'Falta el bucket privado de modelos en el servidor.');
       if (read.reason === 'missing') return fail(404, 'model_missing', 'El archivo del modelo no está en el almacenamiento.');

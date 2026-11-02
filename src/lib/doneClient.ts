@@ -294,11 +294,9 @@ export async function doneSynthesize(text: string, key: string | null, voice: Do
 }
 
 /** URL del GLB de un modelo para el overlay (R2 privado, con la clave de OBS). */
-export const doneModelUrl = (key: string, modelId: string): string =>
-  // La clave de lectura (dr.…) solo la entiende la ruta de Done; la clave de OBS, la de Lux (sirve cualquier modelo de la biblioteca)
-  key.startsWith('dr.')
-    ? `/api/done/model?k=${encodeURIComponent(key)}&m=${encodeURIComponent(modelId)}`
-    : `/api/lux/mascota-model?k=${encodeURIComponent(key)}&m=${encodeURIComponent(modelId)}`;
+// La ruta de Done acepta la clave de OBS y la de lectura, y sirve cualquier modelo de la biblioteca que la cuenta vea
+// (la de Lux solo entrega el modelo activo de Mi AI y responde 404 con los demás).
+export const doneModelUrl = (key: string, modelId: string): string => `/api/done/model?k=${encodeURIComponent(key)}&m=${encodeURIComponent(modelId)}`;
 
 /* ---------- Biblioteca de modelos (compartida con Lux) ---------- */
 
