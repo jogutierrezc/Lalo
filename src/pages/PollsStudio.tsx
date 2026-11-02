@@ -24,6 +24,7 @@ import { BattleBarView } from '../components/polls/BattleBarView';
 import { speakPollEmotionCue } from '../utils/pollsAudio';
 import { loadSettings, saveSettings } from '../types/settings';
 import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
+import { EstudioPestanas, PanelPestana } from '../components/participacion/EstudioPestanas';
 import { Field, Range, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { useCloudSession } from '../hooks/useCloudSession';
@@ -63,7 +64,14 @@ const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds
 /** Lo que se oye: la frase sin las marcas de emoción entre corchetes. */
 const spoken = (text: string) => text.replace(/\[[^\]]+\]/g, '').trim();
 
+const TAB_BASE = 'batallas-tab';
+const TABS = [
+  { id: 'ajustes', label: 'Ajustes' },
+  { id: 'apariencia', label: 'Apariencia' },
+];
+
 export const PollsStudio: React.FC = () => {
+  const [tab, setTab] = useState('ajustes');
   const {
     settings,
     saved,
@@ -222,14 +230,91 @@ export const PollsStudio: React.FC = () => {
   const undoNote = (where: BattleSnapshot['where']) =>
     undo.pending?.snapshot.where === where && <UndoNote label={undo.pending.label} onUndo={restore} />;
 
+  const fijo = (
+    <>
+          <section className="cab-mod">
+            <h2>Monitor</h2>
+            <div className="cab-stage items-center justify-center">
+              <BattleBarView
+                title={settings.activeBattleTitle}
+                optionA={optionA}
+                optionB={optionB}
+                theme={settings.theme}
+                timeLeftSec={timeLeft}
+                totalDurationSec={settings.durationSec}
+                isActive={isActive}
+                winner={winner}
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="cab-btn flex-1"
+                onClick={() => (isActive ? pauseBattle() : startBattle())}
+              >
+                {isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                <span>{isActive ? 'Pausar' : 'Iniciar batalla'}</span>
+              </button>
+              <button type="button" className="cab-btn2" onClick={reset}>
+                <RotateCcw className="h-4 w-4" />
+                <span>Reiniciar</span>
+              </button>
+            </div>
+            <p className="capas-time">{timeText}</p>
+            {undoNote('reinicio')}
+
+            <button type="button" className="cab-btn2" onClick={copyWidgetUrl}>
+              {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+            </button>
+            <p className="cab-hint" role="status">
+              {status || 'La batalla se ve aquí y en las fuentes de OBS que estén abiertas.'}
+            </p>
+          </section>
+      <section className="cab-mod">
+        <h2>Probar</h2>
+              <details className="studio-details">
+                <summary>Probar sin chat</summary>
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    {([0, 1] as const).map((index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        className="cab-btn2"
+                        onClick={() => castVote(index, testVoter())}
+                      >
+                        <i className="capas-dot" style={{ background: settings.options[index].color }} />
+                        <span>Voto a {index + 1}</span>
+                      </button>
+                    ))}
+                    <button type="button" className="cab-btn2" onClick={burst}>
+                      Ráfaga
+                    </button>
+                  </div>
+                  <p className="cab-hint">
+                    Suman votos a la batalla actual, igual que si llegaran del chat. «Reiniciar» los pone a cero.
+                  </p>
+                </div>
+              </details>
+      </section>
+    </>
+  );
+
   return (
     <div className="cab">
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav currentApp="encuestas" channel={settings.channel} saved={saved} tourAvailable={false} />
-
-        <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,560px)]">
-          <div className="grid gap-5">
-            {/* ---------- Batalla ---------- */}
+      <EstudioPestanas
+        etiqueta="Secciones de Batallas"
+        idBase={TAB_BASE}
+        pestanas={TABS}
+        activa={tab}
+        onCambio={setTab}
+        nav={<SuiteNav currentApp="encuestas" channel={settings.channel} saved={saved} tourAvailable={false} />}
+        fijo={fijo}
+      >
+        {/* ---------- Ajustes ---------- */}
+        <PanelPestana idBase={TAB_BASE} id="ajustes" activa={tab}>
             <section className="cab-mod">
               <h2>Batalla</h2>
               <Field label="Pregunta" htmlFor={`${uid}-title`}>
@@ -318,56 +403,8 @@ export const PollsStudio: React.FC = () => {
               </Field>
               {undoNote('plantilla')}
             </section>
-
-            {/* ---------- Aspecto ---------- */}
-            <section className="cab-mod">
-              <h2>Aspecto</h2>
-              <Field label="Tema" hint="Cambia colores, radio y tipografía de la placa.">
-                <div className="cab-seg" role="group" aria-label="Tema de la batalla">
-                  {POLL_THEMES.map((theme) => (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      aria-pressed={settings.theme === theme.id}
-                      title={theme.description}
-                      onClick={() => updateSettings({ theme: theme.id })}
-                    >
-                      {theme.name}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-            </section>
-
-            {/* ---------- Más ---------- */}
-            <section className="cab-mod">
-              <h2>Más</h2>
-
-              <details className="studio-details">
-                <summary>Probar sin chat</summary>
-                <div>
-                  <div className="flex flex-wrap gap-2">
-                    {([0, 1] as const).map((index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        className="cab-btn2"
-                        onClick={() => castVote(index, testVoter())}
-                      >
-                        <i className="capas-dot" style={{ background: settings.options[index].color }} />
-                        <span>Voto a {index + 1}</span>
-                      </button>
-                    ))}
-                    <button type="button" className="cab-btn2" onClick={burst}>
-                      Ráfaga
-                    </button>
-                  </div>
-                  <p className="cab-hint">
-                    Suman votos a la batalla actual, igual que si llegaran del chat. «Reiniciar» los pone a cero.
-                  </p>
-                </div>
-              </details>
-
+          <section className="cab-mod">
+            <h2>Reglas, comandos y voz</h2>
               <details className="studio-details">
                 <summary>Reglas y sonido</summary>
                 <div>
@@ -469,52 +506,31 @@ export const PollsStudio: React.FC = () => {
                   ))}
                 </div>
               </details>
-            </section>
-          </div>
-
-          {/* ---------- Monitor ---------- */}
-          <section className="cab-mod max-[1099px]:order-first min-[1100px]:sticky min-[1100px]:top-4">
-            <h2>Monitor</h2>
-            <div className="cab-stage items-center justify-center">
-              <BattleBarView
-                title={settings.activeBattleTitle}
-                optionA={optionA}
-                optionB={optionB}
-                theme={settings.theme}
-                timeLeftSec={timeLeft}
-                totalDurationSec={settings.durationSec}
-                isActive={isActive}
-                winner={winner}
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="cab-btn flex-1"
-                onClick={() => (isActive ? pauseBattle() : startBattle())}
-              >
-                {isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                <span>{isActive ? 'Pausar' : 'Iniciar batalla'}</span>
-              </button>
-              <button type="button" className="cab-btn2" onClick={reset}>
-                <RotateCcw className="h-4 w-4" />
-                <span>Reiniciar</span>
-              </button>
-            </div>
-            <p className="capas-time">{timeText}</p>
-            {undoNote('reinicio')}
-
-            <button type="button" className="cab-btn2" onClick={copyWidgetUrl}>
-              {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-            </button>
-            <p className="cab-hint" role="status">
-              {status || 'La batalla se ve aquí y en las fuentes de OBS que estén abiertas.'}
-            </p>
           </section>
-        </div>
-      </div>
+        </PanelPestana>
+
+        {/* ---------- Apariencia ---------- */}
+        <PanelPestana idBase={TAB_BASE} id="apariencia" activa={tab}>
+            <section className="cab-mod">
+              <h2>Aspecto</h2>
+              <Field label="Tema" hint="Cambia colores, radio y tipografía de la placa.">
+                <div className="cab-seg" role="group" aria-label="Tema de la batalla">
+                  {POLL_THEMES.map((theme) => (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      aria-pressed={settings.theme === theme.id}
+                      title={theme.description}
+                      onClick={() => updateSettings({ theme: theme.id })}
+                    >
+                      {theme.name}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            </section>
+        </PanelPestana>
+      </EstudioPestanas>
     </div>
   );
 };

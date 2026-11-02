@@ -47,6 +47,7 @@ import { GoalsOverlayView } from '../components/goals/GoalsOverlayView';
 import { MediaItem, MediaType, inspectAudioFile, MAX_AUDIO_DURATION_SECONDS } from '../types/mediaLibrary';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { Field, Range, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
+import { EstudioPestanas, PanelPestana, pasoEnPestana } from '../components/participacion/EstudioPestanas';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { loadSettings } from '../types/settings';
 import { useCloudSession } from '../hooks/useCloudSession';
@@ -54,7 +55,14 @@ import '../styles/capas.css';
 
 const TOUR_ID = 'metas';
 
-const GOALS_TOUR_STEPS: TourStep[] = [
+const TAB_BASE = 'metas-tab';
+const TABS = [
+  { id: 'ajustes', label: 'Ajustes' },
+  { id: 'apariencia', label: 'Apariencia' },
+];
+
+/** Pasos de la guía: antes de cada uno se cambia a la pestaña que contiene su elemento. */
+const buildTourSteps = (goTo: (tab: string) => void): TourStep[] => [
   {
     badge: 'Bienvenida',
     title: 'Metas',
@@ -70,13 +78,23 @@ const GOALS_TOUR_STEPS: TourStep[] = [
     target: 'goals-mode',
     badge: 'En pantalla',
     title: 'Cómo se reparten',
-    body: 'A la vez, por turnos o solo una, y en qué punto de la pantalla. En automático, hasta 4 metas se ven a la vez y con 5 o más pasan a carrusel.',
+    body: pasoEnPestana(
+      'A la vez, por turnos o solo una, y en qué punto de la pantalla. En automático, hasta 4 metas se ven a la vez y con 5 o más pasan a carrusel.',
+      'apariencia',
+      goTo,
+      'goals-mode'
+    ),
   },
   {
     target: 'goals-editor',
     badge: 'Editor',
     title: 'Título, progreso y diseño',
-    body: '«Va en» y «Meta» son el progreso real. Debajo eliges el diseño de la meta. Lo que ocurre al completarla y los anuncios de voz están plegados.',
+    body: pasoEnPestana(
+      '«Va en» y «Meta» son el progreso real. En «Apariencia» eliges el diseño de la meta. Lo que ocurre al completarla y los anuncios de voz están plegados.',
+      'ajustes',
+      goTo,
+      'goals-editor'
+    ),
   },
   {
     target: 'goals-monitor',
@@ -155,6 +173,7 @@ export const GoalsStudio: React.FC = () => {
   const [wantsFile, setWantsFile] = useState(false);
   const [vault, setVault] = useState<MediaType | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [tab, setTab] = useState('ajustes');
   // Valor de prueba por meta: lo ven el monitor y OBS, pero no se guarda
   const [tested, setTested] = useState<Record<string, number>>({});
   const [recentGoalId, setRecentGoalId] = useState<string | null>(null);
@@ -493,20 +512,9 @@ export const GoalsStudio: React.FC = () => {
       .catch(() => say('No se pudo copiar. Usa «Fuentes de OBS» en la cabecera.'));
   };
 
-  return (
-    <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav
-          currentApp="metas"
-          channel={goalsSettings.channel}
-          saved={saved}
-          onOpenTour={() => setTourOpen(true)}
-          tourAvailable={!tourOpen}
-        />
+  const tabIds = TABS;
 
-        <div className="grid items-start gap-5 min-[1200px]:grid-cols-[250px_minmax(0,1fr)_minmax(0,380px)]">
-          <div className="grid gap-5">
-            {/* ---------- Lista de metas ---------- */}
+  const listaMetas = (
             <section className="cab-mod" data-tour="goals-list">
               <h2>Metas</h2>
               <ul className="cab-rows !max-h-none">
@@ -542,54 +550,113 @@ export const GoalsStudio: React.FC = () => {
               </button>
               {undo.pending && <UndoNote label={undo.pending.label} onUndo={restoreGoal} />}
             </section>
+  );
 
-            {/* ---------- En pantalla ---------- */}
-            <section className="cab-mod" data-tour="goals-mode">
-              <h2>En pantalla</h2>
-              <Field label="Reparto" hint={layoutMeta.hint}>
-                <div className="cab-seg" role="group" aria-label="Reparto de las metas en pantalla">
-                  {LAYOUTS.map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      aria-pressed={layout === entry.id}
-                      onClick={() => updateSettings({ displayMode: entry.id })}
-                    >
-                      {entry.name}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Posición" hint="La Cinta ocupa el borde entero, arriba o abajo.">
-                <div className="cab-pos" role="group" aria-label="Posición de las metas en pantalla">
-                  {GOAL_POSITIONS.map((entry) => (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      aria-label={entry.name}
-                      title={entry.name}
-                      aria-pressed={goalsSettings.position === entry.id}
-                      onClick={() => updateSettings({ position: entry.id })}
-                    />
-                  ))}
-                </div>
-              </Field>
-              {carouselApplies && (
-                <Field label="Cada meta se queda">
-                  <Range
-                    label="Segundos que se queda cada meta"
-                    min={3}
-                    max={30}
-                    value={goalsSettings.slideshowIntervalSec}
-                    format={(value) => `${value} s`}
-                    onChange={(value) => updateSettings({ slideshowIntervalSec: value })}
+  const monitorPanel = (
+          <section
+            className="cab-mod"
+            data-tour="goals-monitor"
+          >
+            <h2>Monitor</h2>
+            <div ref={stageRef} className="cab-stage items-start justify-center">
+              <canvas ref={canvasRef} width={900} height={506} className="capas-cover z-20" />
+              {monitorVideo && (
+                <div className="capas-cover z-10" data-video="">
+                  <video
+                    src={monitorVideo}
+                    autoPlay
+                    playsInline
+                    style={{ mixBlendMode: activeGoal.victoryBlendMode === 'screen' ? 'screen' : 'normal' }}
                   />
-                </Field>
+                </div>
               )}
-            </section>
-          </div>
+              <GoalsOverlayView
+                goals={previewGoals}
+                activeGoalId={activeGoal.id}
+                displayMode={goalsSettings.displayMode}
+                slideshowIntervalSec={goalsSettings.slideshowIntervalSec}
+                position={goalsSettings.position}
+                recentProgressGoalId={recentGoalId}
+                onSelectGoal={select}
+                isStudio={true}
+              />
+            </div>
 
-          {/* ---------- Editor ---------- */}
+            <Field
+              label="Probar"
+              hint="Las pruebas mueven la meta elegida en este monitor y en las fuentes de OBS abiertas, sin cambiar lo guardado. Los hitos son el 25, 50 y 75 %."
+            >
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest(1)}>
+                  Aporte +1
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest(5)}>
+                  Aporte +5
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest('hito')}>
+                  Hasta el siguiente hito
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest('fin')}>
+                  Completar
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={resetTest}>
+                  Reiniciar
+                </button>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testCelebration}>
+                  Probar celebración
+                </button>
+              </div>
+            </Field>
+
+            <button type="button" className="cab-btn2" onClick={copyWidgetUrl}>
+              {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+            </button>
+            <p className="cab-hint" role="status">
+              {status ||
+                (hasTest
+                  ? 'El monitor y OBS muestran una prueba. Tus metas guardadas no han cambiado.'
+                  : 'El monitor muestra tus metas tal como están guardadas.')}
+            </p>
+          </section>
+  );
+
+  return (
+    <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
+      <EstudioPestanas
+        etiqueta="Secciones de Metas"
+        idBase={TAB_BASE}
+        pestanas={tabIds}
+        activa={tab}
+        onCambio={setTab}
+        nav={
+          <SuiteNav
+            currentApp="metas"
+            channel={goalsSettings.channel}
+            saved={saved}
+            onOpenTour={() => setTourOpen(true)}
+            tourAvailable={!tourOpen}
+          />
+        }
+        riel={listaMetas}
+        fijo={monitorPanel}
+        extras={
+          <>
+        <MediaLibraryModal
+          isOpen={vault !== null}
+          onClose={() => setVault(null)}
+          onSelect={handleVaultSelect}
+          allowedTypes={[vault || 'video']}
+          title={vault === 'audio' ? 'Biblioteca · elegir sonido (máximo 30 s)' : 'Biblioteca · elegir vídeo'}
+        />
+            {tourOpen && (
+              <GuidedTour steps={buildTourSteps(setTab)} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Metas" />
+            )}
+          </>
+        }
+      >
+        {/* ---------- Ajustes ---------- */}
+        <PanelPestana idBase={TAB_BASE} id="ajustes" activa={tab}>
           <section className="cab-mod" data-tour="goals-editor">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2>{activeGoal.title || 'Sin título'}</h2>
@@ -600,7 +667,6 @@ export const GoalsStudio: React.FC = () => {
                 </button>
               )}
             </div>
-
             <Field label="Título" htmlFor={`${uid}-title`}>
               <input
                 id={`${uid}-title`}
@@ -649,147 +715,6 @@ export const GoalsStudio: React.FC = () => {
                 />
               </Field>
             </div>
-
-            <Field label="Diseño" hint={design.hint}>
-              <div className="mt-designs" role="group" aria-label="Diseño de la meta">
-                {GOAL_DESIGNS.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    className="mt-design"
-                    aria-pressed={activeGoal.style === entry.id}
-                    onClick={() => chooseDesign(entry.id)}
-                  >
-                    <span
-                      className="mt-glyph"
-                      data-g={entry.id}
-                      aria-hidden="true"
-                      style={{ '--c': activeGoal.accentColor } as React.CSSProperties}
-                    >
-                      <i />
-                      {entry.id === 'custom' && (
-                        <>
-                          <i />
-                          <i />
-                        </>
-                      )}
-                    </span>
-                    {entry.name}
-                  </button>
-                ))}
-              </div>
-              {goals.length > 1 && !sameDesignEverywhere && (
-                <div>
-                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={applyDesignToAll}>
-                    Usar en todas las metas
-                  </button>
-                </div>
-              )}
-            </Field>
-
-            {activeGoal.style === 'custom' && (
-              <div className="grid gap-4 rounded border border-[color:var(--cb-line)] p-3">
-                <Field label="Forma" hint="La Cinta no se personaliza: ocupa el borde entero.">
-                  <div className="cab-seg" role="group" aria-label="Forma del diseño personalizado">
-                    {GOAL_CUSTOM_SHAPES.map((entry) => (
-                      <button
-                        key={entry.id}
-                        type="button"
-                        aria-pressed={custom.shape === entry.id}
-                        onClick={() => patchCustom({ shape: entry.id })}
-                      >
-                        {entry.name}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Field label="Fondo" htmlFor={`${uid}-bg`}>
-                    <input
-                      id={`${uid}-bg`}
-                      type="color"
-                      className="mt-color"
-                      value={custom.background}
-                      onChange={(e) => patchCustom({ background: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Texto" htmlFor={`${uid}-fg`}>
-                    <input
-                      id={`${uid}-fg`}
-                      type="color"
-                      className="mt-color"
-                      value={custom.text}
-                      onChange={(e) => patchCustom({ text: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Tipografía" htmlFor={`${uid}-font`}>
-                    <select
-                      id={`${uid}-font`}
-                      className="cab-inp"
-                      value={custom.font}
-                      onChange={(e) => patchCustom({ font: e.target.value as GoalFontId })}
-                    >
-                      {GOAL_FONTS.map((font) => (
-                        <option key={font.id} value={font.id}>
-                          {font.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                </div>
-                <Field label="Tamaño">
-                  <Range
-                    label="Tamaño de la meta"
-                    min={GOAL_SIZE_MIN}
-                    max={GOAL_SIZE_MAX}
-                    step={5}
-                    value={custom.size}
-                    format={(value) => `${value}%`}
-                    onChange={(value) => patchCustom({ size: value })}
-                  />
-                </Field>
-                <Field label="Redondeo">
-                  <Range
-                    label="Redondeo de las esquinas"
-                    min={0}
-                    max={GOAL_RADIUS_MAX}
-                    value={custom.radius}
-                    format={(value) => String(value)}
-                    onChange={(value) => patchCustom({ radius: value })}
-                  />
-                </Field>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Toggle label="Título" checked={custom.showTitle} onChange={(next) => patchCustom({ showTitle: next })} />
-                  <Toggle
-                    label="Meta y unidad"
-                    checked={custom.showTarget}
-                    onChange={(next) => patchCustom({ showTarget: next })}
-                  />
-                </div>
-              </div>
-            )}
-
-            <Field label="Color de avance" hint="El texto que va encima se aclara u oscurece solo para que se lea.">
-              <div className="cab-sw">
-                {ACCENTS.map((accent) => (
-                  <button
-                    key={accent.color}
-                    type="button"
-                    style={{ background: accent.color }}
-                    aria-label={accent.name}
-                    aria-pressed={activeGoal.accentColor === accent.color}
-                    onClick={() => patch({ accentColor: accent.color })}
-                  />
-                ))}
-                <input
-                  type="color"
-                  value={activeGoal.accentColor}
-                  aria-label="Otro color"
-                  onChange={(e) => patch({ accentColor: e.target.value })}
-                />
-              </div>
-            </Field>
-
             <details className="studio-details">
               <summary>Al completar</summary>
               <div>
@@ -959,86 +884,195 @@ export const GoalsStudio: React.FC = () => {
               </details>
             )}
           </section>
+        </PanelPestana>
 
-          {/* ---------- Monitor ---------- */}
-          <section
-            className="cab-mod max-[1199px]:order-first min-[1200px]:sticky min-[1200px]:top-4"
-            data-tour="goals-monitor"
-          >
-            <h2>Monitor</h2>
-            <div ref={stageRef} className="cab-stage items-start justify-center">
-              <canvas ref={canvasRef} width={900} height={506} className="capas-cover z-20" />
-              {monitorVideo && (
-                <div className="capas-cover z-10" data-video="">
-                  <video
-                    src={monitorVideo}
-                    autoPlay
-                    playsInline
-                    style={{ mixBlendMode: activeGoal.victoryBlendMode === 'screen' ? 'screen' : 'normal' }}
+        {/* ---------- Apariencia ---------- */}
+        <PanelPestana idBase={TAB_BASE} id="apariencia" activa={tab}>
+            <section className="cab-mod" data-tour="goals-mode">
+              <h2>En pantalla</h2>
+              <Field label="Reparto" hint={layoutMeta.hint}>
+                <div className="cab-seg" role="group" aria-label="Reparto de las metas en pantalla">
+                  {LAYOUTS.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      aria-pressed={layout === entry.id}
+                      onClick={() => updateSettings({ displayMode: entry.id })}
+                    >
+                      {entry.name}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Posición" hint="La Cinta ocupa el borde entero, arriba o abajo.">
+                <div className="cab-pos" role="group" aria-label="Posición de las metas en pantalla">
+                  {GOAL_POSITIONS.map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      aria-label={entry.name}
+                      title={entry.name}
+                      aria-pressed={goalsSettings.position === entry.id}
+                      onClick={() => updateSettings({ position: entry.id })}
+                    />
+                  ))}
+                </div>
+              </Field>
+              {carouselApplies && (
+                <Field label="Cada meta se queda">
+                  <Range
+                    label="Segundos que se queda cada meta"
+                    min={3}
+                    max={30}
+                    value={goalsSettings.slideshowIntervalSec}
+                    format={(value) => `${value} s`}
+                    onChange={(value) => updateSettings({ slideshowIntervalSec: value })}
                   />
+                </Field>
+              )}
+            </section>
+          <section className="cab-mod">
+            <h2>Diseño de la meta</h2>
+            <Field label="Diseño" hint={design.hint}>
+              <div className="mt-designs" role="group" aria-label="Diseño de la meta">
+                {GOAL_DESIGNS.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className="mt-design"
+                    aria-pressed={activeGoal.style === entry.id}
+                    onClick={() => chooseDesign(entry.id)}
+                  >
+                    <span
+                      className="mt-glyph"
+                      data-g={entry.id}
+                      aria-hidden="true"
+                      style={{ '--c': activeGoal.accentColor } as React.CSSProperties}
+                    >
+                      <i />
+                      {entry.id === 'custom' && (
+                        <>
+                          <i />
+                          <i />
+                        </>
+                      )}
+                    </span>
+                    {entry.name}
+                  </button>
+                ))}
+              </div>
+              {goals.length > 1 && !sameDesignEverywhere && (
+                <div>
+                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={applyDesignToAll}>
+                    Usar en todas las metas
+                  </button>
                 </div>
               )}
-              <GoalsOverlayView
-                goals={previewGoals}
-                activeGoalId={activeGoal.id}
-                displayMode={goalsSettings.displayMode}
-                slideshowIntervalSec={goalsSettings.slideshowIntervalSec}
-                position={goalsSettings.position}
-                recentProgressGoalId={recentGoalId}
-                onSelectGoal={select}
-                isStudio={true}
-              />
-            </div>
-
-            <Field
-              label="Probar"
-              hint="Las pruebas mueven la meta elegida en este monitor y en las fuentes de OBS abiertas, sin cambiar lo guardado. Los hitos son el 25, 50 y 75 %."
-            >
-              <div className="flex flex-wrap gap-2">
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest(1)}>
-                  Aporte +1
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest(5)}>
-                  Aporte +5
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest('hito')}>
-                  Hasta el siguiente hito
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest('fin')}>
-                  Completar
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={resetTest}>
-                  Reiniciar
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testCelebration}>
-                  Probar celebración
-                </button>
+            </Field>
+            {activeGoal.style === 'custom' && (
+              <div className="grid gap-4 rounded border border-[color:var(--cb-line)] p-3">
+                <Field label="Forma" hint="La Cinta no se personaliza: ocupa el borde entero.">
+                  <div className="cab-seg" role="group" aria-label="Forma del diseño personalizado">
+                    {GOAL_CUSTOM_SHAPES.map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        aria-pressed={custom.shape === entry.id}
+                        onClick={() => patchCustom({ shape: entry.id })}
+                      >
+                        {entry.name}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field label="Fondo" htmlFor={`${uid}-bg`}>
+                    <input
+                      id={`${uid}-bg`}
+                      type="color"
+                      className="mt-color"
+                      value={custom.background}
+                      onChange={(e) => patchCustom({ background: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Texto" htmlFor={`${uid}-fg`}>
+                    <input
+                      id={`${uid}-fg`}
+                      type="color"
+                      className="mt-color"
+                      value={custom.text}
+                      onChange={(e) => patchCustom({ text: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Tipografía" htmlFor={`${uid}-font`}>
+                    <select
+                      id={`${uid}-font`}
+                      className="cab-inp"
+                      value={custom.font}
+                      onChange={(e) => patchCustom({ font: e.target.value as GoalFontId })}
+                    >
+                      {GOAL_FONTS.map((font) => (
+                        <option key={font.id} value={font.id}>
+                          {font.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                <Field label="Tamaño">
+                  <Range
+                    label="Tamaño de la meta"
+                    min={GOAL_SIZE_MIN}
+                    max={GOAL_SIZE_MAX}
+                    step={5}
+                    value={custom.size}
+                    format={(value) => `${value}%`}
+                    onChange={(value) => patchCustom({ size: value })}
+                  />
+                </Field>
+                <Field label="Redondeo">
+                  <Range
+                    label="Redondeo de las esquinas"
+                    min={0}
+                    max={GOAL_RADIUS_MAX}
+                    value={custom.radius}
+                    format={(value) => String(value)}
+                    onChange={(value) => patchCustom({ radius: value })}
+                  />
+                </Field>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Toggle label="Título" checked={custom.showTitle} onChange={(next) => patchCustom({ showTitle: next })} />
+                  <Toggle
+                    label="Meta y unidad"
+                    checked={custom.showTarget}
+                    onChange={(next) => patchCustom({ showTarget: next })}
+                  />
+                </div>
+              </div>
+            )}
+            <Field label="Color de avance" hint="El texto que va encima se aclara u oscurece solo para que se lea.">
+              <div className="cab-sw">
+                {ACCENTS.map((accent) => (
+                  <button
+                    key={accent.color}
+                    type="button"
+                    style={{ background: accent.color }}
+                    aria-label={accent.name}
+                    aria-pressed={activeGoal.accentColor === accent.color}
+                    onClick={() => patch({ accentColor: accent.color })}
+                  />
+                ))}
+                <input
+                  type="color"
+                  value={activeGoal.accentColor}
+                  aria-label="Otro color"
+                  onChange={(e) => patch({ accentColor: e.target.value })}
+                />
               </div>
             </Field>
-
-            <button type="button" className="cab-btn2" onClick={copyWidgetUrl}>
-              {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-            </button>
-            <p className="cab-hint" role="status">
-              {status ||
-                (hasTest
-                  ? 'El monitor y OBS muestran una prueba. Tus metas guardadas no han cambiado.'
-                  : 'El monitor muestra tus metas tal como están guardadas.')}
-            </p>
           </section>
-        </div>
-
-        <MediaLibraryModal
-          isOpen={vault !== null}
-          onClose={() => setVault(null)}
-          onSelect={handleVaultSelect}
-          allowedTypes={[vault || 'video']}
-          title={vault === 'audio' ? 'Biblioteca · elegir sonido (máximo 30 s)' : 'Biblioteca · elegir vídeo'}
-        />
-      </div>
-
-      {tourOpen && <GuidedTour steps={GOALS_TOUR_STEPS} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Metas" />}
+        </PanelPestana>
+      </EstudioPestanas>
     </div>
   );
 };
