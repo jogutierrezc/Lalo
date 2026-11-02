@@ -7,7 +7,10 @@
 
 import React, { useEffect, useId, useState } from 'react';
 import { accountsThatFit, adminHref, capacitySplit, storageHealth } from '../../lib/adminLogic';
-import { MB, formatBytes, rpc, updatePlan } from '../../lib/cloud';
+import { MB, archivePlan, formatBytes, rpc, updatePlan } from '../../lib/cloud';
+import { rpcErrorMessage } from '../../lib/invitesLogic';
+import { NuevoPlanForm } from './NuevoPlanForm';
+import { RegaloFundadorCard } from './RegaloFundadorCard';
 import type { PlanRow } from '../../lib/cloudTypes';
 import type { AdminData } from './useAdminData';
 
@@ -16,6 +19,8 @@ const GB = 1024 * MB;
 export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
   const { overview, plans, setPlans, storage, reload, reloadStorage, setError } = data;
   const [notice, setNotice] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<string | null>(null);
+  const [planProblem, setPlanProblem] = useState<string | null>(null);
   if (!overview) return null;
 
   const health = storageHealth(storage);
@@ -36,6 +41,21 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
       setError(err instanceof Error ? err.message : 'No se pudo guardar el plan.');
       reload();
     }
+  };
+
+  const toggleArchived = async (plan: PlanRow) => {
+    if (plan.is_default || archiving) return;
+    const next = !plan.archived;
+    setArchiving(plan.id);
+    setPlanProblem(null);
+    try {
+      await archivePlan(plan.id, next);
+      setNotice(next ? `Plan ${plan.name} archivado. Quien ya lo tiene lo conserva.` : `Plan ${plan.name} restaurado.`);
+      await reload();
+    } catch (err) {
+      setPlanProblem(rpcErrorMessage(err, next ? 'No se pudo archivar el plan.' : 'No se pudo restaurar el plan.'));
+    }
+    setArchiving(null);
   };
 
   const saveCapacity = async (gigabytes: number) => {
@@ -61,10 +81,23 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
         </p>
       )}
 
+      {planProblem && (
+        <p className="cab-error" role="alert">
+          {planProblem}
+        </p>
+      )}
+
       <div className="adm-grid2">
         {plans.map((plan) => (
           <section key={plan.id} className="cab-mod">
-            <h2>{plan.name}</h2>
+            <div className="adm-plan-head">
+              <h2>{plan.name}</h2>
+              {plan.archived && (
+                <span className="cab-chip" data-status="skipped">
+                  Archivado
+                </span>
+              )}
+            </div>
             <PlanNumber
               label="Espacio total (MB)"
               value={Math.round(plan.storage_limit_bytes / MB)}
@@ -91,6 +124,18 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
             />
             <p className="cab-hint">Cuántos modelos 3D puede subir cada creador con su propia cuenta. Cero: ninguno. Los de la biblioteca compartida no cuentan.</p>
             <p className="cab-hint">Mi AI cuenta los créditos de cada respuesta con un modelo de pago. Si la cuenta llega al tope, sus personajes usan el modelo por defecto hasta el mes siguiente. Cero: sin modelos de pago.</p>
+            {!plan.is_default && (
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" className="cab-btn2" disabled={archiving !== null} onClick={() => toggleArchived(plan)}>
+                  {archiving === plan.id ? 'Guardando' : plan.archived ? 'Restaurar plan' : 'Archivar plan'}
+                </button>
+                <span className="cab-hint">
+                  {plan.archived
+                    ? 'No sale en el cobro ni en los códigos nuevos.'
+                    : 'Archivar lo oculta del cobro y de los códigos nuevos; quien ya lo tiene lo conserva.'}
+                </span>
+              </div>
+            )}
             <p className="cab-hint">
               {split
                 ? `Con el espacio que aún no has prometido (${formatBytes(split.free)}) caben ${accountsThatFit(split.free, plan.storage_limit_bytes)} cuentas ${plan.name} más.`
@@ -100,6 +145,16 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
         ))}
       </div>
       <p className="cab-hint">Los cambios se guardan al salir de cada campo y afectan a todas las cuentas con ese plan.</p>
+
+      <NuevoPlanForm
+        onCreated={async (name) => {
+          setNotice(`Plan ${name} creado. Ponle precio en «Planes y precios» y sincronízalo con PayPal para cobrarlo.`);
+          setError(null);
+          await reload();
+        }}
+      />
+
+      <RegaloFundadorCard plans={plans} />
 
       <section className="cab-mod adm-narrow">
         <h2>Capacidad total</h2>
