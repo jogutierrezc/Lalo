@@ -6,7 +6,7 @@
  *   - Fundador (cuenta anterior al despliegue): una sola vez por cuenta.
  *   - Cuenta nueva: una sola vez, al terminar el recorrido de Bienvenida.tsx.
  *   - «Ver bienvenida» en Mi cuenta: la repite cuando se pida.
- * Al cerrarla se recuerda en la cuenta (migración 0047) y en este navegador; si la
+ * Al cerrarla se recuerda en la cuenta (migración 0052) y en este navegador; si la
  * columna aún no existe, queda solo en el navegador y el panel sigue igual.
  *
  * Demostración sin cuenta ni nube: `?bienvenida=fundador` o `?bienvenida=nueva`

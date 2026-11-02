@@ -70,11 +70,11 @@ export interface ProfileRow {
   last_widget_at?: string | null;
   /** Desde 0019: tope diario de caracteres en ElevenLabs (0 = sin límite). */
   elevenlabs_daily_chars?: number;
-  /** Desde 0047: número de Creador Fundador. Null o ausente = no es fundador. */
+  /** Desde 0052: número de Creador Fundador. Null o ausente = no es fundador. */
   founder_number?: number | null;
-  /** Desde 0047: cuándo vio la bienvenida de la app. */
+  /** Desde 0052: cuándo vio la bienvenida de la app. */
   welcome_seen_at?: string | null;
-  /** Desde 0047: cuándo activó el regalo del plan Creadores Iniciales. */
+  /** Desde 0052: cuándo activó el regalo del plan Creadores Iniciales. */
   founder_gift_claimed_at?: string | null;
 }
 
@@ -425,11 +425,11 @@ export interface RpcResult {
   admin_voices: AdminVoiceRow[];
   admin_set_voice_visible: null;
   admin_set_default_voice: null;
-  /** Desde 0047: la fecha en que quedó guardada la bienvenida vista. */
+  /** Desde 0052: la fecha en que quedó guardada la bienvenida vista. */
   mark_welcome_seen: string | null;
-  /** Desde 0047: { plan_id, plan_name, months }. */
+  /** Desde 0052: { plan_id, plan_name, months }. */
   founder_gift_config: unknown;
-  /** Desde 0047: 'ok' | 'already_claimed' | 'not_founder' | 'has_plan' | 'not_active'. */
+  /** Desde 0052: 'ok' | 'already_claimed' | 'not_founder' | 'has_plan' | 'not_active'. */
   claim_founder_gift: string;
   admin_set_founder_gift: unknown;
 }

@@ -15,7 +15,7 @@ export type VarianteBienvenida = 'nueva' | 'fundador';
 // ---------- Regalo ----------
 
 /**
- * Valores de respaldo del regalo cuando la nube no responde (migración 0047
+ * Valores de respaldo del regalo cuando la nube no responde (migración 0052
  * sin aplicar). La fuente de verdad es la tabla public.founder_settings, que
  * edita el administrador con admin_set_founder_gift(plan, meses).
  */
@@ -36,7 +36,7 @@ export function leerConfigRegalo(raw: unknown): ConfigRegalo {
   const base: ConfigRegalo = { ...REGALO_POR_DEFECTO };
   if (typeof raw !== 'object' || raw === null) return base;
   const r = raw as Record<string, unknown>;
-  const meses = typeof r.months === 'number' && Number.isInteger(r.months) && r.months >= 1 && r.months <= 12 ? r.months : base.meses;
+  const meses = typeof r.months === 'number' && Number.isInteger(r.months) && r.months >= 1 && r.months <= 36 ? r.months : base.meses;
   const planId = typeof r.plan_id === 'string' && r.plan_id ? r.plan_id : base.planId;
   const planNombre = typeof r.plan_name === 'string' && r.plan_name ? r.plan_name : base.planNombre;
   return { planId, planNombre, meses };
@@ -120,7 +120,7 @@ export function textoRegalo(estado: EstadoRegalo): { boton: string; aviso: strin
 
 // ---------- Fundador ----------
 
-/** Lo que la lógica necesita del perfil. Los campos de la 0047 faltan mientras no se aplique. */
+/** Lo que la lógica necesita del perfil. Los campos de la 0052 faltan mientras no se aplique. */
 export interface PerfilFundador {
   role?: 'streamer' | 'admin';
   status?: 'pending' | 'active' | 'suspended';
@@ -242,7 +242,7 @@ export function leerDemo(search: string, hash = ''): Demo | null {
       variante,
       nombre: (params.get('nombre') || 'Gaby').slice(0, 24),
       numero: Number.isInteger(n) && n > 0 ? n : 14,
-      meses: Number.isInteger(meses) && meses >= 1 && meses <= 12 ? meses : REGALO_POR_DEFECTO.meses,
+      meses: Number.isInteger(meses) && meses >= 1 && meses <= 36 ? meses : REGALO_POR_DEFECTO.meses,
     };
   }
   return null;

@@ -1,7 +1,7 @@
 /**
  * src/lib/fundadoresApi.ts
  *
- * Llamadas a la nube de la bienvenida y del regalo de fundador (migración 0047).
+ * Llamadas a la nube de la bienvenida y del regalo de fundador (migración 0052).
  * Todas degradan sin romper nada: si la migración aún no está aplicada, las
  * funciones no existen y se devuelve el valor de respaldo.
  */
@@ -41,7 +41,7 @@ export async function reclamarRegalo(): Promise<ResultadoRegalo> {
 
 /**
  * Número de fundador de cada cuenta (solo lo lee un administrador con la lista completa).
- * Va en una consulta aparte: si la 0047 no está aplicada, la columna no existe y se
+ * Va en una consulta aparte: si la 0052 no está aplicada, la columna no existe y se
  * devuelve un mapa vacío sin afectar al resto del listado.
  */
 export async function traerNumerosFundador(): Promise<Map<string, number>> {

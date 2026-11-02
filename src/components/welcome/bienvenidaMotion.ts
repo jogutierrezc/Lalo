@@ -70,7 +70,7 @@ const ESCENAS: Record<EscenaId, Escena> = {
   // 1 · Standby: la baliza parpadea y se enciende
   standby: (tl, _S, B) => {
     const sc = '.bt-sc-standby';
-    const luz = `${sc} .bt-dome, ${sc} .bt-base`;
+    const luz = `${sc} .tally-dome, ${sc} .tally-base`;
     tl.from('.bt-b1', { opacity: 0, y: 14, duration: 0.8 }, B + 0.1)
       .from(`${sc} .bt-st`, { opacity: 0, duration: 0.6 }, B + 0.3)
       .from(palabras(sc, '.bt-hd'), { opacity: 0, yPercent: 50, filter: 'blur(8px)', duration: 0.8, stagger: 0.08, clearProps: 'filter' }, B + 0.5)
@@ -81,7 +81,7 @@ const ESCENAS: Record<EscenaId, Escena> = {
       .to(luz, { fill: ROJO_TALLY, duration: 0.04, ease: 'none' }, B + 2.15)
       .to(`${sc} .bt-glow`, { opacity: 1, duration: 0.4, ease: 'power2.out' }, B + 2.15)
       .to(`${sc} .bt-st i`, { backgroundColor: ROJO_TALLY, boxShadow: '0 0 12px #ff2a2a', duration: 0.2 }, B + 2.15)
-      .set(`${sc} .bt-rays`, { opacity: 1 }, B + 2.2);
+      .set(`${sc} .tally-rays`, { opacity: 1 }, B + 2.2);
   },
 
   // 2 · Revelación: destello rojo y corte al nombre
@@ -91,10 +91,10 @@ const ESCENAS: Record<EscenaId, Escena> = {
       .to('.bt-flood', { opacity: 0, duration: 0.7, ease: 'power2.out' }, B + 0.02)
       .from(`${sc} .bt-glow`, { opacity: 0, duration: 0.9, ease: 'power2.out' }, B + 0.02)
       .from(`${sc} .bt-eb`, { opacity: 0, y: 8, duration: 0.6 }, B + 0.2)
-      .from(`${sc} .bt-dome, ${sc} .bt-base`, { scale: 0.86, transformOrigin: '50% 100%', duration: 0.7 }, B + 0.1)
-      .from(`${sc} .bt-ray`, { strokeDashoffset: 1, duration: 0.5, stagger: 0.06, ease: 'power3.out' }, B + 0.25)
-      .from(`${sc} .bt-wm`, { clipPath: 'inset(0 100% 0 0)', duration: 0.9, ease: 'expo.inOut' }, B + 0.35)
-      .from(`${sc} .bt-wv`, { strokeDashoffset: 1, duration: 0.5, stagger: 0.12, ease: 'power3.out' }, B + 1.0)
+      .from(`${sc} .tally-dome, ${sc} .tally-base`, { scale: 0.86, transformOrigin: '50% 100%', duration: 0.7 }, B + 0.1)
+      .from(`${sc} .tally-ray`, { strokeDashoffset: 1, duration: 0.5, stagger: 0.06, ease: 'power3.out' }, B + 0.25)
+      .from(`${sc} .tally-wm`, { clipPath: 'inset(0 100% 0 0)', duration: 0.9, ease: 'expo.inOut' }, B + 0.35)
+      .from(`${sc} .tally-wv`, { strokeDashoffset: 1, duration: 0.5, stagger: 0.12, ease: 'power3.out' }, B + 1.0)
       .from(`${sc} .bt-slogan`, { opacity: 0, y: 10, letterSpacing: '.4em', duration: 0.9 }, B + 1.3)
       .from(`${sc} .bt-es`, { opacity: 0, y: 8, duration: 0.6 }, B + 1.8);
   },
@@ -164,8 +164,8 @@ const ESCENAS: Record<EscenaId, Escena> = {
         .from(`${sc} .bt-wave i`, { scaleY: 0.15, duration: 0.7, stagger: 0.06, ease: 'back.out(2)' }, B + 1.9)
         .from(`${sc} .bt-acciones > *`, { opacity: 0, y: 10, duration: 0.6, stagger: 0.1 }, B + 2.3);
     } else {
-      tl.from(`${sc} .bt-beacon`, { opacity: 0, y: 12, duration: 0.7 }, B)
-        .from(`${sc} .bt-ray`, { strokeDashoffset: 1, duration: 0.5, stagger: 0.06 }, B + 0.25)
+      tl.from(`${sc} .tally-beacon`, { opacity: 0, y: 12, duration: 0.7 }, B)
+        .from(`${sc} .tally-ray`, { strokeDashoffset: 1, duration: 0.5, stagger: 0.06 }, B + 0.25)
         .from(palabras(sc, '.bt-hl5'), { opacity: 0, yPercent: 60, filter: 'blur(10px)', duration: 0.9, stagger: 0.1, clearProps: 'filter' }, B + 0.3)
         .from(`${sc} .bt-pill`, { opacity: 0, y: 10, duration: 0.6 }, B + 1.2)
         .from(`${sc} .bt-acciones > *`, { opacity: 0, y: 10, duration: 0.6, stagger: 0.1 }, B + 1.6);
@@ -197,8 +197,8 @@ export function construirLinea(o: OpcionesLinea): Tl {
       // Solo fundidos: sin desplazamientos, desenfoque ni destellos
       if (id === 'porque') tl.set('.bt-bug', { autoAlpha: 1 }, B);
       if (id === 'standby') {
-        tl.set('.bt-sc-standby .bt-dome, .bt-sc-standby .bt-base', { fill: ROJO_TALLY }, B + 2.4)
-          .set('.bt-sc-standby .bt-rays', { opacity: 1 }, B + 2.4)
+        tl.set('.bt-sc-standby .tally-dome, .bt-sc-standby .tally-base', { fill: ROJO_TALLY }, B + 2.4)
+          .set('.bt-sc-standby .tally-rays', { opacity: 1 }, B + 2.4)
           .set('.bt-sc-standby .bt-glow', { opacity: 1 }, B + 2.4);
       }
       tl.from(sc, { opacity: 0, duration: 0.4, ease: 'power2.out' }, B);

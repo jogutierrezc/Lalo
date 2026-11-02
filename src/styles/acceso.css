@@ -81,6 +81,60 @@
   background: radial-gradient(closest-side, rgb(255 42 42 / 0.3), transparent);
   will-change: transform, opacity;
 }
+/* Manchas rojas a la deriva (el degradado ya es suave: al moverse solo cambia su transformación) */
+.acc .acc-manchas {
+  position: absolute;
+  inset: -20%;
+}
+.acc .acc-manchas i {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+.acc .acc-manchas i:nth-child(1) {
+  left: 8%;
+  top: 6%;
+  width: 46%;
+  height: 56%;
+  background: radial-gradient(closest-side, rgb(255 42 42 / 0.34), transparent);
+}
+.acc .acc-manchas i:nth-child(2) {
+  right: 4%;
+  top: 18%;
+  width: 42%;
+  height: 52%;
+  background: radial-gradient(closest-side, rgb(184 20 20 / 0.4), transparent);
+}
+.acc .acc-manchas i:nth-child(3) {
+  left: 30%;
+  bottom: 0;
+  width: 46%;
+  height: 50%;
+  background: radial-gradient(closest-side, rgb(255 74 74 / 0.22), transparent);
+}
+/* Capas de las curvas y grupos de barras de la onda: se mueven solo por transformación */
+.acc .acc-capa,
+.acc .acc-barras {
+  will-change: transform;
+  transform-box: fill-box;
+}
+
+/* Foco de luz: sigue al puntero y da un pulso al cambiar de paso */
+.acc .acc-foco {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  width: min(46vw, 560px);
+  aspect-ratio: 1;
+  margin: calc(min(46vw, 560px) / -2) 0 0 calc(min(46vw, 560px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(255 236 232 / 0.22), rgb(255 74 74 / 0.1) 45%, transparent);
+  mix-blend-mode: screen;
+  opacity: 0.8;
+  will-change: transform, opacity;
+}
+
 /* Viñeta: oscurece los bordes para que el panel mande */
 .acc .acc-fondo::after {
   content: '';
@@ -104,7 +158,7 @@
 }
 /* El tamaño del logotipo es de letra: la baliza mide 1.7 veces */
 .acc .acc-logo {
-  font-size: clamp(34px, 7vw, 56px);
+  font-size: clamp(44px, 9vw, 76px);
 }
 .acc .acc-eslogan {
   margin: 0;
@@ -181,7 +235,14 @@
 
 /* ---------- Preferencias del sistema ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .acc .acc-halo {
+  /* Fondo fijo: sin deriva, sin foco y sin pulso */
+  .acc .acc-foco {
+    display: none;
+  }
+  .acc .acc-halo,
+  .acc .acc-manchas i,
+  .acc .acc-capa,
+  .acc .acc-barras {
     will-change: auto;
   }
 }

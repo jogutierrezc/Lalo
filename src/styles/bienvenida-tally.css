@@ -4,8 +4,7 @@
  * Bienvenida de Tally Studio (src/components/welcome). Identidad de la
  * propuesta aprobada: Rojo #FF2A2A, Oscuro OBS #16191C, Onyx #1E2227 y Blanco
  * #F5F6F8, con Sora, Figtree y JetBrains Mono. Las variables son LOCALES a
- * .bt-root a propósito, para no depender de los tokens --tally-* que crea otro
- * trabajo; al unificar se pueden apuntar a ellos.
+ * .bt-root, pero apuntan a los tokens --tally-* de src/styles/tally.css.
  *
  * Todo el texto es claro sobre fondo oscuro (nunca negro). La composición se
  * mide en --u, 1/100 del ancho de un cuadro 16:9 que cabe en la pantalla; los
@@ -15,20 +14,20 @@
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400..800&family=Figtree:wght@400..800&family=JetBrains+Mono:wght@500;700&display=swap');
 
 .bt-root {
-  --bt-red: #ff2a2a;
-  --bt-red-ink: #ff4a4a;
-  --bt-bg: #16191c;
-  --bt-panel: #1e2227;
-  --bt-line: #2e343b;
-  --bt-fg: #f5f6f8;
+  --bt-red: var(--tally-red);
+  --bt-red-ink: var(--tally-red-ink);
+  --bt-bg: var(--tally-dark);
+  --bt-panel: var(--tally-onyx);
+  --bt-line: var(--tally-line);
+  --bt-fg: var(--tally-white);
   --bt-soft: #c3c8cf;
   --bt-mut: #aab1ba;
-  --bt-off: #3a4047;
-  --bt-ok: #3ddc97;
-  --bt-warn: #ffb020;
+  --bt-off: var(--tally-off);
+  --bt-ok: var(--tally-ok);
+  --bt-warn: var(--tally-warn);
   --bt-disp: 'Sora', 'Segoe UI', system-ui, sans-serif;
   --bt-ui: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --bt-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  --bt-mono: var(--tally-mono);
   --u: calc(min(100vw, 177.78vh) / 100);
 
   position: fixed;
@@ -175,57 +174,25 @@
   display: inline-block;
 }
 
-/* ---------- Logotipo ---------- */
-.bt-lock {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3em;
+/* ---------- Logotipo ----------
+   El dibujo y sus estilos base son los de la marca (src/components/brand/TallyLogo.tsx
+   y src/styles/tally.css); aquí solo se fija el tamaño en cada escena. */
+.bt-root .tally-lock {
   font-size: 40px;
-  color: var(--bt-fg);
 }
-.bt-bug .bt-lock {
+.bt-bug .tally-lock {
   font-size: max(20px, calc(2.3 * var(--u)));
 }
-.bt-lock.bt-big {
+.bt-root .tally-lock.bt-big {
   font-size: max(46px, calc(8.4 * var(--u)));
   gap: 0.28em;
-}
-.bt-beacon {
-  width: 1.7em;
-  height: 1.7em;
-  flex: none;
-  overflow: visible;
-}
-.bt-wm {
-  display: grid;
-  line-height: 0.88;
-  font-family: var(--bt-disp);
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  text-transform: lowercase;
-  text-align: left;
-}
-.bt-w1 {
-  position: relative;
-  display: inline-block;
-  width: fit-content;
-}
-.bt-waves {
-  position: absolute;
-  left: 100%;
-  top: -0.12em;
-  width: 0.6em;
-  height: 0.56em;
-  margin-left: 0.06em;
-  overflow: visible;
-  stroke: var(--bt-red);
 }
 .bt-lock-clip {
   overflow: hidden;
   padding: calc(0.6 * var(--u)) calc(1.4 * var(--u)) calc(0.6 * var(--u)) 0;
   margin: calc(-0.6 * var(--u)) calc(-1.4 * var(--u)) calc(-0.6 * var(--u)) 0;
 }
-.bt-b1 .bt-beacon {
+.bt-b1 .tally-beacon {
   width: max(70px, calc(11 * var(--u)));
   height: max(70px, calc(11 * var(--u)));
 }
@@ -538,7 +505,7 @@
   justify-items: center;
   align-content: center;
 }
-.bt-sc-cierre .bt-beacon {
+.bt-sc-cierre .tally-beacon {
   width: max(64px, calc(9 * var(--u)));
   height: max(64px, calc(9 * var(--u)));
 }

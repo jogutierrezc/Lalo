@@ -45,11 +45,11 @@ const RAYS: [number, number, number, number][] = [
   [49.9, 29.5, 57.4, 26.8],
 ];
 
-const Baliza: React.FC<{ tone: TallyTone }> = ({ tone }) => {
-  const { dome, highlight } = TONES[tone];
+const Baliza: React.FC<{ tone: TallyTone; apagada?: boolean }> = ({ tone, apagada }) => {
+  const { dome, highlight } = apagada ? { dome: OFF, highlight: '#6A727C' } : TONES[tone];
   return (
     <svg className="tally-beacon" viewBox="0 0 64 64" fill="none" aria-hidden="true" focusable="false">
-      <g stroke={dome} strokeWidth="3.2" strokeLinecap="round">
+      <g className="tally-rays" stroke={dome} strokeWidth="3.2" strokeLinecap="round" opacity={apagada ? 0 : 1}>
         {RAYS.map(([x1, y1, x2, y2]) => (
           <line key={`${x1}-${y1}`} className="tally-ray" x1={x1} y1={y1} x2={x2} y2={y2} pathLength={1} strokeDasharray={1} strokeDashoffset={0} />
         ))}
@@ -77,6 +77,8 @@ interface TallyLogoProps {
   size?: number;
   /** Enciende la baliza una vez al montarse. */
   animated?: boolean;
+  /** Baliza apagada y sin rayos (la bienvenida la enciende con su propia animación). */
+  apagada?: boolean;
   /** Nombre accesible. Con `decorativo` queda oculto a lectores de pantalla. */
   decorativo?: boolean;
   className?: string;
@@ -87,6 +89,7 @@ export const TallyLogo: React.FC<TallyLogoProps> = ({
   tone = 'onyx',
   size,
   animated = false,
+  apagada = false,
   decorativo = false,
   className,
 }) => {
@@ -126,7 +129,7 @@ export const TallyLogo: React.FC<TallyLogoProps> = ({
 
   return (
     <span ref={ref} className={['tally-lock', className].filter(Boolean).join(' ')} data-tone={tone} data-variant={variant} style={style} {...a11y}>
-      <Baliza tone={tone} />
+      <Baliza tone={tone} apagada={apagada} />
       {variant === 'lockup' && (
         <span className="tally-wm" aria-hidden="true">
           <span className="tally-w1">

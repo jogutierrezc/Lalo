@@ -59,7 +59,7 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Número de Creador Fundador por cuenta (migración 0047); vacío si aún no se aplicó
+  // Número de Creador Fundador por cuenta (migración 0052); vacío si aún no se aplicó
   const [fundadores, setFundadores] = useState<Map<string, number>>(() => new Map());
 
   useEffect(() => {

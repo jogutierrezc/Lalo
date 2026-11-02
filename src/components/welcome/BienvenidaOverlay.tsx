@@ -33,7 +33,7 @@ import {
 import { reduced } from '../../utils/alertMotion';
 import { construirLinea } from './bienvenidaMotion';
 import { InsigniaFundador } from './InsigniaFundador';
-import { APAGADO_TALLY, BalizaTally, FondoCurvas, LogotipoTally } from './tallyMark';
+import { BalizaTally, FondoCurvas, LogotipoTally } from './tallyMark';
 import '../../styles/bienvenida-tally.css';
 
 export interface BienvenidaOverlayProps {
@@ -216,7 +216,7 @@ export const BienvenidaOverlay: React.FC<BienvenidaOverlayProps> = ({
             <section className="bt-sc bt-sc-standby" aria-hidden="true">
               <div className="bt-glow" />
               <div className="bt-b1">
-                <BalizaTally cupula={APAGADO_TALLY} base={APAGADO_TALLY} brillo="#6a727c" sinRayos />
+                <BalizaTally apagada />
               </div>
               <p className="bt-st">
                 <i />

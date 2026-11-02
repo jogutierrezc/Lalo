@@ -10,6 +10,7 @@ import { accountsThatFit, adminHref, capacitySplit, storageHealth } from '../../
 import { MB, archivePlan, formatBytes, rpc, updatePlan } from '../../lib/cloud';
 import { rpcErrorMessage } from '../../lib/invitesLogic';
 import { NuevoPlanForm } from './NuevoPlanForm';
+import { RegaloFundadorCard } from './RegaloFundadorCard';
 import type { PlanRow } from '../../lib/cloudTypes';
 import type { AdminData } from './useAdminData';
 
@@ -152,6 +153,8 @@ export const LimitesSection: React.FC<{ data: AdminData }> = ({ data }) => {
           await reload();
         }}
       />
+
+      <RegaloFundadorCard plans={plans} />
 
       <section className="cab-mod adm-narrow">
         <h2>Capacidad total</h2>

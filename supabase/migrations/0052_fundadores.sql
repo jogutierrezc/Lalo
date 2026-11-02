@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0047_fundadores.sql
+-- 0052_fundadores.sql
 --
 -- Creadores fundadores de Tally Studio (antes Lalo Stream Suite) y su bienvenida.
 --
@@ -14,11 +14,15 @@
 --   claim_founder_gift()             el fundador activa su regalo: plan temporal de N meses.
 --   admin_set_founder_gift()         el administrador cambia el plan y los meses del regalo.
 --
--- El regalo reutiliza el plan temporal de 0046: pone profiles.plan_id y
--- profiles.plan_expires_at, y billing_expire_due() devuelve a la cuenta al plan
--- por defecto cuando vence. No toca billing_subscriptions ni PayPal.
+-- El regalo reutiliza el mecanismo de plan temporal vigente (el mismo que usan los
+-- códigos con duración de 0047_open_access_and_code_duration, plan_months de 1 a 36):
+-- pone profiles.plan_id y profiles.plan_expires_at (hoy + N meses de calendario,
+-- en UTC, como redeem_invite), y billing_expire_due() (0046) devuelve la cuenta al
+-- plan por defecto cuando vence. No toca billing_subscriptions ni PayPal, y no pisa
+-- un plan de pago vigente (misma regla que redeem_invite de 0050: has_paid_plan).
+-- billing_code_access (0051) lista estas cuentas como «plan por código vigente».
 --
--- SIN PROBAR contra un proyecto real. Ejecutar después de 0001 a 0046.
+-- SIN PROBAR contra un proyecto real. Ejecutar después de 0001 a 0051.
 -- Se puede volver a ejecutar: no renumera fundadores ya numerados.
 --
 -- Mientras no se aplique, la app sigue funcionando: sin las columnas nadie es
@@ -35,8 +39,9 @@
 --     que el plan por defecto. Si debe tener más, edítalo en Límites. Qué voces o
 --     TTS incluye NO lo decide este plan (hoy las voces dependen de la cuenta, p. ej.
 --     profiles.elevenlabs_enabled): confirma si el regalo debe activarlo también.
---  4. Quien ya tiene un plan distinto del por defecto, o un plan de pago vigente,
---     NO recibe el regalo (claim_founder_gift devuelve 'has_plan' y no lo marca
+--  4. Quien ya tiene un plan fijo distinto del por defecto, un plan temporal vigente
+--     (de un código) o una suscripción de PayPal con acceso vigente, NO recibe el
+--     regalo (claim_founder_gift devuelve 'has_plan' y no lo marca
 --     como reclamado, así que podrá pedirlo si vuelve al plan por defecto).
 --  5. welcome_seen_at queda null en TODAS las cuentas existentes a propósito: es
 --     lo que hace que cada fundador vea la bienvenida una vez tras el despliegue.
@@ -69,7 +74,7 @@ on conflict (id) do nothing;
 create table if not exists public.founder_settings (
   id          boolean primary key default true check (id),   -- una sola fila
   gift_plan   text not null default 'creadores-iniciales' references public.plans (id),
-  gift_months int  not null default 1 check (gift_months between 1 and 12),
+  gift_months int  not null default 1 check (gift_months between 1 and 36),
   updated_at  timestamptz not null default now()
 );
 
@@ -90,7 +95,12 @@ create policy founder_settings_select on public.founder_settings
 
 do $$
 declare
-  -- CORTE: cuentas creadas antes de esta fecha son fundadoras. REVISAR antes de aplicar.
+  -- ================================================================
+  -- CORTE PROVISIONAL: 2026-11-30. Es una fecha PROVISIONAL puesta por
+  -- el agente, NO una decisión del producto. Las cuentas de streamer creadas
+  -- ANTES de esta fecha serán fundadoras. REVISAR Y AJUSTAR al día real del
+  -- despliegue antes de aplicar esta migración.
+  -- ================================================================
   v_corte timestamptz := timestamptz '2026-11-30 00:00:00+00';
 begin
   if not exists (select 1 from public.profiles p where p.founder_number is not null) then
@@ -171,6 +181,8 @@ declare
   v_p       public.profiles%rowtype;
   v_set     public.founder_settings%rowtype;
   v_default text;
+  v_months  int;
+  v_new_exp timestamptz;
 begin
   if v_uid is null then
     raise exception 'not_authenticated';
@@ -189,17 +201,33 @@ begin
 
   select pl.id into v_default from public.plans pl where pl.is_default limit 1;
 
-  -- No se pisa un plan de pago vigente ni un plan asignado distinto del por defecto
+  -- Convivencia con el cobro: el plan pagado manda (misma condición que redeem_invite, 0050).
+  if exists (
+    select 1 from public.billing_subscriptions s
+    where s.profile_id = v_uid
+      and s.status in ('active', 'grace', 'cancelled', 'suspended')
+      and s.paid_until is not null
+      and s.paid_until > now()
+  ) then
+    return 'has_plan';
+  end if;
+
+  -- Tampoco se pisa un plan temporal vigente (de un código) ni un plan fijo distinto del por defecto.
   if (v_p.plan_expires_at is not null and v_p.plan_expires_at > now())
      or (v_p.plan_id is not null and v_p.plan_id is distinct from v_default) then
     return 'has_plan';
   end if;
 
   select * into v_set from public.founder_settings where id;
+  v_months := v_set.gift_months;
+
+  -- Vencimiento: hoy + N meses de calendario en UTC (fin de mes respetado), como redeem_invite.
+  -- billing_expire_due() devuelve a la cuenta al plan por defecto cuando llegue esa fecha.
+  v_new_exp := ((now() at time zone 'UTC') + make_interval(months => v_months)) at time zone 'UTC';
 
   update public.profiles
      set plan_id = v_set.gift_plan,
-         plan_expires_at = now() + make_interval(months => v_set.gift_months),
+         plan_expires_at = v_new_exp,
          founder_gift_claimed_at = now()
    where id = v_uid;
 
@@ -219,15 +247,23 @@ begin
   if not public.is_admin() then
     raise exception 'not_admin';
   end if;
-  if p_months is null or p_months < 1 or p_months > 12 then
+  if p_months is null or p_months < 1 or p_months > 36 then
     raise exception 'invalid_months';
   end if;
   if not exists (select 1 from public.plans where id = p_plan) then
     raise exception 'unknown_plan';
   end if;
+  if exists (select 1 from public.plans where id = p_plan and archived) then
+    raise exception 'plan_archived';
+  end if;
   update public.founder_settings
      set gift_plan = p_plan, gift_months = p_months, updated_at = now()
    where id;
+  perform public.log_admin_action(
+    null,
+    'founder_gift',
+    'Regalo de fundador: plan ' || p_plan || ' durante ' || p_months || ' meses'
+  );
   return jsonb_build_object('plan_id', p_plan, 'months', p_months);
 end;
 $$;

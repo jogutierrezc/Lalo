@@ -1,88 +1,26 @@
 /**
  * src/components/welcome/tallyMark.tsx
  *
- * Baliza y logotipo de Tally Studio en vector, copiados de la propuesta aprobada
- * (tally-studio-anuncio.html: beacon() y lockup()). Es una versión MÍNIMA para la
- * bienvenida, con sus propios estilos en src/styles/bienvenida-tally.css.
- *
- * TODO unificar: cuando exista src/components/brand/TallyLogo.tsx (otro
- * worktree), sustituir esto por ese componente y borrar este archivo. Las clases
- * que usan las animaciones son: .bt-beacon, .bt-dome, .bt-base, .bt-ray,
- * .bt-wm, .bt-wv.
+ * Adaptadores de la bienvenida sobre el logotipo único de la marca
+ * (src/components/brand/TallyLogo.tsx). Las animaciones de bienvenidaMotion.ts
+ * se enganchan a las clases .tally-beacon, .tally-dome, .tally-base,
+ * .tally-rays, .tally-ray, .tally-wm y .tally-wv que dibuja TallyLogo.
  */
 
 import React from 'react';
+import { TallyLogo } from '../brand/TallyLogo';
 
 export const ROJO_TALLY = '#FF2A2A';
 export const APAGADO_TALLY = '#3A4047';
 
-/** Rayos de la baliza: [x1, y1, x2, y2] en un lienzo de 64 x 64. */
-const RAYOS: [number, number, number, number][] = [
-  [14.1, 29.5, 6.6, 26.8],
-  [21.1, 20.4, 16.5, 13.9],
-  [32, 17, 32, 9],
-  [42.9, 20.4, 47.5, 13.9],
-  [49.9, 29.5, 57.4, 26.8],
-];
-
-export interface ColoresBaliza {
-  cupula?: string;
-  brillo?: string;
-  rayo?: string;
-  base?: string;
-  sinRayos?: boolean;
-}
-
-/** La baliza de cabina: cúpula, brillo, base y cinco rayos que se dibujan con pathLength. */
-export const BalizaTally: React.FC<ColoresBaliza & { className?: string }> = ({
-  cupula = ROJO_TALLY,
-  brillo = '#fff',
-  rayo,
-  base,
-  sinRayos,
-  className = '',
-}) => {
-  const colorRayo = rayo ?? cupula;
-  const colorBase = base ?? cupula;
-  return (
-    <svg className={`bt-beacon ${className}`.trim()} viewBox="0 0 64 64" fill="none" aria-hidden="true" focusable="false">
-      <g className="bt-rays" stroke={colorRayo} strokeWidth="3.2" strokeLinecap="round" opacity={sinRayos ? 0 : 1}>
-        {RAYOS.map(([x1, y1, x2, y2]) => (
-          <line key={`${x1}-${y1}`} className="bt-ray" x1={x1} y1={y1} x2={x2} y2={y2} pathLength={1} strokeDasharray={1} strokeDashoffset={0} />
-        ))}
-      </g>
-      <path className="bt-dome" d="M18 49V36a14 14 0 0 1 28 0v13z" fill={cupula} />
-      <path d="M24.5 44V37a7.5 7.5 0 0 1 4.6-6.9" stroke={brillo} strokeOpacity=".9" strokeWidth="2.8" strokeLinecap="round" />
-      <rect className="bt-base" x="12" y="50" width="40" height="6" rx="2" fill={colorBase} />
-      <rect x="16" y="58" width="32" height="2.5" rx="1.25" fill={colorBase} fillOpacity=".45" />
-    </svg>
-  );
-};
-
-/** Las tres ondas que salen de la «y» de «tally». */
-const Ondas: React.FC = () => (
-  <svg className="bt-waves" viewBox="0 0 28 26" fill="none" strokeWidth="3" strokeLinecap="round" aria-hidden="true" focusable="false">
-    <path className="bt-wv" pathLength={1} strokeDasharray={1} strokeDashoffset={0} d="M4 7Q9 13 4 19" />
-    <path className="bt-wv" pathLength={1} strokeDasharray={1} strokeDashoffset={0} d="M10 4Q18 13 10 22" />
-    <path className="bt-wv" pathLength={1} strokeDasharray={1} strokeDashoffset={0} d="M16 1Q27 13 16 25" />
-  </svg>
+/** La baliza de cabina sola. `apagada`: sin luz ni rayos, lista para encenderse en la escena de standby. */
+export const BalizaTally: React.FC<{ apagada?: boolean; className?: string }> = ({ apagada, className }) => (
+  <TallyLogo variant="baliza" tone="onyx" apagada={apagada} decorativo className={className} />
 );
 
-/** Baliza + «tally studio». `grande` es el tamaño de la revelación. */
-export const LogotipoTally: React.FC<{ className?: string; texto?: string }> = ({
-  className = '',
-  texto = 'Tally Studio',
-}) => (
-  <span className={`bt-lock ${className}`.trim()} role="img" aria-label={texto}>
-    <BalizaTally />
-    <span className="bt-wm" aria-hidden="true">
-      <span className="bt-w1">
-        tally
-        <Ondas />
-      </span>
-      <span className="bt-w2">studio</span>
-    </span>
-  </span>
+/** Baliza + «tally studio». `bt-big` es el tamaño de la revelación. */
+export const LogotipoTally: React.FC<{ className?: string }> = ({ className }) => (
+  <TallyLogo variant="lockup" tone="onyx" className={className} />
 );
 
 /** Curvas de nivel para el fondo de las escenas: una polilínea por línea. */
