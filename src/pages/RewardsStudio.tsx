@@ -16,6 +16,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Check, Copy, Play, Plus, Trash2 } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
+import { TabPanel } from '../components/tally-ui';
+import { VentanaPestanas } from '../components/premios/VentanaPestanas';
 import { useRewardsSettings } from '../hooks/useRewardsSettings';
 import {
   CustomRewardItem,
@@ -44,6 +46,21 @@ import '../styles/recompensas.css';
 
 const TOUR_ID = 'recompensas';
 
+/** Pestañas de la ventana. El monitor y las pruebas son el panel fijo, visible en todas. */
+type RewardTab = 'ajustes' | 'apariencia';
+const TAB_BASE = 'recompensas';
+const REWARD_TABS: { id: RewardTab; label: string }[] = [
+  { id: 'ajustes', label: 'Ajustes' },
+  { id: 'apariencia', label: 'Apariencia' },
+];
+
+/** Pestaña que contiene cada elemento de la guía; la lista y el monitor siempre están a la vista. */
+const TOUR_TAB: Record<string, RewardTab> = {
+  'reward-editor': 'ajustes',
+  'reward-rules': 'ajustes',
+  'reward-look': 'apariencia',
+};
+
 const REWARDS_TOUR_STEPS: TourStep[] = [
   {
     badge: 'Bienvenida',
@@ -60,7 +77,13 @@ const REWARDS_TOUR_STEPS: TourStep[] = [
     target: 'reward-editor',
     badge: 'Editor',
     title: 'Qué la activa y qué hace',
-    body: 'Elige puntos o bits, el sonido, si sale una placa y con qué estilo, y un vídeo si quieres. Debajo están las reglas comunes a todas.',
+    body: 'Elige puntos o bits y el sonido. Debajo están las reglas comunes a todas.',
+  },
+  {
+    target: 'reward-look',
+    badge: 'Apariencia',
+    title: 'Placa y vídeo',
+    body: 'Decide si sale una placa y con qué estilo, y añade un vídeo si quieres. Aquí también está el estilo de placa de partida.',
   },
   {
     target: 'rewards-monitor',
@@ -107,6 +130,7 @@ export const RewardsStudio: React.FC = () => {
   const [cheer, setCheer] = useState(100);
   const [vault, setVault] = useState<MediaType | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [tab, setTab] = useState<RewardTab>('ajustes');
   const undo = useUndo<{ rewards: CustomRewardItem[]; id: string }>();
 
   const layerRef = useRef<RewardsLayerHandle | null>(null);
@@ -156,7 +180,7 @@ export const RewardsStudio: React.FC = () => {
         releaseMedia(mediaId).then((ok) => {
           if (!ok) say('No se pudo borrar el archivo anterior de tu espacio. Puedes borrarlo en «Mi cuenta».');
         });
-      }, delay)
+      }, delay),
     );
   };
 
@@ -181,7 +205,7 @@ export const RewardsStudio: React.FC = () => {
         showPlate: true,
         showNoticeText: false,
         soundType: 'arcade-chime',
-      })
+      }),
     );
     setSelectedId(id);
   };
@@ -258,7 +282,7 @@ export const RewardsStudio: React.FC = () => {
         accentColor: reward?.accentColor,
       }),
       DEMO_USERS[0],
-      'Prueba'
+      'Prueba',
     );
 
   const testVideo = () => reward && run(reward, DEMO_USERS[0], whyFor(reward), { sampleVideo: true, silent: true, holdSeconds: 3 });
@@ -291,13 +315,18 @@ export const RewardsStudio: React.FC = () => {
       .catch(() => say('No se pudo copiar. Usa «Fuentes de OBS» en la cabecera.'));
   };
 
-  const customInUse =
-    rewardsSettings.defaultPlateStyle === 'custom' || rewards.some((entry) => entry.showPlate && entry.plateStyle === 'custom');
+  const customInUse = rewardsSettings.defaultPlateStyle === 'custom' || rewards.some((entry) => entry.showPlate && entry.plateStyle === 'custom');
   const mediaCount = reward ? Number(Boolean(reward.customAudioUrl)) : 0;
 
   return (
-    <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
+    <VentanaPestanas
+      label="Secciones de Recompensas"
+      idBase={TAB_BASE}
+      tabs={REWARD_TABS}
+      value={tab}
+      onChange={(id) => setTab(id as RewardTab)}
+      style={{ paddingBottom: tourOpen ? 220 : undefined }}
+      nav={
         <SuiteNav
           currentApp="recompensas"
           channel={rewardsSettings.channel}
@@ -305,246 +334,267 @@ export const RewardsStudio: React.FC = () => {
           onOpenTour={() => setTourOpen(true)}
           tourAvailable={!tourOpen}
         />
-
-        <div className="grid items-start gap-5 min-[1200px]:grid-cols-[220px_minmax(0,1fr)_minmax(0,410px)]">
-          {/* ---------- Lista de recompensas ---------- */}
-          <section className="cab-mod" data-tour="rewards-list">
-            <h2>Recompensas</h2>
-            {rewards.length > 0 && (
-              <ul className="cab-rows !max-h-none">
-                {rewards.map((entry) => {
-                  const current = entry.id === reward?.id;
-                  return (
-                    <li key={entry.id} className="cab-row" data-current={current ? '' : undefined}>
-                      <button type="button" className="studio-pick" aria-current={current ? 'true' : undefined} onClick={() => setSelectedId(entry.id)}>
-                        {entry.name || 'Sin nombre'}
-                        <span className="cab-mono">
-                          {triggerLabel(entry)} · {entry.showPlate ? 'con placa' : entry.videoUrl ? 'vídeo' : 'solo sonido'}
-                          {entry.enabled ? '' : ' · apagada'}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            <span className="cab-label">Nueva recompensa</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="cab-btn2" onClick={() => createReward('points')}>
-                <Plus className="h-4 w-4" />
-                <span>Puntos</span>
-              </button>
-              <button type="button" className="cab-btn2" onClick={() => createReward('bits')}>
-                <Plus className="h-4 w-4" />
-                <span>Bits</span>
-              </button>
-            </div>
-            {undo.pending && <UndoNote label={undo.pending.label} onUndo={restoreReward} />}
-          </section>
-
-          {/* ---------- Editor ---------- */}
-          <div className="grid min-w-0 gap-5">
-            <section className="cab-mod" data-tour="reward-editor">
-              {!reward ? (
-                <>
-                  <h2>Sin recompensas</h2>
-                  <p className="cab-note">
-                    No hay ninguna recompensa. Crea una con «Puntos» o «Bits», bajo «Nueva recompensa», para elegir qué suena y
-                    qué aparece al activarla.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2>{reward.name || 'Sin nombre'}</h2>
-                    <button type="button" className="cab-btn2 cab-btn-sm" onClick={removeReward}>
-                      <Trash2 className="h-4 w-4" />
-                      <span>Eliminar</span>
+      }
+      rail={
+        <section className="cab-mod" data-tour="rewards-list">
+          <h2>Recompensas</h2>
+          {rewards.length > 0 && (
+            <ul className="cab-rows !max-h-none">
+              {rewards.map((entry) => {
+                const current = entry.id === reward?.id;
+                return (
+                  <li key={entry.id} className="cab-row" data-current={current ? '' : undefined}>
+                    <button type="button" className="studio-pick" aria-current={current ? 'true' : undefined} onClick={() => setSelectedId(entry.id)}>
+                      {entry.name || 'Sin nombre'}
+                      <span className="cab-mono">
+                        {triggerLabel(entry)} · {entry.showPlate ? 'con placa' : entry.videoUrl ? 'vídeo' : 'solo sonido'}
+                        {entry.enabled ? '' : ' · apagada'}
+                      </span>
                     </button>
-                  </div>
-
-                  <div className="rw-two">
-                    <Field label="Nombre" htmlFor={`${uid}-name`} hint="Es el nombre del sonido que sale en la placa.">
-                      <input
-                        id={`${uid}-name`}
-                        className="cab-inp"
-                        maxLength={60}
-                        value={reward.name}
-                        onChange={(e) => patch({ name: e.target.value })}
-                      />
-                    </Field>
-                    <Field label="Color">
-                      <div className="cab-sw">
-                        {ACCENTS.map((accent) => (
-                          <button
-                            key={accent.color}
-                            type="button"
-                            style={{ background: accent.color }}
-                            aria-label={accent.name}
-                            aria-pressed={reward.accentColor === accent.color}
-                            onClick={() => patch({ accentColor: accent.color })}
-                          />
-                        ))}
-                        <input
-                          type="color"
-                          value={reward.accentColor}
-                          aria-label="Otro color"
-                          onChange={(e) => patch({ accentColor: e.target.value })}
-                        />
-                      </div>
-                    </Field>
-                  </div>
-                  <Toggle label="Encendida" checked={reward.enabled} onChange={(enabled) => patch({ enabled })} />
-
-                  <TriggerFields key={reward.id} reward={reward} settings={rewardsSettings} patch={patch} onNote={say} />
-
-                  <details className="studio-details" open>
-                    <summary>Sonido{mediaCount ? ' · archivo propio' : ''}</summary>
-                    <div>
-                      <SoundFields reward={reward} cloudOn={cloudOn} patch={patch} onRelease={scheduleRelease} onOpenVault={setVault} />
-                    </div>
-                  </details>
-
-                  <details className="studio-details" open>
-                    <summary>Placa{reward.showPlate ? '' : ' · apagada, solo sonido'}</summary>
-                    <div>
-                      <PlateFields reward={reward} settings={rewardsSettings} patch={patch} />
-                    </div>
-                  </details>
-
-                  <details className="studio-details">
-                    <summary>Vídeo{reward.videoUrl ? ' · 1 vídeo' : ''}</summary>
-                    <div>
-                      <VideoFields reward={reward} cloudOn={cloudOn} patch={patch} onRelease={scheduleRelease} onOpenVault={setVault} />
-                    </div>
-                  </details>
-                </>
-              )}
-            </section>
-
-            <section className="cab-mod">
-              <h2>Reglas para todas</h2>
-              <GeneralRules
-                settings={rewardsSettings}
-                cloudOn={cloudOn}
-                update={updateRewards}
-                onRelease={scheduleRelease}
-                customInUse={customInUse}
-              />
-            </section>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <span className="cab-label">Nueva recompensa</span>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className="cab-btn2" onClick={() => createReward('points')}>
+              <Plus className="h-4 w-4" />
+              <span>Puntos</span>
+            </button>
+            <button type="button" className="cab-btn2" onClick={() => createReward('bits')}>
+              <Plus className="h-4 w-4" />
+              <span>Bits</span>
+            </button>
+          </div>
+          {undo.pending && <UndoNote label={undo.pending.label} onUndo={restoreReward} />}
+        </section>
+      }
+      dock={
+        <section className="cab-mod" data-tour="rewards-monitor">
+          <h2>Monitor</h2>
+          <div className="cab-stage rw-stage">
+            {reward?.position === 'random' && <div className="rw-safe" style={{ inset: `${reward.randomMargin}%` }} />}
+            <RewardsLayer
+              ref={layerRef}
+              settings={rewardsSettings}
+              isStudio
+              onLog={say}
+              onCounts={(waiting, active) => setCounts({ waiting, active })}
+            />
           </div>
 
-          {/* ---------- Monitor ---------- */}
-          <section className="cab-mod max-[1199px]:order-first min-[1200px]:sticky min-[1200px]:top-4" data-tour="rewards-monitor">
-            <h2>Monitor</h2>
-            <div className="cab-stage rw-stage">
-              {reward?.position === 'random' && <div className="rw-safe" style={{ inset: `${reward.randomMargin}%` }} />}
-              <RewardsLayer
-                ref={layerRef}
-                settings={rewardsSettings}
-                isStudio
-                onLog={say}
-                onCounts={(waiting, active) => setCounts({ waiting, active })}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="cab-btn flex-1" disabled={!reward} onClick={testCurrent}>
+              <Play className="h-4 w-4" />
+              <span>Probar esta</span>
+            </button>
+            <button type="button" className="cab-btn2" onClick={clearAll}>
+              Vaciar
+            </button>
+          </div>
+
+          <div className="cab-field">
+            <span className="cab-label">Qué la dispara</span>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn2 cab-btn-sm" onClick={testPoints}>
+                Canje de puntos
+              </button>
+              <button type="button" className="cab-btn2 cab-btn-sm" onClick={testThree}>
+                Tres seguidos
+              </button>
+              <button type="button" className="cab-btn2 cab-btn-sm" onClick={testShort}>
+                Clip corto
+              </button>
+              {reward && (
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testVideo}>
+                  Posición del vídeo
+                </button>
+              )}
+            </div>
+            <div className="rw-inline">
+              <label htmlFor={`${uid}-cheer`}>Cheer de</label>
+              <input
+                id={`${uid}-cheer`}
+                type="number"
+                min={1}
+                max={100000}
+                className="cab-inp cab-mono"
+                value={cheer}
+                onChange={(e) => setCheer(Math.min(100000, Math.max(1, Math.round(Number(e.target.value) || 1))))}
               />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn flex-1" disabled={!reward} onClick={testCurrent}>
-                <Play className="h-4 w-4" />
-                <span>Probar esta</span>
-              </button>
-              <button type="button" className="cab-btn2" onClick={clearAll}>
-                Vaciar
+              <button type="button" className="cab-btn2 cab-btn-sm" onClick={testCheer}>
+                Enviar {cheer === 1 ? 'bit' : 'bits'}
               </button>
             </div>
+          </div>
 
-            <div className="cab-field">
-              <span className="cab-label">Qué la dispara</span>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testPoints}>
-                  Canje de puntos
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testThree}>
-                  Tres seguidos
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testShort}>
-                  Clip corto
-                </button>
-                {reward && (
-                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={testVideo}>
-                    Posición del vídeo
-                  </button>
-                )}
-              </div>
-              <div className="rw-inline">
-                <label htmlFor={`${uid}-cheer`}>Cheer de</label>
-                <input
-                  id={`${uid}-cheer`}
-                  type="number"
-                  min={1}
-                  max={100000}
-                  className="cab-inp cab-mono"
-                  value={cheer}
-                  onChange={(e) => setCheer(Math.min(100000, Math.max(1, Math.round(Number(e.target.value) || 1))))}
-                />
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={testCheer}>
-                  Enviar {cheer === 1 ? 'bit' : 'bits'}
-                </button>
-              </div>
-            </div>
+          <div className="cab-field">
+            <Toggle label="Aplicar esperas y límites en estas pruebas" checked={gates} onChange={setGates} />
+            <span className="cab-hint">Apagado, puedes repetir una prueba sin esperar. En directo se aplican siempre.</span>
+          </div>
 
-            <div className="cab-field">
-              <Toggle label="Aplicar esperas y límites en estas pruebas" checked={gates} onChange={setGates} />
-              <span className="cab-hint">Apagado, puedes repetir una prueba sin esperar. En directo se aplican siempre.</span>
-            </div>
-
-            <p className="cab-hint" role="status">
-              En cola: {counts.waiting}. Sonando: {counts.active}.
+          <p className="cab-hint" role="status">
+            En cola: {counts.waiting}. Sonando: {counts.active}.
+          </p>
+          {log.length > 0 ? (
+            <ul className="rw-log" aria-label="Registro de la capa">
+              {log.map((line, index) => (
+                <li key={`${log.length}-${index}`}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="cab-hint">
+              Las pruebas suenan aquí y en las fuentes de OBS abiertas en este navegador. No gastan puntos ni bits. Si no oyes nada, pulsa una vez en
+              la página: el navegador pide un clic antes de dejar sonar.
             </p>
-            {log.length > 0 ? (
-              <ul className="rw-log" aria-label="Registro de la capa">
-                {log.map((line, index) => (
-                  <li key={`${log.length}-${index}`}>{line}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="cab-hint">
-                Las pruebas suenan aquí y en las fuentes de OBS abiertas en este navegador. No gastan puntos ni bits. Si no
-                oyes nada, pulsa una vez en la página: el navegador pide un clic antes de dejar sonar.
-              </p>
-            )}
+          )}
 
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(false)}>
-                {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'url' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-              </button>
-              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(true)}>
-                {copied === 'demo' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'demo' ? 'URL copiada' : 'URL con placa de muestra'}</span>
-              </button>
-            </div>
-            {!cloudOn && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(false)}>
+              {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span>{copied === 'url' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+            </button>
+            <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(true)}>
+              {copied === 'demo' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span>{copied === 'demo' ? 'URL copiada' : 'URL con placa de muestra'}</span>
+            </button>
+          </div>
+          {!cloudOn && (
+            <p className="cab-note">
+              Sin cuenta en la nube, los ajustes viajan dentro de la URL: vuelve a copiarla en OBS cuando cambies algo. Los archivos que subas se
+              quedan en este navegador y no llegan a OBS.
+            </p>
+          )}
+        </section>
+      }
+      after={
+        <>
+          <MediaLibraryModal
+            isOpen={vault !== null}
+            onClose={() => setVault(null)}
+            onSelect={handleVaultSelect}
+            allowedTypes={[vault || 'video']}
+            title={vault === 'audio' ? 'Biblioteca · elegir sonido (máximo 30 s)' : 'Biblioteca · elegir vídeo'}
+          />
+          {tourOpen && (
+            <GuidedTour
+              steps={REWARDS_TOUR_STEPS}
+              onClose={() => setTourOpen(false)}
+              id={TOUR_ID}
+              appName="Recompensas"
+              onStep={(step) => {
+                const to = step.target ? TOUR_TAB[step.target] : undefined;
+                if (to) setTab(to);
+              }}
+            />
+          )}
+        </>
+      }
+    >
+      <TabPanel idBase={TAB_BASE} id="ajustes" value={tab}>
+        <section className="cab-mod" data-tour="reward-editor">
+          {!reward ? (
+            <>
+              <h2>Sin recompensas</h2>
               <p className="cab-note">
-                Sin cuenta en la nube, los ajustes viajan dentro de la URL: vuelve a copiarla en OBS cuando cambies algo.
-                Los archivos que subas se quedan en este navegador y no llegan a OBS.
+                No hay ninguna recompensa. Crea una con «Puntos» o «Bits», bajo «Nueva recompensa», para elegir qué suena y qué aparece al activarla.
               </p>
-            )}
+            </>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2>{reward.name || 'Sin nombre'}</h2>
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={removeReward}>
+                  <Trash2 className="h-4 w-4" />
+                  <span>Eliminar</span>
+                </button>
+              </div>
+
+              <div className="rw-two">
+                <Field label="Nombre" htmlFor={`${uid}-name`} hint="Es el nombre del sonido que sale en la placa.">
+                  <input
+                    id={`${uid}-name`}
+                    className="cab-inp"
+                    maxLength={60}
+                    value={reward.name}
+                    onChange={(e) => patch({ name: e.target.value })}
+                  />
+                </Field>
+                <Field label="Color">
+                  <div className="cab-sw">
+                    {ACCENTS.map((accent) => (
+                      <button
+                        key={accent.color}
+                        type="button"
+                        style={{ background: accent.color }}
+                        aria-label={accent.name}
+                        aria-pressed={reward.accentColor === accent.color}
+                        onClick={() => patch({ accentColor: accent.color })}
+                      />
+                    ))}
+                    <input type="color" value={reward.accentColor} aria-label="Otro color" onChange={(e) => patch({ accentColor: e.target.value })} />
+                  </div>
+                </Field>
+              </div>
+              <Toggle label="Encendida" checked={reward.enabled} onChange={(enabled) => patch({ enabled })} />
+
+              <TriggerFields key={reward.id} reward={reward} settings={rewardsSettings} patch={patch} onNote={say} />
+
+              <details className="studio-details" open>
+                <summary>Sonido{mediaCount ? ' · archivo propio' : ''}</summary>
+                <div>
+                  <SoundFields reward={reward} cloudOn={cloudOn} patch={patch} onRelease={scheduleRelease} onOpenVault={setVault} />
+                </div>
+              </details>
+            </>
+          )}
+        </section>
+
+        <section className="cab-mod" data-tour="reward-rules">
+          <h2>Reglas para todas</h2>
+          <GeneralRules
+            settings={rewardsSettings}
+            cloudOn={cloudOn}
+            update={updateRewards}
+            onRelease={scheduleRelease}
+            customInUse={customInUse}
+            part="reglas"
+          />
+        </section>
+      </TabPanel>
+
+      <TabPanel idBase={TAB_BASE} id="apariencia" value={tab}>
+        {reward && (
+          <section className="cab-mod" data-tour="reward-look">
+            <h2>Apariencia de {reward.name || 'Sin nombre'}</h2>
+            <details className="studio-details" open>
+              <summary>Placa{reward.showPlate ? '' : ' · apagada, solo sonido'}</summary>
+              <div>
+                <PlateFields reward={reward} settings={rewardsSettings} patch={patch} />
+              </div>
+            </details>
+
+            <details className="studio-details">
+              <summary>Vídeo{reward.videoUrl ? ' · 1 vídeo' : ''}</summary>
+              <div>
+                <VideoFields reward={reward} cloudOn={cloudOn} patch={patch} onRelease={scheduleRelease} onOpenVault={setVault} />
+              </div>
+            </details>
           </section>
-        </div>
-
-        <MediaLibraryModal
-          isOpen={vault !== null}
-          onClose={() => setVault(null)}
-          onSelect={handleVaultSelect}
-          allowedTypes={[vault || 'video']}
-          title={vault === 'audio' ? 'Biblioteca · elegir sonido (máximo 30 s)' : 'Biblioteca · elegir vídeo'}
-        />
-      </div>
-
-      {tourOpen && (
-        <GuidedTour steps={REWARDS_TOUR_STEPS} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Recompensas" />
-      )}
-    </div>
+        )}
+        <section className="cab-mod" data-tour={reward ? undefined : 'reward-look'}>
+          <h2>Placa de todas las recompensas</h2>
+          <GeneralRules
+            settings={rewardsSettings}
+            cloudOn={cloudOn}
+            update={updateRewards}
+            onRelease={scheduleRelease}
+            customInUse={customInUse}
+            part="apariencia"
+          />
+        </section>
+      </TabPanel>
+    </VentanaPestanas>
   );
 };

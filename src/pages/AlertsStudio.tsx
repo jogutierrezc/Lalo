@@ -15,6 +15,8 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import gsap from 'gsap';
 import { Check, Copy, Play, Plus, Trash2 } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
+import { TabPanel } from '../components/tally-ui';
+import { VentanaPestanas } from '../components/premios/VentanaPestanas';
 import { useAlertsSettings } from '../hooks/useAlertsSettings';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import {
@@ -44,6 +46,22 @@ import { useCloudSession } from '../hooks/useCloudSession';
 
 const TOUR_ID = 'alertas';
 
+/** Pestañas de la ventana. «Probar» y el monitor son el panel fijo, visible en todas. */
+type AlertTab = 'diseno' | 'sonido' | 'apariencia';
+const TAB_BASE = 'alertas';
+const ALERT_TABS: { id: AlertTab; label: string }[] = [
+  { id: 'diseno', label: 'Diseño' },
+  { id: 'sonido', label: 'Sonido' },
+  { id: 'apariencia', label: 'Apariencia' },
+];
+
+/** Pestaña que contiene cada elemento de la guía; el riel y el monitor no necesitan cambiar. */
+const TOUR_TAB: Record<string, AlertTab> = {
+  'alert-editor': 'diseno',
+  'alert-sound': 'sonido',
+  'alert-appearance': 'apariencia',
+};
+
 const ALERTS_TOUR_STEPS: TourStep[] = [
   {
     badge: 'Bienvenida',
@@ -60,7 +78,19 @@ const ALERTS_TOUR_STEPS: TourStep[] = [
     target: 'alert-editor',
     badge: 'Editor',
     title: 'Mensaje y sonido',
-    body: 'Escribe el mensaje, elige un sonido y decide si se lee con la voz del chat. El vídeo, los niveles y la apariencia están plegados debajo.',
+    body: 'Escribe el mensaje y, si quieres, añade un vídeo o niveles. El sonido y la apariencia tienen su propia pestaña.',
+  },
+  {
+    target: 'alert-sound',
+    badge: 'Sonido',
+    title: 'Sonido y voz',
+    body: 'Elige un sonido o sube el tuyo, decide si se lee con la voz del chat y si la pantalla se sacude.',
+  },
+  {
+    target: 'alert-appearance',
+    badge: 'Apariencia',
+    title: 'Cómo se ven todas',
+    body: 'Estilo, color, posición, tiempo en pantalla y volumen general. Valen para todas las alertas.',
   },
   {
     target: 'stage-monitor',
@@ -129,7 +159,7 @@ interface Shot {
 }
 
 const fill = (template: string, user: string, vars: Record<string, string>) =>
-  template.replace(/\{(\w+)\}/g, (match, key) => (key === 'user' ? user : vars[key] ?? match));
+  template.replace(/\{(\w+)\}/g, (match, key) => (key === 'user' ? user : (vars[key] ?? match)));
 
 /** Sonido + «leer con voz» → modo de audio que entiende el widget. */
 const audioModeFor = (tts: boolean, hasFile: boolean, sound: AlertSoundType): AlertAudioMode =>
@@ -156,11 +186,7 @@ const Field: React.FC<{ label: string; htmlFor?: string; hint?: React.ReactNode;
   </div>
 );
 
-const Toggle: React.FC<{ label: string; checked: boolean; onChange: (next: boolean) => void }> = ({
-  label,
-  checked,
-  onChange,
-}) => {
+const Toggle: React.FC<{ label: string; checked: boolean; onChange: (next: boolean) => void }> = ({ label, checked, onChange }) => {
   const id = useId();
   return (
     <div className="flex items-center gap-3">
@@ -187,6 +213,7 @@ export const AlertsStudio: React.FC = () => {
   const [shot, setShot] = useState<Shot | null>(null);
   const [monitorVideo, setMonitorVideo] = useState<{ url: string; blend?: AlertBlendMode } | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
+  const [tab, setTab] = useState<AlertTab>('diseno');
 
   const cardRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -205,7 +232,7 @@ export const AlertsStudio: React.FC = () => {
       stopDemoRef.current?.();
       if (statusTimer.current) clearTimeout(statusTimer.current);
     },
-    []
+    [],
   );
 
   const say = (message: string) => {
@@ -284,7 +311,7 @@ export const AlertsStudio: React.FC = () => {
       setAudioError(
         err instanceof Error && err.message
           ? err.message
-          : `El archivo supera la duración máxima de ${MAX_AUDIO_DURATION_SECONDS} s. Elige uno más corto.`
+          : `El archivo supera la duración máxima de ${MAX_AUDIO_DURATION_SECONDS} s. Elige uno más corto.`,
       );
     }
   };
@@ -423,7 +450,7 @@ export const AlertsStudio: React.FC = () => {
       gsap.fromTo(
         stageRef.current,
         { x: -14, y: 10, rotate: -0.8 },
-        { x: 0, y: 0, rotate: 0, duration: 0.65, ease: 'elastic.out(1.2, 0.2)', clearProps: 'transform' }
+        { x: 0, y: 0, rotate: 0, duration: 0.65, ease: 'elastic.out(1.2, 0.2)', clearProps: 'transform' },
       );
     }
     say(`Prueba de ${options.label} enviada al monitor y a OBS.`);
@@ -442,7 +469,7 @@ export const AlertsStudio: React.FC = () => {
         accent: shot.accent,
         emotion: shot.eventType === 'bits' ? 'excited' : shot.eventType === 'sub' ? 'happy' : null,
       },
-      alertsSettings.duration
+      alertsSettings.duration,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shot?.key]);
@@ -520,7 +547,7 @@ export const AlertsStudio: React.FC = () => {
       'alerts',
       alertsSettings.channel,
       loadSettings(),
-      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined
+      cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined,
     );
     navigator.clipboard
       ?.writeText(url)
@@ -549,12 +576,18 @@ export const AlertsStudio: React.FC = () => {
     custom || (eventType !== 'bits' && eventType !== 'sub')
       ? null
       : eventType === 'bits'
-      ? { type: 'bits', list: bitTiers }
-      : { type: 'sub', list: subTiers };
+        ? { type: 'bits', list: bitTiers }
+        : { type: 'sub', list: subTiers };
 
   return (
-    <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
+    <VentanaPestanas
+      label="Secciones de Alertas"
+      idBase={TAB_BASE}
+      tabs={ALERT_TABS}
+      value={tab}
+      onChange={(id) => setTab(id as AlertTab)}
+      style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}
+      nav={
         <SuiteNav
           currentApp="alertas"
           channel={alertsSettings.channel}
@@ -562,563 +595,543 @@ export const AlertsStudio: React.FC = () => {
           onOpenTour={() => setTourOpen(true)}
           tourAvailable={!tourOpen}
         />
-
-        <div className="grid items-start gap-5 min-[1200px]:grid-cols-[230px_minmax(0,1fr)_minmax(0,350px)]">
-          {/* ---------- Lista de eventos ---------- */}
-          <section className="cab-mod" data-tour="alert-events">
-            <h2>Eventos</h2>
-            <ul className="cab-rows !max-h-none">
-              {EVENTS.map((entry) => {
-                const config = alertsSettings.events[entry.type];
-                const current = selection.kind === 'event' && selection.type === entry.type;
-                return (
-                  <li key={entry.type} className="cab-row" data-current={current ? '' : undefined}>
-                    <button
-                      type="button"
-                      className="studio-pick"
-                      aria-current={current ? 'true' : undefined}
-                      onClick={() => select({ kind: 'event', type: entry.type })}
-                    >
-                      {entry.label}
-                    </button>
-                    <input
-                      type="checkbox"
-                      className="cab-tog"
-                      checked={config.enabled}
-                      aria-label={`Activar ${entry.label}`}
-                      onChange={(e) => updateEvent(entry.type, { enabled: e.target.checked })}
-                    />
-                  </li>
-                );
-              })}
-              {customEvents.map((rule) => {
-                const current = selection.kind === 'custom' && selection.id === rule.id;
-                return (
-                  <li key={rule.id} className="cab-row" data-current={current ? '' : undefined}>
-                    <button
-                      type="button"
-                      className="studio-pick"
-                      aria-current={current ? 'true' : undefined}
-                      onClick={() => select({ kind: 'custom', id: rule.id })}
-                    >
-                      {rule.name}
-                      <span className="cab-mono">{rule.triggerKeyword}</span>
-                    </button>
-                    <input
-                      type="checkbox"
-                      className="cab-tog"
-                      checked={rule.enabled}
-                      aria-label={`Activar ${rule.name}`}
-                      onChange={(e) => updateCustom(rule.id, { enabled: e.target.checked })}
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-            <button type="button" className="cab-btn2" onClick={createCustom}>
-              <Plus className="h-4 w-4" />
-              <span>Nuevo evento</span>
-            </button>
-            {undo && (
-              <p className="cab-note" role="status">
-                Se eliminó «{undo.rule.name}».{' '}
-                <button type="button" className="studio-link" onClick={restoreCustom}>
-                  Deshacer
-                </button>
-              </p>
-            )}
-          </section>
-
-          {/* ---------- Editor ---------- */}
-          <section className="cab-mod" data-tour="alert-editor">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2>{itemLabel}</h2>
-              {custom && (
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => deleteCustom(custom)}>
-                  <Trash2 className="h-4 w-4" />
-                  <span>Eliminar</span>
-                </button>
-              )}
-            </div>
-
-            {custom && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Nombre" htmlFor={`${uid}-name`}>
+      }
+      rail={
+        <section className="cab-mod" data-tour="alert-events">
+          <h2>Eventos</h2>
+          <ul className="cab-rows !max-h-none">
+            {EVENTS.map((entry) => {
+              const config = alertsSettings.events[entry.type];
+              const current = selection.kind === 'event' && selection.type === entry.type;
+              return (
+                <li key={entry.type} className="cab-row" data-current={current ? '' : undefined}>
+                  <button
+                    type="button"
+                    className="studio-pick"
+                    aria-current={current ? 'true' : undefined}
+                    onClick={() => select({ kind: 'event', type: entry.type })}
+                  >
+                    {entry.label}
+                  </button>
                   <input
-                    id={`${uid}-name`}
-                    className="cab-inp"
-                    value={custom.name}
-                    onChange={(e) => updateCustom(custom.id, { name: e.target.value })}
+                    type="checkbox"
+                    className="cab-tog"
+                    checked={config.enabled}
+                    aria-label={`Activar ${entry.label}`}
+                    onChange={(e) => updateEvent(entry.type, { enabled: e.target.checked })}
                   />
-                </Field>
-                <Field label="Palabra del chat" htmlFor={`${uid}-keyword`} hint="El evento se dispara cuando alguien la escribe.">
+                </li>
+              );
+            })}
+            {customEvents.map((rule) => {
+              const current = selection.kind === 'custom' && selection.id === rule.id;
+              return (
+                <li key={rule.id} className="cab-row" data-current={current ? '' : undefined}>
+                  <button
+                    type="button"
+                    className="studio-pick"
+                    aria-current={current ? 'true' : undefined}
+                    onClick={() => select({ kind: 'custom', id: rule.id })}
+                  >
+                    {rule.name}
+                    <span className="cab-mono">{rule.triggerKeyword}</span>
+                  </button>
                   <input
-                    id={`${uid}-keyword`}
-                    className="cab-inp cab-mono"
-                    value={custom.triggerKeyword}
-                    onChange={(e) => updateCustom(custom.id, { triggerKeyword: e.target.value.trim() })}
+                    type="checkbox"
+                    className="cab-tog"
+                    checked={rule.enabled}
+                    aria-label={`Activar ${rule.name}`}
+                    onChange={(e) => updateCustom(rule.id, { enabled: e.target.checked })}
                   />
-                </Field>
+                </li>
+              );
+            })}
+          </ul>
+          <button type="button" className="cab-btn2" onClick={createCustom}>
+            <Plus className="h-4 w-4" />
+            <span>Nuevo evento</span>
+          </button>
+          {undo && (
+            <p className="cab-note" role="status">
+              Se eliminó «{undo.rule.name}».{' '}
+              <button type="button" className="studio-link" onClick={restoreCustom}>
+                Deshacer
+              </button>
+            </p>
+          )}
+        </section>
+      }
+      dock={
+        <section className="cab-mod" data-tour="stage-monitor">
+          <h2>Monitor</h2>
+          <div ref={stageRef} className={`cab-stage ${STAGE_POSITION[alertsSettings.position]}`}>
+            {monitorVideo && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4">
+                <video
+                  src={monitorVideo.url}
+                  autoPlay
+                  playsInline
+                  className="max-h-full w-auto object-contain"
+                  style={{ mixBlendMode: monitorVideo.blend === 'screen' ? 'screen' : 'normal' }}
+                />
               </div>
             )}
-
-            <Field
-              label="Mensaje"
-              htmlFor={`${uid}-template`}
-              hint={
-                <>
-                  Variables: <span className="cab-mono">{custom ? '{user}' : eventMeta.vars}</span>
-                </>
+            {/* Con posición aleatoria, la tarjeta va en una caja que cada prueba coloca en otro punto */}
+            <div
+              style={
+                alertsSettings.randomPosition
+                  ? {
+                      ...spotStyle(monitorSpot, alertsSettings.randomMargin),
+                      width: `min(calc(clamp(8px, 3.1cqw, 16px) * 34), ${100 - alertsSettings.randomMargin * 2}%)`,
+                    }
+                  : { display: 'contents' }
               }
             >
-              <input
-                id={`${uid}-template`}
-                className="cab-inp"
-                value={item.template}
-                onChange={(e) => patchItem({ template: e.target.value })}
+              <AlertCard
+                ref={cardRef}
+                alertStyle={alertsSettings.alertStyle}
+                position={alertsSettings.position}
+                accent={preview.accent}
+                name={preview.user}
+                text={preview.text}
+                emotionLabel={preview.detail || undefined}
+                stickerSvg={alertsSettings.stickerSvg}
+                fontSize="clamp(8px, 3.1cqw, 16px)"
               />
-            </Field>
+            </div>
+          </div>
 
-            {!custom && (eventType === 'bits' || eventType === 'raid') && (
-              <Field
-                label={eventType === 'bits' ? 'Bits mínimos' : 'Espectadores mínimos'}
-                htmlFor={`${uid}-min`}
-                hint="Por debajo de esta cantidad la alerta no aparece."
-              >
+          <div className="flex flex-wrap gap-2" data-tour="test-trigger">
+            <button type="button" className="cab-btn flex-1" onClick={testSelected}>
+              <Play className="h-4 w-4" />
+              <span>Probar {itemLabel}</span>
+            </button>
+            <button type="button" className="cab-btn2 flex-1" onClick={copyWidgetUrl} data-tour="alert-obs">
+              {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+            </button>
+          </div>
+          <p className="cab-hint" role="status">
+            {status || 'La prueba suena aquí y aparece en las fuentes de OBS que estén abiertas.'}
+          </p>
+        </section>
+      }
+      after={
+        <>
+          <MediaLibraryModal
+            isOpen={vault !== null}
+            onClose={() => setVault(null)}
+            onSelect={handleVaultSelect}
+            allowedTypes={[vault || 'audio']}
+            title={vault === 'video' ? 'Biblioteca · elegir vídeo' : 'Biblioteca · elegir sonido (máximo 30 s)'}
+          />
+          {tourOpen && (
+            <GuidedTour
+              steps={ALERTS_TOUR_STEPS}
+              onClose={() => setTourOpen(false)}
+              id={TOUR_ID}
+              appName="Alertas"
+              onStep={(step) => {
+                const to = step.target ? TOUR_TAB[step.target] : undefined;
+                if (to) setTab(to);
+              }}
+            />
+          )}
+        </>
+      }
+    >
+      <TabPanel idBase={TAB_BASE} id="diseno" value={tab}>
+        <section className="cab-mod" data-tour="alert-editor">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2>{itemLabel}</h2>
+            {custom && (
+              <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => deleteCustom(custom)}>
+                <Trash2 className="h-4 w-4" />
+                <span>Eliminar</span>
+              </button>
+            )}
+          </div>
+
+          {custom && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nombre" htmlFor={`${uid}-name`}>
                 <input
-                  id={`${uid}-min`}
-                  type="number"
-                  min={0}
-                  className="cab-inp sm:max-w-[160px]"
-                  value={eventConfig.minAmount ?? 0}
-                  onChange={(e) => updateEvent(eventType, { minAmount: Math.max(0, Number(e.target.value) || 0) })}
+                  id={`${uid}-name`}
+                  className="cab-inp"
+                  value={custom.name}
+                  onChange={(e) => updateCustom(custom.id, { name: e.target.value })}
                 />
               </Field>
-            )}
+              <Field label="Palabra del chat" htmlFor={`${uid}-keyword`} hint="El evento se dispara cuando alguien la escribe.">
+                <input
+                  id={`${uid}-keyword`}
+                  className="cab-inp cab-mono"
+                  value={custom.triggerKeyword}
+                  onChange={(e) => updateCustom(custom.id, { triggerKeyword: e.target.value.trim() })}
+                />
+              </Field>
+            </div>
+          )}
 
-            <Field label="Sonido" htmlFor={`${uid}-sound`}>
-              <div className="flex flex-wrap items-center gap-2" data-tour="alert-audio">
-                <select
-                  id={`${uid}-sound`}
-                  className="cab-inp flex-1 basis-48"
-                  value={hasFile || wantsFile ? 'file' : item.soundType}
-                  onChange={(e) => chooseSound(e.target.value)}
-                >
-                  {SOUNDS.map((sound) => (
-                    <option key={sound.id} value={sound.id}>
-                      {sound.name}
-                    </option>
-                  ))}
-                  <option value="file">Archivo propio</option>
-                </select>
-                <button
-                  type="button"
-                  className="cab-btn2"
-                  onClick={() => playAlertOrCustomSound(item.customAudioUrl, item.soundType, volume)}
-                >
-                  <Play className="h-4 w-4" />
-                  <span>Escuchar</span>
-                </button>
+          <Field
+            label="Mensaje"
+            htmlFor={`${uid}-template`}
+            hint={
+              <>
+                Variables: <span className="cab-mono">{custom ? '{user}' : eventMeta.vars}</span>
+              </>
+            }
+          >
+            <input id={`${uid}-template`} className="cab-inp" value={item.template} onChange={(e) => patchItem({ template: e.target.value })} />
+          </Field>
+
+          {!custom && (eventType === 'bits' || eventType === 'raid') && (
+            <Field
+              label={eventType === 'bits' ? 'Bits mínimos' : 'Espectadores mínimos'}
+              htmlFor={`${uid}-min`}
+              hint="Por debajo de esta cantidad la alerta no aparece."
+            >
+              <input
+                id={`${uid}-min`}
+                type="number"
+                min={0}
+                className="cab-inp sm:max-w-[160px]"
+                value={eventConfig.minAmount ?? 0}
+                onChange={(e) => updateEvent(eventType, { minAmount: Math.max(0, Number(e.target.value) || 0) })}
+              />
+            </Field>
+          )}
+          {custom && (
+            <Field label="Color del evento">
+              <div className="cab-sw">
+                {ACCENTS.map((accent) => (
+                  <button
+                    key={accent.color}
+                    type="button"
+                    style={{ background: accent.color }}
+                    aria-label={accent.name}
+                    aria-pressed={custom.accentColor === accent.color}
+                    onClick={() => updateCustom(custom.id, { accentColor: accent.color })}
+                  />
+                ))}
               </div>
-
-              {(hasFile || wantsFile) && (
-                <div className="grid gap-3 rounded border border-[color:var(--cb-line)] p-3">
-                  <p className="cab-hint">
-                    {hasFile
-                      ? `Archivo: ${item.customAudioName || 'sin nombre'}${
-                          item.customAudioDuration ? ` · ${item.customAudioDuration} s` : ''
-                        }`
-                      : `Elige un sonido de hasta ${MAX_AUDIO_DURATION_SECONDS} segundos.`}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setVault('audio')}>
-                      Elegir de la biblioteca
-                    </button>
-                    <label className="cab-btn2 cab-btn-sm" htmlFor={`${uid}-audio-file`}>
-                      Subir archivo
-                    </label>
-                    <input
-                      id={`${uid}-audio-file`}
-                      type="file"
-                      accept="audio/*"
-                      className="studio-file"
-                      onChange={handleAudioUpload}
-                    />
-                  </div>
-                  {audioError && (
-                    <p className="cab-error" role="alert">
-                      {audioError}
-                    </p>
-                  )}
-                  {hasFile && (
+            </Field>
+          )}
+          <details className="studio-details" data-tour="alert-video">
+            <summary>Vídeo o meme{item.videoUrl ? ' · 1 archivo' : ''}</summary>
+            <div>
+              <p className="cab-hint">
+                {item.videoUrl
+                  ? `Archivo: ${item.videoName || 'vídeo sin nombre'}`
+                  : 'Sin vídeo. Se reproduce encima de la alerta mientras está en pantalla.'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setVault('video')}>
+                  Elegir de la biblioteca
+                </button>
+                <label className="cab-btn2 cab-btn-sm" htmlFor={`${uid}-video-file`}>
+                  Subir archivo
+                </label>
+                <input id={`${uid}-video-file`} type="file" accept="video/webm,video/mp4" className="studio-file" onChange={handleVideoUpload} />
+                {item.videoUrl && (
+                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => patchItem({ videoUrl: undefined, videoName: undefined })}>
+                    Quitar vídeo
+                  </button>
+                )}
+              </div>
+              {item.videoUrl && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Fondo del vídeo" htmlFor={`${uid}-blend`}>
+                    <select
+                      id={`${uid}-blend`}
+                      className="cab-inp"
+                      value={item.blendMode || 'transparent'}
+                      onChange={(e) => patchItem({ blendMode: e.target.value as AlertBlendMode })}
+                    >
+                      {BLEND_MODES.map((mode) => (
+                        <option key={mode.id} value={mode.id}>
+                          {mode.label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Tamaño del vídeo">
                     <div className="cab-range">
                       <input
                         type="range"
-                        min={0}
-                        max={1}
+                        min={0.5}
+                        max={2}
                         step={0.05}
-                        value={volume}
-                        aria-label="Volumen del archivo"
-                        onChange={(e) => patchItem({ customAudioVolume: Number(e.target.value) })}
+                        value={item.videoScale ?? 1}
+                        aria-label="Tamaño del vídeo"
+                        onChange={(e) => patchItem({ videoScale: Number(e.target.value) })}
                       />
-                      <output>{Math.round(volume * 100)}%</output>
+                      <output>{Math.round((item.videoScale ?? 1) * 100)}%</output>
                     </div>
-                  )}
+                  </Field>
                 </div>
               )}
-            </Field>
+            </div>
+          </details>
 
-            <Toggle
-              label="Leer el mensaje con la voz del chat"
-              checked={usesTts(item.audioMode)}
-              onChange={(next) => patchItem({ audioMode: audioModeFor(next, hasFile, item.soundType) })}
-            />
-            <Toggle
-              label="Sacudir la pantalla"
-              checked={Boolean(item.screenShake)}
-              onChange={(next) => patchItem({ screenShake: next })}
-            />
-
-            {custom && (
-              <Field label="Color del evento">
-                <div className="cab-sw">
-                  {ACCENTS.map((accent) => (
-                    <button
-                      key={accent.color}
-                      type="button"
-                      style={{ background: accent.color }}
-                      aria-label={accent.name}
-                      aria-pressed={custom.accentColor === accent.color}
-                      onClick={() => updateCustom(custom.id, { accentColor: accent.color })}
-                    />
-                  ))}
-                </div>
-              </Field>
-            )}
-
-            <details className="studio-details" data-tour="alert-video">
-              <summary>Vídeo o meme{item.videoUrl ? ' · 1 archivo' : ''}</summary>
+          {tiers && (
+            <details className="studio-details" data-tour="alert-tiers">
+              <summary>Niveles · {tiers.list.length}</summary>
               <div>
                 <p className="cab-hint">
-                  {item.videoUrl
-                    ? `Archivo: ${item.videoName || 'vídeo sin nombre'}`
-                    : 'Sin vídeo. Se reproduce encima de la alerta mientras está en pantalla.'}
+                  {tiers.type === 'bits'
+                    ? 'Cada nivel se aplica desde su cantidad de bits y cambia mensaje, color y sonido.'
+                    : 'Cada tipo de suscripción puede tener su propio mensaje, color y sonido.'}
+                </p>
+                {tiers.list.map((tier) => {
+                  const patch = (value: Partial<BitTierConfig & SubTierConfig>) =>
+                    tiers.type === 'bits' ? updateBitTier(tier.id, value) : updateSubTier(tier.id, value);
+                  return (
+                    <fieldset key={tier.id} className="studio-tier">
+                      <legend className="sr-only">{tier.name}</legend>
+                      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                        <input
+                          className="cab-inp"
+                          value={tier.name}
+                          aria-label="Nombre del nivel"
+                          onChange={(e) => patch({ name: e.target.value })}
+                        />
+                        {'minBits' in tier && (
+                          <input
+                            type="number"
+                            min={1}
+                            className="cab-inp sm:w-28"
+                            value={tier.minBits}
+                            aria-label="Desde cuántos bits"
+                            onChange={(e) => patch({ minBits: Math.max(1, Number(e.target.value) || 1) })}
+                          />
+                        )}
+                      </div>
+                      <input
+                        className="cab-inp"
+                        value={tier.template}
+                        aria-label={`Mensaje de ${tier.name}`}
+                        onChange={(e) => patch({ template: e.target.value })}
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <input
+                          type="color"
+                          className="studio-color"
+                          value={tier.accent}
+                          aria-label={`Color de ${tier.name}`}
+                          onChange={(e) => patch({ accent: e.target.value })}
+                        />
+                        <select
+                          className="cab-inp flex-1 basis-36"
+                          value={tier.soundType}
+                          aria-label={`Sonido de ${tier.name}`}
+                          onChange={(e) => patch({ soundType: e.target.value as AlertSoundType })}
+                        >
+                          {SOUNDS.map((sound) => (
+                            <option key={sound.id} value={sound.id}>
+                              {sound.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Toggle label="Sacudir" checked={Boolean(tier.screenShake)} onChange={(next) => patch({ screenShake: next })} />
+                        <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => testTier(tier, tiers.type)}>
+                          Probar
+                        </button>
+                      </div>
+                    </fieldset>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+        </section>
+      </TabPanel>
+
+      <TabPanel idBase={TAB_BASE} id="sonido" value={tab}>
+        <section className="cab-mod" data-tour="alert-sound">
+          <h2>Sonido de {itemLabel}</h2>
+          <Field label="Sonido" htmlFor={`${uid}-sound`}>
+            <div className="flex flex-wrap items-center gap-2" data-tour="alert-audio">
+              <select
+                id={`${uid}-sound`}
+                className="cab-inp flex-1 basis-48"
+                value={hasFile || wantsFile ? 'file' : item.soundType}
+                onChange={(e) => chooseSound(e.target.value)}
+              >
+                {SOUNDS.map((sound) => (
+                  <option key={sound.id} value={sound.id}>
+                    {sound.name}
+                  </option>
+                ))}
+                <option value="file">Archivo propio</option>
+              </select>
+              <button type="button" className="cab-btn2" onClick={() => playAlertOrCustomSound(item.customAudioUrl, item.soundType, volume)}>
+                <Play className="h-4 w-4" />
+                <span>Escuchar</span>
+              </button>
+            </div>
+
+            {(hasFile || wantsFile) && (
+              <div className="grid gap-3 rounded border border-[color:var(--cb-line)] p-3">
+                <p className="cab-hint">
+                  {hasFile
+                    ? `Archivo: ${item.customAudioName || 'sin nombre'}${item.customAudioDuration ? ` · ${item.customAudioDuration} s` : ''}`
+                    : `Elige un sonido de hasta ${MAX_AUDIO_DURATION_SECONDS} segundos.`}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setVault('video')}>
+                  <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => setVault('audio')}>
                     Elegir de la biblioteca
                   </button>
-                  <label className="cab-btn2 cab-btn-sm" htmlFor={`${uid}-video-file`}>
+                  <label className="cab-btn2 cab-btn-sm" htmlFor={`${uid}-audio-file`}>
                     Subir archivo
                   </label>
-                  <input
-                    id={`${uid}-video-file`}
-                    type="file"
-                    accept="video/webm,video/mp4"
-                    className="studio-file"
-                    onChange={handleVideoUpload}
-                  />
-                  {item.videoUrl && (
-                    <button
-                      type="button"
-                      className="cab-btn2 cab-btn-sm"
-                      onClick={() => patchItem({ videoUrl: undefined, videoName: undefined })}
-                    >
-                      Quitar vídeo
-                    </button>
-                  )}
+                  <input id={`${uid}-audio-file`} type="file" accept="audio/*" className="studio-file" onChange={handleAudioUpload} />
                 </div>
-                {item.videoUrl && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Fondo del vídeo" htmlFor={`${uid}-blend`}>
-                      <select
-                        id={`${uid}-blend`}
-                        className="cab-inp"
-                        value={item.blendMode || 'transparent'}
-                        onChange={(e) => patchItem({ blendMode: e.target.value as AlertBlendMode })}
-                      >
-                        {BLEND_MODES.map((mode) => (
-                          <option key={mode.id} value={mode.id}>
-                            {mode.label}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Tamaño del vídeo">
-                      <div className="cab-range">
-                        <input
-                          type="range"
-                          min={0.5}
-                          max={2}
-                          step={0.05}
-                          value={item.videoScale ?? 1}
-                          aria-label="Tamaño del vídeo"
-                          onChange={(e) => patchItem({ videoScale: Number(e.target.value) })}
-                        />
-                        <output>{Math.round((item.videoScale ?? 1) * 100)}%</output>
-                      </div>
-                    </Field>
+                {audioError && (
+                  <p className="cab-error" role="alert">
+                    {audioError}
+                  </p>
+                )}
+                {hasFile && (
+                  <div className="cab-range">
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={volume}
+                      aria-label="Volumen del archivo"
+                      onChange={(e) => patchItem({ customAudioVolume: Number(e.target.value) })}
+                    />
+                    <output>{Math.round(volume * 100)}%</output>
                   </div>
                 )}
               </div>
-            </details>
-
-            {tiers && (
-              <details className="studio-details" data-tour="alert-tiers">
-                <summary>Niveles · {tiers.list.length}</summary>
-                <div>
-                  <p className="cab-hint">
-                    {tiers.type === 'bits'
-                      ? 'Cada nivel se aplica desde su cantidad de bits y cambia mensaje, color y sonido.'
-                      : 'Cada tipo de suscripción puede tener su propio mensaje, color y sonido.'}
-                  </p>
-                  {tiers.list.map((tier) => {
-                    const patch = (value: Partial<BitTierConfig & SubTierConfig>) =>
-                      tiers.type === 'bits' ? updateBitTier(tier.id, value) : updateSubTier(tier.id, value);
-                    return (
-                      <fieldset key={tier.id} className="studio-tier">
-                        <legend className="sr-only">{tier.name}</legend>
-                        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                          <input
-                            className="cab-inp"
-                            value={tier.name}
-                            aria-label="Nombre del nivel"
-                            onChange={(e) => patch({ name: e.target.value })}
-                          />
-                          {'minBits' in tier && (
-                            <input
-                              type="number"
-                              min={1}
-                              className="cab-inp sm:w-28"
-                              value={tier.minBits}
-                              aria-label="Desde cuántos bits"
-                              onChange={(e) => patch({ minBits: Math.max(1, Number(e.target.value) || 1) })}
-                            />
-                          )}
-                        </div>
-                        <input
-                          className="cab-inp"
-                          value={tier.template}
-                          aria-label={`Mensaje de ${tier.name}`}
-                          onChange={(e) => patch({ template: e.target.value })}
-                        />
-                        <div className="flex flex-wrap items-center gap-3">
-                          <input
-                            type="color"
-                            className="studio-color"
-                            value={tier.accent}
-                            aria-label={`Color de ${tier.name}`}
-                            onChange={(e) => patch({ accent: e.target.value })}
-                          />
-                          <select
-                            className="cab-inp flex-1 basis-36"
-                            value={tier.soundType}
-                            aria-label={`Sonido de ${tier.name}`}
-                            onChange={(e) => patch({ soundType: e.target.value as AlertSoundType })}
-                          >
-                            {SOUNDS.map((sound) => (
-                              <option key={sound.id} value={sound.id}>
-                                {sound.name}
-                              </option>
-                            ))}
-                          </select>
-                          <Toggle
-                            label="Sacudir"
-                            checked={Boolean(tier.screenShake)}
-                            onChange={(next) => patch({ screenShake: next })}
-                          />
-                          <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => testTier(tier, tiers.type)}>
-                            Probar
-                          </button>
-                        </div>
-                      </fieldset>
-                    );
-                  })}
-                </div>
-              </details>
             )}
+          </Field>
 
-            <details className="studio-details" data-tour="alert-appearance">
-              <summary>Apariencia de todas las alertas</summary>
-              <div>
-                <Field label="Estilo">
-                  <div className="cab-seg" role="group" aria-label="Estilo de las alertas">
-                    {ALERT_STYLES.map((style) => (
-                      <button
-                        key={style.id}
-                        type="button"
-                        aria-pressed={alertsSettings.alertStyle === style.id}
-                        title={style.description}
-                        onClick={() => updateAlerts({ alertStyle: style.id })}
-                      >
-                        {style.name}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-                <Field label="Color">
-                  <div className="cab-sw">
-                    {ACCENTS.map((accent) => (
-                      <button
-                        key={accent.color}
-                        type="button"
-                        style={{ background: accent.color }}
-                        aria-label={accent.name}
-                        aria-pressed={alertsSettings.accent === accent.color}
-                        onClick={() => updateAlerts({ accent: accent.color })}
-                      />
-                    ))}
-                    <input
-                      type="color"
-                      value={alertsSettings.accent}
-                      aria-label="Otro color"
-                      onChange={(e) => updateAlerts({ accent: e.target.value })}
-                    />
-                  </div>
-                </Field>
-                <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
-                  <Field label="Posición">
-                    <div className="cab-pos" role="group" aria-label="Posición en pantalla">
-                      {ALERT_POSITIONS.map((position) => (
-                        <button
-                          key={position.id}
-                          type="button"
-                          aria-label={position.name}
-                          aria-pressed={alertsSettings.position === position.id}
-                          onClick={() => updateAlerts({ position: position.id })}
-                        />
-                      ))}
-                    </div>
-                    <Toggle
-                      label="Posición aleatoria"
-                      checked={alertsSettings.randomPosition}
-                      onChange={(randomPosition) => updateAlerts({ randomPosition })}
-                    />
-                    <span className="cab-hint">
-                      {alertsSettings.randomPosition
-                        ? 'Cada alerta sale en un punto distinto de la pantalla, nunca dos veces seguidas en el mismo.'
-                        : 'Apagada, la alerta sale siempre en el punto elegido arriba.'}
-                    </span>
-                  </Field>
-                  <div className="grid content-start gap-4">
-                    {alertsSettings.randomPosition && (
-                      <Field label="Margen con los bordes" hint="Espacio que la alerta deja libre contra cada borde de la pantalla.">
-                        <div className="cab-range">
-                          <input
-                            type="range"
-                            min={RANDOM_MARGIN.min}
-                            max={RANDOM_MARGIN.max}
-                            step={1}
-                            value={alertsSettings.randomMargin}
-                            aria-label="Margen con los bordes"
-                            onChange={(e) => updateAlerts({ randomMargin: Number(e.target.value) })}
-                          />
-                          <output>{alertsSettings.randomMargin}%</output>
-                        </div>
-                      </Field>
-                    )}
-                    <Field label="Tiempo en pantalla">
-                      <div className="cab-range">
-                        <input
-                          type="range"
-                          min={2}
-                          max={15}
-                          step={1}
-                          value={alertsSettings.duration}
-                          aria-label="Tiempo en pantalla"
-                          onChange={(e) => updateAlerts({ duration: Number(e.target.value) })}
-                        />
-                        <output>{alertsSettings.duration} s</output>
-                      </div>
-                    </Field>
-                    <Field label="Volumen general">
-                      <div className="cab-range">
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={alertsSettings.soundVolume}
-                          aria-label="Volumen general"
-                          onChange={(e) => updateAlerts({ soundVolume: Number(e.target.value) })}
-                        />
-                        <output>{Math.round(alertsSettings.soundVolume * 100)}%</output>
-                      </div>
-                    </Field>
-                  </div>
-                </div>
+          <Toggle
+            label="Leer el mensaje con la voz del chat"
+            checked={usesTts(item.audioMode)}
+            onChange={(next) => patchItem({ audioMode: audioModeFor(next, hasFile, item.soundType) })}
+          />
+          <Toggle label="Sacudir la pantalla" checked={Boolean(item.screenShake)} onChange={(next) => patchItem({ screenShake: next })} />
+        </section>
+      </TabPanel>
+
+      <TabPanel idBase={TAB_BASE} id="apariencia" value={tab}>
+        <section className="cab-mod" data-tour="alert-appearance">
+          <h2>Apariencia de todas las alertas</h2>
+          <div className="grid gap-4">
+            <Field label="Estilo">
+              <div className="cab-seg" role="group" aria-label="Estilo de las alertas">
+                {ALERT_STYLES.map((style) => (
+                  <button
+                    key={style.id}
+                    type="button"
+                    aria-pressed={alertsSettings.alertStyle === style.id}
+                    title={style.description}
+                    onClick={() => updateAlerts({ alertStyle: style.id })}
+                  >
+                    {style.name}
+                  </button>
+                ))}
               </div>
-            </details>
-          </section>
-
-          {/* ---------- Monitor ---------- */}
-          <section className="cab-mod max-[1199px]:order-first min-[1200px]:sticky min-[1200px]:top-4" data-tour="stage-monitor">
-            <h2>Monitor</h2>
-            <div ref={stageRef} className={`cab-stage ${STAGE_POSITION[alertsSettings.position]}`}>
-              {monitorVideo && (
-                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-4">
-                  <video
-                    src={monitorVideo.url}
-                    autoPlay
-                    playsInline
-                    className="max-h-full w-auto object-contain"
-                    style={{ mixBlendMode: monitorVideo.blend === 'screen' ? 'screen' : 'normal' }}
+            </Field>
+            <Field label="Color">
+              <div className="cab-sw">
+                {ACCENTS.map((accent) => (
+                  <button
+                    key={accent.color}
+                    type="button"
+                    style={{ background: accent.color }}
+                    aria-label={accent.name}
+                    aria-pressed={alertsSettings.accent === accent.color}
+                    onClick={() => updateAlerts({ accent: accent.color })}
                   />
-                </div>
-              )}
-              {/* Con posición aleatoria, la tarjeta va en una caja que cada prueba coloca en otro punto */}
-              <div
-                style={
-                  alertsSettings.randomPosition
-                    ? {
-                        ...spotStyle(monitorSpot, alertsSettings.randomMargin),
-                        width: `min(calc(clamp(8px, 3.1cqw, 16px) * 34), ${100 - alertsSettings.randomMargin * 2}%)`,
-                      }
-                    : { display: 'contents' }
-                }
-              >
-                <AlertCard
-                  ref={cardRef}
-                  alertStyle={alertsSettings.alertStyle}
-                  position={alertsSettings.position}
-                  accent={preview.accent}
-                  name={preview.user}
-                  text={preview.text}
-                  emotionLabel={preview.detail || undefined}
-                  stickerSvg={alertsSettings.stickerSvg}
-                  fontSize="clamp(8px, 3.1cqw, 16px)"
+                ))}
+                <input
+                  type="color"
+                  value={alertsSettings.accent}
+                  aria-label="Otro color"
+                  onChange={(e) => updateAlerts({ accent: e.target.value })}
                 />
               </div>
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+              <Field label="Posición">
+                <div className="cab-pos" role="group" aria-label="Posición en pantalla">
+                  {ALERT_POSITIONS.map((position) => (
+                    <button
+                      key={position.id}
+                      type="button"
+                      aria-label={position.name}
+                      aria-pressed={alertsSettings.position === position.id}
+                      onClick={() => updateAlerts({ position: position.id })}
+                    />
+                  ))}
+                </div>
+                <Toggle
+                  label="Posición aleatoria"
+                  checked={alertsSettings.randomPosition}
+                  onChange={(randomPosition) => updateAlerts({ randomPosition })}
+                />
+                <span className="cab-hint">
+                  {alertsSettings.randomPosition
+                    ? 'Cada alerta sale en un punto distinto de la pantalla, nunca dos veces seguidas en el mismo.'
+                    : 'Apagada, la alerta sale siempre en el punto elegido arriba.'}
+                </span>
+              </Field>
+              <div className="grid content-start gap-4">
+                {alertsSettings.randomPosition && (
+                  <Field label="Margen con los bordes" hint="Espacio que la alerta deja libre contra cada borde de la pantalla.">
+                    <div className="cab-range">
+                      <input
+                        type="range"
+                        min={RANDOM_MARGIN.min}
+                        max={RANDOM_MARGIN.max}
+                        step={1}
+                        value={alertsSettings.randomMargin}
+                        aria-label="Margen con los bordes"
+                        onChange={(e) => updateAlerts({ randomMargin: Number(e.target.value) })}
+                      />
+                      <output>{alertsSettings.randomMargin}%</output>
+                    </div>
+                  </Field>
+                )}
+                <Field label="Tiempo en pantalla">
+                  <div className="cab-range">
+                    <input
+                      type="range"
+                      min={2}
+                      max={15}
+                      step={1}
+                      value={alertsSettings.duration}
+                      aria-label="Tiempo en pantalla"
+                      onChange={(e) => updateAlerts({ duration: Number(e.target.value) })}
+                    />
+                    <output>{alertsSettings.duration} s</output>
+                  </div>
+                </Field>
+                <Field label="Volumen general">
+                  <div className="cab-range">
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={alertsSettings.soundVolume}
+                      aria-label="Volumen general"
+                      onChange={(e) => updateAlerts({ soundVolume: Number(e.target.value) })}
+                    />
+                    <output>{Math.round(alertsSettings.soundVolume * 100)}%</output>
+                  </div>
+                </Field>
+              </div>
             </div>
-
-            <div className="flex flex-wrap gap-2" data-tour="test-trigger">
-              <button type="button" className="cab-btn flex-1" onClick={testSelected}>
-                <Play className="h-4 w-4" />
-                <span>Probar {itemLabel}</span>
-              </button>
-              <button type="button" className="cab-btn2 flex-1" onClick={copyWidgetUrl} data-tour="alert-obs">
-                {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-              </button>
-            </div>
-            <p className="cab-hint" role="status">
-              {status || 'La prueba suena aquí y aparece en las fuentes de OBS que estén abiertas.'}
-            </p>
-          </section>
-        </div>
-
-        <MediaLibraryModal
-          isOpen={vault !== null}
-          onClose={() => setVault(null)}
-          onSelect={handleVaultSelect}
-          allowedTypes={[vault || 'audio']}
-          title={vault === 'video' ? 'Biblioteca · elegir vídeo' : 'Biblioteca · elegir sonido (máximo 30 s)'}
-        />
-      </div>
-
-      {tourOpen && (
-        <GuidedTour steps={ALERTS_TOUR_STEPS} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Alertas" />
-      )}
-    </div>
+          </div>
+        </section>
+      </TabPanel>
+    </VentanaPestanas>
   );
 };
