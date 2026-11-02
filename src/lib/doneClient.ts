@@ -78,8 +78,13 @@ export async function doneGetSettings(): Promise<ApiOutcome<DoneSettings>> {
   if (isDoneDemo()) return { ok: true, data: { ...demoSettings } };
   const res = await call('/api/done/settings', 'GET');
   if (!res.ok) return res;
+  if (typeof res.data.readKey === 'string') lastReadKey = res.data.readKey;
   return { ok: true, data: normalizeSettings(res.data.settings ?? res.data) };
 }
+
+let lastReadKey: string | null = null;
+/** Clave de lectura de la fuente de OBS que devuelve GET /api/done/settings (null hasta leerla). */
+export const getDoneReadKey = (): string | null => lastReadKey;
 
 /** Guarda los campos indicados. El servidor valida y devuelve los ajustes completos. */
 export async function doneSaveSettings(patch: Partial<DoneSettings>): Promise<ApiOutcome<DoneSettings>> {
@@ -247,15 +252,23 @@ export async function doneSpeech(key: string, after: string | null): Promise<Api
     if (!res.ok) return fail(typeof data.code === 'string' ? data.code : 'server', typeof data.error === 'string' ? data.error : NO_SERVER);
     const items = (Array.isArray(data.items) ? data.items : []).map(parseSpeech).filter((s): s is DoneSpeech => s !== null);
     const voice = (data.voice ?? data.tts ?? null) as Partial<DoneVoice> | null;
-    const gestures = Array.isArray(data.gestures) ? (data.gestures as unknown[]).filter((g): g is DoneGesture => typeof g === 'string' && GESTURES.has(g)) : null;
+    const character = (data.character && typeof data.character === 'object' ? data.character : {}) as Record<string, unknown>;
+    const rawGestures = Array.isArray(data.gestures) ? data.gestures : Array.isArray(character.gestures) ? character.gestures : null;
+    const gestures = rawGestures ? (rawGestures as unknown[]).filter((g): g is DoneGesture => typeof g === 'string' && GESTURES.has(g)) : null;
+    const notice = typeof data.licenseNotice === 'string' ? data.licenseNotice : typeof character.licenseNotice === 'string' ? character.licenseNotice : null;
+    const merged: Partial<DoneSettings> = { ...(data.settings && typeof data.settings === 'object' ? (data.settings as Partial<DoneSettings>) : {}) };
+    if (typeof data.enabled === 'boolean') merged.enabled = data.enabled;
+    if (typeof character.modelId === 'string') merged.modelId = character.modelId;
+    if (typeof character.id === 'string' && merged.characterId === undefined) merged.characterId = character.id;
+    if (typeof data.command === 'string' && merged.commandWord === undefined) merged.commandWord = data.command;
     return {
       ok: true,
       data: {
         items,
         last: data.last === undefined || data.last === null ? after : String(data.last),
-        settings: data.settings && typeof data.settings === 'object' ? (data.settings as Partial<DoneSettings>) : null,
+        settings: Object.keys(merged).length ? merged : null,
         voice: voice ? { referenceId: voice.referenceId ?? null, engine: voice.engine ?? null } : null,
-        licenseNotice: typeof data.licenseNotice === 'string' ? data.licenseNotice : null,
+        licenseNotice: notice,
         gestures,
       },
     };

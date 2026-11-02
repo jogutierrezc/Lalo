@@ -54,6 +54,7 @@ export const DoneOverlayLayer: React.FC<Props> = ({ widgetKey, channel }) => {
   const [voice, setVoice] = useState<DoneVoice | null>(null);
   const [license, setLicense] = useState<string | null>(null);
   const [gestures, setGestures] = useState<CharacterSpec['allowedGestures']>(null);
+  const [ready, setReady] = useState(false);
   const overlay = useRef<DoneOverlayHandle>(null);
   const after = useRef<string | null>(null);
 
@@ -69,6 +70,7 @@ export const DoneOverlayLayer: React.FC<Props> = ({ widgetKey, channel }) => {
       busy = false;
       if (stopped || !res.ok) return;
       const first = after.current === null;
+      setReady(true);
       after.current = res.data.last;
       if (res.data.settings) setSettings((s) => ({ ...s, ...res.data.settings, ...overrides }));
       if (res.data.voice) setVoice(res.data.voice);
@@ -133,7 +135,8 @@ export const DoneOverlayLayer: React.FC<Props> = ({ widgetKey, channel }) => {
     return { ...entry, allowedGestures: gestures ?? entry.allowedGestures };
   }, [settings, gestures, license]);
 
-  if (!settings.enabled) return null;
+  // Sin clave o sin primera respuesta del servidor no se dibuja nada (en «Todo en uno» no estorba).
+  if (!settings.enabled || (!demo && (!widgetKey || !ready))) return null;
 
   return (
     <div className="done-layer" aria-live="polite">

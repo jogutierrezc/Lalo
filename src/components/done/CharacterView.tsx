@@ -7,7 +7,7 @@
  * carga (sin red al CDN, modelo caído), muestra la mascota de Done y avisa por onFallback.
  */
 
-import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import type { DoneEmotion } from '../../lib/doneTypes';
 import { SVG_PALETTES, type CharacterSpec } from './doneLogic';
 import { createSvgActor } from './renderers/svgCharacter';
