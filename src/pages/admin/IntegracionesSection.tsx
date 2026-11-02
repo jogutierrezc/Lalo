@@ -454,7 +454,7 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
               </select>
             </div>
           )}
-          <p className="cab-hint">Cada streamer activa Mi AI desde su ficha en «Streamers». Los personajes y los modelos con su coste se gestionan en «Personajes».</p>
+          <p className="cab-hint">Cada streamer activa Mi AI desde su ficha en «Cuentas». Los personajes y los modelos con su coste se gestionan en «Voces y personajes», pestaña «Personajes».</p>
         </ServiceCard>
 
         <ServiceCard mark="R2" name="Cloudflare R2" status={data.storageLoading ? 'Comprobando' : r2.label} tone={data.storageLoading ? undefined : r2.tone} adminOnly>

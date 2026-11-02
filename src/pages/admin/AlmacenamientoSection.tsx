@@ -347,13 +347,13 @@ export const AlmacenamientoSection: React.FC<{ data: AdminData }> = ({ data }) =
               Capacidad total: {formatBytes(split.capacity)}. Prometido a las cuentas activas según su plan:{' '}
               {formatBytes(overview.totals.storage_committed_bytes)}. Lo usado es la suma de los archivos registrados en
               Lalo; Cloudflare no informa del total del bucket por esta vía.{' '}
-              <a className="studio-link" href={adminHref('limites')}>
+              <a className="studio-link" href={adminHref('precios')}>
                 Cambiar la capacidad
               </a>
             </p>
             {split.overcommitted && (
               <p className="cab-error" role="status">
-                Has prometido más espacio del que hay. Sube la capacidad o baja los planes en Límites.
+                Has prometido más espacio del que hay. Sube la capacidad o baja los planes en «Planes y precios».
               </p>
             )}
             <span className="cab-label">Quién ocupa más</span>

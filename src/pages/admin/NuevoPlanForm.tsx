@@ -3,7 +3,7 @@
  *
  * Plan nuevo: nombre, identificador (se genera del nombre y se puede editar) y
  * límites. Valida en el navegador con validateNewPlan y crea con createPlan; el
- * servidor vuelve a validar. Los planes no se borran: se archivan en «Límites».
+ * servidor vuelve a validar. Los planes no se borran: se archivan en «Planes y precios».
  */
 
 import React, { useEffect, useId, useRef, useState } from 'react';
