@@ -1,11 +1,13 @@
 /**
  * src/pages/TwitchIOStudio.tsx
  *
- * Bot del chat. Arriba, la tarjeta «Bot en la nube»: tres pasos (cuenta de Twitch,
- * permiso al bot y bot activo) y el estado de la conexión. Debajo, la lista de
- * comandos: cada uno se edita en su propia fila y se guarda en el servidor, por
- * streamer. A la derecha se prueban sin salir del panel (prueba local: no se
- * envía nada a Twitch).
+ * Bot del chat dentro de su ventana de Tally Studio, en dos pestañas.
+ * Conexión: la tarjeta «Bot en la nube» (tres pasos: cuenta de Twitch, permiso al
+ * bot y bot activo, y el estado de la conexión) y, plegada al final, la opción
+ * avanzada con el script de Python. Comandos: la lista, donde cada uno se edita
+ * en su propia fila y se guarda en el servidor, por streamer, y los ajustes del
+ * bot. A la derecha queda fijo «Probar» en las dos pestañas, para ensayar un
+ * comando sin salir del panel (prueba local: no se envía nada a Twitch).
  *
  * El bot en la nube es el bot global «Lalo»: el streamer solo concede en Twitch
  * el permiso channel:bot. Sin sesión de la nube, la lista se guarda solo en este
@@ -21,6 +23,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Check, Copy, Plus, Send } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
+import { VentanaPestanas } from '../components/voz-ia/VentanaPestanas';
 import { Field, UndoNote, useUndo } from '../components/studio/StudioKit';
 import { useTwitchIOSettings } from '../hooks/useTwitchIOSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
@@ -48,6 +51,13 @@ import '../styles/inicio-bot.css';
 
 const TOUR_ID = 'twitchio';
 
+type Tab = 'conexion' | 'comandos';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'conexion', label: 'Conexión' },
+  { id: 'comandos', label: 'Comandos' },
+];
+
 const TWITCHIO_TOUR_STEPS: TourStep[] = [
   {
     badge: 'Bienvenida',
@@ -56,24 +66,28 @@ const TWITCHIO_TOUR_STEPS: TourStep[] = [
   },
   {
     target: 'bot-nube',
+    tab: 'conexion',
     badge: 'Bot en la nube',
     title: 'Conéctalo en tres pasos',
     body: 'Das permiso al bot de Lalo una sola vez en Twitch y responde en tu chat desde el servidor. No instalas nada.',
   },
   {
     target: 'bot-comandos',
+    tab: 'comandos',
     badge: 'Comandos',
     title: 'Un comando por fila',
     body: 'Escribe el nombre, la respuesta y quién puede usarlo. El interruptor lo apaga sin borrarlo.',
   },
   {
     target: 'bot-probar',
+    tab: 'comandos',
     badge: 'Probar',
     title: 'Pruébalo aquí',
     body: 'Escribe un comando como si estuvieras en el chat y mira qué contestaría el bot.',
   },
   {
     target: 'bot-arranque',
+    tab: 'conexion',
     badge: 'Opción avanzada',
     title: 'Ejecútalo en tu equipo',
     body: 'Si prefieres tu propia cuenta de bot, copia el script, pega tu token y ejecútalo con Python.',
@@ -139,6 +153,7 @@ export const TwitchIOStudio: React.FC = () => {
   const undo = useUndo<UndoSnapshot>();
   const uid = useId();
 
+  const [tab, setTab] = useState<Tab>('conexion');
   const [tourOpen, setTourOpen] = useState(false);
   const [addedId, setAddedId] = useState<string | null>(null);
   // Mientras se escribe, el prefijo puede quedar vacío; al salir del campo vuelve a «!»
@@ -415,19 +430,62 @@ export const TwitchIOStudio: React.FC = () => {
       </span>
     );
 
-  return (
-    <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav
-          currentApp="twitchio"
-          channel={twitchIOSettings.channel}
-          saved={saved}
-          onOpenTour={() => setTourOpen(true)}
-          tourAvailable={!tourOpen}
-        />
+  const aside = (
+    <section className="cab-mod" data-tour="bot-probar">
+      <h2>Probar</h2>
 
-        <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
-          <div className="grid gap-5">
+      <ul ref={logRef} className="bot-log" role="log" aria-label="Conversación de prueba" tabIndex={0}>
+        {log.length === 0 ? (
+          <li data-kind="note">Aún no has probado nada. Lo que escribas y lo que conteste el bot aparecerá aquí.</li>
+        ) : (
+          log.map((line) => (
+            <li key={line.id} data-kind={line.kind}>
+              {line.text}
+            </li>
+          ))
+        )}
+      </ul>
+
+      <form className="cab-field" onSubmit={simulate}>
+        <label className="cab-label" htmlFor={`${uid}-chat`}>
+          Mensaje de chat
+        </label>
+        <div className="flex gap-2">
+          <input
+            id={`${uid}-chat`}
+            className="cab-inp cab-mono"
+            value={chatInput}
+            placeholder={example ? `${prefix}${example.name}` : `${prefix}comando`}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => setChatInput(e.target.value)}
+          />
+          <button type="submit" className="cab-btn" disabled={!chatInput.trim()}>
+            <Send className="h-4 w-4" aria-hidden="true" />
+            <span>Enviar</span>
+          </button>
+        </div>
+        <span className="cab-hint">
+          Es una prueba dentro del panel: no se envía nada a Twitch y escribes como streamer, así que todos los
+          comandos te dejan pasar.
+        </span>
+      </form>
+    </section>
+  );
+
+  return (
+    <>
+      <VentanaPestanas
+        idBase="bot"
+        label="Secciones del bot"
+        tabs={TABS}
+        value={tab}
+        onChange={(id) => setTab(id as Tab)}
+        bar={<SuiteNav currentApp="twitchio" channel={twitchIOSettings.channel} saved={saved} onOpenTour={() => setTourOpen(true)} tourAvailable={!tourOpen} />}
+        aside={aside}
+      >
+        {tab === 'conexion' && (
+          <>
             {/* ---------- Bot en la nube ---------- */}
             <section className="cab-mod" data-tour="bot-nube">
               <h2>Bot en la nube</h2>
@@ -525,181 +583,6 @@ export const TwitchIOStudio: React.FC = () => {
                     </button>
                   </div>
                 </>
-              )}
-            </section>
-
-            {/* ---------- Comandos ---------- */}
-            <section className="cab-mod" data-tour="bot-comandos">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2>Comandos</h2>
-                {showList && (
-                  <p className="cab-hint">
-                    {activeCount} de {items.length} encendidos
-                  </p>
-                )}
-              </div>
-
-              {bot.notice && (
-                <p className="cab-note" role="status">
-                  {bot.notice}{' '}
-                  <button type="button" className="studio-link" onClick={bot.clearNotice}>
-                    Entendido
-                  </button>
-                </p>
-              )}
-
-              {!showList ? (
-                <p className="cab-note">
-                  {bot.phase === 'loading' ? 'Cargando tus comandos…' : 'No se pudieron cargar tus comandos. Reintenta arriba.'}
-                </p>
-              ) : items.length === 0 ? (
-                <p className="cab-note">
-                  Todavía no hay comandos. Pulsa «Nuevo comando», ponle un nombre (por ejemplo, redes) y escribe lo que
-                  debe contestar el bot.
-                </p>
-              ) : (
-                <ul className="cab-rows !max-h-none">
-                  {items.map((item) => {
-                    const label = item.name ? `${prefix}${item.name}` : 'comando sin nombre';
-                    return (
-                      <li key={item.key} className="bot-cmd">
-                        <input
-                          type="checkbox"
-                          className="cab-tog"
-                          checked={item.enabled}
-                          aria-label={`Encender ${label}`}
-                          onChange={(e) => patchCommand(item.key, { enabled: e.target.checked })}
-                        />
-                        <div className="bot-cmd-name">
-                          <span className="cab-mono" aria-hidden="true">
-                            {prefix}
-                          </span>
-                          <input
-                            className="cab-inp cab-mono"
-                            value={item.name}
-                            placeholder="nombre"
-                            aria-label="Nombre del comando"
-                            autoComplete="off"
-                            spellCheck={false}
-                            maxLength={25}
-                            autoFocus={item.key === addedId}
-                            onChange={(e) => patchCommand(item.key, { name: cleanCommandName(e.target.value, prefix) })}
-                          />
-                        </div>
-                        <input
-                          className="cab-inp bot-cmd-reply"
-                          value={item.response}
-                          placeholder="Lo que contesta el bot"
-                          aria-label={`Respuesta de ${label}`}
-                          maxLength={450}
-                          onChange={(e) => patchCommand(item.key, { response: e.target.value })}
-                        />
-                        <select
-                          className="cab-inp bot-cmd-who"
-                          value={item.permission}
-                          aria-label={`Quién puede usar ${label}`}
-                          onChange={(e) => patchCommand(item.key, { permission: e.target.value as CommandPermission })}
-                        >
-                          {PERMISSIONS.map((permission) => (
-                            <option key={permission.id} value={permission.id}>
-                              {permission.label}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="cab-btn2 cab-btn-sm"
-                          aria-label={`Quitar ${label}`}
-                          onClick={() => removeCommand(item)}
-                        >
-                          Quitar
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              {repeated.length > 0 && (
-                <p className="cab-error" role="alert">
-                  Hay más de un comando llamado {repeated.map((name) => `${prefix}${name}`).join(', ')}. El bot solo usará
-                  el primero.
-                </p>
-              )}
-
-              {items
-                .filter((item) => item.error)
-                .map((item) => (
-                  <p key={item.key} className="cab-error" role="alert">
-                    {item.name ? `${prefix}${item.name}` : 'Un comando'}: {item.error}
-                  </p>
-                ))}
-
-              {undo.pending && <UndoNote label={undo.pending.label} onUndo={restoreCommands} />}
-
-              {showList && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <button type="button" className="cab-btn2" onClick={addCommand}>
-                    <Plus className="h-4 w-4" aria-hidden="true" />
-                    <span>Nuevo comando</span>
-                  </button>
-                  <p className="cab-hint flex-1 basis-60">
-                    En la respuesta, <span className="cab-mono">{'{user}'}</span> se cambia por quien escribe y{' '}
-                    <span className="cab-mono">{'{channel}'}</span> por tu canal.
-                    {cloudReady && ' Cada comando se guarda en la nube cuando tiene nombre y respuesta.'}
-                  </p>
-                </div>
-              )}
-
-              {showList && (
-                <details className="studio-details">
-                  <summary>Ajustes del bot</summary>
-                  <div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field
-                        label="Prefijo"
-                        htmlFor={`${uid}-prefix`}
-                        hint="El símbolo con el que empiezan los comandos. Si lo dejas vacío, vuelve a ser !"
-                      >
-                        <input
-                          id={`${uid}-prefix`}
-                          className="cab-inp cab-mono"
-                          value={prefixDraft ?? prefix}
-                          maxLength={3}
-                          autoComplete="off"
-                          spellCheck={false}
-                          onChange={(e) => {
-                            const next = e.target.value.replace(/\s+/g, '');
-                            setPrefixDraft(next);
-                            if (next) changePrefix(next);
-                          }}
-                          onBlur={() => {
-                            if (prefixDraft === '') changePrefix('!');
-                            setPrefixDraft(null);
-                          }}
-                        />
-                      </Field>
-                      <Field
-                        label="Mensaje de bienvenida (solo script de Python)"
-                        htmlFor={`${uid}-welcome`}
-                        hint="Solo lo usa el script de Python de la opción avanzada. El bot en la nube todavía no envía saludo. Déjalo vacío si no quieres saludo."
-                      >
-                        <input
-                          id={`${uid}-welcome`}
-                          className="cab-inp"
-                          value={welcomeMessage}
-                          maxLength={450}
-                          onChange={(e) => changeWelcome(e.target.value)}
-                        />
-                      </Field>
-                    </div>
-                    {cloudReady && bot.settingsError && (
-                      <p className="cab-error" role="alert">
-                        {bot.settingsError}
-                      </p>
-                    )}
-                  </div>
-                </details>
               )}
             </section>
 
@@ -809,53 +692,187 @@ export const TwitchIOStudio: React.FC = () => {
                 </div>
               </details>
             </section>
-          </div>
+          </>
+        )}
 
-          {/* ---------- Probar ---------- */}
-          <section className="cab-mod min-[1100px]:sticky min-[1100px]:top-4" data-tour="bot-probar">
-            <h2>Probar</h2>
-
-            <ul ref={logRef} className="bot-log" role="log" aria-label="Conversación de prueba" tabIndex={0}>
-              {log.length === 0 ? (
-                <li data-kind="note">Aún no has probado nada. Lo que escribas y lo que conteste el bot aparecerá aquí.</li>
-              ) : (
-                log.map((line) => (
-                  <li key={line.id} data-kind={line.kind}>
-                    {line.text}
-                  </li>
-                ))
+        {tab === 'comandos' && (
+          <section className="cab-mod" data-tour="bot-comandos">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2>Comandos</h2>
+              {showList && (
+                <p className="cab-hint">
+                  {activeCount} de {items.length} encendidos
+                </p>
               )}
-            </ul>
+            </div>
 
-            <form className="cab-field" onSubmit={simulate}>
-              <label className="cab-label" htmlFor={`${uid}-chat`}>
-                Mensaje de chat
-              </label>
-              <div className="flex gap-2">
-                <input
-                  id={`${uid}-chat`}
-                  className="cab-inp cab-mono"
-                  value={chatInput}
-                  placeholder={example ? `${prefix}${example.name}` : `${prefix}comando`}
-                  autoComplete="off"
-                  spellCheck={false}
-                  onChange={(e) => setChatInput(e.target.value)}
-                />
-                <button type="submit" className="cab-btn" disabled={!chatInput.trim()}>
-                  <Send className="h-4 w-4" aria-hidden="true" />
-                  <span>Enviar</span>
+            {bot.notice && (
+              <p className="cab-note" role="status">
+                {bot.notice}{' '}
+                <button type="button" className="studio-link" onClick={bot.clearNotice}>
+                  Entendido
                 </button>
-              </div>
-              <span className="cab-hint">
-                Es una prueba dentro del panel: no se envía nada a Twitch y escribes como streamer, así que todos los
-                comandos te dejan pasar.
-              </span>
-            </form>
-          </section>
-        </div>
-      </div>
+              </p>
+            )}
 
-      {tourOpen && <GuidedTour steps={TWITCHIO_TOUR_STEPS} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Bot" />}
-    </div>
+            {!showList ? (
+              <p className="cab-note">
+                {bot.phase === 'loading' ? 'Cargando tus comandos…' : 'No se pudieron cargar tus comandos. Reintenta arriba.'}
+              </p>
+            ) : items.length === 0 ? (
+              <p className="cab-note">
+                Todavía no hay comandos. Pulsa «Nuevo comando», ponle un nombre (por ejemplo, redes) y escribe lo que
+                debe contestar el bot.
+              </p>
+            ) : (
+              <ul className="cab-rows !max-h-none">
+                {items.map((item) => {
+                  const label = item.name ? `${prefix}${item.name}` : 'comando sin nombre';
+                  return (
+                    <li key={item.key} className="bot-cmd">
+                      <input
+                        type="checkbox"
+                        className="cab-tog"
+                        checked={item.enabled}
+                        aria-label={`Encender ${label}`}
+                        onChange={(e) => patchCommand(item.key, { enabled: e.target.checked })}
+                      />
+                      <div className="bot-cmd-name">
+                        <span className="cab-mono" aria-hidden="true">
+                          {prefix}
+                        </span>
+                        <input
+                          className="cab-inp cab-mono"
+                          value={item.name}
+                          placeholder="nombre"
+                          aria-label="Nombre del comando"
+                          autoComplete="off"
+                          spellCheck={false}
+                          maxLength={25}
+                          autoFocus={item.key === addedId}
+                          onChange={(e) => patchCommand(item.key, { name: cleanCommandName(e.target.value, prefix) })}
+                        />
+                      </div>
+                      <input
+                        className="cab-inp bot-cmd-reply"
+                        value={item.response}
+                        placeholder="Lo que contesta el bot"
+                        aria-label={`Respuesta de ${label}`}
+                        maxLength={450}
+                        onChange={(e) => patchCommand(item.key, { response: e.target.value })}
+                      />
+                      <select
+                        className="cab-inp bot-cmd-who"
+                        value={item.permission}
+                        aria-label={`Quién puede usar ${label}`}
+                        onChange={(e) => patchCommand(item.key, { permission: e.target.value as CommandPermission })}
+                      >
+                        {PERMISSIONS.map((permission) => (
+                          <option key={permission.id} value={permission.id}>
+                            {permission.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="cab-btn2 cab-btn-sm"
+                        aria-label={`Quitar ${label}`}
+                        onClick={() => removeCommand(item)}
+                      >
+                        Quitar
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {repeated.length > 0 && (
+              <p className="cab-error" role="alert">
+                Hay más de un comando llamado {repeated.map((name) => `${prefix}${name}`).join(', ')}. El bot solo usará
+                el primero.
+              </p>
+            )}
+
+            {items
+              .filter((item) => item.error)
+              .map((item) => (
+                <p key={item.key} className="cab-error" role="alert">
+                  {item.name ? `${prefix}${item.name}` : 'Un comando'}: {item.error}
+                </p>
+              ))}
+
+            {undo.pending && <UndoNote label={undo.pending.label} onUndo={restoreCommands} />}
+
+            {showList && (
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" className="cab-btn2" onClick={addCommand}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <span>Nuevo comando</span>
+                </button>
+                <p className="cab-hint flex-1 basis-60">
+                  En la respuesta, <span className="cab-mono">{'{user}'}</span> se cambia por quien escribe y{' '}
+                  <span className="cab-mono">{'{channel}'}</span> por tu canal.
+                  {cloudReady && ' Cada comando se guarda en la nube cuando tiene nombre y respuesta.'}
+                </p>
+              </div>
+            )}
+
+            {showList && (
+              <details className="studio-details">
+                <summary>Ajustes del bot</summary>
+                <div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Prefijo"
+                      htmlFor={`${uid}-prefix`}
+                      hint="El símbolo con el que empiezan los comandos. Si lo dejas vacío, vuelve a ser !"
+                    >
+                      <input
+                        id={`${uid}-prefix`}
+                        className="cab-inp cab-mono"
+                        value={prefixDraft ?? prefix}
+                        maxLength={3}
+                        autoComplete="off"
+                        spellCheck={false}
+                        onChange={(e) => {
+                          const next = e.target.value.replace(/\s+/g, '');
+                          setPrefixDraft(next);
+                          if (next) changePrefix(next);
+                        }}
+                        onBlur={() => {
+                          if (prefixDraft === '') changePrefix('!');
+                          setPrefixDraft(null);
+                        }}
+                      />
+                    </Field>
+                    <Field
+                      label="Mensaje de bienvenida (solo script de Python)"
+                      htmlFor={`${uid}-welcome`}
+                      hint="Solo lo usa el script de Python de la opción avanzada. El bot en la nube todavía no envía saludo. Déjalo vacío si no quieres saludo."
+                    >
+                      <input
+                        id={`${uid}-welcome`}
+                        className="cab-inp"
+                        value={welcomeMessage}
+                        maxLength={450}
+                        onChange={(e) => changeWelcome(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                  {cloudReady && bot.settingsError && (
+                    <p className="cab-error" role="alert">
+                      {bot.settingsError}
+                    </p>
+                  )}
+                </div>
+              </details>
+            )}
+          </section>
+        )}
+      </VentanaPestanas>
+
+      {tourOpen && <GuidedTour steps={TWITCHIO_TOUR_STEPS} onClose={() => setTourOpen(false)} onTab={(id) => setTab(id as Tab)} id={TOUR_ID} appName="Bot" />}
+    </>
   );
 };

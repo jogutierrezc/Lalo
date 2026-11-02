@@ -1,0 +1,168 @@
+/* ==========================================================================
+   Voz e IA con identidad Tally (Voz del chat, Mi AI y Bot dentro de su ventana)
+   Todo va acotado a .vt-root, así que no cambia las páginas que aún usan
+   Cabina. Solo usa tokens --cb-* y --tally-*: dentro de la ventana el tema es
+   siempre Tally oscuro (ver el bloque «Tema de las ventanas» de shell.css).
+   El rojo se reserva para «en vivo» y la acción principal; los errores van con
+   borde discontinuo, icono y texto.
+   ========================================================================== */
+
+.cab.vt-root {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  container: vt / inline-size;
+  background: var(--cb-bg);
+  color: var(--cb-fg);
+}
+.vt-bar {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--cb-line);
+  background: var(--tally-onyx);
+}
+.vt-bar:empty {
+  display: none;
+}
+.vt-bar .shell-embed-bar {
+  justify-content: space-between;
+}
+.vt-root .tui-tabs {
+  background: var(--tally-onyx);
+}
+
+/* Cuerpo: formulario a la izquierda, panel fijo a la derecha */
+.vt-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.vt-main,
+.vt-aside {
+  min-width: 0;
+  min-height: 0;
+}
+.vt-aside {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 16px;
+  border-top: 1px solid var(--cb-line);
+  background: rgb(0 0 0 / 0.14);
+}
+@container vt (min-width: 780px) {
+  .vt-body[data-aside] {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    overflow: hidden;
+  }
+  .vt-body[data-aside] .vt-main,
+  .vt-body[data-aside] .vt-aside {
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--cb-line) transparent;
+  }
+  .vt-aside {
+    border-top: 0;
+    border-left: 1px solid var(--cb-line);
+  }
+}
+.vt-panel {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 16px;
+}
+.vt-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--cb-line);
+  background: var(--tally-onyx);
+}
+
+/* Módulos y controles con el aspecto de Tally */
+.vt-root .cab-mod {
+  gap: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--tally-onyx);
+}
+.vt-root .cab-mod h2 {
+  font-size: 0.9375rem;
+}
+.vt-root .cab-inp {
+  height: 38px;
+  border-radius: 8px;
+  background: var(--tally-dark);
+}
+.vt-root textarea.cab-inp {
+  height: auto;
+}
+.vt-root .cab-inp:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 1px;
+}
+.vt-root .cab-btn,
+.vt-root .cab-btn2 {
+  min-height: 38px;
+  border-radius: 8px;
+}
+.vt-root .cab-btn-sm {
+  min-height: 32px;
+}
+.vt-root .cab-seg {
+  border-radius: 8px;
+}
+.vt-root .cab-seg button {
+  border-radius: 6px;
+}
+.vt-root .cab-note {
+  border-radius: 8px;
+}
+.vt-root .studio-link {
+  color: var(--tally-white);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.vt-root .studio-details > summary {
+  font-stretch: 100%;
+  font-family: var(--tally-ui);
+  cursor: pointer;
+}
+.vt-root .cab-tog {
+  transition: background-color 160ms ease;
+}
+.vt-root .cab-tog::after {
+  transition: transform 200ms var(--tally-ease, cubic-bezier(0.23, 1, 0.32, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-root .cab-tog,
+  .vt-root .cab-tog::after {
+    transition: none;
+  }
+}
+
+/* Bot: dentro de la ventana la columna es estrecha; cada comando se reparte en líneas, no en cinco columnas fijas */
+.vt-root .bot-cmd {
+  display: flex;
+}
+.vt-root .bot-log {
+  border-radius: 8px;
+  background: var(--tally-dark);
+}
+.vt-root .bot-script {
+  border-radius: 8px;
+  background: var(--tally-dark);
+}
+.vt-root .cab-rows {
+  border-radius: 8px;
+}

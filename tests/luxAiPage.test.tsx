@@ -3,7 +3,8 @@
  *
  * Panel de Lux AI: se renderiza a HTML con la sesión y las llamadas al servidor
  * simuladas. Comprueba la estructura de los dos casos (cuenta activada y no
- * activada), no la interacción. La interacción la cubren tests/lux*.test.ts.
+ * activada), no la interacción. La interacción la cubren tests/lux*.test.ts y el
+ * cambio de pestañas, tests/ui/vozIaVentanas.test.tsx.
  */
 
 import React from 'react';
@@ -36,21 +37,16 @@ describe('panel de Lux AI', () => {
     expect(html).not.toContain('Guardar ajustes');
   });
 
-  it('con Lux activada, muestra las tres secciones de configuración y la prueba', () => {
+  it('con Lux activada, abre en Personaje y deja fijos el guardado manual y el panel de pruebas', () => {
     session.profile = { id: 'p1', role: 'streamer', lux_enabled: true };
     const html = renderToStaticMarkup(<LuxAI />);
+    // Pestañas de la ventana (las demás secciones se comprueban en tests/ui/vozIaVentanas.test.tsx)
+    for (const name of ['Personaje', 'Comando', 'Respuestas', 'Eventos', 'En OBS', 'Memoria']) expect(html).toContain(`>${name}</button>`);
     expect(html).toContain('Personalidad');
-    expect(html).toContain('Respuestas');
-    expect(html).toContain('Personaje en OBS');
     expect(html).toContain('Probar a Lux');
+    expect(html).toContain('Decir en el chat');
     expect(html).toContain('¿Funciona?');
     expect(html).toContain('Guardar ajustes');
-  });
-
-  it('la dirección de OBS lleva el overlay y el tamaño por defecto', () => {
-    session.profile = { id: 'p1', role: 'streamer', lux_enabled: true };
-    const html = renderToStaticMarkup(<LuxAI />);
-    expect(html).toContain('/lux/overlay.html?overlay=1&amp;size=40');
   });
 
   it('el administrador ve el panel aunque no tenga Lux activada para sí mismo', () => {
