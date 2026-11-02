@@ -1,9 +1,11 @@
 /**
  * Dashboard.tsx
  *
- * Voz del chat sobre la plantilla común del panel: a la izquierda se edita, en
- * tres pestañas (Voz, Apariencia y Reglas); a la derecha el monitor 16:9 queda
- * siempre a la vista, con la alerta real, el mensaje de prueba y la URL de OBS.
+ * Voz del chat dentro de su ventana de Tally Studio: la barra de la herramienta
+ * (guía, Actualizar OBS, Copiar URL y guardado) queda fija arriba; debajo, tres
+ * pestañas (Voz, Reglas y Apariencia) con el formulario a la izquierda, y a la
+ * derecha el monitor 16:9 siempre a la vista, con la alerta real, el mensaje de
+ * prueba y la URL de OBS.
  *
  * - La voz se elige en un solo sitio; el ID propio solo aparece si se pide.
  * - Hay una sola forma de probar: «Enviar al widget», que además repite la
@@ -41,6 +43,7 @@ import { playDemo } from '../utils/alertMotion';
 import { AlertCard } from '../components/AlertCard';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { Field, Range, Toggle, UndoNote, useUndo } from '../components/studio/StudioKit';
+import { VentanaPestanas } from '../components/voz-ia/VentanaPestanas';
 import { RulesPanel } from '../components/voz/RulesPanel';
 import { PreSoundSection } from '../components/voz/PreSoundSection';
 import { useRewardDetect } from '../components/voz/useRewardDetect';
@@ -58,10 +61,10 @@ const ACCENTS = [
 
 type Tab = 'voz' | 'apariencia' | 'reglas';
 
-const TABS: { id: Tab; name: string }[] = [
-  { id: 'voz', name: 'Voz' },
-  { id: 'apariencia', name: 'Apariencia' },
-  { id: 'reglas', name: 'Reglas' },
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'voz', label: 'Voz' },
+  { id: 'reglas', label: 'Reglas' },
+  { id: 'apariencia', label: 'Apariencia' },
 ];
 
 // Guía de primeros pasos: lo mínimo para llegar a oír el primer mensaje en el stream
@@ -77,8 +80,9 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     target: 'voz-editor',
+    tab: 'voz',
     title: 'Tres pestañas para ajustarla',
-    body: 'En Voz eliges quién habla y a qué volumen. En Apariencia, cómo se ve la alerta. En Reglas, quién puede usarla, cuánto y cómo se activa.',
+    body: 'En Voz eliges quién habla y a qué volumen. En Reglas, quién puede usarla, cuánto y cómo se activa. En Apariencia, cómo se ve la alerta.',
   },
   {
     target: 'voz-monitor',
@@ -330,317 +334,27 @@ export const Dashboard: React.FC = () => {
         : normalizeTextForFishAudio(previewText);
   const rootStyle = { '--acc': settings.accent, '--acc-ink': inkFor(settings.accent) } as React.CSSProperties;
 
-  // Con la guía abierta se deja hueco abajo para que su consola no tape el último módulo
+  // Cada columna de la ventana se desplaza por dentro, así que la guía no necesita hueco extra abajo
   return (
-    <div className="cab" style={{ ...rootStyle, paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav
-          currentApp="tts"
-          channel={settings.channel}
-          saved={saved}
-          onOpenTour={() => setTourOpen(true)}
-          tourAvailable={!tourOpen}
-        />
-
-        <div className="vz-layout">
-          {/* ---------- Editor ---------- */}
-          <section className="cab-mod" data-tour="voz-editor" aria-label="Ajustes de la voz del chat">
-            <Segmented label="Sección de ajustes" value={tab} options={TABS} onChange={setTab} />
-
-            {tab === 'voz' && (
-              <>
-                {elevenInvite && (
-                  <div className="cab-note grid gap-2" role="status">
-                    <p>
-                      <b>Te invitamos a probar un nuevo modelo de voces: ElevenLabs.</b> Más expresivo, con emociones y canto. Elige una voz del grupo «ElevenLabs»
-                      en la lista de abajo y úsala con los mismos comandos del chat (por ejemplo, <span className="cab-mono">!s [feliz] hola</span> o{' '}
-                      <span className="cab-mono">!s [canto] la la la</span>). Tus voces de siempre siguen ahí.
-                    </p>
-                    <div>
-                      <button type="button" className="cab-btn2 cab-btn-sm" onClick={closeElevenInvite}>
-                        Entendido
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <Field
-                  label="Voz"
-                  htmlFor={`${uid}-voice`}
-                  hint={
-                    voiceList.replacedBy
-                      ? `La voz que tenías ya no está en el catálogo. Ahora se usa ${voiceList.replacedBy}.`
-                      : customVoice
-                        ? undefined
-                        : voices.find((voice) => voice.id === settings.referenceId)?.description
-                  }
-                >
-                  <select
-                    id={`${uid}-voice`}
-                    value={customVoice ? 'custom' : settings.referenceId}
-                    onChange={(e) => chooseVoice(e.target.value)}
-                    className="cab-inp"
-                  >
-                    {voiceUnknownYet && <option value={settings.referenceId}>Leyendo el catálogo</option>}
-                    {(elevenVoices.length > 0 ? fishVoices : voices).map((voice) => (
-                      <option key={voice.id} value={voice.id}>
-                        {voice.name}
-                      </option>
-                    ))}
-                    {elevenVoices.length > 0 && (
-                      <optgroup label="ElevenLabs (nuevo)">
-                        {elevenVoices.map((voice) => (
-                          <option key={voice.id} value={voice.id}>
-                            {voice.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    <option value="custom">Usar ID propio</option>
-                  </select>
-                </Field>
-
-                {customVoice && (
-                  <Field
-                    label="ID de tu voz"
-                    htmlFor={`${uid}-voice-id`}
-                    hint={
-                      customDraft
-                        ? 'Es el ID de una voz tuya en Fish Audio.'
-                        : `Pega aquí el ID de una voz tuya de Fish Audio. Hasta entonces se sigue usando ${currentVoiceName || 'la voz anterior'}.`
-                    }
-                  >
-                    <input
-                      id={`${uid}-voice-id`}
-                      type="text"
-                      value={customDraft}
-                      onChange={(e) => typeCustomVoice(e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="cab-inp cab-mono"
-                    />
-                  </Field>
-                )}
-
-                <Field label="Volumen">
-                  <Range
-                    label="Volumen"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={settings.volume}
-                    format={(value) => `${Math.round(value * 100)} %`}
-                    onChange={(volume) => update({ volume })}
-                  />
-                </Field>
-
-                <div className="cab-field">
-                  <Toggle label="Anunciar quién escribe" checked={announce} onChange={(announceSender) => update({ announceSender })} />
-                  <span className="cab-hint">
-                    {announce ? 'Antes del mensaje, la voz dice quién lo escribió.' : 'La voz lee solo el mensaje.'}
-                  </span>
-                </div>
-
-                <PreSoundSection settings={settings} cloudOn={cloud.profile?.status === 'active'} update={update} />
-
-                <details className="studio-details">
-                  <summary>Avanzado</summary>
-                  <div>
-                    <Field label="Modelo" hint="Gratis no consume créditos. Pro gasta créditos de Fish Audio.">
-                      <Segmented
-                        label="Modelo"
-                        value={settings.model === 's2.1-pro' ? 's2.1-pro' : 's2.1-pro-free'}
-                        options={[
-                          { id: 's2.1-pro-free', name: 'Gratis' },
-                          { id: 's2.1-pro', name: 'Pro' },
-                        ]}
-                        onChange={(model) => update({ model })}
-                      />
-                    </Field>
-                    <Field label="Velocidad">
-                      <Range
-                        label="Velocidad"
-                        min={0.75}
-                        max={1.5}
-                        step={0.05}
-                        value={settings.speed}
-                        format={(value) => `${value.toFixed(2)}×`}
-                        onChange={(speed) => update({ speed })}
-                      />
-                    </Field>
-                    <Field
-                      label="Frase del anuncio"
-                      htmlFor={`${uid}-template`}
-                      hint={
-                        announce ? (
-                          <>
-                            Usa <span className="vz-code">{'{user}'}</span> para el nombre y <span className="vz-code">{'{message}'}</span> para el
-                            mensaje.
-                          </>
-                        ) : (
-                          'Activa «Anunciar quién escribe» para usarla.'
-                        )
-                      }
-                    >
-                      <input
-                        id={`${uid}-template`}
-                        type="text"
-                        value={template}
-                        disabled={!announce}
-                        onChange={(e) => update({ announceTemplate: e.target.value })}
-                        placeholder={DEFAULT_TEMPLATE}
-                        autoComplete="off"
-                        spellCheck={false}
-                        className="cab-inp cab-mono"
-                      />
-                    </Field>
-                  </div>
-                </details>
-
-                <details className="studio-details">
-                  <summary>Emociones que puede escribir el chat</summary>
-                  <div>
-                    <p className="cab-hint max-w-[70ch]">
-                      Van entre corchetes dentro del comando, por ejemplo <span className="vz-code">!s [susurro] no hagan ruido</span>. Cambian el
-                      tono de la voz y el gesto con el que entra el texto.
-                    </p>
-                    <ul className="flex flex-wrap gap-x-5 gap-y-1">
-                      {AVAILABLE_EMOTIONS.map((emo) => (
-                        <li key={emo.tag} className="cab-hint">
-                          <span className="vz-code">{emo.example}</span> {emo.label}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </details>
-              </>
-            )}
-
-            {tab === 'apariencia' && (
-              <>
-                <Field label="Estilo de alerta">
-                  <div className="cab-styles" role="group" aria-label="Estilo de alerta">
-                    {ALERT_STYLES.map((style) => (
-                      <button
-                        key={style.id}
-                        type="button"
-                        className="cab-style"
-                        aria-pressed={settings.alertStyle === style.id}
-                        onClick={() => update({ alertStyle: style.id })}
-                      >
-                        <span className={`cab-style-face cab-face-${style.id}`}>
-                          {style.id === 'cabina' && <i />}
-                          {style.name}
-                        </span>
-                        <span className="cab-style-body">{style.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                {settings.alertStyle === 'sticker' && (
-                  <Field
-                    label="Sticker del canal (SVG)"
-                    hint={`Tu logo o mascota en SVG plano, hasta ${MAX_STICKER_BYTES / 1000} KB. Entra de golpe, se balancea mientras suena la voz y lleva borde de troquel.`}
-                  >
-                    <div className="flex flex-wrap items-center gap-3">
-                      {settings.stickerSvg && <img className="cab-sticker-thumb" src={stickerDataUri(settings.stickerSvg)} alt="Sticker actual" />}
-                      <button type="button" className="cab-btn2" onClick={() => stickerInputRef.current?.click()}>
-                        <Upload className="h-4 w-4" aria-hidden="true" />
-                        <span>{settings.stickerSvg ? 'Cambiar SVG' : 'Subir SVG'}</span>
-                      </button>
-                      <input ref={stickerInputRef} type="file" accept=".svg,image/svg+xml" hidden tabIndex={-1} onChange={onStickerFile} />
-                      {settings.stickerSvg && (
-                        <button type="button" className="cab-btn2" onClick={removeSticker}>
-                          Quitar
-                        </button>
-                      )}
-                    </div>
-                    {stickerError && (
-                      <span className="cab-error" role="alert">
-                        {stickerError}
-                      </span>
-                    )}
-                    {!settings.stickerSvg && !stickerError && (
-                      <span className="cab-hint">Sin SVG, el sticker muestra la inicial de quien escribe.</span>
-                    )}
-                    {stickerUndo.pending && (
-                      <UndoNote
-                        label={stickerUndo.pending.label}
-                        onUndo={() => {
-                          update({ stickerSvg: stickerUndo.pending?.snapshot ?? '' });
-                          stickerUndo.clear();
-                        }}
-                      />
-                    )}
-                  </Field>
-                )}
-
-                <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
-                  <Field label="Color">
-                    <div className="cab-sw" role="group" aria-label="Color">
-                      {ACCENTS.map((accent) => (
-                        <button
-                          key={accent.color}
-                          type="button"
-                          aria-label={accent.name}
-                          title={accent.name}
-                          aria-pressed={settings.accent === accent.color}
-                          style={{ backgroundColor: accent.color }}
-                          onClick={() => update({ accent: accent.color })}
-                        />
-                      ))}
-                      <input
-                        type="color"
-                        aria-label="Color personalizado"
-                        title="Color personalizado"
-                        value={settings.accent}
-                        onChange={(e) => update({ accent: normalizeAccent(e.target.value) || settings.accent })}
-                      />
-                    </div>
-                  </Field>
-
-                  <Field label="Posición en pantalla">
-                    <div className="cab-pos" role="group" aria-label="Posición en pantalla">
-                      {ALERT_POSITIONS.map((position) => (
-                        <button
-                          key={position.id}
-                          type="button"
-                          aria-label={position.name}
-                          title={position.name}
-                          aria-pressed={settings.position === position.id}
-                          onClick={() => update({ position: position.id })}
-                        />
-                      ))}
-                    </div>
-                    <span className="cab-hint">
-                      Ahora: {ALERT_POSITIONS.find((position) => position.id === settings.position)?.name}
-                    </span>
-                  </Field>
-
-                  <Field label="Tamaño">
-                    <Range
-                      label="Tamaño"
-                      min={SCALE_MIN}
-                      max={SCALE_MAX}
-                      step={0.05}
-                      value={settings.scale}
-                      format={(value) => `${Math.round(value * 100)} %`}
-                      onChange={(scale) => update({ scale })}
-                    />
-                  </Field>
-
-                  <Field label="Energía del movimiento">
-                    <Segmented label="Energía del movimiento" value={settings.energy} options={ALERT_ENERGIES} onChange={(energy) => update({ energy })} />
-                  </Field>
-                </div>
-              </>
-            )}
-
-            {tab === 'reglas' && <RulesPanel settings={settings} update={update} detect={detect} />}
-          </section>
-
-          {/* ---------- Monitor ---------- */}
-          <section className="cab-mod vz-monitor" data-tour="voz-monitor">
+    <>
+      <VentanaPestanas
+        style={rootStyle}
+        idBase="voz"
+        label="Secciones de ajustes de la voz del chat"
+        tabs={TABS}
+        value={tab}
+        onChange={(id) => setTab(id as Tab)}
+        bar={
+          <SuiteNav
+            currentApp="tts"
+            channel={settings.channel}
+            saved={saved}
+            onOpenTour={() => setTourOpen(true)}
+            tourAvailable={!tourOpen}
+          />
+        }
+        aside={
+          <section className="cab-mod" data-tour="voz-monitor">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2>Monitor</h2>
               <button type="button" className="cab-btn2 cab-btn-sm" aria-pressed={brightStage} onClick={() => setBrightStage((value) => !value)}>
@@ -772,9 +486,302 @@ export const Dashboard: React.FC = () => {
               </div>
             </details>
           </section>
-        </div>
-      </div>
-      {tourOpen && <GuidedTour steps={TOUR_STEPS} onClose={() => setTourOpen(false)} />}
-    </div>
+        }
+      >
+        <section className="grid gap-4" data-tour="voz-editor" aria-label="Ajustes de la voz del chat">
+          {tab === 'voz' && (
+            <>
+              {elevenInvite && (
+                <div className="cab-note grid gap-2" role="status">
+                  <p>
+                    <b>Te invitamos a probar un nuevo modelo de voces: ElevenLabs.</b> Más expresivo, con emociones y canto. Elige una voz del grupo «ElevenLabs»
+                    en la lista de abajo y úsala con los mismos comandos del chat (por ejemplo, <span className="cab-mono">!s [feliz] hola</span> o{' '}
+                    <span className="cab-mono">!s [canto] la la la</span>). Tus voces de siempre siguen ahí.
+                  </p>
+                  <div>
+                    <button type="button" className="cab-btn2 cab-btn-sm" onClick={closeElevenInvite}>
+                      Entendido
+                    </button>
+                  </div>
+                </div>
+              )}
+              <Field
+                label="Voz"
+                htmlFor={`${uid}-voice`}
+                hint={
+                  voiceList.replacedBy
+                    ? `La voz que tenías ya no está en el catálogo. Ahora se usa ${voiceList.replacedBy}.`
+                    : customVoice
+                      ? undefined
+                      : voices.find((voice) => voice.id === settings.referenceId)?.description
+                }
+              >
+                <select
+                  id={`${uid}-voice`}
+                  value={customVoice ? 'custom' : settings.referenceId}
+                  onChange={(e) => chooseVoice(e.target.value)}
+                  className="cab-inp"
+                >
+                  {voiceUnknownYet && <option value={settings.referenceId}>Leyendo el catálogo</option>}
+                  {(elevenVoices.length > 0 ? fishVoices : voices).map((voice) => (
+                    <option key={voice.id} value={voice.id}>
+                      {voice.name}
+                    </option>
+                  ))}
+                  {elevenVoices.length > 0 && (
+                    <optgroup label="ElevenLabs (nuevo)">
+                      {elevenVoices.map((voice) => (
+                        <option key={voice.id} value={voice.id}>
+                          {voice.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <option value="custom">Usar ID propio</option>
+                </select>
+              </Field>
+
+              {customVoice && (
+                <Field
+                  label="ID de tu voz"
+                  htmlFor={`${uid}-voice-id`}
+                  hint={
+                    customDraft
+                      ? 'Es el ID de una voz tuya en Fish Audio.'
+                      : `Pega aquí el ID de una voz tuya de Fish Audio. Hasta entonces se sigue usando ${currentVoiceName || 'la voz anterior'}.`
+                  }
+                >
+                  <input
+                    id={`${uid}-voice-id`}
+                    type="text"
+                    value={customDraft}
+                    onChange={(e) => typeCustomVoice(e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="cab-inp cab-mono"
+                  />
+                </Field>
+              )}
+
+              <Field label="Volumen">
+                <Range
+                  label="Volumen"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={settings.volume}
+                  format={(value) => `${Math.round(value * 100)} %`}
+                  onChange={(volume) => update({ volume })}
+                />
+              </Field>
+
+              <div className="cab-field">
+                <Toggle label="Anunciar quién escribe" checked={announce} onChange={(announceSender) => update({ announceSender })} />
+                <span className="cab-hint">
+                  {announce ? 'Antes del mensaje, la voz dice quién lo escribió.' : 'La voz lee solo el mensaje.'}
+                </span>
+              </div>
+
+              <PreSoundSection settings={settings} cloudOn={cloud.profile?.status === 'active'} update={update} />
+
+              <details className="studio-details">
+                <summary>Avanzado</summary>
+                <div>
+                  <Field label="Modelo" hint="Gratis no consume créditos. Pro gasta créditos de Fish Audio.">
+                    <Segmented
+                      label="Modelo"
+                      value={settings.model === 's2.1-pro' ? 's2.1-pro' : 's2.1-pro-free'}
+                      options={[
+                        { id: 's2.1-pro-free', name: 'Gratis' },
+                        { id: 's2.1-pro', name: 'Pro' },
+                      ]}
+                      onChange={(model) => update({ model })}
+                    />
+                  </Field>
+                  <Field label="Velocidad">
+                    <Range
+                      label="Velocidad"
+                      min={0.75}
+                      max={1.5}
+                      step={0.05}
+                      value={settings.speed}
+                      format={(value) => `${value.toFixed(2)}×`}
+                      onChange={(speed) => update({ speed })}
+                    />
+                  </Field>
+                  <Field
+                    label="Frase del anuncio"
+                    htmlFor={`${uid}-template`}
+                    hint={
+                      announce ? (
+                        <>
+                          Usa <span className="vz-code">{'{user}'}</span> para el nombre y <span className="vz-code">{'{message}'}</span> para el
+                          mensaje.
+                        </>
+                      ) : (
+                        'Activa «Anunciar quién escribe» para usarla.'
+                      )
+                    }
+                  >
+                    <input
+                      id={`${uid}-template`}
+                      type="text"
+                      value={template}
+                      disabled={!announce}
+                      onChange={(e) => update({ announceTemplate: e.target.value })}
+                      placeholder={DEFAULT_TEMPLATE}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="cab-inp cab-mono"
+                    />
+                  </Field>
+                </div>
+              </details>
+
+              <details className="studio-details">
+                <summary>Emociones que puede escribir el chat</summary>
+                <div>
+                  <p className="cab-hint max-w-[70ch]">
+                    Van entre corchetes dentro del comando, por ejemplo <span className="vz-code">!s [susurro] no hagan ruido</span>. Cambian el
+                    tono de la voz y el gesto con el que entra el texto.
+                  </p>
+                  <ul className="flex flex-wrap gap-x-5 gap-y-1">
+                    {AVAILABLE_EMOTIONS.map((emo) => (
+                      <li key={emo.tag} className="cab-hint">
+                        <span className="vz-code">{emo.example}</span> {emo.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            </>
+          )}
+
+          {tab === 'apariencia' && (
+            <>
+              <Field label="Estilo de alerta">
+                <div className="cab-styles" role="group" aria-label="Estilo de alerta">
+                  {ALERT_STYLES.map((style) => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      className="cab-style"
+                      aria-pressed={settings.alertStyle === style.id}
+                      onClick={() => update({ alertStyle: style.id })}
+                    >
+                      <span className={`cab-style-face cab-face-${style.id}`}>
+                        {style.id === 'cabina' && <i />}
+                        {style.name}
+                      </span>
+                      <span className="cab-style-body">{style.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              {settings.alertStyle === 'sticker' && (
+                <Field
+                  label="Sticker del canal (SVG)"
+                  hint={`Tu logo o mascota en SVG plano, hasta ${MAX_STICKER_BYTES / 1000} KB. Entra de golpe, se balancea mientras suena la voz y lleva borde de troquel.`}
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    {settings.stickerSvg && <img className="cab-sticker-thumb" src={stickerDataUri(settings.stickerSvg)} alt="Sticker actual" />}
+                    <button type="button" className="cab-btn2" onClick={() => stickerInputRef.current?.click()}>
+                      <Upload className="h-4 w-4" aria-hidden="true" />
+                      <span>{settings.stickerSvg ? 'Cambiar SVG' : 'Subir SVG'}</span>
+                    </button>
+                    <input ref={stickerInputRef} type="file" accept=".svg,image/svg+xml" hidden tabIndex={-1} onChange={onStickerFile} />
+                    {settings.stickerSvg && (
+                      <button type="button" className="cab-btn2" onClick={removeSticker}>
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                  {stickerError && (
+                    <span className="cab-error" role="alert">
+                      {stickerError}
+                    </span>
+                  )}
+                  {!settings.stickerSvg && !stickerError && (
+                    <span className="cab-hint">Sin SVG, el sticker muestra la inicial de quien escribe.</span>
+                  )}
+                  {stickerUndo.pending && (
+                    <UndoNote
+                      label={stickerUndo.pending.label}
+                      onUndo={() => {
+                        update({ stickerSvg: stickerUndo.pending?.snapshot ?? '' });
+                        stickerUndo.clear();
+                      }}
+                    />
+                  )}
+                </Field>
+              )}
+
+              <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
+                <Field label="Color">
+                  <div className="cab-sw" role="group" aria-label="Color">
+                    {ACCENTS.map((accent) => (
+                      <button
+                        key={accent.color}
+                        type="button"
+                        aria-label={accent.name}
+                        title={accent.name}
+                        aria-pressed={settings.accent === accent.color}
+                        style={{ backgroundColor: accent.color }}
+                        onClick={() => update({ accent: accent.color })}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      aria-label="Color personalizado"
+                      title="Color personalizado"
+                      value={settings.accent}
+                      onChange={(e) => update({ accent: normalizeAccent(e.target.value) || settings.accent })}
+                    />
+                  </div>
+                </Field>
+
+                <Field label="Posición en pantalla">
+                  <div className="cab-pos" role="group" aria-label="Posición en pantalla">
+                    {ALERT_POSITIONS.map((position) => (
+                      <button
+                        key={position.id}
+                        type="button"
+                        aria-label={position.name}
+                        title={position.name}
+                        aria-pressed={settings.position === position.id}
+                        onClick={() => update({ position: position.id })}
+                      />
+                    ))}
+                  </div>
+                  <span className="cab-hint">
+                    Ahora: {ALERT_POSITIONS.find((position) => position.id === settings.position)?.name}
+                  </span>
+                </Field>
+
+                <Field label="Tamaño">
+                  <Range
+                    label="Tamaño"
+                    min={SCALE_MIN}
+                    max={SCALE_MAX}
+                    step={0.05}
+                    value={settings.scale}
+                    format={(value) => `${Math.round(value * 100)} %`}
+                    onChange={(scale) => update({ scale })}
+                  />
+                </Field>
+
+                <Field label="Energía del movimiento">
+                  <Segmented label="Energía del movimiento" value={settings.energy} options={ALERT_ENERGIES} onChange={(energy) => update({ energy })} />
+                </Field>
+              </div>
+            </>
+          )}
+
+          {tab === 'reglas' && <RulesPanel settings={settings} update={update} detect={detect} />}
+        </section>
+      </VentanaPestanas>
+      {tourOpen && <GuidedTour steps={TOUR_STEPS} onClose={() => setTourOpen(false)} onTab={(id) => setTab(id as Tab)} />}
+    </>
   );
 };

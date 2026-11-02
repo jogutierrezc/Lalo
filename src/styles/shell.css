@@ -550,3 +550,69 @@ body.has-side .tally-app .cab:not(.shell-side) {
 .tally-receipt code {
   font-size: 12px;
 }
+
+/* ==========================================================================
+   Tema de las ventanas internas
+   Dentro de una ventana, las páginas usan SIEMPRE el tema Tally oscuro, sea
+   cual sea el tema del panel (Claro, Oscuro o Twitch). El marco de la ventana
+   es oscuro fijo; así no se mezcla una ventana oscura con contenido claro.
+   Se remapean los tokens --cb-* y --acc dentro de la ventana. La especificidad
+   (html body.tally .tally-win[data-win]) supera a los temas del panel de
+   index.css y tally.css, sin depender del orden de carga. Los widgets y
+   overlays de OBS no se ven afectados: no viven dentro de una ventana.
+   ========================================================================== */
+html body.tally .tally-win[data-win].cab,
+html body.tally .tally-win[data-win] .cab,
+html body.tally .tally-win[data-win] .tour-dock {
+  --acc: var(--tally-red);
+  --acc-ink: #ffffff;
+  --ui: var(--tally-red);
+  --ui-ink: #ffffff;
+  --cb-bg: var(--tally-dark);
+  --cb-panel: var(--tally-onyx);
+  --cb-surface: var(--tally-onyx-2);
+  --cb-line: var(--tally-line);
+  --cb-fg: var(--tally-white);
+  --cb-mut: var(--tally-muted);
+  --cb-off: var(--tally-off);
+  --cb-live: var(--tally-red-ink);
+  --cb-warn: var(--tally-warn);
+  --cb-warn-bg: rgb(255 176 32 / 0.12);
+  --cb-ok: var(--tally-ok);
+  --cb-ok-bg: rgb(61 220 151 / 0.12);
+  --cb-bad: var(--tally-error);
+  --cb-bad-bg: rgb(255 107 107 / 0.08);
+  color-scheme: dark;
+}
+/* El marco de la ventana conserva su fondo; el contenido va sobre el negro de Tally */
+html body.tally .tally-win[data-win].cab {
+  min-height: 0;
+  background: #1b1f24;
+  color: var(--tally-white);
+}
+html body.tally .tally-win[data-win] .tally-win-body > .cab {
+  min-height: 100%;
+}
+/* Acción principal en rojo y secundaria con contorno, también con el tema Twitch del panel */
+html body.tally .tally-win[data-win] .cab-btn:not(.acc-twitch):not(.cab-btn-danger) {
+  background: var(--tally-red);
+  color: #ffffff;
+}
+html body.tally .tally-win[data-win] .cab-btn2 {
+  background: transparent;
+  border-color: var(--cb-off);
+  color: var(--cb-fg);
+}
+html body.tally .tally-win[data-win] .cab-btn-danger {
+  background: transparent;
+  border: 1px dashed var(--tally-error-line);
+  color: var(--cb-bad);
+}
+html body.tally .tally-win[data-win] .acc-twitch {
+  background: #9146ff;
+  color: #ffffff;
+}
+html body.tally .tally-win[data-win] .cab-nav a[aria-current='page'] {
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+}

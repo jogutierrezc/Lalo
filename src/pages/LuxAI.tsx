@@ -1,9 +1,10 @@
 /**
  * src/pages/LuxAI.tsx
  *
- * Panel de Lux AI del streamer. A la izquierda se configura al personaje; a la
- * derecha se le habla para comprobar que responde. Las comprobaciones de abajo
- * dicen qué falta para que Lux funcione en directo.
+ * Panel de Mi AI (Lux) del streamer, dentro de su ventana de Tally Studio. Cinco
+ * pestañas de ajustes (Personaje, Comando, Respuestas, Eventos y En OBS) y la
+ * pestaña Memoria. A la derecha queda fijo el panel para hablar con Lux, decir algo en
+ * el chat y ver qué falta para que funcione; abajo, el «Guardar ajustes» manual.
  *
  * Los ajustes se guardan en el servidor (lux_settings, migración 0024) y se
  * validan allí. La clave de NVIDIA no aparece aquí: la pone el administrador.
@@ -27,6 +28,7 @@ import {
   type LuxSettingsView,
   type LuxVoice,
 } from '../lib/luxApi';
+import { VentanaPestanas } from '../components/voz-ia/VentanaPestanas';
 import { LuxMemoryPanel } from '../components/lux/LuxMemoryPanel';
 import { LuxModelLibraryPanel } from '../components/lux/LuxModelLibrary';
 import { callSubscriptions, type SubscriptionRow } from '../lib/twitchEventsApi';
@@ -64,6 +66,17 @@ const DEFAULTS: LuxSettingsView = {
   eventRaid: true,
   eventStart: true,
 };
+type Tab = 'personaje' | 'comando' | 'respuestas' | 'eventos' | 'obs' | 'memoria';
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'personaje', label: 'Personaje' },
+  { id: 'comando', label: 'Comando' },
+  { id: 'respuestas', label: 'Respuestas' },
+  { id: 'eventos', label: 'Eventos' },
+  { id: 'obs', label: 'En OBS' },
+  { id: 'memoria', label: 'Memoria' },
+];
+
 const SPONTANEOUS_EVERY = [10, 15, 30, 60];
 const SPONTANEOUS_MIN = [3, 5, 10];
 const SAY_TEXT_MAX = 500;
@@ -162,7 +175,7 @@ export const LuxAI: React.FC = () => {
   const [viewer, setViewer] = useState('');
   const [catalogue, setCatalogue] = useState<VoiceCatalogue | null>(null);
   const [speakOverlay, setSpeakOverlay] = useState(true);
-  const [tab, setTab] = useState<'ajustes' | 'memoria'>('ajustes');
+  const [tab, setTab] = useState<Tab>('personaje');
   const [character, setCharacter] = useState<LuxCharacterView | null>(null);
   // Giro del modelo 3D en grados. Va en el enlace de OBS (&turn=) y en la vista previa.
   const [turn, setTurn] = useState(0);
@@ -368,37 +381,214 @@ export const LuxAI: React.FC = () => {
     setSayBusy(false);
   };
 
-  return (
-    <div className="cab">
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav currentApp="lux" />
+  const footer = (
+    <>
+      <button type="button" className="cab-btn" disabled={busy || !dirty || !wordCheck.ok || !nameCheck.ok} onClick={save}>
+        Guardar ajustes
+      </button>
+      {dirty && <span className="cab-hint">Hay cambios sin guardar.</span>}
+      {saveNote && (
+        <span className="cab-hint" role="status">
+          {saveNote}
+        </span>
+      )}
+      {saveError && (
+        <span className="cab-error" role="alert">
+          {saveError}
+        </span>
+      )}
+    </>
+  );
 
-        {!enabled ? (
-          <section className="cab-mod">
-            <h2 className="text-base font-semibold">Mi AI no está activada para tu cuenta</h2>
-            <p className="cab-hint">El administrador la activa desde Streamers. Cuando lo haga, aquí podrás configurarla.</p>
-          </section>
-        ) : (
-          <div className="grid gap-5">
-            <div className="cab-seg" role="group" aria-label="Secciones de Mi AI">
-              <button type="button" aria-pressed={tab === 'ajustes'} onClick={() => setTab('ajustes')}>
-                Ajustes
-              </button>
-              <button type="button" aria-pressed={tab === 'memoria'} onClick={() => setTab('memoria')}>
-                Memoria
-              </button>
-            </div>
-            {tab === 'memoria' ? (
-              <LuxMemoryPanel />
-            ) : (
-          <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-            <div className="grid gap-5">
-              {loadError && (
-                <p className="cab-error" role="alert">
-                  No se pudieron leer tus ajustes: {loadError}
+  // Panel fijo de la ventana: se prueba a Lux y se habla por el bot sin cambiar de pestaña
+  const aside = (
+    <>
+      <section className="cab-mod grid gap-4" aria-labelledby="lux-test">
+        <h2 id="lux-test" className="text-base font-semibold">
+          Probar a Lux
+        </h2>
+        <p className="cab-hint">Escribe como si fueras un espectador. La respuesta usa los ajustes guardados.</p>
+
+        <div className="grid max-h-96 min-h-40 gap-2 overflow-y-auto" aria-live="polite">
+          {turns.length === 0 && <p className="cab-hint">Todavía no has hablado con Lux.</p>}
+          {turns.map((turn) => (
+            <div key={turn.id} className="grid gap-1">
+              <p className="text-sm">
+                <strong>{turn.viewer}:</strong> {turn.text}
+              </p>
+              {turn.reply && (
+                <p className="text-sm">
+                  <strong>{aiName}{turn.emotion ? ` · ${turn.emotion}` : ''}:</strong> {turn.reply}
                 </p>
               )}
+              {turn.error && (
+                <p className="cab-error" role="alert">
+                  {turn.error}
+                </p>
+              )}
+            </div>
+          ))}
+          {busy && <p className="cab-hint">{aiName} está pensando…</p>}
+        </div>
 
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Toggle label="Hablar en OBS" checked={speakOverlay} disabled={busy} onChange={setSpeakOverlay} />
+            <button type="button" className="cab-btn2 cab-btn-sm" disabled={busy} onClick={listenOverlay}>
+              Escuchar la voz
+            </button>
+          </div>
+          <Field label="Nombre del espectador (opcional)" htmlFor="lux-viewer">
+            <input id="lux-viewer" className="cab-inp" maxLength={40} value={viewer} onChange={(e) => setViewer(e.target.value)} />
+          </Field>
+          <div className="flex items-center gap-2">
+            <input
+              id="lux-message"
+              className="cab-inp flex-1"
+              maxLength={500}
+              aria-label="Mensaje para Lux"
+              placeholder="Escribe un mensaje"
+              value={message}
+              disabled={busy}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') ask();
+              }}
+            />
+            <button type="button" className="cab-btn2 cab-btn-sm" disabled={busy || message.trim() === ''} onClick={ask}>
+              <Send size={16} aria-hidden />
+              Enviar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="cab-mod grid gap-4" aria-labelledby="lux-say">
+        <h2 id="lux-say" className="text-base font-semibold">
+          Decir en el chat
+        </h2>
+        <p className="cab-hint">
+          El mensaje lo publica tu bot de Twitch, con el nombre {aiName}. Tiene que estar corriendo con el script de la versión {LUX_BOT_VERSION}.
+        </p>
+        <div className="cab-seg" role="group" aria-label="Cómo se escribe el mensaje">
+          <button type="button" aria-pressed={sayMode === 'literal'} onClick={() => setSayMode('literal')}>
+            Texto tal cual
+          </button>
+          <button type="button" aria-pressed={sayMode === 'ai'} onClick={() => setSayMode('ai')}>
+            Que la IA lo redacte
+          </button>
+        </div>
+        <Field
+          label={sayMode === 'ai' ? 'Idea para el mensaje' : 'Mensaje'}
+          htmlFor="lux-say-text"
+          hint={`${sayText.length} de ${sayMode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX} caracteres`}
+        >
+          <textarea
+            id="lux-say-text"
+            className="cab-inp min-h-20"
+            maxLength={sayMode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX}
+            value={sayText}
+            disabled={sayBusy}
+            placeholder={sayMode === 'ai' ? 'Ejemplo: recuerda que mañana hay directo a las 8 y agradece el apoyo.' : 'Escribe lo que quieres que salga en el chat.'}
+            onChange={(e) => setSayText(e.target.value)}
+          />
+        </Field>
+        <Toggle label="También que se oiga en OBS" checked={sayAlsoObs} disabled={sayBusy} onChange={setSayAlsoObs} />
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="cab-btn2 cab-btn-sm" disabled={sayBusy || sayText.trim() === ''} onClick={say}>
+            <Send size={16} aria-hidden />
+            {sayMode === 'ai' ? 'Redactar y mandar a la cola' : 'Mandar a la cola'}
+          </button>
+          {sayBusy && <span className="cab-hint">{sayMode === 'ai' ? 'La IA está redactando…' : 'Enviando a la cola…'}</span>}
+          {sayError && (
+            <span className="cab-error" role="alert">
+              {sayError}
+            </span>
+          )}
+        </div>
+        {sayList && sayList.items.length > 0 && (
+          <ul className="grid gap-2 text-sm" aria-live="polite">
+            {sayList.items.slice(0, 5).map((item) => (
+              <li key={item.id} className="grid gap-0.5">
+                <span>{item.text}</span>
+                <span className={item.state === 'sent' ? 'cab-hint' : item.state === 'queued' || item.state === 'sending' ? 'cab-hint' : 'cab-error'}>
+                  {SAY_STATE[item.state]}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {sayList && !sayList.botOnline && <p className="cab-hint">Ahora mismo el bot no ha dado señales de vida.</p>}
+      </section>
+
+      <section className="cab-mod grid gap-3" aria-labelledby="lux-checks">
+        <h2 id="lux-checks" className="text-base font-semibold">
+          ¿Funciona?
+        </h2>
+        <ul className="grid gap-2 text-sm">
+          <li className="flex items-center gap-2">
+            <Check size={16} aria-hidden className={enabled ? 'text-emerald-400' : 'opacity-40'} />
+            Mi AI está activada para tu cuenta
+          </li>
+          <li className="flex items-center gap-2">
+            <Check size={16} aria-hidden className={saved !== null && !dirty ? 'text-emerald-400' : 'opacity-40'} />
+            Los ajustes están guardados
+          </li>
+          <li className="flex items-center gap-2">
+            <Check size={16} aria-hidden className={answered ? 'text-emerald-400' : 'opacity-40'} />
+            Lux ha respondido a una prueba
+          </li>
+        </ul>
+        <p className="cab-hint">
+          Si una prueba falla, el mensaje dice por qué: falta la clave del proveedor de IA, el modelo no responde o tu cuenta no tiene Mi AI.
+        </p>
+      </section>
+    </>
+  );
+
+  if (!enabled) {
+    return (
+      <div className="cab vt-root">
+        <div className="vt-bar">
+          <SuiteNav currentApp="lux" />
+        </div>
+        <div className="vt-body">
+          <div className="vt-panel">
+            <section className="cab-mod">
+              <h2 className="text-base font-semibold">Mi AI no está activada para tu cuenta</h2>
+              <p className="cab-hint">El administrador la activa desde Streamers. Cuando lo haga, aquí podrás configurarla.</p>
+            </section>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const onMemoria = tab === 'memoria';
+
+  return (
+    <VentanaPestanas
+      idBase="lux"
+      label="Secciones de Mi AI"
+      tabs={TABS}
+      value={tab}
+      onChange={(id) => setTab(id as Tab)}
+      bar={<SuiteNav currentApp="lux" />}
+      aside={onMemoria ? undefined : aside}
+      footer={onMemoria ? undefined : footer}
+    >
+      {onMemoria ? (
+        <LuxMemoryPanel />
+      ) : (
+        <>
+          {loadError && (
+            <p className="cab-error" role="alert">
+              No se pudieron leer tus ajustes: {loadError}
+            </p>
+          )}
+
+          {tab === 'personaje' && (
+            <>
               <section className="cab-mod grid gap-3" aria-labelledby="lux-character">
                 <h2 id="lux-character" className="text-base font-semibold">
                   Tu personaje
@@ -432,7 +622,7 @@ export const LuxAI: React.FC = () => {
                 <p className="cab-hint">El administrador asigna el personaje. Lo que Mi AI recuerda es de ese personaje.</p>
               </section>
 
-              <LuxModelLibraryPanel />
+                <LuxModelLibraryPanel />
 
               <section className="cab-mod grid gap-4" aria-labelledby="lux-personality">
                 <h2 id="lux-personality" className="text-base font-semibold">
@@ -450,7 +640,11 @@ export const LuxAI: React.FC = () => {
                   />
                 </Field>
               </section>
+            </>
+          )}
 
+          {tab === 'comando' && (
+            <>
               <section className="cab-mod grid gap-4" aria-labelledby="lux-command">
                 <h2 id="lux-command" className="text-base font-semibold">
                   Comando de activación
@@ -519,79 +713,11 @@ export const LuxAI: React.FC = () => {
                   </p>
                 )}
               </section>
+            </>
+          )}
 
-              <section className="cab-mod grid gap-4" aria-labelledby="lux-proactive">
-                <h2 id="lux-proactive" className="text-base font-semibold">
-                  Comentarios y eventos
-                </h2>
-                <Toggle
-                  label="Comentarios espontáneos"
-                  checked={draft.spontaneousEnabled}
-                  disabled={busy || saved === null}
-                  onChange={(next) => update('spontaneousEnabled', next)}
-                />
-                {draft.spontaneousEnabled && (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Cada cuánto como mucho" htmlFor="lux-spont-every">
-                      <select
-                        id="lux-spont-every"
-                        className="cab-inp"
-                        value={draft.spontaneousEveryMin}
-                        disabled={busy || saved === null}
-                        onChange={(e) => update('spontaneousEveryMin', Number(e.target.value))}
-                      >
-                        {SPONTANEOUS_EVERY.map((minutes) => (
-                          <option key={minutes} value={minutes}>
-                            {minutes} minutos
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Mensajes mínimos del chat" htmlFor="lux-spont-min">
-                      <select
-                        id="lux-spont-min"
-                        className="cab-inp"
-                        value={draft.spontaneousMinMessages}
-                        disabled={busy || saved === null}
-                        onChange={(e) => update('spontaneousMinMessages', Number(e.target.value))}
-                      >
-                        {SPONTANEOUS_MIN.map((count) => (
-                          <option key={count} value={count}>
-                            {count} mensajes
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  </div>
-                )}
-                <p className="cab-hint">
-                  Cada cierto tiempo, {draftName} comenta lo que se habló en el chat, pero solo si hubo al menos esos mensajes de espectadores desde su último comentario. Si no, no dice nada. Se calla con !luxoff.
-                </p>
-                <span className="text-sm font-medium">Saludar cuando haya</span>
-                <Toggle label="Seguidores nuevos" checked={draft.eventFollow} disabled={busy || saved === null} onChange={(next) => update('eventFollow', next)} />
-                <Toggle label="Suscripciones" checked={draft.eventSub} disabled={busy || saved === null} onChange={(next) => update('eventSub', next)} />
-                <Toggle label="Raids" checked={draft.eventRaid} disabled={busy || saved === null} onChange={(next) => update('eventRaid', next)} />
-                <Toggle label="Inicio del directo" checked={draft.eventStart} disabled={busy || saved === null} onChange={(next) => update('eventStart', next)} />
-                <div className="cab-note" role="note">
-                  <p>Las suscripciones y las raids llegan por el chat de Twitch. Los seguidores nuevos y el inicio del directo llegan por el «Canal de eventos» de Twitch:</p>
-                  <ul className="list-disc pl-5">
-                    {(['channel.follow', 'stream.online'] as const).map((type) => (
-                      <li key={type}>
-                        {SUBSCRIPTION_NAMES[type]}:{' '}
-                        {eventLinks === 'loading' ? 'comprobando…' : linkText(eventLinkState(eventLinks, type, grantedScopes))}
-                      </li>
-                    ))}
-                  </ul>
-                  <p>
-                    {draftName} los saluda a través del bot, que tiene que estar en marcha.{' '}
-                    <a className="studio-link" href="#powerups">
-                      Ir a Power-ups
-                    </a>
-                  </p>
-                </div>
-                <p className="cab-hint">Varios eventos seguidos se saludan juntos, en un solo mensaje. Si la IA falla, no escribe nada.</p>
-              </section>
-
+          {tab === 'respuestas' && (
+            <>
               <section className="cab-mod grid gap-4" aria-labelledby="lux-replies">
                 <h2 id="lux-replies" className="text-base font-semibold">
                   Respuestas
@@ -697,7 +823,87 @@ export const LuxAI: React.FC = () => {
                   Apagado por defecto. Cada media hora Lux resume el chat y guarda algunos recuerdos (espectadores habituales, fechas, sucesos). Los mensajes no se guardan, y apagarlo no borra lo que ya aprendió.
                 </p>
               </section>
+            </>
+          )}
 
+          {tab === 'eventos' && (
+            <>
+              <section className="cab-mod grid gap-4" aria-labelledby="lux-proactive">
+                <h2 id="lux-proactive" className="text-base font-semibold">
+                  Comentarios y eventos
+                </h2>
+                <Toggle
+                  label="Comentarios espontáneos"
+                  checked={draft.spontaneousEnabled}
+                  disabled={busy || saved === null}
+                  onChange={(next) => update('spontaneousEnabled', next)}
+                />
+                {draft.spontaneousEnabled && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Cada cuánto como mucho" htmlFor="lux-spont-every">
+                      <select
+                        id="lux-spont-every"
+                        className="cab-inp"
+                        value={draft.spontaneousEveryMin}
+                        disabled={busy || saved === null}
+                        onChange={(e) => update('spontaneousEveryMin', Number(e.target.value))}
+                      >
+                        {SPONTANEOUS_EVERY.map((minutes) => (
+                          <option key={minutes} value={minutes}>
+                            {minutes} minutos
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Mensajes mínimos del chat" htmlFor="lux-spont-min">
+                      <select
+                        id="lux-spont-min"
+                        className="cab-inp"
+                        value={draft.spontaneousMinMessages}
+                        disabled={busy || saved === null}
+                        onChange={(e) => update('spontaneousMinMessages', Number(e.target.value))}
+                      >
+                        {SPONTANEOUS_MIN.map((count) => (
+                          <option key={count} value={count}>
+                            {count} mensajes
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                )}
+                <p className="cab-hint">
+                  Cada cierto tiempo, {draftName} comenta lo que se habló en el chat, pero solo si hubo al menos esos mensajes de espectadores desde su último comentario. Si no, no dice nada. Se calla con !luxoff.
+                </p>
+                <span className="text-sm font-medium">Saludar cuando haya</span>
+                <Toggle label="Seguidores nuevos" checked={draft.eventFollow} disabled={busy || saved === null} onChange={(next) => update('eventFollow', next)} />
+                <Toggle label="Suscripciones" checked={draft.eventSub} disabled={busy || saved === null} onChange={(next) => update('eventSub', next)} />
+                <Toggle label="Raids" checked={draft.eventRaid} disabled={busy || saved === null} onChange={(next) => update('eventRaid', next)} />
+                <Toggle label="Inicio del directo" checked={draft.eventStart} disabled={busy || saved === null} onChange={(next) => update('eventStart', next)} />
+                <div className="cab-note" role="note">
+                  <p>Las suscripciones y las raids llegan por el chat de Twitch. Los seguidores nuevos y el inicio del directo llegan por el «Canal de eventos» de Twitch:</p>
+                  <ul className="list-disc pl-5">
+                    {(['channel.follow', 'stream.online'] as const).map((type) => (
+                      <li key={type}>
+                        {SUBSCRIPTION_NAMES[type]}:{' '}
+                        {eventLinks === 'loading' ? 'comprobando…' : linkText(eventLinkState(eventLinks, type, grantedScopes))}
+                      </li>
+                    ))}
+                  </ul>
+                  <p>
+                    {draftName} los saluda a través del bot, que tiene que estar en marcha.{' '}
+                    <a className="studio-link" href="#powerups">
+                      Ir a Power-ups
+                    </a>
+                  </p>
+                </div>
+                <p className="cab-hint">Varios eventos seguidos se saludan juntos, en un solo mensaje. Si la IA falla, no escribe nada.</p>
+              </section>
+            </>
+          )}
+
+          {tab === 'obs' && (
+            <>
               <section className="cab-mod grid gap-4" aria-labelledby="lux-overlay">
                 <h2 id="lux-overlay" className="text-base font-semibold">
                   Personaje en OBS
@@ -748,172 +954,10 @@ export const LuxAI: React.FC = () => {
                   </p>
                 </div>
               </section>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button type="button" className="cab-btn2" disabled={busy || !dirty || !wordCheck.ok || !nameCheck.ok} onClick={save}>
-                  Guardar ajustes
-                </button>
-                {dirty && <span className="cab-hint">Hay cambios sin guardar.</span>}
-                {saveNote && (
-                  <span className="cab-hint" role="status">
-                    {saveNote}
-                  </span>
-                )}
-                {saveError && (
-                  <span className="cab-error" role="alert">
-                    {saveError}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="grid gap-5">
-              <section className="cab-mod grid gap-4" aria-labelledby="lux-test">
-                <h2 id="lux-test" className="text-base font-semibold">
-                  Probar a Lux
-                </h2>
-                <p className="cab-hint">Escribe como si fueras un espectador. La respuesta usa los ajustes guardados.</p>
-
-                <div className="grid max-h-96 min-h-40 gap-2 overflow-y-auto" aria-live="polite">
-                  {turns.length === 0 && <p className="cab-hint">Todavía no has hablado con Lux.</p>}
-                  {turns.map((turn) => (
-                    <div key={turn.id} className="grid gap-1">
-                      <p className="text-sm">
-                        <strong>{turn.viewer}:</strong> {turn.text}
-                      </p>
-                      {turn.reply && (
-                        <p className="text-sm">
-                          <strong>{aiName}{turn.emotion ? ` · ${turn.emotion}` : ''}:</strong> {turn.reply}
-                        </p>
-                      )}
-                      {turn.error && (
-                        <p className="cab-error" role="alert">
-                          {turn.error}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                  {busy && <p className="cab-hint">{aiName} está pensando…</p>}
-                </div>
-
-                <div className="grid gap-2">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Toggle label="Hablar en OBS" checked={speakOverlay} disabled={busy} onChange={setSpeakOverlay} />
-                    <button type="button" className="cab-btn2 cab-btn-sm" disabled={busy} onClick={listenOverlay}>
-                      Escuchar la voz
-                    </button>
-                  </div>
-                  <Field label="Nombre del espectador (opcional)" htmlFor="lux-viewer">
-                    <input id="lux-viewer" className="cab-inp" maxLength={40} value={viewer} onChange={(e) => setViewer(e.target.value)} />
-                  </Field>
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="lux-message"
-                      className="cab-inp flex-1"
-                      maxLength={500}
-                      aria-label="Mensaje para Lux"
-                      placeholder="Escribe un mensaje"
-                      value={message}
-                      disabled={busy}
-                      onChange={(e) => setMessage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') ask();
-                      }}
-                    />
-                    <button type="button" className="cab-btn2 cab-btn-sm" disabled={busy || message.trim() === ''} onClick={ask}>
-                      <Send size={16} aria-hidden />
-                      Enviar
-                    </button>
-                  </div>
-                </div>
-              </section>
-
-              <section className="cab-mod grid gap-4" aria-labelledby="lux-say">
-                <h2 id="lux-say" className="text-base font-semibold">
-                  Decir en el chat
-                </h2>
-                <p className="cab-hint">
-                  El mensaje lo publica tu bot de Twitch, con el nombre {aiName}. Tiene que estar corriendo con el script de la versión {LUX_BOT_VERSION}.
-                </p>
-                <div className="cab-seg" role="group" aria-label="Cómo se escribe el mensaje">
-                  <button type="button" aria-pressed={sayMode === 'literal'} onClick={() => setSayMode('literal')}>
-                    Texto tal cual
-                  </button>
-                  <button type="button" aria-pressed={sayMode === 'ai'} onClick={() => setSayMode('ai')}>
-                    Que la IA lo redacte
-                  </button>
-                </div>
-                <Field
-                  label={sayMode === 'ai' ? 'Idea para el mensaje' : 'Mensaje'}
-                  htmlFor="lux-say-text"
-                  hint={`${sayText.length} de ${sayMode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX} caracteres`}
-                >
-                  <textarea
-                    id="lux-say-text"
-                    className="cab-inp min-h-20"
-                    maxLength={sayMode === 'ai' ? SAY_IDEA_MAX : SAY_TEXT_MAX}
-                    value={sayText}
-                    disabled={sayBusy}
-                    placeholder={sayMode === 'ai' ? 'Ejemplo: recuerda que mañana hay directo a las 8 y agradece el apoyo.' : 'Escribe lo que quieres que salga en el chat.'}
-                    onChange={(e) => setSayText(e.target.value)}
-                  />
-                </Field>
-                <Toggle label="También que se oiga en OBS" checked={sayAlsoObs} disabled={sayBusy} onChange={setSayAlsoObs} />
-                <div className="flex flex-wrap items-center gap-3">
-                  <button type="button" className="cab-btn2 cab-btn-sm" disabled={sayBusy || sayText.trim() === ''} onClick={say}>
-                    <Send size={16} aria-hidden />
-                    {sayMode === 'ai' ? 'Redactar y mandar a la cola' : 'Mandar a la cola'}
-                  </button>
-                  {sayBusy && <span className="cab-hint">{sayMode === 'ai' ? 'La IA está redactando…' : 'Enviando a la cola…'}</span>}
-                  {sayError && (
-                    <span className="cab-error" role="alert">
-                      {sayError}
-                    </span>
-                  )}
-                </div>
-                {sayList && sayList.items.length > 0 && (
-                  <ul className="grid gap-2 text-sm" aria-live="polite">
-                    {sayList.items.slice(0, 5).map((item) => (
-                      <li key={item.id} className="grid gap-0.5">
-                        <span>{item.text}</span>
-                        <span className={item.state === 'sent' ? 'cab-hint' : item.state === 'queued' || item.state === 'sending' ? 'cab-hint' : 'cab-error'}>
-                          {SAY_STATE[item.state]}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {sayList && !sayList.botOnline && <p className="cab-hint">Ahora mismo el bot no ha dado señales de vida.</p>}
-              </section>
-
-              <section className="cab-mod grid gap-3" aria-labelledby="lux-checks">
-                <h2 id="lux-checks" className="text-base font-semibold">
-                  ¿Funciona?
-                </h2>
-                <ul className="grid gap-2 text-sm">
-                  <li className="flex items-center gap-2">
-                    <Check size={16} aria-hidden className={enabled ? 'text-emerald-400' : 'opacity-40'} />
-                    Mi AI está activada para tu cuenta
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} aria-hidden className={saved !== null && !dirty ? 'text-emerald-400' : 'opacity-40'} />
-                    Los ajustes están guardados
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} aria-hidden className={answered ? 'text-emerald-400' : 'opacity-40'} />
-                    Lux ha respondido a una prueba
-                  </li>
-                </ul>
-                <p className="cab-hint">
-                  Si una prueba falla, el mensaje dice por qué: falta la clave del proveedor de IA, el modelo no responde o tu cuenta no tiene Mi AI.
-                </p>
-              </section>
-            </div>
-          </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+            </>
+          )}
+        </>
+      )}
+    </VentanaPestanas>
   );
 };

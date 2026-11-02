@@ -17,6 +17,7 @@ export interface TourStep {
   title: string;
   body: React.ReactNode;
   badge?: string; // e.g. 'Acción del Sistema', 'Módulo', 'OBS Studio', 'Audio', 'En vivo'
+  tab?: string; // pestaña de la ventana que contiene el módulo; se activa (onTab) antes de mostrar el paso
 }
 
 export interface GuidedTourProps {
@@ -26,6 +27,8 @@ export interface GuidedTourProps {
   appName?: string;
   /** Se llama justo antes de pasar a otro paso: permite cambiar de pestaña para que el módulo del paso exista. */
   onStep?: (step: TourStep) => void;
+  /** Cambia a la pestaña `tab` del paso antes de enseñarlo (herramientas con pestañas). */
+  onTab?: (tab: string) => void;
 }
 
 const TOUR_DONE_KEY = 'lalo_tts_tour_done';
@@ -111,6 +114,7 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({
   id = 'ajustes',
   appName,
   onStep,
+  onTab,
 }) => {
   const [index, setIndex] = useState(0);
   const ringRef = useRef<HTMLDivElement | null>(null);
@@ -214,21 +218,30 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({
     gsap.to(dockRef.current, { yPercent: 100, opacity: 0, duration: 0.2, ease: 'power2.out', onComplete: onClose });
   }, [onClose, id]);
 
+  // Cambiar de pestaña y de paso en el mismo lote: así el módulo ya existe cuando se coloca el marco
+  const goTo = useCallback(
+    (to: number) => {
+      const target = steps[to];
+      if (target) onStep?.(target);
+      if (target?.tab) onTab?.(target.tab);
+      setIndex(to);
+    },
+    [steps, onStep, onTab]
+  );
+
   const next = useCallback(() => {
     if (isLast) {
       close();
     } else {
       playTourCue(false);
-      onStep?.(steps[index + 1]);
-      setIndex((i) => i + 1);
+      goTo(index + 1);
     }
-  }, [isLast, close, onStep, steps, index]);
+  }, [isLast, close, goTo, index]);
 
   const back = useCallback(() => {
     playTourCue(false);
-    onStep?.(steps[Math.max(0, index - 1)]);
-    setIndex((i) => Math.max(0, i - 1));
-  }, [onStep, steps, index]);
+    goTo(Math.max(0, index - 1));
+  }, [goTo, index]);
 
   // Control por teclado: Esc para cerrar, Flechas para avanzar/retroceder (salvo si se está escribiendo)
   useEffect(() => {
