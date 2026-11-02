@@ -34,6 +34,7 @@ import {
   X,
 } from 'lucide-react';
 import { ThemeSwitch } from '../ThemeSwitch';
+import { TallyLogo } from '../brand/TallyLogo';
 import { useCloudSession } from '../../hooks/useCloudSession';
 import {
   ADMIN_SECTIONS,
@@ -110,10 +111,11 @@ export const AdminShell: React.FC = () => {
   }, []);
 
   // La página deja sitio a la barra lateral a través de clases en <body>
+  // y el tema Tally Studio se activa con la clase .tally (ver src/styles/tally.css)
   useLayoutEffect(() => {
-    document.body.classList.add('has-side');
+    document.body.classList.add('has-side', 'tally');
     return () => {
-      document.body.classList.remove('has-side', 'side-collapsed');
+      document.body.classList.remove('has-side', 'side-collapsed', 'tally');
     };
   }, []);
 
@@ -164,11 +166,9 @@ export const AdminShell: React.FC = () => {
       aria-label="Menú de administración"
     >
       <div className="shell-brand">
-        <a href={adminHref('resumen')} className="shell-logo" title="Lalo Stream Suite, administración">
-          <span>L</span>
-          <b className="shell-lab adm-brand">
-            Lalo<small>Administración</small>
-          </b>
+        <a href={adminHref('resumen')} className="tally-brand" aria-label="Tally Studio, administración" title="Tally Studio, administración">
+          <TallyLogo size={20} decorativo />
+          <span className="tally-brand-sub">Administración</span>
         </a>
         <button type="button" className="cab-icon shell-close" aria-label="Cerrar menú" onClick={() => setDrawerOpen(false)}>
           <X className="h-4 w-4" />

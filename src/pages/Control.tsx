@@ -291,6 +291,7 @@ export const Control: React.FC = () => {
           saved={saved}
           onOpenTour={() => setTourOpen(true)}
           tourAvailable={!tourOpen}
+          live={online && !paused}
         />
 
         <div ref={listsRef} className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">

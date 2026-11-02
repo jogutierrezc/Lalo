@@ -15,8 +15,10 @@
  * administrador, con correo y clave de administración (usuario de Supabase con
  * contraseña). Si esa cuenta aún no tiene el rol, se le explica cómo conseguirlo.
  *
- * Todos los pasos comparten el mismo fondo (aurora y foco de luz) y el panel de
- * cristal; los estilos están en src/styles/acceso.css y src/styles/recorrido.css.
+ * Todos los pasos comparten el mismo fondo de Tally Studio (Oscuro OBS con
+ * curvas de nivel, onda y halo rojo), el logotipo y el panel; los estilos están
+ * en src/styles/acceso.css y src/styles/recorrido.css. Los botones que llevan a
+ * Twitch conservan el morado de Twitch; la acción principal restante va en rojo.
  */
 
 import React, { useEffect, useId, useState } from 'react';
@@ -178,7 +180,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
   ) : (
     <>
       <div>
-        <p className="cab-label">Lalo Stream Suite</p>
+        <p className="cab-label">Tally Studio</p>
         <h1>Tu directo, tu mesa de control</h1>
       </div>
       <ul>
@@ -444,7 +446,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
               {validPlan ? (
                 <button
                   type="button"
-                  className="cab-btn acc-twitch"
+                  className="cab-btn"
                   onClick={() => go((pasoSiguiente('co', 'codigo') as Step | null) ?? 'permisos', 'co')}
                 >
                   Seguir
@@ -515,7 +517,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
                 {notice}
               </p>
             )}
-            <button type="submit" className="cab-btn acc-twitch" disabled={busy || !code.trim()}>
+            <button type="submit" className={signedIn ? 'cab-btn' : 'cab-btn acc-twitch'} disabled={busy || !code.trim()}>
               {signedIn ? 'Recuperar mi cuenta' : 'Recuperar y entrar con Twitch'}
             </button>
             <div className="acc-links">
