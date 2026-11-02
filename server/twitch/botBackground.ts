@@ -36,6 +36,9 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Env } from '../integrations/store.js';
 import type { LuxProactiveStatus } from '../lux/handlers.js';
+import type { DoneProactiveStatus } from '../done/forProfile.js';
+import type { DoneSettings } from '../../src/lib/doneTypes.js';
+import { createDoneSender } from './doneSender.js';
 import { isOwnBotMessage, type ChatMessageEvent } from './eventsub.js';
 import { supabaseBotDb, type BotDb, type BotSenderMode } from './botDb.js';
 import { echoMarkerFor, senderIdFor } from './senderMode.js';
@@ -105,7 +108,42 @@ export const defaultBackgroundLux: BackgroundLux = {
   },
 };
 
+/** Lo que el trabajo de fondo necesita de Done. Por defecto sale de server/done/handlers.ts (carga perezosa). */
+export interface BackgroundDone {
+  settings(profileId: string, env: Env): Promise<{ settings: DoneSettings; allowed: boolean } | null>;
+  status(profileId: string, env: Env): Promise<DoneProactiveStatus | null>;
+  summary(profileId: string, lines: LineInput, env: Env): Promise<LuxAnswer>;
+  spontaneous(profileId: string, lines: LineInput, env: Env): Promise<LuxAnswer>;
+  outbox(profileId: string, send: OutboxSend, env: Env): Promise<{ sent: number; failed: number }>;
+}
+
+export const defaultBackgroundDone: BackgroundDone = {
+  async settings(profileId, env) {
+    const { doneSettingsForProfile } = await import('../done/handlers.js');
+    return doneSettingsForProfile(profileId, env);
+  },
+  async status(profileId, env) {
+    const { doneProactiveStatusForProfile } = await import('../done/handlers.js');
+    return doneProactiveStatusForProfile(profileId, env);
+  },
+  async summary(profileId, lines, env) {
+    const { doneSummaryForProfile } = await import('../done/handlers.js');
+    const result = await doneSummaryForProfile(profileId, lines, env);
+    return { status: result.status, body: (result.body ?? {}) as Record<string, unknown> };
+  },
+  async spontaneous(profileId, lines, env) {
+    const { doneSpontaneousForProfile } = await import('../done/handlers.js');
+    const result = await doneSpontaneousForProfile(profileId, lines, env);
+    return { status: result.status, body: (result.body ?? {}) as Record<string, unknown> };
+  },
+  async outbox(profileId, send, env) {
+    const { doneOutboxForProfile } = await import('../done/handlers.js');
+    return doneOutboxForProfile(profileId, send, env);
+  },
+};
+
 export interface BackgroundDeps {
+  done?: BackgroundDone;
   db?: (env: Env) => BotDb | null;
   limiter?: (env: Env) => SendLimiter | null;
   lines?: (env: Env) => ChatLinesDb | null;
@@ -227,6 +265,54 @@ export async function pushOutboxNow(profileId: string, env: Env = process.env, d
   }
 }
 
+/** El envío de Done: con la cuenta del creador o la global según `writeAs` (doneSender.ts). null si no hay limitador. */
+function doneSendFor(
+  deps: BackgroundDeps,
+  env: Env,
+  db: BotDb | null,
+  profileId: string,
+  broadcasterId: string,
+  channelSenderId: string,
+  writeAs: 'creator' | 'bot'
+): OutboxSend | null {
+  const limiter = (deps.limiter ?? defaultLimiter)(env);
+  if (!limiter) return null;
+  return createDoneSender({
+    fetch: deps.fetch ?? ((...args) => fetch(...args)),
+    env,
+    db,
+    limiter,
+    profileId,
+    broadcasterId,
+    writeAs,
+    channelSenderId,
+    now: deps.now,
+    sleep: deps.sleep,
+    pauseMs: deps.pauseMs,
+  });
+}
+
+/** Como pushOutboxNow, para la cola de Done («decir en el chat» y saludos a eventos). No lanza. */
+export async function pushDoneOutboxNow(profileId: string, env: Env = process.env, deps: BackgroundDeps = {}): Promise<void> {
+  try {
+    const db = (deps.db ?? defaultDb)(env);
+    if (!db) return;
+    const settings = await db.settings(profileId);
+    if (!settings || !settings.enabled) return;
+    const broadcasterId = await (deps.twitchUserId ?? defaultTwitchUserId)(profileId, env);
+    if (!broadcasterId) return;
+    const channelSenderId = senderIdFor(settings, broadcasterId, env);
+    if (!channelSenderId) return;
+    const done = deps.done ?? defaultBackgroundDone;
+    const found = await done.settings(profileId, env);
+    if (!found || !found.allowed || !found.settings.enabled) return;
+    const send = doneSendFor(deps, env, db, profileId, broadcasterId, channelSenderId, found.settings.writeAs);
+    if (send) await done.outbox(profileId, send, env);
+  } catch (err) {
+    logError('no se pudo vaciar la cola de Done', err);
+  }
+}
+
 // ---------- (b) Con cada mensaje del chat ----------
 
 export interface BackgroundInput {
@@ -253,6 +339,8 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
   // Solo para no leer la base en cada mensaje; en otra instancia se empieza de cero y no pasa nada
   const lastOutbox = new Map<string, number>();
   const statuses = new Map<string, { at: number; status: LuxProactiveStatus | null }>();
+  const doneStatuses = new Map<string, { at: number; status: DoneProactiveStatus | null }>();
+  const done = deps.done ?? defaultBackgroundDone;
 
   /** Antieco del modo streamer para los envíos de este canal (undefined en modo global). */
   const marker = (input: BackgroundInput) => echoMarkerFor(input.senderMode ?? 'global', getDb(input.env), input.profileId);
@@ -313,6 +401,12 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
       if (lastOutbox.size > 500) lastOutbox.delete(lastOutbox.keys().next().value as string);
       const send = senderFor(deps, env, input.botUserId, event.broadcasterId, marker(input));
       if (send) await lux.outbox(profileId, send, env);
+      // La cola de Done: aparte de la de Lux (agent 'done'), con la cuenta que eligió el creador
+      const doneFound = await done.settings(profileId, env).catch(() => null);
+      if (doneFound && doneFound.allowed && doneFound.settings.enabled) {
+        const doneSend = doneSendFor(deps, env, getDb(env), profileId, event.broadcasterId, input.botUserId, doneFound.settings.writeAs);
+        if (doneSend) await done.outbox(profileId, doneSend, env);
+      }
     }
 
     // 2. Estado de aprendizaje y comentarios (con caché corta)
@@ -323,12 +417,22 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
       statuses.set(profileId, { at: now, status });
       if (statuses.size > 500) statuses.delete(statuses.keys().next().value as string);
     }
-    if (!status) return;
+    // Done comparte el búfer de líneas del chat con Lux: se guarda si cualquiera de los dos lo necesita
+    const doneKnown = doneStatuses.get(profileId);
+    const doneRefreshed = !doneKnown || now - doneKnown.at >= STATUS_TTL_MS || now < doneKnown.at;
+    const doneStatus = doneRefreshed ? await done.status(profileId, env).catch(() => null) : doneKnown.status;
+    if (doneRefreshed) {
+      doneStatuses.set(profileId, { at: now, status: doneStatus });
+      if (doneStatuses.size > 500) doneStatuses.delete(doneStatuses.keys().next().value as string);
+    }
+    if (!status && !doneStatus) return;
     const lines = getLines(env);
     if (!lines) return;
 
+    const luxNeeds = Boolean(status && (status.learning || status.spontaneous.enabled));
+    const doneNeeds = Boolean(doneStatus && (doneStatus.learning || doneStatus.spontaneous.enabled));
     // Sin aprendizaje ni comentarios no se guarda nada del chat, y lo que hubiera de antes se borra
-    if (!status.learning && !status.spontaneous.enabled) {
+    if (!luxNeeds && !doneNeeds) {
       if (refreshed) await lines.clear(profileId);
       return;
     }
@@ -341,9 +445,49 @@ export function createChatBackground(deps: BackgroundDeps = {}): ChatBackground 
     }
 
     // 4. Decidir (solo al renovar el estado: como mucho cada STATUS_TTL_MS)
-    if (!refreshed) return;
+    if (!refreshed && !doneRefreshed) return;
+    if (doneStatus) await doneDecide(input, doneStatus, status, lines);
+    if (!status) return;
     if (status.learning && status.digestReady) await digest(input, status, lines);
     if (status.spontaneous.enabled && status.spontaneous.waitSeconds === 0) await spontaneous(input, status, lines);
+  }
+
+  /** Resumen y comentario espontáneo de Done, con las mismas líneas y candados que los de Lux. Las líneas las borra Lux si él también aprende. */
+  async function doneDecide(input: BackgroundInput, doneStatus: DoneProactiveStatus, luxStatus: LuxProactiveStatus | null, lines: ChatLinesDb): Promise<void> {
+    if (doneStatus.learning && doneStatus.digestReady) {
+      const all = await lines.all(input.profileId);
+      if (all.length >= MIN_DIGEST_LINES && (await lock(input, 'digest', DIGEST_LOCK_SECONDS))) {
+        const maxId = Math.max(...all.map((line) => line.id));
+        const answer = await done.summary(
+          input.profileId,
+          all.map(({ viewer, text }) => ({ viewer, text })),
+          input.env
+        );
+        if (answer.body.skipped !== 'too_soon' && !luxStatus?.learning) {
+          await lines.clear(input.profileId, maxId, { keepPendingComments: doneStatus.spontaneous.enabled || Boolean(luxStatus?.spontaneous.enabled) });
+        }
+      }
+    }
+    if (doneStatus.spontaneous.enabled && doneStatus.spontaneous.waitSeconds === 0) {
+      const pending = await lines.pendingSpontaneous(input.profileId, SPONT_LINES_MAX);
+      if (pending.length >= Math.max(SPONT_MIN_SEEN, doneStatus.spontaneous.minMessages) && (await lock(input, 'spont', SPONT_LOCK_SECONDS))) {
+        const answer = await done.spontaneous(
+          input.profileId,
+          pending.map(({ viewer, text }) => ({ viewer, text })),
+          input.env
+        );
+        const reply = typeof answer.body.reply === 'string' ? sanitizeChatOutput(answer.body.reply) : '';
+        if (!reply) return;
+        await lines.markSpontaneousUsed(
+          input.profileId,
+          pending.map((line) => line.id)
+        );
+        const found = await done.settings(input.profileId, input.env);
+        const db = getDb(input.env);
+        const send = doneSendFor(deps, input.env, db, input.profileId, input.event.broadcasterId, input.botUserId, found?.settings.writeAs ?? 'bot');
+        if (send) await send(reply);
+      }
+    }
   }
 
   return {
