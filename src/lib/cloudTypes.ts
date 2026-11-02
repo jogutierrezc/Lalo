@@ -66,6 +66,12 @@ export interface ProfileRow {
   last_widget_at?: string | null;
   /** Desde 0019: tope diario de caracteres en ElevenLabs (0 = sin límite). */
   elevenlabs_daily_chars?: number;
+  /** Desde 0047: número de Creador Fundador. Null o ausente = no es fundador. */
+  founder_number?: number | null;
+  /** Desde 0047: cuándo vio la bienvenida de la app. */
+  welcome_seen_at?: string | null;
+  /** Desde 0047: cuándo activó el regalo del plan Creadores Iniciales. */
+  founder_gift_claimed_at?: string | null;
 }
 
 export interface InviteCodeRow {
@@ -337,6 +343,11 @@ export interface RpcArgs {
   admin_set_eleven_active_slot: { p_slot: number };
   admin_set_streamer_voice: { p_profile: string; p_reference_id: string; p_engine: 'fish' | 'elevenlabs' };
   dismiss_elevenlabs_invite: Record<string, never>;
+  /** Desde 0047. */
+  mark_welcome_seen: Record<string, never>;
+  founder_gift_config: Record<string, never>;
+  claim_founder_gift: Record<string, never>;
+  admin_set_founder_gift: { p_plan: string; p_months: number };
 }
 
 /** Resultado de cada RPC (lo que llega en `data`). */
@@ -373,4 +384,11 @@ export interface RpcResult {
   admin_voices: AdminVoiceRow[];
   admin_set_voice_visible: null;
   admin_set_default_voice: null;
+  /** Desde 0047: la fecha en que quedó guardada la bienvenida vista. */
+  mark_welcome_seen: string | null;
+  /** Desde 0047: { plan_id, plan_name, months }. */
+  founder_gift_config: unknown;
+  /** Desde 0047: 'ok' | 'already_claimed' | 'not_founder' | 'has_plan' | 'not_active'. */
+  claim_founder_gift: string;
+  admin_set_founder_gift: unknown;
 }

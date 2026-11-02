@@ -24,6 +24,9 @@ import {
 import { formatBytes, rpc } from '../../lib/cloud';
 import type { AdminVoiceRow, ProfileStatus } from '../../lib/cloudTypes';
 import { formatDate } from './adminFormat';
+import { InsigniaFundador } from '../../components/welcome/InsigniaFundador';
+import { nombreEmblema } from '../../lib/fundadores';
+import { traerNumerosFundador } from '../../lib/fundadoresApi';
 import type { AdminData } from './useAdminData';
 import { VERSIONES_ACTUALES } from '../../legal';
 import { resumenAceptacion } from '../../legal/logica';
@@ -56,6 +59,18 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Número de Creador Fundador por cuenta (migración 0047); vacío si aún no se aplicó
+  const [fundadores, setFundadores] = useState<Map<string, number>>(() => new Map());
+
+  useEffect(() => {
+    let viva = true;
+    traerNumerosFundador().then((numeros) => {
+      if (viva) setFundadores(numeros);
+    });
+    return () => {
+      viva = false;
+    };
+  }, [overview]);
 
   useEffect(
     () => () => {
@@ -262,7 +277,13 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                       }}
                     >
                       <td>
+                        {fundadores.has(row.profile_id) && (
+                          <InsigniaFundador numero={fundadores.get(row.profile_id) as number} tamano={22} className="bt-mini" />
+                        )}
                         <b>{who}</b>
+                        {fundadores.has(row.profile_id) && (
+                          <div className="cab-hint cab-mono">{nombreEmblema(fundadores.get(row.profile_id) as number)}</div>
+                        )}
                         {rowUsage && rowUsage.modules.length > 0 && (
                           <div className="cab-hint cab-mono">{rowUsage.modules.length} mód.</div>
                         )}
@@ -310,6 +331,15 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
               <dl className="adm-kv">
                 <dt>Canal</dt>
                 <dd>{selected.twitch_login ? `#${selected.twitch_login}` : 'Sin canal'}</dd>
+                {fundadores.has(selected.profile_id) && (
+                  <>
+                    <dt>Insignia</dt>
+                    <dd className="flex items-center gap-2">
+                      <InsigniaFundador numero={fundadores.get(selected.profile_id) as number} tamano={44} decorativa />
+                      {nombreEmblema(fundadores.get(selected.profile_id) as number)}
+                    </dd>
+                  </>
+                )}
                 <dt>Espacio</dt>
                 <dd className="cab-mono">
                   {formatBytes(selected.bytes_used)} de {formatBytes(selected.storage_limit_bytes)}
