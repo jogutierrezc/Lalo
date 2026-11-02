@@ -76,9 +76,9 @@ describe('adminSectionFromHash', () => {
     expect(adminSectionFromHash('#admin')).toBe('resumen');
     expect(adminSectionFromHash('#admin/uso')).toBe('uso');
     expect(adminSectionFromHash('#admin/codigos')).toBe('codigos');
-    expect(adminSectionFromHash('#/admin/limites/')).toBe('limites');
+    expect(adminSectionFromHash('#/admin/precios/')).toBe('precios');
     expect(adminSectionFromHash('#ADMIN/Almacenamiento')).toBe('almacenamiento');
-    expect(adminSectionFromHash('#admin/streamers?x=1')).toBe('streamers');
+    expect(adminSectionFromHash('#admin/cuentas?x=1')).toBe('cuentas');
     expect(adminSectionFromHash('#admin/acceso')).toBe('acceso');
   });
 
@@ -89,7 +89,7 @@ describe('adminSectionFromHash', () => {
   });
 
   it('adminHref y adminSectionFromHash son inversas', () => {
-    for (const section of ['resumen', 'uso', 'codigos', 'limites', 'almacenamiento', 'streamers', 'acceso'] as const) {
+    for (const section of ['resumen', 'uso', 'codigos', 'precios', 'almacenamiento', 'cuentas', 'bandeja', 'facturacion', 'voces', 'acceso'] as const) {
       expect(adminSectionFromHash(adminHref(section))).toBe(section);
     }
   });

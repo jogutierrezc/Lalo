@@ -1,0 +1,490 @@
+/* ==========================================================================
+   Consola de administración con la identidad de Tally Studio (prefijo .atl-)
+   Cubre la bandeja de pagos, la facturación, los estados de carga y la
+   organización por plan de «Planes y precios». Tokens --tally-* (tally.css).
+   Movimiento: cubic-bezier(0.23, 1, 0.32, 1), hasta 300 ms, :active a
+   scale(.97), hover solo con puntero fino, movimiento reducido respetado.
+   Rojo solo para la acción principal; errores con borde discontinuo + icono + texto.
+   ========================================================================== */
+
+.atl-page,
+.atl-stack {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  align-content: start;
+}
+.atl-lede {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--tally-muted);
+  font-family: var(--tally-ui);
+  font-size: 0.875rem;
+}
+.atl-mono {
+  font-family: var(--tally-mono);
+  font-size: 0.75rem;
+}
+.atl-hint,
+.atl-sub {
+  display: block;
+  margin: 0;
+  color: var(--tally-muted);
+  font-family: var(--tally-ui);
+  font-size: 0.75rem;
+}
+.atl-lbl {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--tally-muted);
+  font-family: var(--tally-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.atl-nav-group {
+  display: grid;
+  gap: 2px;
+}
+
+/* ---------- Estados de carga ---------- */
+.atl-estado {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--tally-line);
+  border-radius: 12px;
+  background: var(--tally-onyx);
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+  font-size: 0.875rem;
+}
+.atl-estado[data-estado='cargando'] {
+  color: var(--tally-muted);
+}
+.atl-estado[data-estado='error'] {
+  border: 1px dashed var(--tally-error-line);
+}
+.atl-estado[data-estado='error'] svg {
+  color: var(--tally-error);
+}
+.atl-estado[data-estado='pendiente'] svg {
+  color: var(--tally-warn);
+}
+.atl-estado > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.atl-estado b {
+  display: block;
+  font-family: var(--tally-disp);
+}
+.atl-estado p {
+  margin: 2px 0 0;
+  color: var(--tally-muted);
+}
+.atl-vacio {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 6px;
+  min-height: 220px;
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--tally-muted);
+  font-family: var(--tally-ui);
+  font-size: 0.875rem;
+}
+.atl-vacio b {
+  color: var(--tally-white);
+  font-family: var(--tally-disp);
+  font-size: 1.125rem;
+}
+.atl-card-vacio {
+  border: 1px solid var(--tally-line);
+  border-radius: 12px;
+  background: var(--tally-onyx);
+}
+
+/* ---------- Bandeja ---------- */
+.atl-inbox {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  min-height: 460px;
+  overflow: hidden;
+  border: 1px solid var(--tally-line);
+  border-radius: 12px;
+  background: var(--tally-onyx);
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+}
+.atl-ilist {
+  max-height: 560px;
+  overflow: auto;
+  border-right: 1px solid var(--tally-line);
+}
+.atl-filters {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid var(--tally-line);
+  background: var(--tally-onyx);
+}
+.atl-fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--tally-line);
+  border-radius: 99px;
+  background: transparent;
+  color: var(--tally-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: transform 140ms var(--tally-ease), background-color 140ms var(--tally-ease);
+}
+.atl-fchip:active {
+  transform: scale(0.97);
+}
+.atl-fchip[aria-pressed='true'] {
+  border-color: var(--tally-white);
+  background: var(--tally-white);
+  color: var(--tally-dark);
+  font-weight: 700;
+}
+.atl-fchip:focus-visible,
+.atl-irow:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 2px;
+}
+.atl-fn {
+  font-family: var(--tally-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+.atl-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.atl-rows li {
+  overflow: hidden;
+  border-bottom: 1px solid var(--tally-line);
+}
+.atl-irow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms var(--tally-ease);
+}
+.atl-irow[aria-current='true'] {
+  background: var(--tally-onyx-2);
+}
+.atl-irow b {
+  display: block;
+  font-size: 0.875rem;
+}
+.atl-irow small {
+  display: block;
+  overflow: hidden;
+  color: var(--tally-muted);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.atl-when {
+  color: var(--tally-muted);
+  font-family: var(--tally-mono);
+  font-size: 0.6875rem;
+}
+.atl-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--tally-warn);
+}
+.atl-dot[data-tone='bad'] {
+  border: 1.5px dashed var(--tally-error-line);
+  background: transparent;
+}
+.atl-dot[data-tone='neutral'] {
+  background: var(--tally-muted);
+}
+.atl-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--tally-line);
+  color: var(--tally-ok);
+  font-size: 0.78rem;
+}
+.atl-idet {
+  min-width: 0;
+}
+.atl-detail {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 18px;
+}
+.atl-detail h3 {
+  margin: 0;
+  font-family: var(--tally-disp);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.atl-note {
+  margin: 0;
+  color: var(--tally-ink-dim);
+  font-size: 0.875rem;
+}
+.atl-kv {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-family: var(--tally-ui);
+  font-size: 0.84rem;
+}
+.atl-kv dt {
+  color: var(--tally-muted);
+}
+.atl-kv dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.atl-tl {
+  display: grid;
+  margin: 0 0 0 4px;
+  padding: 0;
+  border-left: 1px solid var(--tally-line);
+  list-style: none;
+}
+.atl-tl li {
+  position: relative;
+  padding: 0 0 10px 14px;
+  font-size: 0.8rem;
+}
+.atl-tl li::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tally-off);
+}
+.atl-tl small {
+  display: block;
+  color: var(--tally-muted);
+}
+.atl-field {
+  display: grid;
+}
+.atl-input {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--tally-off);
+  border-radius: 8px;
+  background: var(--tally-dark);
+  color: var(--tally-white);
+  font: inherit;
+  font-size: 0.84rem;
+}
+.atl-input:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 1px;
+}
+.atl-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--tally-error-line);
+  border-radius: 8px;
+  color: var(--tally-error);
+  font-size: 0.84rem;
+}
+.atl-error svg {
+  flex: none;
+  margin-top: 2px;
+}
+.atl-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- Facturación ---------- */
+.atl-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.atl-kpi {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--tally-line);
+  border-radius: 12px;
+  background: var(--tally-onyx);
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+}
+.atl-kpi small {
+  color: var(--tally-muted);
+  font-size: 0.78rem;
+}
+.atl-kpi b {
+  font-family: var(--tally-disp);
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.atl-delta {
+  font-family: var(--tally-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.atl-delta[data-dir='up'] {
+  color: var(--tally-ok);
+}
+.atl-delta[data-dir='down'] {
+  color: var(--tally-error);
+}
+.atl-delta[data-dir='flat'] {
+  color: var(--tally-muted);
+  font-weight: 500;
+}
+.atl-grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+.atl-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.atl-chart text {
+  fill: var(--tally-muted);
+  font-family: var(--tally-mono);
+  font-size: 11px;
+}
+.atl-chart .atl-grid {
+  stroke: var(--tally-line);
+}
+.atl-chart .atl-bar rect {
+  fill: var(--tally-off);
+}
+.atl-chart .atl-bar[data-current] rect {
+  fill: var(--tally-white);
+}
+.atl-chart .atl-bar-val[data-current] {
+  fill: var(--tally-white);
+  font-weight: 700;
+}
+.atl-tablewrap {
+  overflow-x: auto;
+}
+.atl-tablewrap:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 2px;
+}
+.atl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.atl-table th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--tally-line);
+  color: var(--tally-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+.atl-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--tally-line);
+  vertical-align: top;
+}
+.atl-table .atl-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- Planes y precios ---------- */
+.atl-sub-h {
+  margin: 6px 0 0;
+  color: var(--tally-muted);
+  font-family: var(--tally-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.atl-periods {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+.atl-period {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .atl-fchip:not([aria-pressed='true']):hover {
+    background: var(--tally-onyx-2);
+    color: var(--tally-white);
+  }
+  .atl-irow:hover {
+    background: var(--tally-onyx-2);
+  }
+}
+
+@media (max-width: 900px) {
+  .atl-inbox {
+    grid-template-columns: 1fr;
+  }
+  .atl-ilist {
+    max-height: 320px;
+    border-right: 0;
+    border-bottom: 1px solid var(--tally-line);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atl-fchip,
+  .atl-irow {
+    transition: none;
+  }
+}

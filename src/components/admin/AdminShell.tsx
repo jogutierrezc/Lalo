@@ -6,8 +6,10 @@
  * fuentes de OBS: solo códigos, límites, almacenamiento, voces, cuentas, integraciones y su acceso.
  *
  * La sección se elige por la dirección (#admin, #admin/codigos...). Cualquier
- * otra dirección lleva al Resumen. El menú marca con un número las secciones
- * que tienen algo pendiente.
+ * otra dirección lleva al Resumen. El menú va en cuatro grupos (Cobros,
+ * Creadores, Contenido y Sistema) bajo «Resumen», y marca con un número las
+ * secciones que tienen algo pendiente. Las rutas antiguas (#admin/limites,
+ * #admin/personajes, #admin/streamers) siguen llevando a su sección nueva.
  *
  * Reutiliza los estilos .shell-* del panel de streamer: se pliega en escritorio
  * y es un cajón en pantallas estrechas.
@@ -17,10 +19,11 @@ import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Activity,
+  BarChart3,
   CreditCard,
   FileText,
-  Gauge,
   HardDrive,
+  Inbox,
   KeyRound,
   LayoutGrid,
   Menu,
@@ -29,7 +32,6 @@ import {
   PanelLeftOpen,
   Plug,
   Receipt,
-  Sparkles,
   Ticket,
   Users,
   X,
@@ -38,41 +40,48 @@ import { ThemeSwitch } from '../ThemeSwitch';
 import { TallyLogo } from '../brand/TallyLogo';
 import { useCloudSession } from '../../hooks/useCloudSession';
 import {
+  ADMIN_GROUPS,
+  ADMIN_HOME,
   ADMIN_SECTIONS,
   adminHref,
-  adminSectionFromHash,
+  adminRouteFromHash,
   attentionCounts,
   buildAttention,
+  navCounts,
   storageHealth,
+  type AdminRoute,
   type AdminSection,
+  type AttentionItem,
   type StorageHealth,
 } from '../../lib/adminLogic';
 import { useAdminData } from '../../pages/admin/useAdminData';
 import { ResumenSection } from '../../pages/admin/ResumenSection';
 import { UsoSection } from '../../pages/admin/UsoSection';
-import { CodigosSection } from '../../pages/admin/CodigosSection';
-import { LimitesSection } from '../../pages/admin/LimitesSection';
-import { PreciosSection } from '../../pages/admin/PreciosSection';
+import { CodigosRegalosSection } from '../../pages/admin/CodigosRegalosSection';
+import { PlanesSection } from '../../pages/admin/PlanesSection';
 import { SuscripcionesSection } from '../../pages/admin/SuscripcionesSection';
 import { AlmacenamientoSection } from '../../pages/admin/AlmacenamientoSection';
 import { StreamersSection } from '../../pages/admin/StreamersSection';
-import { VocesSection } from '../../pages/admin/VocesSection';
+import { VocesPersonajesSection } from '../../pages/admin/VocesPersonajesSection';
 import { AccesoSection } from '../../pages/admin/AccesoSection';
 import { IntegracionesSection } from '../../pages/admin/IntegracionesSection';
-import { PersonajesSection } from '../../pages/admin/PersonajesSection';
+import { BandejaSection } from '../../pages/admin/BandejaSection';
+import { FacturacionSection } from '../../pages/admin/FacturacionSection';
+import { useAdminBillingSummary, useAdminInbox } from '../../pages/admin/useAdminBilling';
 import '../../styles/admin.css';
+import '../../styles/admin-tally.css';
 
 const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> = {
   resumen: LayoutGrid,
-  uso: Activity,
-  codigos: Ticket,
-  limites: Gauge,
-  precios: CreditCard,
+  bandeja: Inbox,
+  facturacion: BarChart3,
   suscripciones: Receipt,
-  almacenamiento: HardDrive,
+  precios: CreditCard,
+  codigos: Ticket,
+  cuentas: Users,
+  uso: Activity,
   voces: Mic,
-  personajes: Sparkles,
-  streamers: Users,
+  almacenamiento: HardDrive,
   integraciones: Plug,
   acceso: KeyRound,
 };
@@ -99,12 +108,15 @@ function loadCollapsed(): boolean {
 export const AdminShell: React.FC = () => {
   const { session, profile } = useCloudSession();
   const data = useAdminData();
-  const [section, setSection] = useState<AdminSection>(() => adminSectionFromHash(window.location.hash));
+  const [route, setRoute] = useState<AdminRoute>(() => adminRouteFromHash(window.location.hash));
+  const section = route.section;
+  const inbox = useAdminInbox();
+  const summary = useAdminBillingSummary();
   const [collapsed, setCollapsed] = useState(loadCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
-    const onChange = () => setSection(adminSectionFromHash(window.location.hash));
+    const onChange = () => setRoute(adminRouteFromHash(window.location.hash));
     window.addEventListener('hashchange', onChange);
     window.addEventListener('popstate', onChange);
     return () => {
@@ -142,7 +154,7 @@ export const AdminShell: React.FC = () => {
   }, [drawerOpen]);
 
   const { overview, invites, usage, storage, storageError, storageLoading } = data;
-  const attention = useMemo(
+  const baseAttention = useMemo(
     () =>
       overview && !storageLoading
         ? buildAttention({
@@ -156,10 +168,45 @@ export const AdminShell: React.FC = () => {
         : [],
     [overview, invites, usage, storage, storageError, storageLoading]
   );
-  const counts = attentionCounts(attention);
-  const title = ADMIN_SECTIONS.find((entry) => entry.id === section)?.label ?? 'Resumen';
+  // Los pagos por atender: el número del menú es su total; en el Resumen entran como un aviso más
+  const inboxCounts = inbox.state.status === 'ready' ? inbox.state.data.counts : null;
+  const attention = useMemo((): AttentionItem[] => {
+    if (!inboxCounts || inboxCounts.total === 0) return baseAttention;
+    const text = `${inboxCounts.total === 1 ? '1 pago requiere' : `${inboxCounts.total} pagos requieren`} atención en la bandeja de pagos.`;
+    return [{ level: inboxCounts.fail > 0 ? 'bad' : 'warn', text, section: 'bandeja', action: 'Abrir la bandeja' }, ...baseAttention];
+  }, [baseAttention, inboxCounts]);
+  const counts = useMemo(() => {
+    const out = navCounts(attentionCounts(baseAttention));
+    if (inboxCounts && inboxCounts.total > 0) out.bandeja = inboxCounts.total;
+    return out;
+  }, [baseAttention, inboxCounts]);
+  const title = ADMIN_SECTIONS.find((entry) => entry.id === section)?.label ?? ADMIN_HOME.label;
   const storageChip = STORAGE_CHIP[storageHealth(storage)];
   const email = session?.user.email || profile?.display_name || 'Administrador';
+
+  const navLink = (entry: { id: AdminSection; label: string }) => {
+    const Icon = ICONS[entry.id];
+    const count = counts[entry.id] ?? 0;
+    return (
+      <a
+        key={entry.id}
+        href={adminHref(entry.id)}
+        className="shell-link adm-link"
+        aria-current={entry.id === section ? 'page' : undefined}
+        title={collapsed ? entry.label : undefined}
+        onClick={() => setDrawerOpen(false)}
+      >
+        <Icon className="h-4 w-4 flex-none" />
+        <span className="shell-lab">{entry.label}</span>
+        {count > 0 && (
+          <b className="adm-badge" title="Requiere atención">
+            {count}
+            <span className="adm-sr"> {count === 1 ? 'aviso' : 'avisos'}</span>
+          </b>
+        )}
+      </a>
+    );
+  };
 
   const side = (
     <aside
@@ -179,29 +226,15 @@ export const AdminShell: React.FC = () => {
       </div>
 
       <nav className="shell-nav" aria-label="Secciones de la consola">
-        {ADMIN_SECTIONS.map((entry) => {
-          const Icon = ICONS[entry.id];
-          const count = counts[entry.id] ?? 0;
-          return (
-            <a
-              key={entry.id}
-              href={adminHref(entry.id)}
-              className="shell-link adm-link"
-              aria-current={entry.id === section ? 'page' : undefined}
-              title={collapsed ? entry.label : undefined}
-              onClick={() => setDrawerOpen(false)}
-            >
-              <Icon className="h-4 w-4 flex-none" />
-              <span className="shell-lab">{entry.label}</span>
-              {count > 0 && (
-                <b className="adm-badge" title="Requiere atención">
-                  {count}
-                  <span className="adm-sr"> {count === 1 ? 'aviso' : 'avisos'}</span>
-                </b>
-              )}
-            </a>
-          );
-        })}
+        {navLink(ADMIN_HOME)}
+        {ADMIN_GROUPS.map((group) => (
+          <div key={group.id} role="group" aria-label={group.label} className="atl-nav-group">
+            <p className="shell-group shell-lab" aria-hidden="true">
+              {group.label}
+            </p>
+            {group.sections.map(navLink)}
+          </div>
+        ))}
       </nav>
 
       <div className="shell-foot">
@@ -277,15 +310,15 @@ export const AdminShell: React.FC = () => {
 
         <main key={section} className="adm-view">
           {section === 'resumen' && <ResumenSection data={data} attention={attention} />}
-          {section === 'uso' && <UsoSection data={data} ownId={profile?.id ?? null} />}
-          {section === 'codigos' && overview && <CodigosSection data={data} />}
-          {section === 'limites' && <LimitesSection data={data} />}
-          {section === 'precios' && <PreciosSection />}
+          {section === 'bandeja' && <BandejaSection inbox={inbox} />}
+          {section === 'facturacion' && <FacturacionSection summary={summary} />}
           {section === 'suscripciones' && <SuscripcionesSection />}
+          {section === 'precios' && <PlanesSection data={data} />}
+          {section === 'codigos' && overview && <CodigosRegalosSection data={data} />}
+          {section === 'cuentas' && <StreamersSection data={data} ownId={profile?.id ?? null} />}
+          {section === 'uso' && <UsoSection data={data} ownId={profile?.id ?? null} />}
+          {section === 'voces' && <VocesPersonajesSection data={data} tab={route.tab} />}
           {section === 'almacenamiento' && <AlmacenamientoSection data={data} />}
-          {section === 'voces' && <VocesSection data={data} />}
-          {section === 'personajes' && <PersonajesSection />}
-          {section === 'streamers' && <StreamersSection data={data} ownId={profile?.id ?? null} />}
           {section === 'integraciones' && <IntegracionesSection data={data} />}
           {section === 'acceso' && <AccesoSection />}
         </main>

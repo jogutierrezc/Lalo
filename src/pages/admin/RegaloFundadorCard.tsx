@@ -1,7 +1,7 @@
 /**
  * src/pages/admin/RegaloFundadorCard.tsx
  *
- * Tarjeta de Límites: plan y meses del regalo que reciben los Creadores Fundadores
+ * Tarjeta de Códigos y regalos: plan y meses del regalo que reciben los Creadores Fundadores
  * al activarlo en su bienvenida (migración 0052, tabla founder_settings).
  * Si la migración aún no está aplicada, la lectura cae a los valores de respaldo
  * y el guardado muestra el error legible de la nube.

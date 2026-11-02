@@ -21,47 +21,123 @@ import type {
 
 export type AdminSection =
   | 'resumen'
-  | 'uso'
-  | 'codigos'
-  | 'limites'
-  | 'precios'
+  | 'bandeja'
+  | 'facturacion'
   | 'suscripciones'
-  | 'almacenamiento'
+  | 'precios'
+  | 'codigos'
+  | 'cuentas'
+  | 'uso'
   | 'voces'
-  | 'personajes'
-  | 'streamers'
+  | 'almacenamiento'
   | 'integraciones'
   | 'acceso';
 
-export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [
-  { id: 'resumen', label: 'Resumen' },
-  { id: 'uso', label: 'Uso y actividad' },
-  { id: 'codigos', label: 'Códigos de invitación' },
-  { id: 'limites', label: 'Límites' },
-  { id: 'precios', label: 'Planes y precios' },
-  { id: 'suscripciones', label: 'Suscripciones' },
-  { id: 'almacenamiento', label: 'Almacenamiento' },
-  { id: 'voces', label: 'Voces' },
-  { id: 'personajes', label: 'Personajes' },
-  { id: 'streamers', label: 'Streamers' },
-  { id: 'integraciones', label: 'Integraciones' },
-  { id: 'acceso', label: 'Mi acceso' },
-];
+/** Rutas antiguas que siguen funcionando: llevan a la sección nueva que absorbió su contenido. */
+export type LegacyAdminSection = 'limites' | 'personajes' | 'streamers';
+export type AdminRouteId = AdminSection | LegacyAdminSection;
 
-/**
- * Sección de la consola para una dirección (#admin, #admin/codigos...).
- * Cualquier otra dirección, incluidas las de los módulos de streamer (#tts,
- * #ruleta...), lleva al Resumen: el administrador no tiene esas pantallas.
- */
-export function adminSectionFromHash(hash: string): AdminSection {
-  const clean = hash.toLowerCase().replace(/^#\/?/, '').split('?')[0].replace(/\/+$/, '');
-  const [root, section] = clean.split('/');
-  if (root !== 'admin') return 'resumen';
-  return ADMIN_SECTIONS.find((entry) => entry.id === section)?.id ?? 'resumen';
+export const ADMIN_ALIASES: Record<LegacyAdminSection, { section: AdminSection; tab?: string }> = {
+  limites: { section: 'precios' },
+  personajes: { section: 'voces', tab: 'personajes' },
+  streamers: { section: 'cuentas' },
+};
+
+/** Pestañas que admite cada sección unida. */
+export const ADMIN_TABS: Partial<Record<AdminSection, string[]>> = { voces: ['voces', 'personajes'] };
+
+export interface AdminGroup {
+  id: string;
+  label: string;
+  sections: { id: AdminSection; label: string }[];
 }
 
-export function adminHref(section: AdminSection): string {
-  return section === 'resumen' ? '#admin' : `#admin/${section}`;
+/** Navegación en grupos; «Resumen» queda arriba como inicio de la consola. */
+export const ADMIN_HOME: { id: AdminSection; label: string } = { id: 'resumen', label: 'Resumen' };
+
+export const ADMIN_GROUPS: AdminGroup[] = [
+  {
+    id: 'cobros',
+    label: 'Cobros',
+    sections: [
+      { id: 'bandeja', label: 'Bandeja de pagos' },
+      { id: 'facturacion', label: 'Facturación' },
+      { id: 'suscripciones', label: 'Suscripciones' },
+      { id: 'precios', label: 'Planes y precios' },
+      { id: 'codigos', label: 'Códigos y regalos' },
+    ],
+  },
+  {
+    id: 'creadores',
+    label: 'Creadores',
+    sections: [
+      { id: 'cuentas', label: 'Cuentas' },
+      { id: 'uso', label: 'Uso y actividad' },
+    ],
+  },
+  {
+    id: 'contenido',
+    label: 'Contenido',
+    sections: [
+      { id: 'voces', label: 'Voces y personajes' },
+      { id: 'almacenamiento', label: 'Almacenamiento' },
+    ],
+  },
+  {
+    id: 'sistema',
+    label: 'Sistema',
+    sections: [
+      { id: 'integraciones', label: 'Integraciones' },
+      { id: 'acceso', label: 'Mi acceso' },
+    ],
+  },
+];
+
+export const ADMIN_SECTIONS: { id: AdminSection; label: string }[] = [ADMIN_HOME, ...ADMIN_GROUPS.flatMap((group) => group.sections)];
+
+export interface AdminRoute {
+  section: AdminSection;
+  /** Pestaña pedida por la dirección (solo en secciones con pestañas), o null. */
+  tab: string | null;
+}
+
+/**
+ * Sección (y pestaña) de la consola para una dirección (#admin, #admin/codigos,
+ * #admin/voces/personajes...). Las rutas antiguas (#admin/limites, #admin/streamers,
+ * #admin/personajes) llevan a la sección nueva. Cualquier otra dirección, incluidas
+ * las de los módulos de streamer (#tts, #ruleta...), lleva al Resumen.
+ */
+export function adminRouteFromHash(hash: string): AdminRoute {
+  const clean = hash.toLowerCase().replace(/^#\/?/, '').split('?')[0].replace(/\/+$/, '');
+  const [root, id, tab] = clean.split('/');
+  if (root !== 'admin') return { section: 'resumen', tab: null };
+  const alias = ADMIN_ALIASES[id as LegacyAdminSection];
+  const section = alias?.section ?? ADMIN_SECTIONS.find((entry) => entry.id === id)?.id ?? 'resumen';
+  const wanted = tab ?? alias?.tab ?? null;
+  return { section, tab: wanted && ADMIN_TABS[section]?.includes(wanted) ? wanted : null };
+}
+
+export function adminSectionFromHash(hash: string): AdminSection {
+  return adminRouteFromHash(hash).section;
+}
+
+/** Dirección de una sección; los nombres antiguos se escriben ya con su destino nuevo. */
+export function adminHref(id: AdminRouteId): string {
+  const alias = ADMIN_ALIASES[id as LegacyAdminSection];
+  const section = alias?.section ?? (id as AdminSection);
+  const tab = alias?.tab;
+  if (section === 'resumen') return '#admin';
+  return tab ? `#admin/${section}/${tab}` : `#admin/${section}`;
+}
+
+/** Suma los avisos de las secciones antiguas en la sección nueva que las absorbió. */
+export function navCounts(counts: Partial<Record<AdminRouteId, number>>): Partial<Record<AdminSection, number>> {
+  const out: Partial<Record<AdminSection, number>> = {};
+  for (const [id, count] of Object.entries(counts) as [AdminRouteId, number][]) {
+    const section = ADMIN_ALIASES[id as LegacyAdminSection]?.section ?? (id as AdminSection);
+    out[section] = (out[section] ?? 0) + count;
+  }
+  return out;
 }
 
 // ---------- Módulos y telemetría de uso ----------
@@ -272,7 +348,7 @@ export function accountsThatFit(freeBytes: number, planBytes: number): number {
 export interface AttentionItem {
   level: 'bad' | 'warn' | 'info';
   text: string;
-  section: AdminSection;
+  section: AdminRouteId;
   action: string;
 }
 
@@ -354,8 +430,8 @@ export function buildAttention(input: {
 }
 
 /** Cuántos avisos tiene cada sección, para el número del menú. */
-export function attentionCounts(items: AttentionItem[]): Partial<Record<AdminSection, number>> {
-  const counts: Partial<Record<AdminSection, number>> = {};
+export function attentionCounts(items: AttentionItem[]): Partial<Record<AdminRouteId, number>> {
+  const counts: Partial<Record<AdminRouteId, number>> = {};
   for (const item of items) counts[item.section] = (counts[item.section] ?? 0) + 1;
   return counts;
 }

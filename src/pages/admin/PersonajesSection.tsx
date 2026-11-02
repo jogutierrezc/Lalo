@@ -176,7 +176,7 @@ export const PersonajesSection: React.FC = () => {
               Personajes
             </h2>
             <p className="cab-hint">
-              Cada streamer tiene un personaje activo, que asignas desde su ficha en Streamers. Sus recuerdos son del personaje, no de la cuenta.
+              Cada streamer tiene un personaje activo, que asignas desde su ficha en Cuentas. Sus recuerdos son del personaje, no de la cuenta.
             </p>
           </div>
           <button
@@ -387,7 +387,7 @@ export const PersonajesSection: React.FC = () => {
             Modelos
           </h2>
           <p className="cab-hint">
-            Qué modelos puede elegir un personaje. Cada respuesta cuesta los créditos que pongas aquí; el tope mensual lo pone cada plan en Límites.
+            Qué modelos puede elegir un personaje. Cada respuesta cuesta los créditos que pongas aquí; el tope mensual lo pone cada plan en «Planes y precios».
             El modelo por defecto es gratis y no se puede deshabilitar: es el que usan los personajes cuando el suyo no puede.
           </p>
         </div>
