@@ -16,6 +16,8 @@ import { useGSAP } from '@gsap/react';
 import { Check, Lock } from 'lucide-react';
 import { reduced } from '../../utils/alertMotion';
 import { billingSubscribe } from '../../lib/billingApi';
+import { PAYPAL_BUTTON_STYLE, buildPaypalSdkUrl } from '../../lib/invitesLogic';
+import { loadPaypalSdk } from '../../lib/paypalSdk';
 import {
   addMonths,
   availablePeriods,
@@ -58,9 +60,16 @@ interface Props {
   onClose: () => void;
   /** Vuelve a preguntar por el estado (botón «Comprobar ahora»). */
   onRecheck?: () => void;
+  /** PayPal aprobó la suscripción desde los botones: quien abre la ventana la confirma y sigue los pasos. */
+  onApproved?: (subscriptionId: string, info: { planName: string; months: number }) => void;
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+type SdkState = 'loading' | 'ready' | 'failed';
+
+/** Fallo de nuestro servidor al crear la suscripción (p. ej. 409 ya suscrito): ya se explicó en pantalla, no es un error de PayPal. */
+class SubscribeFailure extends Error {}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
 
 const PayPalMark: React.FC = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -69,7 +78,7 @@ const PayPalMark: React.FC = () => (
   </svg>
 );
 
-export const CheckoutWindow: React.FC<Props> = ({ catalog, status, track, onClose, onRecheck }) => {
+export const CheckoutWindow: React.FC<Props> = ({ catalog, status, track, onClose, onRecheck, onApproved }) => {
   const titleId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +93,12 @@ export const CheckoutWindow: React.FC<Props> = ({ catalog, status, track, onClos
   const [months, setMonths] = useState<number>(() => (plan ? (defaultPeriod(plan.prices, current?.months) ?? 1) : 1));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const hasClientId = buildPaypalSdkUrl(catalog.clientId) !== null;
+  const [sdk, setSdk] = useState<SdkState>(hasClientId ? 'loading' : 'failed');
+  const buttonsRef = useRef<HTMLDivElement | null>(null);
+  const onApprovedRef = useRef(onApproved);
+  onApprovedRef.current = onApproved;
 
   // Si el periodo elegido no existe en este plan, se usa el primero disponible
   const period: BillingPeriod | null = plan ? defaultPeriod(plan.prices, months) : null;
@@ -177,11 +192,85 @@ export const CheckoutWindow: React.FC<Props> = ({ catalog, status, track, onClos
     { dependencies: [total, tracking] }
   );
 
+  // El SDK de PayPal se carga una sola vez; si no llega, queda el botón de redirección
+  useEffect(() => {
+    if (!hasClientId) return;
+    let alive = true;
+    loadPaypalSdk(catalog.clientId)
+      .then(() => alive && setSdk('ready'))
+      .catch(() => alive && setSdk('failed'));
+    return () => {
+      alive = false;
+    };
+  }, [catalog.clientId, hasClientId]);
+
+  // Botones de PayPal: se destruyen y se crean de nuevo al cambiar de plan o de periodo
+  const planIdNow = plan?.id ?? null;
+  const planNameNow = plan?.name ?? '';
+  useEffect(() => {
+    const container = buttonsRef.current;
+    if (sdk !== 'ready' || tracking || !container || !planIdNow || period == null || !window.paypal) return;
+    let alive = true;
+    const chosen = { planId: planIdNow, planName: planNameNow, months: period };
+    const buttons = window.paypal.Buttons({
+      style: { ...PAYPAL_BUTTON_STYLE },
+      createSubscription: async () => {
+        setError(null);
+        setInfo(null);
+        const res = await billingSubscribe(chosen.planId, chosen.months, 'sdk');
+        if (!res.ok) {
+          // El SDK llama luego a onError con este rechazo: se muestra tal cual, sin el prefijo de «PayPal no pudo»
+          const message = res.code === 'already_subscribed' && !res.message ? 'Ya tienes una suscripción en curso. Revisa Mi plan antes de contratar otra.' : res.message;
+          if (alive) setError(message);
+          throw new SubscribeFailure(message);
+        }
+        try {
+          sessionStorage.setItem(
+            PENDING_SUB_KEY,
+            JSON.stringify({ subscriptionId: res.data.subscriptionId, planName: chosen.planName, months: chosen.months })
+          );
+        } catch {
+          // Sin almacenamiento de sesión: la suscripción se confirma igual al aprobar
+        }
+        return res.data.subscriptionId;
+      },
+      onApprove: async (data) => {
+        const id = data.subscriptionID;
+        if (!id) {
+          if (alive) setError('PayPal aprobó el pago pero no devolvió la suscripción. No repitas el pago: avisa al administrador.');
+          return;
+        }
+        onApprovedRef.current?.(id, { planName: chosen.planName, months: chosen.months });
+      },
+      onCancel: () => {
+        if (alive) setInfo('Cerraste PayPal sin terminar. No se cobró nada; puedes intentarlo de nuevo cuando quieras.');
+      },
+      onError: (err) => {
+        if (!alive || err instanceof SubscribeFailure) return;
+        const detail = err instanceof Error && err.message ? err.message : '';
+        setError(detail ? `PayPal no pudo completar el pago: ${detail}` : 'PayPal no pudo completar el pago. No se cobró nada; inténtalo otra vez.');
+      },
+    });
+    buttons.render(container).catch(() => {
+      if (alive) setSdk('failed');
+    });
+    return () => {
+      alive = false;
+      try {
+        Promise.resolve(buttons.close()).catch(() => {});
+      } catch {
+        // Los botones ya no estaban
+      }
+      container.replaceChildren();
+    };
+  }, [sdk, tracking, planIdNow, planNameNow, period]);
+
   const choosePlan = (id: string) => {
     setPlanId(id);
     const next = plans.find((p) => p.id === id);
     if (next) setMonths(defaultPeriod(next.prices, months) ?? 1);
     setError(null);
+    setInfo(null);
     if (!reduced()) gsap.fromTo('.bil-res-nombre', { y: 6, opacity: 0.4 }, { y: 0, opacity: 1, duration: 0.35, ease: SALIDA });
   };
 
@@ -318,12 +407,38 @@ export const CheckoutWindow: React.FC<Props> = ({ catalog, status, track, onClos
                   {error}
                 </p>
               )}
-              <button type="button" className="bil-pp" onClick={pay} disabled={busy}>
-                <PayPalMark />
-                {busy ? 'Abriendo PayPal…' : 'Suscribirme con PayPal'}
-              </button>
+              {info && (
+                <p className="bil-nota" role="status">
+                  {info}
+                </p>
+              )}
+              {sdk === 'failed' ? (
+                <>
+                  {hasClientId && (
+                    <p className="bil-nota" role="status">
+                      No pudimos cargar los botones de PayPal en esta página. Usa este botón: te lleva a PayPal para terminar el pago.
+                    </p>
+                  )}
+                  <button type="button" className="bil-pp" onClick={pay} disabled={busy}>
+                    <PayPalMark />
+                    {busy ? 'Abriendo PayPal…' : 'Suscribirme con PayPal'}
+                  </button>
+                </>
+              ) : (
+                <div className="bil-sdk" data-state={sdk}>
+                  {sdk === 'loading' && (
+                    <p className="bil-nota" role="status">
+                      Cargando los botones de PayPal…
+                    </p>
+                  )}
+                  <div ref={buttonsRef} />
+                </div>
+              )}
               <p className="bil-nota">
-                Al continuar se abre PayPal para aprobar el cobro recurrente. El plan se activa cuando PayPal confirma que el dinero llegó, no antes.
+                {sdk === 'failed'
+                  ? 'Al continuar se abre PayPal para aprobar el cobro recurrente.'
+                  : 'Paga con tu cuenta de PayPal o con tarjeta si PayPal la ofrece para ti.'}{' '}
+                El plan se activa cuando PayPal confirma que el dinero llegó, no antes.
                 {catalog.env === 'sandbox' && ' Estás en modo de pruebas: no se cobra dinero de verdad.'}
               </p>
             </div>

@@ -14,11 +14,15 @@ import type {
   AdminPlan,
   AdminPriceCell,
   AdminPrices,
+  AdminSubscription,
+  AdminSubscriptions,
+  CodeAccess,
   BillingCatalog,
   BillingStatus,
   BillingSubscription,
   PeriodKey,
   PriceMap,
+  SubscribeFlow,
   SubscribeResult,
   SubscriptionStatus,
 } from './billingTypes';
@@ -43,6 +47,7 @@ export function parseCatalog(data: Record<string, unknown>): BillingCatalog {
   return {
     enabled: data.enabled === true,
     env: data.env === 'live' ? 'live' : 'sandbox',
+    clientId: asText(data.clientId),
     plans: plans
       .map(asObject)
       .filter((plan) => asText(plan.id))
@@ -87,8 +92,60 @@ export function parseAdminPrices(data: Record<string, unknown>): AdminPrices {
             paypalPlanId: asText(cell.paypalPlanId) || null,
           };
         }
-        return { id: asText(plan.id), name: asText(plan.name) || asText(plan.id), prices };
+        return { id: asText(plan.id), name: asText(plan.name) || asText(plan.id), archived: plan.archived === true, prices };
       }),
+  };
+}
+
+const num = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
+export function parseAdminSubscriptions(data: Record<string, unknown>): AdminSubscriptions {
+  const subs = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+  const access = Array.isArray(data.codeAccess) ? data.codeAccess : [];
+  const totals = asObject(data.totals);
+  return {
+    subscriptions: subs
+      .map(asObject)
+      .filter((s) => asText(s.id))
+      .map(
+        (s): AdminSubscription => ({
+          id: asText(s.id),
+          profileId: asText(s.profileId),
+          twitchLogin: asText(s.twitchLogin) || null,
+          displayName: asText(s.displayName) || null,
+          planId: asText(s.planId),
+          planName: asText(s.planName) || asText(s.planId),
+          months: typeof s.months === 'number' ? s.months : 1,
+          status: STATUSES.includes(s.status as SubscriptionStatus) ? (s.status as SubscriptionStatus) : 'expired',
+          startedAt: asDate(s.startedAt),
+          paidUntil: asDate(s.paidUntil),
+          lastPaymentAt: asDate(s.lastPaymentAt),
+          priceUsd: num(s.priceUsd),
+        })
+      ),
+    totals: {
+      active: num(totals.active),
+      grace: num(totals.grace),
+      cancelled: num(totals.cancelled),
+      suspended: num(totals.suspended),
+      expired: num(totals.expired),
+      pending: num(totals.pending),
+    },
+    codeAccess: access
+      .map(asObject)
+      .filter((c) => asText(c.profileId) && asDate(c.expiresAt))
+      .map(
+        (c): CodeAccess => ({
+          profileId: asText(c.profileId),
+          twitchLogin: asText(c.twitchLogin) || null,
+          displayName: asText(c.displayName) || null,
+          planId: asText(c.planId),
+          planName: asText(c.planName) || asText(c.planId),
+          expiresAt: asText(c.expiresAt),
+          inviteCode: asText(c.inviteCode) || null,
+        })
+      ),
+    nextBefore: asDate(data.nextBefore),
   };
 }
 
@@ -106,12 +163,13 @@ async function read<T>(path: string, method: 'GET' | 'POST', parse: (data: Recor
 
 export const billingCatalog = () => read('/api/paypal/catalog', 'GET', parseCatalog);
 
-export async function billingSubscribe(planId: string, months: number): Promise<ApiOutcome<SubscribeResult>> {
-  const res = await call('/api/paypal/subscribe', 'POST', { planId, months });
+/** flow 'sdk': usa subscriptionId en createSubscription de los botones de PayPal y luego billingConfirm. 'redirect' (por defecto): navega a approveUrl. */
+export async function billingSubscribe(planId: string, months: number, flow: SubscribeFlow = 'redirect'): Promise<ApiOutcome<SubscribeResult>> {
+  const res = await call('/api/paypal/subscribe', 'POST', { planId, months, flow });
   if (!res.ok) return res;
   const approveUrl = asText(res.data.approveUrl);
   const subscriptionId = asText(res.data.subscriptionId);
-  if (!approveUrl) return bad<SubscribeResult>();
+  if (!subscriptionId || (flow === 'redirect' && !approveUrl)) return bad<SubscribeResult>();
   return { ok: true, data: { approveUrl, subscriptionId } };
 }
 
@@ -127,3 +185,7 @@ export const adminSavePrice = (planId: string, months: number, priceUsd: number 
   read('/api/paypal/admin-prices', 'POST', parseAdminPrices, { planId, months, priceUsd, active });
 
 export const adminSync = () => read('/api/paypal/admin-sync', 'POST', parseAdminPrices);
+
+/** Suscripciones, totales y accesos por código. `before` (nextBefore de la página anterior) pide la siguiente. */
+export const adminSubscriptions = (before?: string | null) =>
+  read(before ? `/api/paypal/admin-subscriptions?before=${encodeURIComponent(before)}` : '/api/paypal/admin-subscriptions', 'GET', parseAdminSubscriptions);

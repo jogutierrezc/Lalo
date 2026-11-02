@@ -3,7 +3,7 @@
  *
  * Piezas de la bienvenida que comparten la pantalla de acceso (pasos antes de
  * Twitch) y la página de bienvenida (pasos con la sesión abierta): el marco con
- * la aurora, la lista de pasos, el título palabra a palabra, la tarjeta del
+ * el fondo de señal de Tally Studio y el logotipo, la lista de pasos, el título palabra a palabra, la tarjeta del
  * plan y el movimiento de entrada y salida de cada paso.
  *
  * Con «reducir movimiento» nada se desplaza: solo cambia la opacidad.
@@ -13,7 +13,8 @@ import React, { useRef } from 'react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { Check } from 'lucide-react';
-import { AuroraFondo } from '../acceso/AuroraFondo';
+import { SenalFondo } from '../brand/SenalFondo';
+import { TallyLogo } from '../brand/TallyLogo';
 import { Narrador } from './Narrador';
 import { reduced } from '../../utils/alertMotion';
 import { ETIQUETA, NARRACION, estadoPaso, pasosVisibles, type Camino, type PasoId, type PasoNarrado } from '../../lib/recorrido';
@@ -34,7 +35,7 @@ interface MarcoProps {
   children: React.ReactNode;
 }
 
-/** Fondo de aurora y panel de cristal de la pantalla de acceso. */
+/** Fondo de señal, logotipo y panel de la pantalla de acceso. */
 export const MarcoRecorrido: React.FC<MarcoProps> = ({ pulso, lateral, children }) => {
   const tarjetaRef = useRef<HTMLDivElement | null>(null);
 
@@ -57,10 +58,18 @@ export const MarcoRecorrido: React.FC<MarcoProps> = ({ pulso, lateral, children 
 
   return (
     <div className="cab acc rec">
-      <AuroraFondo pulso={pulso} />
-      <div ref={tarjetaRef} className="acc-card">
-        <div className="acc-brand">{lateral}</div>
-        <div className="acc-form">{children}</div>
+      <SenalFondo pulso={pulso} />
+      <div className="acc-escena">
+        <header className="acc-marca">
+          <TallyLogo animated className="acc-logo" />
+          <p className="acc-eslogan" lang="en">
+            Professional tools for rising creators
+          </p>
+        </header>
+        <div ref={tarjetaRef} className="acc-card">
+          <div className="acc-brand">{lateral}</div>
+          <div className="acc-form">{children}</div>
+        </div>
       </div>
     </div>
   );
@@ -90,7 +99,7 @@ export const ListaPasos: React.FC<{ camino: Camino; actual: PasoId }> = ({ camin
 export const LateralRecorrido: React.FC<{ camino: Camino; paso: PasoNarrado }> = ({ camino, paso }) => (
   <>
     <div>
-      <p className="cab-label">Lalo Stream Suite</p>
+      <p className="cab-label">Tally Studio</p>
       <ListaPasos camino={camino} actual={paso} />
     </div>
     <Narrador paso={paso} texto={NARRACION[paso]} />

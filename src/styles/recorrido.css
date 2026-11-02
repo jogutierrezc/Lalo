@@ -31,10 +31,10 @@
 }
 .acc.rec .cab-error {
   padding: 10px 12px;
-  border: 1px solid rgb(255 138 128 / 0.6);
-  border-radius: 4px;
-  background: rgb(255 106 96 / 0.16);
-  color: #ffd2cd;
+  border: 1px dashed #ff6b6b;
+  border-radius: 6px;
+  background: rgb(255 107 107 / 0.08);
+  color: #ffd0d0;
 }
 .acc.rec .rec-fila {
   display: flex;
@@ -98,9 +98,9 @@
   color: var(--acc-noche);
 }
 .rec-pasos li[data-estado='hecho'] i {
-  border-color: var(--acc-tw);
-  background: var(--acc-tw);
-  color: #fff;
+  border-color: var(--cb-ok);
+  background: var(--cb-ok-bg);
+  color: var(--cb-ok);
 }
 
 /* ---------- Chispa te explica ---------- */
@@ -110,7 +110,7 @@
   padding: 14px;
   border: 1px solid var(--cb-line);
   border-radius: 6px;
-  background: rgb(145 70 255 / 0.18);
+  background: rgb(255 42 42 / 0.08);
 }
 .rec-narra-cab {
   display: flex;
@@ -176,7 +176,7 @@
   padding: 14px;
   border: 1px solid var(--cb-line);
   border-radius: 6px;
-  background: rgb(10 3 28 / 0.45);
+  background: rgb(22 25 28 / 0.6);
 }
 .rec-caja > b {
   display: block;
@@ -293,7 +293,7 @@
 
 /* ---------- Elección de voz y estilo ---------- */
 .acc.rec .cab-seg {
-  background: rgb(10 3 28 / 0.5);
+  background: rgb(22 25 28 / 0.6);
 }
 .acc.rec .cab-seg button {
   min-height: 36px;
@@ -354,7 +354,7 @@
   justify-content: flex-end;
 }
 .acc.rec .rec-tareas li {
-  background: rgb(10 3 28 / 0.45);
+  background: rgb(22 25 28 / 0.6);
 }
 @media (max-width: 480px) {
   .rec-tareas li {
