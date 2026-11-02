@@ -25,6 +25,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Check, Copy, Play, Plus, Shuffle, Undo2, X } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { Field, Range, Toggle } from '../components/studio/StudioKit';
+import { EstudioPestanas, PanelPestana } from '../components/participacion/EstudioPestanas';
 import { MediaField, MediaValue } from '../components/recompensas/MediaField';
 import { SignupPanel } from '../components/torneo/SignupPanel';
 import { TournamentLayer } from '../components/torneo/TournamentLayer';
@@ -355,36 +356,69 @@ export const TournamentStudio: React.FC = () => {
   const style = TOURNAMENT_STYLES.find((item) => item.id === settings.style) ?? TOURNAMENT_STYLES[0];
   const sceneName = TOURNAMENT_SCENES.find((item) => item.id === shown)?.name ?? '';
 
-  return (
-    <div className="cab">
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav currentApp="torneos" channel={channel} saved={saved} />
-
-        <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          <div className="grid gap-5">
-            <div className="pt-tabs" role="tablist" aria-label="Secciones de Torneos">
-              {TABS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  id={`${uid}-tab-${item.id}`}
-                  aria-selected={tab === item.id}
-                  aria-controls={`${uid}-panel`}
-                  onClick={() => setTab(item.id)}
-                >
-                  {item.name}
-                  {/* Solicitudes de inscripción sin responder: a la vista desde cualquier pestaña */}
-                  {item.id === 'torneo' && signup.pending.length > 0 && (
-                    <b className="cab-chip tnp-badge" data-status="skipped" aria-label={signup.pending.length === 1 ? '1 solicitud pendiente' : `${signup.pending.length} solicitudes pendientes`}>
-                      {signup.pending.length}
-                    </b>
-                  )}
-                </button>
-              ))}
+  const monitorPanel = (
+          <section className="cab-mod">
+            <div className="flex items-center justify-between gap-3">
+              <h2>Monitor</h2>
+              <b className="cab-chip">{sceneName}</b>
+            </div>
+            <div className="cab-stage">
+              <TournamentLayer settings={clean} state={state} isStudio replay={replay} />
             </div>
 
-            <div id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-tab-${tab}`} className="grid gap-5">
+            <div className="cab-field">
+              <span className="cab-label">Pantalla</span>
+              <Seg label="Pantalla" value={shown} options={TOURNAMENT_SCENES} onChange={show} />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn flex-1" onClick={() => copyUrl(false)}>
+                {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span>{copied === 'url' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+              </button>
+              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(true)}>
+                {copied === 'demo' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span>{copied === 'demo' ? 'URL copiada' : 'Copiar URL con pantallas de muestra'}</span>
+              </button>
+            </div>
+            <p className="cab-hint" role="status">
+              {status ||
+                (channel
+                  ? 'El monitor enseña tu llave tal como saldrá en OBS. La voz del narrador solo se oye en la fuente de OBS.'
+                  : 'Falta tu canal: escríbelo en Inicio antes de copiar la URL.')}
+            </p>
+            <p className="cab-note">
+              La fuente ocupa la pantalla entera (1920 × 1080) y es transparente: ponla encima de tu partida. Si copiaste la URL sin cuenta en la nube,
+              vuelve a copiarla cuando cambies los equipos.
+            </p>
+          </section>
+  );
+
+  const pestanas = TABS.map((item) => ({
+    id: item.id,
+    label: item.name,
+    insignia:
+      // Solicitudes de inscripción sin responder: a la vista desde cualquier pestaña
+      item.id === 'torneo' && signup.pending.length > 0
+        ? {
+            texto: String(signup.pending.length),
+            aria: signup.pending.length === 1 ? '1 solicitud pendiente' : `${signup.pending.length} solicitudes pendientes`,
+          }
+        : undefined,
+  }));
+
+  return (
+    <div className="cab">
+      <EstudioPestanas
+        etiqueta="Secciones de Torneos"
+        idBase={uid}
+        pestanas={pestanas}
+        activa={tab}
+        onCambio={(next) => setTab(next as Tab)}
+        nav={<SuiteNav currentApp="torneos" channel={channel} saved={saved} />}
+        fijo={monitorPanel}
+      >
+        <PanelPestana idBase={uid} id={tab} activa={tab}>
               {/* Lo que borra resultados se confirma aquí, no en una ventana del navegador */}
               {ask && (
                 <div className="cab-note" role="alertdialog" aria-label="Confirmar">
@@ -803,47 +837,8 @@ export const TournamentStudio: React.FC = () => {
                   </section>
                 </>
               )}
-            </div>
-          </div>
-
-          {/* ---------- Monitor ---------- */}
-          <section className="cab-mod max-[1099px]:order-first min-[1100px]:sticky min-[1100px]:top-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2>Monitor</h2>
-              <b className="cab-chip">{sceneName}</b>
-            </div>
-            <div className="cab-stage">
-              <TournamentLayer settings={clean} state={state} isStudio replay={replay} />
-            </div>
-
-            <div className="cab-field">
-              <span className="cab-label">Pantalla</span>
-              <Seg label="Pantalla" value={shown} options={TOURNAMENT_SCENES} onChange={show} />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn flex-1" onClick={() => copyUrl(false)}>
-                {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'url' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-              </button>
-              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(true)}>
-                {copied === 'demo' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'demo' ? 'URL copiada' : 'Copiar URL con pantallas de muestra'}</span>
-              </button>
-            </div>
-            <p className="cab-hint" role="status">
-              {status ||
-                (channel
-                  ? 'El monitor enseña tu llave tal como saldrá en OBS. La voz del narrador solo se oye en la fuente de OBS.'
-                  : 'Falta tu canal: escríbelo en Inicio antes de copiar la URL.')}
-            </p>
-            <p className="cab-note">
-              La fuente ocupa la pantalla entera (1920 × 1080) y es transparente: ponla encima de tu partida. Si copiaste la URL sin cuenta en la nube,
-              vuelve a copiarla cuando cambies los equipos.
-            </p>
-          </section>
-        </div>
-      </div>
+        </PanelPestana>
+      </EstudioPestanas>
     </div>
   );
 };

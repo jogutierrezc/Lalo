@@ -1,0 +1,138 @@
+/* ==========================================================================
+   Participación (Metas, Ruleta, Batallas, Torneos): estudio con pestañas.
+   Armazón: cabecera fija (barra de la suite + pestañas), paneles a la
+   izquierda y panel fijo (monitor y pruebas) a la derecha. Los controles
+   siguen siendo los del sistema (.cab-*), que bajo .tally ya lucen Tally.
+   Movimiento: cubic-bezier(0.23, 1, 0.32, 1), menos de 300 ms, nunca desde
+   scale(0); movimiento reducido respetado.
+   ========================================================================== */
+
+.pa-estudio {
+  --pa-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  display: grid;
+  align-content: start;
+  min-height: 100%;
+  color: var(--cb-fg, var(--tally-white));
+  font-family: var(--tally-ui, system-ui, sans-serif);
+}
+
+/* ---------- Cabecera fija ---------- */
+.pa-cabecera {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: grid;
+  gap: 0;
+  padding: 12px 20px 0;
+  background: var(--cb-bg, var(--tally-dark));
+  border-bottom: 1px solid var(--cb-line, var(--tally-line));
+}
+.pa-cabecera .tui-tabs {
+  padding: 0;
+  border-bottom: 0;
+  margin-top: 8px;
+}
+
+/* ---------- Cuerpo ---------- */
+.pa-cuerpo {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+  padding: 20px;
+}
+.pa-centro,
+.pa-riel,
+.pa-fijo {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  min-width: 0;
+}
+.pa-panel {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.pa-panel[hidden] {
+  display: none;
+}
+.pa-panel:not([hidden]) {
+  animation: pa-entra 220ms var(--pa-ease) both;
+}
+@keyframes pa-entra {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pa-panel:not([hidden]) {
+    animation: none;
+  }
+}
+
+/* El monitor y las pruebas van arriba en ventanas estrechas */
+.pa-fijo {
+  order: -1;
+}
+@media (min-width: 900px) {
+  .pa-cuerpo[data-fijo] {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  }
+  .pa-cuerpo[data-riel][data-fijo] {
+    grid-template-columns: 240px minmax(0, 1fr) minmax(300px, 400px);
+  }
+  .pa-fijo {
+    order: 0;
+    position: sticky;
+    top: 112px;
+  }
+}
+
+/* ---------- Tarjetas: el módulo de Cabina con rostro Tally ---------- */
+.pa-estudio .cab-mod {
+  border: 1px solid var(--cb-line, var(--tally-line));
+  border-radius: 12px;
+}
+
+/* Aviso de confirmación inline (Torneos) y avisos del panel */
+.pa-estudio .pa-aviso {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px dashed var(--tally-error-line, #ff6b6b);
+  border-radius: 8px;
+  background: var(--cb-bad-bg, rgb(255 107 107 / 0.08));
+}
+
+/* Chip numérico dentro de una pestaña */
+.pa-estudio .tui-tabs button .pa-chip {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--tally-warn, #ffb020);
+  border-radius: 999px;
+  color: var(--tally-warn, #ffb020);
+  font-family: var(--tally-mono, monospace);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+/* El texto de los botones de prueba no se parte a mitad de palabra */
+.pa-fijo .cab-btn,
+.pa-fijo .cab-btn2 {
+  min-height: 36px;
+}
+.pa-fijo .cab-btn:active:not(:disabled),
+.pa-fijo .cab-btn2:active:not(:disabled) {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pa-fijo .cab-btn:active:not(:disabled),
+  .pa-fijo .cab-btn2:active:not(:disabled) {
+    transform: none;
+  }
+}

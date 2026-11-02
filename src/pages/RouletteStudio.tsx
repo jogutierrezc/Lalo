@@ -40,12 +40,20 @@ import { useVoiceCatalogue } from '../hooks/useVoiceCatalogue';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import { MediaItem } from '../types/mediaLibrary';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
+import { EstudioPestanas, PanelPestana, pasoEnPestana } from '../components/participacion/EstudioPestanas';
 import { buildSuiteWidgetUrl } from '../utils/widgetUrl';
 import { useCloudSession } from '../hooks/useCloudSession';
 
 const TOUR_ID = 'ruleta';
 
-const ROULETTE_TOUR_STEPS: TourStep[] = [
+const TAB_BASE = 'ruleta-tab';
+const TABS = [
+  { id: 'ajustes', label: 'Ajustes' },
+  { id: 'apariencia', label: 'Apariencia' },
+];
+
+/** Pasos de la guía: antes de cada uno se cambia a la pestaña que contiene su elemento. */
+const buildTourSteps = (goTo: (tab: string) => void): TourStep[] => [
   {
     badge: 'Bienvenida',
     title: 'Ruleta de castigos',
@@ -55,19 +63,34 @@ const ROULETTE_TOUR_STEPS: TourStep[] = [
     target: 'roulette-segments',
     badge: 'Segmentos',
     title: 'Lo que puede salir',
-    body: 'Cada fila es un segmento: cambia el texto, el color, la categoría o los segundos del reto. El interruptor lo saca de la rueda sin borrarlo.',
+    body: pasoEnPestana(
+      'Cada fila es un segmento: cambia el texto, el color, la categoría o los segundos del reto. El interruptor lo saca de la rueda sin borrarlo.',
+      'ajustes',
+      goTo,
+      'roulette-segments'
+    ),
   },
   {
     target: 'roulette-trigger',
     badge: 'Giros',
     title: 'Cómo se gira',
-    body: 'Abre la ruleta aquí o con tu comando y su nombre. Mientras está abierta la giran los puntos del canal o los bits, lo que elijas.',
+    body: pasoEnPestana(
+      'Abre la ruleta aquí o con tu comando y su nombre. Mientras está abierta la giran los puntos del canal o los bits, lo que elijas.',
+      'ajustes',
+      goTo,
+      'roulette-trigger'
+    ),
   },
   {
     target: 'roulette-actions',
     badge: 'Al caer',
     title: 'Qué pasa cuando se detiene',
-    body: 'Sacudida, confeti, sonido y la voz que anuncia el giro y el resultado.',
+    body: pasoEnPestana(
+      'Sacudida, confeti, sonido y la voz que anuncia el giro y el resultado.',
+      'apariencia',
+      goTo,
+      'roulette-actions'
+    ),
   },
   {
     target: 'roulette-monitor',
@@ -118,6 +141,7 @@ export const RouletteStudio: React.FC = () => {
   const [spinUser, setSpinUser] = useState('Streamer');
   const [confettiActive, setConfettiActive] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const [tab, setTab] = useState('ajustes');
   const [vaultOpen, setVaultOpen] = useState(false);
   const [presetChoice, setPresetChoice] = useState('');
   // Segmentos anteriores a la última acción destructiva, para deshacerla
@@ -369,20 +393,92 @@ export const RouletteStudio: React.FC = () => {
   const voiceName =
     voiceList.catalogue.voices.find((voice) => voice.id === loadSettings().referenceId)?.name || 'voz personalizada';
 
+  const monitorPanel = (
+          <section
+            className="cab-mod"
+            data-tour="roulette-monitor"
+          >
+            <h2>Monitor</h2>
+            <div ref={stageRef} className="cab-stage items-center justify-center">
+              <canvas ref={canvasRef} width={900} height={506} className="pointer-events-none absolute inset-0 z-20 h-full w-full" />
+              <RouletteOverlayView
+                settings={rouletteSettings}
+                targetRotation={currentRotation}
+                startRotation={startRotation}
+                targetWinner={targetWinner}
+                isSpinning={isSpinning}
+                activeUser={spinUser}
+                winnerBanner={rouletteSettings.showWinnerBanner ? activeWinner : null}
+                onSpinComplete={handleWheelComplete}
+                onBannerDismiss={() => setActiveWinner(null)}
+                isStudio={true}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn flex-1" disabled={isSpinning || !canSpin} onClick={spin}>
+                <RotateCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
+                <span>{isSpinning ? 'Girando' : 'Girar'}</span>
+              </button>
+              <button type="button" className="cab-btn2 flex-1" onClick={copyWidgetUrl} data-tour="roulette-obs">
+                {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="cab-btn2 cab-btn-sm flex-1" disabled={isSpinning || !canSpin} onClick={() => simulate('points')}>
+                Simular canje
+              </button>
+              <button type="button" className="cab-btn2 cab-btn-sm flex-1" disabled={isSpinning || !canSpin} onClick={() => simulate('bits')}>
+                Simular cheer
+              </button>
+            </div>
+            <p className="cab-hint" role="status">
+              {!canSpin
+                ? 'Para girar hacen falta al menos dos segmentos activos.'
+                : status ||
+                  (cloud.profile?.status === 'active'
+                    ? 'La prueba suena aquí. A OBS le llegan los ajustes solos, por la nube.'
+                    : 'La prueba suena aquí. Sin cuenta en la nube, los ajustes viajan en la URL: cópiala otra vez en OBS cuando cambies algo.')}
+            </p>
+          </section>
+  );
+
   return (
     <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav
-          currentApp="ruleta"
-          channel={rouletteSettings.channel}
-          saved={saved}
-          onOpenTour={() => setTourOpen(true)}
-          tourAvailable={!tourOpen}
+      <EstudioPestanas
+        etiqueta="Secciones de la Ruleta"
+        idBase={TAB_BASE}
+        pestanas={TABS}
+        activa={tab}
+        onCambio={setTab}
+        nav={
+          <SuiteNav
+            currentApp="ruleta"
+            channel={rouletteSettings.channel}
+            saved={saved}
+            onOpenTour={() => setTourOpen(true)}
+            tourAvailable={!tourOpen}
+          />
+        }
+        fijo={monitorPanel}
+        extras={
+          <>
+        <MediaLibraryModal
+          isOpen={vaultOpen}
+          onClose={() => setVaultOpen(false)}
+          onSelect={handleVaultSelect}
+          allowedTypes={['audio']}
+          title="Biblioteca · elegir sonido (máximo 30 s)"
         />
-
-        <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-          <div className="grid gap-5">
-            {/* ---------- Segmentos ---------- */}
+            {tourOpen && (
+              <GuidedTour steps={buildTourSteps(setTab)} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Ruleta" />
+            )}
+          </>
+        }
+      >
+        {/* ---------- Ajustes ---------- */}
+        <PanelPestana idBase={TAB_BASE} id="ajustes" activa={tab}>
             <section className="cab-mod" data-tour="roulette-segments">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2>Segmentos</h2>
@@ -495,8 +591,6 @@ export const RouletteStudio: React.FC = () => {
                 )}
               </div>
             </section>
-
-            {/* ---------- Cómo se gira ---------- */}
             <section className="cab-mod" data-tour="roulette-trigger">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2>Cómo se gira</h2>
@@ -504,8 +598,10 @@ export const RouletteStudio: React.FC = () => {
               </div>
               <RouletteTriggerFields settings={rouletteSettings} update={updateSettings} onNote={say} />
             </section>
+        </PanelPestana>
 
-            {/* ---------- Al caer ---------- */}
+        {/* ---------- Apariencia ---------- */}
+        <PanelPestana idBase={TAB_BASE} id="apariencia" activa={tab}>
             <section className="cab-mod" data-tour="roulette-actions">
               <h2>Al caer</h2>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -679,71 +775,8 @@ export const RouletteStudio: React.FC = () => {
                 </div>
               </details>
             </section>
-          </div>
-
-          {/* ---------- Monitor ---------- */}
-          <section
-            className="cab-mod max-[1099px]:order-first min-[1100px]:sticky min-[1100px]:top-4"
-            data-tour="roulette-monitor"
-          >
-            <h2>Monitor</h2>
-            <div ref={stageRef} className="cab-stage items-center justify-center">
-              <canvas ref={canvasRef} width={900} height={506} className="pointer-events-none absolute inset-0 z-20 h-full w-full" />
-              <RouletteOverlayView
-                settings={rouletteSettings}
-                targetRotation={currentRotation}
-                startRotation={startRotation}
-                targetWinner={targetWinner}
-                isSpinning={isSpinning}
-                activeUser={spinUser}
-                winnerBanner={rouletteSettings.showWinnerBanner ? activeWinner : null}
-                onSpinComplete={handleWheelComplete}
-                onBannerDismiss={() => setActiveWinner(null)}
-                isStudio={true}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn flex-1" disabled={isSpinning || !canSpin} onClick={spin}>
-                <RotateCw className={`h-4 w-4 ${isSpinning ? 'animate-spin' : ''}`} />
-                <span>{isSpinning ? 'Girando' : 'Girar'}</span>
-              </button>
-              <button type="button" className="cab-btn2 flex-1" onClick={copyWidgetUrl} data-tour="roulette-obs">
-                {copiedUrl ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copiedUrl ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn2 cab-btn-sm flex-1" disabled={isSpinning || !canSpin} onClick={() => simulate('points')}>
-                Simular canje
-              </button>
-              <button type="button" className="cab-btn2 cab-btn-sm flex-1" disabled={isSpinning || !canSpin} onClick={() => simulate('bits')}>
-                Simular cheer
-              </button>
-            </div>
-            <p className="cab-hint" role="status">
-              {!canSpin
-                ? 'Para girar hacen falta al menos dos segmentos activos.'
-                : status ||
-                  (cloud.profile?.status === 'active'
-                    ? 'La prueba suena aquí. A OBS le llegan los ajustes solos, por la nube.'
-                    : 'La prueba suena aquí. Sin cuenta en la nube, los ajustes viajan en la URL: cópiala otra vez en OBS cuando cambies algo.')}
-            </p>
-          </section>
-        </div>
-
-        <MediaLibraryModal
-          isOpen={vaultOpen}
-          onClose={() => setVaultOpen(false)}
-          onSelect={handleVaultSelect}
-          allowedTypes={['audio']}
-          title="Biblioteca · elegir sonido (máximo 30 s)"
-        />
-      </div>
-
-      {tourOpen && (
-        <GuidedTour steps={ROULETTE_TOUR_STEPS} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Ruleta" />
-      )}
+        </PanelPestana>
+      </EstudioPestanas>
     </div>
   );
 };
