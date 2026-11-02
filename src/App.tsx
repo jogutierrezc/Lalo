@@ -35,35 +35,15 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AceptacionCargando, AceptacionGate } from './pages/AceptacionGate';
 import { useAceptacion } from './hooks/useAceptacion';
 
-const Catalog = lazy(() => import('./pages/Catalog').then((m) => ({ default: m.Catalog })));
-const Dashboard = lazy(() => import('./pages/Dashboard').then((m) => ({ default: m.Dashboard })));
 const Widget = lazy(() => import('./pages/Widget').then((m) => ({ default: m.Widget })));
-const Control = lazy(() => import('./pages/Control').then((m) => ({ default: m.Control })));
-const AlertsStudio = lazy(() => import('./pages/AlertsStudio').then((m) => ({ default: m.AlertsStudio })));
-const TwitchIOStudio = lazy(() => import('./pages/TwitchIOStudio').then((m) => ({ default: m.TwitchIOStudio })));
-const RewardsStudio = lazy(() => import('./pages/RewardsStudio').then((m) => ({ default: m.RewardsStudio })));
-const GoalsStudio = lazy(() => import('./pages/GoalsStudio').then((m) => ({ default: m.GoalsStudio })));
-const RouletteStudio = lazy(() => import('./pages/RouletteStudio').then((m) => ({ default: m.RouletteStudio })));
-const PollsStudio = lazy(() => import('./pages/PollsStudio').then((m) => ({ default: m.PollsStudio })));
-const ChatStudio = lazy(() => import('./pages/ChatStudio').then((m) => ({ default: m.ChatStudio })));
-const RaidStudio = lazy(() => import('./pages/RaidStudio').then((m) => ({ default: m.RaidStudio })));
-const Studio = lazy(() => import('./pages/Studio').then((m) => ({ default: m.Studio })));
-const PowerupsStudio = lazy(() => import('./pages/PowerupsStudio').then((m) => ({ default: m.PowerupsStudio })));
-const PetsStudio = lazy(() => import('./pages/PetsStudio').then((m) => ({ default: m.PetsStudio })));
-const TournamentStudio = lazy(() => import('./pages/TournamentStudio').then((m) => ({ default: m.TournamentStudio })));
-const GameStudio = lazy(() => import('./pages/GameStudio').then((m) => ({ default: m.GameStudio })));
-const Integraciones = lazy(() => import('./pages/Integraciones').then((m) => ({ default: m.Integraciones })));
-const MusicStudio = lazy(() => import('./pages/MusicStudio').then((m) => ({ default: m.MusicStudio })));
-const KofiStudio = lazy(() => import('./pages/KofiStudio').then((m) => ({ default: m.KofiStudio })));
-const LuxAI = lazy(() => import('./pages/LuxAI').then((m) => ({ default: m.LuxAI })));
 const Access = lazy(() => import('./pages/Access').then((m) => ({ default: m.Access })));
 const Bienvenida = lazy(() => import('./pages/Bienvenida').then((m) => ({ default: m.Bienvenida })));
-const Account = lazy(() => import('./pages/Account').then((m) => ({ default: m.Account })));
 const AdminShell = lazy(() => import('./components/admin/AdminShell').then((m) => ({ default: m.AdminShell })));
-const CloudSetup = lazy(() => import('./pages/CloudSetup').then((m) => ({ default: m.CloudSetup })));
 const Legal = lazy(() => import('./pages/Legal').then((m) => ({ default: m.Legal })));
 const TournamentSignup = lazy(() => import('./pages/TournamentSignup').then((m) => ({ default: m.TournamentSignup })));
 import { parseRutaLegal } from './legal/logica';
+import { AppShell } from './components/shell/AppShell';
+import { matchTool, type ToolId } from './lib/tools';
 import { CloudProvider, useCloudSession } from './hooks/useCloudSession';
 import { readWidgetKey, startWidgetCloud } from './lib/widgetCloud';
 import { isCloudEnabled } from './lib/supabase';
@@ -76,25 +56,10 @@ import { parseSignupRoute } from './utils/tournamentSignup';
 
 export type AppRoute =
   | 'catalogo'
-  | 'tts'
+  | 'herramientas'
   | 'control'
-  | 'alertas'
-  | 'recompensas'
-  | 'twitchio'
-  | 'metas'
-  | 'ruleta'
-  | 'encuestas'
-  | 'chat'
-  | 'raid'
-  | 'studio'
-  | 'powerups'
-  | 'mascotas'
-  | 'juego'
-  | 'torneos'
+  | ToolId
   | 'integraciones'
-  | 'musica'
-  | 'kofi'
-  | 'lux'
   | 'cuenta'
   | 'admin'
   | 'nube'
@@ -114,100 +79,10 @@ function resolveRoute(): AppRoute {
   // Inscripción de un torneo: página pública. Sin slug, #torneo es el panel (más abajo)
   if (parseSignupRoute(rawHash)) return 'inscripcion';
 
-  // 1. Ajustes de TTS (prioridad alta ante cualquier query param)
-  if (
-    hash.startsWith('tts') ||
-    hash.startsWith('ajustes') ||
-    path.includes('/tts') ||
-    path.includes('/ajustes')
-  ) {
-    return 'tts';
-  }
-
-  // 2. Estudio de Alertas
-  if (
-    hash.startsWith('alertas') ||
-    hash.startsWith('alerts') ||
-    path.includes('/alertas') ||
-    path.includes('/alerts')
-  ) {
-    return 'alertas';
-  }
-
-  // 3. Estudio de Recompensas, Puntos de Canal y Videos FX
-  if (
-    hash.startsWith('recompensas') ||
-    hash.startsWith('rewards') ||
-    path.includes('/recompensas') ||
-    path.includes('/rewards')
-  ) {
-    return 'recompensas';
-  }
-
-  // 4. Metas Comunitarias & Marcadores (Sub Goals, Follower Goals, Bit Goals)
-  if (
-    hash.startsWith('metas') ||
-    hash.startsWith('goals') ||
-    path.includes('/metas') ||
-    path.includes('/goals')
-  ) {
-    return 'metas';
-  }
-
-  // 5. Estudio de Bot & EventSub (Powered by TwitchIO)
-  if (
-    hash.startsWith('twitchio') ||
-    hash.startsWith('bot') ||
-    path.includes('/twitchio') ||
-    path.includes('/bot')
-  ) {
-    return 'twitchio';
-  }
-
-  // 6. Ruleta de Castigos & Retos en Vivo
-  if (
-    hash.startsWith('ruleta') ||
-    hash.startsWith('wheel') ||
-    hash.startsWith('castigos') ||
-    hash.startsWith('roulette') ||
-    path.includes('/ruleta') ||
-    path.includes('/wheel') ||
-    path.includes('/roulette')
-  ) {
-    return 'ruleta';
-  }
-
-  // 7. Batallas & Encuestas Cinemáticas en Vivo
-  if (
-    hash.startsWith('encuestas') ||
-    hash.startsWith('versus') ||
-    hash.startsWith('batallas') ||
-    hash.startsWith('polls') ||
-    path.includes('/encuestas') ||
-    path.includes('/versus') ||
-    path.includes('/polls')
-  ) {
-    return 'encuestas';
-  }
-
-  // Chat en vivo: el chat de Twitch como capa
-  if (hash === 'chat' || hash.startsWith('chat?') || hash.startsWith('chat/')) return 'chat';
-
-  // Saludo de raid con corto
-  if (hash === 'raid' || hash === 'raids' || hash.startsWith('raid?') || hash.startsWith('raid/')) return 'raid';
-
-  // Studio: el editor de escenas
-  if (/^(studio|estudio)([?/]|$)/.test(hash)) return 'studio';
-
-  // Power-ups de Twitch y canal de eventos
-  if (/^power-?ups([?/]|$)/.test(hash)) return 'powerups';
-
-  // Mascotas: el personaje que reacciona con voz
-  if (/^(mascotas?|pets)([?/]|$)/.test(hash)) return 'mascotas';
-  // Alertas de juego: la integración con Riot Games
-  if (/^(juego|riot)([?/]|$)/.test(hash)) return 'juego';
-  // Torneos: la llave de eliminación directa
-  if (/^(torneos?|tournament)([?/]|$)/.test(hash)) return 'torneos';
+  // Herramientas (alias en src/lib/tools.ts): voz, alertas, recompensas, metas, bot, ruleta, batallas,
+  // chat, raid, studio, power-ups, mascotas, juego y torneos. Tienen prioridad ante cualquier query param
+  const early = matchTool(hash, path, 'early');
+  if (early) return early;
 
   // Cuenta del streamer y portal de administración (solo con la nube configurada)
   if (hash.startsWith('cuenta')) return 'cuenta';
@@ -220,11 +95,12 @@ function resolveRoute(): AppRoute {
     return 'control';
   }
 
-  // Integraciones: la galería de servicios, la capa «Ahora suena» y Ko-fi
+  // Lanzador de herramientas
+  if (/^herramientas([?/]|$)/.test(hash)) return 'herramientas';
+  // Integraciones: la galería de servicios; después «Ahora suena», Ko-fi, Mi AI y Done
   if (/^integraciones([?/]|$)/.test(hash)) return 'integraciones';
-  if (/^(musica|ahora-suena)([?/]|$)/.test(hash)) return 'musica';
-  if (/^ko-?fi([?/]|$)/.test(hash)) return 'kofi';
-  if (/^lux([?/]|$)/.test(hash)) return 'lux';
+  const late = matchTool(hash, path, 'late');
+  if (late) return late;
 
   // 9. Fuentes de navegador para OBS Studio
   if (
@@ -350,57 +226,11 @@ const Routes: React.FC = () => {
   // El administrador no es un streamer: solo ve su consola, escriba la dirección que escriba
   if (cloud.enabled && cloud.profile?.role === 'admin') return <AdminShell />;
 
-  // Bienvenida de Tally Studio (fundadores y cuentas nuevas): se monta sobre la página
-  const pagina = (() => { switch (currentRoute) {
-    case 'cuenta':
-      return <Account />;
-    case 'nube':
-      return cloud.enabled ? <Catalog /> : <CloudSetup />;
-    case 'control':
-      return <Control />;
-    case 'alertas':
-      return <AlertsStudio />;
-    case 'recompensas':
-      return <RewardsStudio />;
-    case 'metas':
-      return <GoalsStudio />;
-    case 'ruleta':
-      return <RouletteStudio />;
-    case 'encuestas':
-      return <PollsStudio />;
-    case 'chat':
-      return <ChatStudio />;
-    case 'raid':
-      return <RaidStudio />;
-    case 'studio':
-      return <Studio />;
-    case 'powerups':
-      return <PowerupsStudio />;
-    case 'mascotas':
-      return <PetsStudio />;
-    case 'torneos':
-      return <TournamentStudio />;
-    case 'juego':
-      return <GameStudio />;
-    case 'integraciones':
-      return <Integraciones />;
-    case 'musica':
-      return <MusicStudio />;
-    case 'kofi':
-      return <KofiStudio />;
-    case 'lux':
-      return <LuxAI />;
-    case 'twitchio':
-      return <TwitchIOStudio />;
-    case 'tts':
-      return <Dashboard />;
-    case 'catalogo':
-    default:
-      return <Catalog />;
-  } })();
+  // Todo el panel del creador va dentro del cascarón único; la bienvenida de Tally Studio
+  // (fundadores y cuentas nuevas) se monta sobre él
   return (
     <>
-      {pagina}
+      <AppShell route={currentRoute} />
       <BienvenidaTally />
     </>
   );

@@ -1,103 +1,28 @@
 /**
  * src/components/SuiteNav.tsx
  *
- * Estructura común del panel: barra lateral con los módulos y cabecera con las
- * acciones de la página.
+ * Barra de la herramienta dentro del cascarón único (src/components/shell/AppShell.tsx).
  *
- * - La barra lateral se pliega a solo iconos en escritorio y se convierte en un
- *   cajón que se abre y se cierra en pantallas estrechas.
- * - La cabecera reúne lo que es igual en todas las páginas: canal, actualizar
- *   OBS, las fuentes de navegador, la guía y el estado de guardado.
- *
- * La barra lateral se monta en <body> para que ninguna animación de la página
- * la desplace; por eso lleva la clase .cab, que le da los tokens del tema.
- *
- * Tally Studio: mientras el cascarón está montado, <body> lleva la clase
- * .tally (ver src/styles/tally.css). Los widgets y overlays de OBS no montan
- * este componente, así que su aspecto no cambia. El indicador «En vivo» solo
- * se muestra si la página indica que hay directo (prop `live`).
+ * La barra lateral, el título, el canal y las fuentes de OBS ahora los pinta el
+ * cascarón una sola vez. Cada página sigue montando <SuiteNav> con sus datos y
+ * este componente solo dibuja lo que es de la página:
+ *   - «Guía», si la página tiene recorrido;
+ *   - «Actualizar OBS» y «Copiar URL» de la fuente de esa herramienta;
+ *   - el estado de guardado (o el aviso de la sincronización con la nube).
+ * `live` ya no se usa aquí: el cascarón decide cuándo mostrar «Canal en directo».
  */
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import {
-  BellRing,
-  Bot,
-  Check,
-  Clapperboard,
-  Coffee,
-  Sparkles,
-  CloudOff,
-  Coins,
-  Copy,
-  ExternalLink,
-  FileText,
-  Gamepad2,
-  Layers,
-  LayoutGrid,
-  Menu,
-  MessagesSquare,
-  Mic,
-  Music,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PawPrint,
-  Medal,
-  Plug,
-  Radio,
-  RefreshCw,
-  Swords,
-  Target,
-  Trophy,
-  Tv,
-  UserRound,
-  X,
-  Zap,
-} from 'lucide-react';
-import { ThemeSwitch } from './ThemeSwitch';
-import { TallyLogo } from './brand/TallyLogo';
-import { buildSuiteWidgetUrl, WidgetAppType } from '../utils/widgetUrl';
-import { loadSettings } from '../types/settings';
-import { encodeChatSettings, loadChatSettings } from '../types/chat';
-import { encodeRaidSettings, loadRaidSettings } from '../types/raid';
-import { encodeRewardsSettings, loadRewardsSettings } from '../types/rewards';
-import { encodeRouletteSettings, loadRouletteSettings } from '../types/roulette';
-import { encodeMusicSettings, loadMusicSettings } from '../types/music';
-import { encodeKofiSettings, loadKofiSettings } from '../types/kofi';
-import { encodePetsSettings, loadPetsSettings } from '../types/pets';
-import { encodeGameSettings, loadGameSettings } from '../types/game';
-import { encodeTournamentSettings, loadTournamentSettings } from '../types/tournament';
-import { tournamentStore } from '../lib/tournamentStore';
-import { listenBus, postBus } from '../utils/bus';
-import { playAlertAudio } from '../utils/alertsAudio';
+import React from 'react';
+import { Check, Copy, RefreshCw } from 'lucide-react';
 import { ObsSyncNotice } from './ObsSyncNotice';
-import { useCloudSession } from '../hooks/useCloudSession';
-import { onCloudSyncMessage, pushAllNow } from '../lib/cloudConfig';
+import { layerParamsForWidget, useCloudSyncMessage, useObsActions } from './shell/obsActions';
+import { useShellTool } from './shell/ShellContext';
+import { toolById } from '../lib/tools';
+import type { ToolId } from '../lib/tools';
 
-export type SuiteApp =
-  | 'catalogo'
-  | 'tts'
-  | 'control'
-  | 'alertas'
-  | 'recompensas'
-  | 'twitchio'
-  | 'metas'
-  | 'ruleta'
-  | 'encuestas'
-  | 'chat'
-  | 'raid'
-  | 'studio'
-  | 'powerups'
-  | 'mascotas'
-  | 'torneos'
-  | 'integraciones'
-  | 'musica'
-  | 'kofi'
-  | 'lux'
-  | 'juego'
-  | 'cuenta'
-  | 'admin'
-  | 'nube';
+export type SuiteApp = ToolId | 'catalogo' | 'control' | 'integraciones' | 'cuenta' | 'nube' | 'admin';
+
+export { layerParamsForWidget };
 
 interface SuiteNavProps {
   currentApp: SuiteApp;
@@ -105,493 +30,62 @@ interface SuiteNavProps {
   saved?: boolean;
   onOpenTour?: () => void;
   tourAvailable?: boolean;
-  /** Hay directo en marcha. Sin él no se muestra el indicador «En vivo». */
+  /** Lo decide el cascarón; se acepta para no tocar a las páginas. */
   live?: boolean;
 }
 
-interface NavItem {
-  app: SuiteApp;
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
+export const SuiteNav: React.FC<SuiteNavProps> = ({ currentApp, channel, saved, onOpenTour, tourAvailable = false }) => {
+  const windowTool = useShellTool();
+  const toolId = windowTool ?? currentApp;
+  const tool = toolById(toolId);
+  const obs = useObsActions(channel, tool ? tool.id : null);
+  const syncMessage = useCloudSyncMessage();
+  const widgetApp = tool?.widgetApp;
 
-const NAV: { group: string | null; items: NavItem[] }[] = [
-  { group: null, items: [{ app: 'catalogo', label: 'Inicio', href: '#dashboard', icon: LayoutGrid }] },
-  {
-    group: 'En directo',
-    items: [
-      { app: 'control', label: 'En vivo', href: '#control', icon: Radio },
-      { app: 'studio', label: 'Studio', href: '#studio', icon: Layers },
-    ],
-  },
-  {
-    group: 'Capas',
-    items: [
-      { app: 'tts', label: 'Voz del chat', href: '#tts', icon: Mic },
-      { app: 'alertas', label: 'Alertas', href: '#alertas', icon: BellRing },
-      { app: 'recompensas', label: 'Recompensas', href: '#recompensas', icon: Coins },
-      { app: 'powerups', label: 'Power-ups', href: '#powerups', icon: Zap },
-      { app: 'mascotas', label: 'Mascotas', href: '#mascotas', icon: PawPrint },
-      { app: 'torneos', label: 'Torneos', href: '#torneos', icon: Medal },
-      { app: 'metas', label: 'Metas', href: '#metas', icon: Target },
-      { app: 'ruleta', label: 'Ruleta', href: '#ruleta', icon: Gamepad2 },
-      { app: 'encuestas', label: 'Batallas', href: '#encuestas', icon: Swords },
-      { app: 'chat', label: 'Chat', href: '#chat', icon: MessagesSquare },
-      { app: 'raid', label: 'Raids', href: '#raid', icon: Clapperboard },
-    ],
-  },
-  { group: 'Chat', items: [{ app: 'twitchio', label: 'Bot', href: '#twitchio', icon: Bot }] },
-  {
-    group: 'Integraciones',
-    items: [
-      { app: 'integraciones', label: 'Integraciones', href: '#integraciones', icon: Plug },
-      { app: 'musica', label: 'Ahora suena', href: '#musica', icon: Music },
-      { app: 'kofi', label: 'Ko-fi', href: '#kofi', icon: Coffee },
-      { app: 'lux', label: 'Mi AI', href: '#lux', icon: Sparkles },
-      { app: 'juego', label: 'Alertas de juego', href: '#juego', icon: Trophy },
-    ],
-  },
-];
-
-const SOURCES: { mode: WidgetAppType; name: string; note: string }[] = [
-  { mode: 'all', name: 'Todo en uno', note: 'Recomendada: una sola fuente con todas las capas' },
-  { mode: 'tts', name: 'Voz del chat', note: 'Mensajes leídos en voz alta' },
-  { mode: 'alerts', name: 'Alertas', note: 'Follows, suscripciones, bits y raids' },
-  { mode: 'goals', name: 'Metas', note: 'Barras de progreso' },
-  { mode: 'roulette', name: 'Ruleta', note: 'Rueda de castigos y retos' },
-  { mode: 'polls', name: 'Batallas', note: 'Votación entre dos opciones' },
-  { mode: 'chat', name: 'Chat', note: 'El chat de tu canal en pantalla' },
-  { mode: 'raid', name: 'Saludo de raid', note: 'Placa de bienvenida con un corto del canal' },
-  { mode: 'rewards', name: 'Recompensas', note: 'Sonidos, placas y vídeos por puntos de canal o bits' },
-  { mode: 'pets', name: 'Mascota', note: 'Tu personaje reacciona con voz a canjes, bits y al chat' },
-  { mode: 'music', name: 'Ahora suena', note: 'La canción que estás escuchando' },
-  { mode: 'kofi', name: 'Alertas de Ko-fi', note: 'Donaciones, membresías, pedidos y comisiones' },
-  { mode: 'kofigoal', name: 'Meta de Ko-fi', note: 'Lo recaudado, en barra o en depósito' },
-  { mode: 'kofirecent', name: 'Últimos apoyos de Ko-fi', note: 'Lista corta de quien te apoyó' },
-  { mode: 'game', name: 'Alertas de juego', note: 'Victorias, rango y jugadas de tu cuenta de Riot' },
-  { mode: 'tournament', name: 'Torneo', note: 'La llave, la tabla y el campeón de tu torneo' },
-];
-
-const SYNC_TARGET: Partial<Record<SuiteApp, WidgetAppType>> = {
-  ruleta: 'roulette',
-  alertas: 'alerts',
-  metas: 'goals',
-  encuestas: 'polls',
-  chat: 'chat',
-  raid: 'raid',
-  recompensas: 'rewards',
-  powerups: 'rewards',
-  mascotas: 'pets',
-  musica: 'music',
-  kofi: 'kofi',
-  juego: 'game',
-  torneos: 'tournament',
-  tts: 'tts',
-};
-
-const COLLAPSE_KEY = 'lalo_panel_side_collapsed';
-const WIDGET_STALE_MS = 12000;
-
-function loadCollapsed(): boolean {
-  try {
-    return localStorage.getItem(COLLAPSE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-/** El widget solo responde por el bus si está abierto en este mismo navegador. */
-function useWidgetOpenHere(): boolean {
-  const [seenAt, setSeenAt] = useState(0);
-  const [clock, setClock] = useState(() => Date.now());
-
-  useEffect(() => {
-    const stop = listenBus((message) => {
-      if (message.type === 'STATE') setSeenAt(Date.now());
-    });
-    postBus({ type: 'STATE_REQUEST' });
-    const tick = setInterval(() => setClock(Date.now()), 4000);
-    return () => {
-      stop();
-      clearInterval(tick);
-    };
-  }, []);
-
-  return seenAt > 0 && clock - seenAt < WIDGET_STALE_MS;
-}
-
-/**
- * Los ajustes del chat, del saludo de raid, de las recompensas y de la ruleta viajan en la URL: OBS no comparte
- * almacenamiento con el panel. Con cuenta en la nube va además la clave: la fuente usa lo de la cuenta y deja
- * lo de la URL de reserva, por si la nube no responde.
- */
-export function layerParamsForWidget(mode: WidgetAppType): Record<string, string> {
-  if (mode === 'chat') return { cs: encodeChatSettings(loadChatSettings()) };
-  if (mode === 'rewards') return { rw: encodeRewardsSettings(loadRewardsSettings()) };
-  if (mode === 'raid') return { rs: encodeRaidSettings(loadRaidSettings()) };
-  if (mode === 'roulette') return { rl: encodeRouletteSettings(loadRouletteSettings()) };
-  if (mode === 'music') return { ms: encodeMusicSettings(loadMusicSettings()) };
-  if (mode === 'pets') return { ps: encodePetsSettings(loadPetsSettings()) };
-  if (mode === 'game') return { gs: encodeGameSettings(loadGameSettings()) };
-  if (mode === 'tournament') return { ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()) };
-  if (mode === 'kofi' || mode === 'kofigoal' || mode === 'kofirecent') return { kf: encodeKofiSettings(loadKofiSettings()) };
-  if (mode === 'all') {
-    return {
-      cs: encodeChatSettings(loadChatSettings()),
-      rs: encodeRaidSettings(loadRaidSettings()),
-      rw: encodeRewardsSettings(loadRewardsSettings()),
-      rl: encodeRouletteSettings(loadRouletteSettings()),
-      ms: encodeMusicSettings(loadMusicSettings()),
-      kf: encodeKofiSettings(loadKofiSettings()),
-      ps: encodePetsSettings(loadPetsSettings()),
-      gs: encodeGameSettings(loadGameSettings()),
-      ts: encodeTournamentSettings(loadTournamentSettings(), tournamentStore().read()),
-    };
-  }
-  return {};
-}
-
-export const SuiteNav: React.FC<SuiteNavProps> = ({
-  currentApp,
-  channel = 'laloplay_',
-  saved = true,
-  onOpenTour,
-  tourAvailable = false,
-  live = false,
-}) => {
-  const [collapsed, setCollapsed] = useState(loadCollapsed);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [obsOpen, setObsOpen] = useState(false);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [syncState, setSyncState] = useState<'idle' | 'busy' | 'done'>('idle');
-  const [activeNotice, setActiveNotice] = useState<{ appType: string; url: string } | null>(null);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const widgetOpenHere = useWidgetOpenHere();
-  const cloud = useCloudSession();
-
-  useEffect(
-    () => () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    },
-    []
-  );
-
-  // La cuenta solo existe con la nube configurada; sin ella, «Nube» explica qué
-  // falta para encenderla. El administrador tiene su propia consola (AdminShell)
-  const nav = cloud.enabled
-    ? [
-        ...NAV,
-        {
-          group: 'Cuenta',
-          items: [{ app: 'cuenta' as const, label: 'Mi cuenta', href: '#cuenta', icon: UserRound }],
-        },
-      ]
-    : [...NAV, { group: 'Cuenta', items: [{ app: 'nube' as const, label: 'Nube', href: '#nube', icon: CloudOff }] }];
-
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  // Con cuenta en la nube, las URL de OBS llevan la clave privada del streamer
-  const widgetKeyParam = cloud.profile?.status === 'active' ? { k: cloud.profile.widget_key } : undefined;
-
-  // Avisos de la sincronización con la nube (null = todo guardado)
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  useEffect(() => onCloudSyncMessage(setSyncMessage), []);
-  const current = nav.flatMap((section) => section.items).find((item) => item.app === currentApp);
-
-  const extraFor = (mode: WidgetAppType): Record<string, string> => ({ ...widgetKeyParam, ...layerParamsForWidget(mode) });
-
-  const getWidgetUrl = (mode: WidgetAppType) => {
-    const ttsSettings = loadSettings();
-    return buildSuiteWidgetUrl(baseUrl, mode, channel || ttsSettings.channel, ttsSettings, extraFor(mode));
-  };
-
-  // La página deja sitio a la barra lateral a través de clases en <body>
-  // y el tema Tally Studio se activa con la clase .tally, solo mientras el cascarón está montado
-  useLayoutEffect(() => {
-    document.body.classList.add('has-side', 'tally');
-    return () => {
-      document.body.classList.remove('has-side', 'side-collapsed', 'tally');
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    document.body.classList.toggle('side-collapsed', collapsed);
-    try {
-      localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
-    } catch {
-      // Sin almacenamiento: la preferencia dura lo que dure la sesión
-    }
-  }, [collapsed]);
-
-  // Escape cierra el cajón y el panel de fuentes
-  useEffect(() => {
-    if (!drawerOpen && !obsOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setDrawerOpen(false);
-        setObsOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [drawerOpen, obsOpen]);
-
-  const handleCopy = (mode: WidgetAppType) => {
-    navigator.clipboard
-      ?.writeText(getWidgetUrl(mode))
-      .then(() => {
-        setCopiedKey(mode);
-        if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-        copyTimerRef.current = setTimeout(() => setCopiedKey(null), 2000);
-      })
-      .catch(() => setCopiedKey(null));
-  };
-
-  // Envía los ajustes actuales a las fuentes de OBS y copia la URL vigente
-  const triggerObsSync = async () => {
-    if (syncState === 'busy') return;
-    setSyncState('busy');
-
-    const ttsSettings = loadSettings();
-    const targetApp: WidgetAppType = SYNC_TARGET[currentApp] || 'all';
-    const activeUrl = buildSuiteWidgetUrl(baseUrl, targetApp, channel || ttsSettings.channel, ttsSettings, extraFor(targetApp));
-
-    postBus({ type: 'FORCE_RELOAD' });
-    postBus({
-      type: 'SETTINGS_UPDATE',
-      settings: { ...ttsSettings, channel: channel || ttsSettings.channel },
-    });
-
-    // Con cuenta en la nube: se suben los ajustes ahora y las fuentes de OBS, en cualquier equipo,
-    // los descargan en su siguiente consulta (unos diez segundos)
-    try {
-      await pushAllNow();
-    } catch {
-      // El aviso de sincronización del panel ya explica el fallo
-    }
-
-    // Señal HTTP de recarga para fuentes de navegador de OBS conectadas al mismo servidor
-    try {
-      await fetch('/api/obs/reload', { method: 'POST' });
-    } catch {
-      // Sin servidor o fuera de línea, el bus y la nube ya avisaron a las fuentes
-    }
-
-    try {
-      await navigator.clipboard.writeText(activeUrl);
-    } catch {
-      // Portapapeles no disponible
-    }
-
-    setSyncState('done');
-    playAlertAudio('synth-bell', 0.45);
-    setActiveNotice({ appType: targetApp.toUpperCase(), url: activeUrl });
-    if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(() => setSyncState('idle'), 2800);
-  };
-
-  const side = (
-    <aside
-      className="cab shell-side"
-      data-collapsed={collapsed ? '' : undefined}
-      data-open={drawerOpen ? '' : undefined}
-      aria-label="Módulos del panel"
-    >
-      <div className="shell-brand">
-        <a href="#dashboard" className="tally-brand" aria-label="Tally Studio, ir al inicio" title="Tally Studio">
-          <TallyLogo size={20} decorativo />
-          {live && (
-            <span className="tally-live" role="status">
-              <i aria-hidden="true" />
-              En vivo
-            </span>
-          )}
-        </a>
-        <button type="button" className="cab-icon shell-close" aria-label="Cerrar menú" onClick={() => setDrawerOpen(false)}>
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <nav className="shell-nav" aria-label="Módulos" data-tour="nav">
-        {nav.map((section) => (
-          <React.Fragment key={section.group || 'inicio'}>
-            {section.group && <p className="shell-group">{section.group}</p>}
-            {section.items.map((item) => {
-              const Icon = item.icon;
-              return (
-                <a
-                  key={item.app}
-                  href={item.href}
-                  className="shell-link"
-                  aria-current={item.app === currentApp ? 'page' : undefined}
-                  title={collapsed ? item.label : undefined}
-                  onClick={() => setDrawerOpen(false)}
-                >
-                  <Icon className="h-4 w-4 flex-none" />
-                  <span className="shell-lab">{item.label}</span>
-                </a>
-              );
-            })}
-          </React.Fragment>
-        ))}
-      </nav>
-
-      <div className="shell-foot">
-        <a href="#legal" className="shell-link" title={collapsed ? 'Términos y políticas' : undefined} onClick={() => setDrawerOpen(false)}>
-          <FileText className="h-4 w-4 flex-none" />
-          <span className="shell-lab">Términos y políticas</span>
-        </a>
-        <div className="shell-lab">
-          <ThemeSwitch />
-        </div>
-        <button
-          type="button"
-          className="shell-link shell-collapse"
-          onClick={() => setCollapsed(!collapsed)}
-          aria-pressed={collapsed}
-          title={collapsed ? 'Mostrar el menú completo' : undefined}
-        >
-          {collapsed ? <PanelLeftOpen className="h-4 w-4 flex-none" /> : <PanelLeftClose className="h-4 w-4 flex-none" />}
-          <span className="shell-lab">Ocultar menú</span>
-        </button>
-      </div>
-    </aside>
-  );
+  const showTour = tourAvailable && !!onOpenTour;
+  // Sin nada que mostrar (por ejemplo Mi cuenta), la barra no ocupa sitio
+  if (!tool && !showTour && saved === undefined) return null;
 
   return (
-    <header className="shell-top">
-      {createPortal(
+    <div className="shell-embed-bar" data-tour="obs-sync">
+      {tool && (
         <>
-          {drawerOpen && <div className="shell-scrim" onClick={() => setDrawerOpen(false)} />}
-          {side}
-        </>,
-        document.body
-      )}
-
-      <div className="shell-head">
-        <button
-          type="button"
-          className="cab-icon shell-menu"
-          aria-label="Abrir menú"
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen(true)}
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <h1 className="shell-title">{current?.label || 'Tally Studio'}</h1>
-      </div>
-
-      <div className="shell-actions">
-        <span className="shell-channel">
-          Canal <b className="cab-mono">#{channel || 'sin canal'}</b>
-        </span>
-        {widgetOpenHere && (
-          <span className="cab-chip" data-status="read" title="Hay un widget abierto en este navegador y responde">
-            Widget abierto
-          </span>
-        )}
-
-        <button
-          type="button"
-          className="cab-btn2 cab-btn-sm"
-          onClick={triggerObsSync}
-          disabled={syncState === 'busy'}
-          title="Envía los ajustes actuales a las fuentes de OBS y copia la URL"
-          data-tour="obs-sync"
-        >
-          {syncState === 'done' ? (
-            <Check className="h-4 w-4" />
-          ) : (
-            <RefreshCw className={`h-4 w-4 ${syncState === 'busy' ? 'animate-spin' : ''}`} />
-          )}
-          <span>{syncState === 'busy' ? 'Enviando' : syncState === 'done' ? 'OBS actualizado' : 'Actualizar OBS'}</span>
-        </button>
-
-        <div className="relative" data-tour="obs-menu">
           <button
             type="button"
-            className="cab-btn cab-btn-sm"
-            aria-expanded={obsOpen}
-            onClick={() => setObsOpen(!obsOpen)}
+            className="cab-btn2 cab-btn-sm"
+            onClick={obs.triggerObsSync}
+            disabled={obs.syncState === 'busy'}
+            title="Envía los ajustes actuales a las fuentes de OBS y copia la URL"
           >
-            <Tv className="h-4 w-4" />
-            <span>Fuentes de OBS</span>
+            {obs.syncState === 'done' ? (
+              <Check className="h-4 w-4" />
+            ) : (
+              <RefreshCw className={`h-4 w-4 ${obs.syncState === 'busy' ? 'animate-spin' : ''}`} />
+            )}
+            <span>{obs.syncState === 'busy' ? 'Enviando' : obs.syncState === 'done' ? 'OBS actualizado' : 'Actualizar OBS'}</span>
           </button>
-
-          {obsOpen && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setObsOpen(false)} />
-              <div className="shell-pop" role="dialog" aria-label="Fuentes de navegador para OBS">
-                <div className="shell-pop-head">
-                  <h2>Fuentes de navegador</h2>
-                  <button type="button" className="cab-icon" aria-label="Cerrar" onClick={() => setObsOpen(false)}>
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <p className="cab-hint">
-                  Pega una URL como fuente de navegador en OBS, a 1920 × 1080. Usa «Todo en uno» o una fuente por capa.
-                </p>
-
-                <ul className="cab-rows shell-sources">
-                  {SOURCES.map((source) => (
-                    <li key={source.mode} className="cab-row">
-                      <div className="min-w-0">
-                        <p className="shell-source-name">{source.name}</p>
-                        <p className="cab-hint">{source.note}</p>
-                      </div>
-                      <div className="cab-row-actions">
-                        <a
-                          className="cab-icon"
-                          href={getWidgetUrl(source.mode)}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={`Abrir ${source.name} en una pestaña`}
-                          title="Abrir en una pestaña"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                        <button type="button" className="cab-btn2 cab-btn-sm" onClick={() => handleCopy(source.mode)}>
-                          {copiedKey === source.mode ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                          <span>{copiedKey === source.mode ? 'Copiada' : 'Copiar URL'}</span>
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-
-                <p className="cab-hint">
-                  ¿Quieres colocar las capas a tu gusto? En{' '}
-                  <a className="studio-link" href="#studio" onClick={() => setObsOpen(false)}>
-                    Studio
-                  </a>{' '}
-                  montas escenas y cada una tiene su propia URL.
-                </p>
-
-                <p className="cab-note">
-                  ¿Cambiaste voz, reglas o diseño? «Actualizar OBS» envía los cambios a las fuentes ya pegadas, sin
-                  cortar el directo. En OBS conviene activar «Actualizar el navegador al activar escena».
-                </p>
-              </div>
-            </>
+          {widgetApp && (
+            <button type="button" className="cab-btn cab-btn-sm" onClick={() => obs.copy(widgetApp)} title="Copia la URL de la fuente de esta herramienta">
+              {obs.copiedKey === widgetApp ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              <span>{obs.copiedKey === widgetApp ? 'Copiada' : 'Copiar URL'}</span>
+            </button>
           )}
-        </div>
-
-        {tourAvailable && onOpenTour && (
-          <button type="button" className="cab-btn2 cab-btn-sm" onClick={onOpenTour}>
-            Guía
-          </button>
-        )}
-
-        <span className="shell-saved" role="status">
-          {!saved ? 'Guardando' : syncMessage || (cloud.enabled ? 'Guardado en la nube' : 'Guardado')}
-        </span>
-      </div>
-
-      {activeNotice && (
-        <ObsSyncNotice appType={activeNotice.appType} url={activeNotice.url} onDismiss={() => setActiveNotice(null)} />
+        </>
       )}
-    </header>
+
+      {showTour && (
+        <button type="button" className="cab-btn2 cab-btn-sm" onClick={onOpenTour}>
+          Guía
+        </button>
+      )}
+
+      {saved !== undefined && (
+        <span className="shell-saved" role="status">
+          {!saved ? 'Guardando' : syncMessage || (obs.cloud.enabled ? 'Guardado en la nube' : 'Guardado')}
+        </span>
+      )}
+
+      {obs.notice && <ObsSyncNotice appType={obs.notice.appType} url={obs.notice.url} onDismiss={obs.clearNotice} />}
+    </div>
   );
 };
