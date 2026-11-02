@@ -1,9 +1,13 @@
 /**
  * src/pages/MusicStudio.tsx
  *
- * Estudio de la capa «Ahora suena» sobre la plantilla común del panel: a la
- * izquierda se ajusta, a la derecha el monitor 16:9 queda siempre a la vista.
+ * Ventana «Ahora suena» de Tally Studio, con pestañas Ajustes | Apariencia. El
+ * monitor 16:9, las pruebas, «Mostrar ahora / Ocultar ahora», el fondo de la
+ * escena y las URLs de OBS forman el panel fijo de la derecha, visible en las
+ * dos pestañas.
  *
+ * - Apariencia: diseño, posición y tamaño, y qué se ve.
+ * - Ajustes: cuándo se muestra, comandos del chat y fuente de OBS.
  * - El monitor pinta la capa real (la misma que OBS) con canciones de ejemplo
  *   inventadas y portadas dibujadas con CSS. No hace falta conectar nada.
  * - Cada prueba llega también a las fuentes abiertas en este navegador.
@@ -12,10 +16,11 @@
  */
 
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, Copy } from 'lucide-react';
 import { SuiteNav } from '../components/SuiteNav';
 import { MusicOverlay, type MusicOverlayHandle } from '../components/integraciones/MusicOverlay';
-import { Field, Range, Toggle } from '../components/studio/StudioKit';
+import { Ajuste, BotonCopiar, Deslizador, Escenario, Modulo, Nota, Opcion, Pista } from '../components/enpantalla/kit';
+import { VentanaPestanas } from '../components/enpantalla/VentanaPestanas';
+import { Boton, Segmented } from '../components/tally-ui';
 import { useCloudSession } from '../hooks/useCloudSession';
 import { useMusicSettings } from '../hooks/useIntegrationSettings';
 import { spotifyStatus } from '../lib/integrationsApi';
@@ -44,9 +49,15 @@ const TESTS: { id: TestId; label: string }[] = [
   { id: 'stop', label: 'Deja de sonar' },
 ];
 const BACKGROUNDS = [
-  { id: 'juego', name: 'Oscuro' },
-  { id: 'claro', name: 'Claro' },
-  { id: 'ruido', name: 'Muy cargado' },
+  { value: 'juego', label: 'Oscuro' },
+  { value: 'claro', label: 'Claro' },
+  { value: 'ruido', label: 'Muy cargado' },
+];
+
+export type MusicTab = 'ajustes' | 'apariencia';
+export const MUSIC_TABS: { id: MusicTab; label: string }[] = [
+  { id: 'ajustes', label: 'Ajustes' },
+  { id: 'apariencia', label: 'Apariencia' },
 ];
 
 const WHY: Record<'no_music' | 'paused', string> = {
@@ -63,6 +74,7 @@ export const MusicStudio: React.FC = () => {
 
   const overlay = useRef<MusicOverlayHandle | null>(null);
   const sample = useRef(0);
+  const [tab, setTab] = useState<MusicTab>('ajustes');
   const [visible, setVisible] = useState(false);
   const [bg, setBg] = useState('juego');
   const [status, setStatus] = useState('La capa aparece al abrir la página con el diseño guardado.');
@@ -175,243 +187,230 @@ export const MusicStudio: React.FC = () => {
   const design = MUSIC_DESIGNS.find((item) => item.id === clean.design) ?? MUSIC_DESIGNS[0];
   const showInfo = MUSIC_SHOW.find((item) => item.id === clean.show) ?? MUSIC_SHOW[0];
 
-  return (
-    <div className="cab">
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav currentApp="musica" channel={channel} saved={saved} />
-
-        <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          <div className="grid gap-5">
-            <section className="cab-mod">
-              <h2>Diseño</h2>
-              <div className="itg-dz" role="group" aria-label="Diseño de la capa">
-                {MUSIC_DESIGNS.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={clean.design === item.id}
-                    onClick={() => {
-                      set('design', item.id);
-                      setStatus(`Diseño «${item.name}».`);
-                    }}
-                  >
-                    <b>{item.name}</b>
-                    <span>{item.note}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="cab-hint">{design.hint}</p>
-            </section>
-
-            <section className="cab-mod">
-              <h2>Mostrar</h2>
-              <div className="cab-seg" role="group" aria-label="Cuándo se muestra">
-                {MUSIC_SHOW.map((item) => (
-                  <button key={item.id} type="button" aria-pressed={clean.show === item.id} onClick={() => set('show', item.id)}>
-                    {item.name}
-                  </button>
-                ))}
-              </div>
-              {clean.show === 'cambio' && (
-                <Field label="Segundos en pantalla">
-                  <Range
-                    label="Segundos en pantalla"
-                    min={MUSIC_LIMITS.secs.min}
-                    max={MUSIC_LIMITS.secs.max}
-                    value={clean.secs}
-                    format={(value) => `${value} s`}
-                    onChange={(secs) => set('secs', secs)}
-                  />
-                </Field>
-              )}
-              <p className="cab-hint">{showInfo.hint}</p>
-              <Field label="Si pones pausa">
-                <div className="cab-seg" role="group" aria-label="Si pones pausa">
-                  <button type="button" aria-pressed={clean.pause === 'atenuar'} onClick={() => set('pause', 'atenuar')}>
-                    Se queda atenuada
-                  </button>
-                  <button type="button" aria-pressed={clean.pause === 'ocultar'} onClick={() => set('pause', 'ocultar')}>
-                    Se oculta
-                  </button>
-                </div>
-              </Field>
-            </section>
-
-            <section className="cab-mod">
-              <h2>Posición y tamaño</h2>
-              <div className="itg-two">
-                <Field label="Posición">
-                  <div className="itg-six" role="group" aria-label="Posición">
-                    {SIX_POSITIONS.map((item) => (
-                      <button key={item.id} type="button" aria-label={item.name} aria-pressed={clean.pos === item.id} onClick={() => set('pos', item.id)} />
-                    ))}
-                  </div>
-                </Field>
-                <Field label="Tamaño">
-                  <Range
-                    label="Tamaño"
-                    min={MUSIC_LIMITS.size.min}
-                    max={MUSIC_LIMITS.size.max}
-                    step={5}
-                    value={clean.size}
-                    format={(value) => `${value}%`}
-                    onChange={(size) => set('size', size)}
-                  />
-                </Field>
-              </div>
-            </section>
-
-            <section className="cab-mod">
-              <h2>Qué se ve</h2>
-              <Toggle label="Portada" checked={settings.art} onChange={(art) => set('art', art)} />
-              <Toggle label="Barra de progreso y tiempo" checked={settings.bar} onChange={(bar) => set('bar', bar)} />
-              <Toggle label="Artista" checked={settings.artist} onChange={(artist) => set('artist', artist)} />
-              <Toggle label="Álbum" checked={settings.album} onChange={(album) => set('album', album)} />
-              <Field label="Color de acento">
-                <div className="ic-row">
-                  <div className="cab-seg" role="group" aria-label="Color de acento">
-                    <button type="button" aria-pressed={clean.accent === 'cover'} onClick={() => set('accent', 'cover')}>
-                      El de la portada
-                    </button>
-                    <button type="button" aria-pressed={clean.accent === 'fixed'} onClick={() => set('accent', 'fixed')}>
-                      Fijo
-                    </button>
-                  </div>
-                  <input
-                    type="color"
-                    className="itg-color"
-                    aria-label="Color fijo"
-                    value={clean.color}
-                    disabled={clean.accent !== 'fixed'}
-                    onChange={(e) => set('color', e.target.value)}
-                  />
-                </div>
-              </Field>
-              <p className="cab-hint">
-                El título y el artista de la canción son lo mínimo: sin ellos la capa no tendría sentido. En «Línea» no hay portada. Un archivo local de
-                tu equipo sale sin portada, y si la portada no deja leer su color se usa el fijo.
-              </p>
-            </section>
-
-            <section className="cab-mod">
-              <h2>Comandos del chat</h2>
-              <p className="cab-hint">Solo los aceptan el streamer y los moderadores. Escríbelos en el chat de tu canal.</p>
-              <div className="itg-two">
-                <Field label="Mostrar la canción" htmlFor={`${uid}-show`}>
-                  <input
-                    id={`${uid}-show`}
-                    type="text"
-                    className="cab-inp cab-mono"
-                    maxLength={25}
-                    spellCheck={false}
-                    autoComplete="off"
-                    placeholder={DEFAULT_MUSIC_COMMANDS.show}
-                    value={settings.commands.show}
-                    onChange={(e) => update({ commands: { ...settings.commands, show: e.target.value } })}
-                    onBlur={() => update({ commands: clean.commands })}
-                  />
-                </Field>
-                <Field label="Ocultarla" htmlFor={`${uid}-hide`}>
-                  <input
-                    id={`${uid}-hide`}
-                    type="text"
-                    className="cab-inp cab-mono"
-                    maxLength={25}
-                    spellCheck={false}
-                    autoComplete="off"
-                    placeholder={DEFAULT_MUSIC_COMMANDS.hide}
-                    value={settings.commands.hide}
-                    onChange={(e) => update({ commands: { ...settings.commands, hide: e.target.value } })}
-                    onBlur={() => update({ commands: clean.commands })}
-                  />
-                </Field>
-              </div>
-              <p className="cab-hint">Los comandos los lee la fuente de OBS que muestra la capa, por el chat de tu canal. No responden en el chat.</p>
-            </section>
-
-            <section className="cab-mod">
-              <h2>Fuente de OBS</h2>
-              <div className="cab-field">
-                <Toggle label="Mostrar también en «Todo en uno»" checked={settings.inAll} onChange={(inAll) => set('inAll', inAll)} />
-                <span className="cab-hint">La fuente «Ahora suena» la muestra siempre.</span>
-              </div>
-              <p className="cab-note" role="status">
-                {cloud.enabled
-                  ? account || 'Comprobando la conexión con Spotify.'
-                  : 'La canción real necesita la nube y el servidor de Lalo: sin ellos, la fuente de OBS solo enseña canciones de ejemplo con la URL de muestra. El diseño y los ajustes sí viajan en la URL.'}{' '}
-                <a className="studio-link" href="#integraciones">
-                  Integraciones
-                </a>
-              </p>
-            </section>
-          </div>
-
-          {/* ---------- Monitor ---------- */}
-          <section className="cab-mod max-[1099px]:order-first min-[1100px]:sticky min-[1100px]:top-4">
-            <h2>Monitor</h2>
-            <div className="cab-stage itg-stage" data-bg={bg}>
-              <MusicOverlay ref={overlay} settings={clean} onVisible={setVisible} onTimeout={() => setStatus(`Pasaron ${secsText}: la capa se retira hasta la próxima canción.`)} />
-            </div>
-            <p className="cab-hint" role="status">
-              {status}
-            </p>
-
-            <div className="cab-field">
-              <span className="cab-label">Pruebas</span>
-              <div className="itg-tests">
-                {TESTS.map((test) => (
-                  <button key={test.id} type="button" className="cab-btn2 cab-btn-sm" onClick={() => runTest(test.id)}>
-                    {test.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="cab-field">
-              <span className="cab-label">En directo</span>
-              <div className="itg-tests">
-                <button type="button" className="cab-btn cab-btn-sm" onClick={liveToggle}>
-                  {visible ? 'Ocultar ahora' : 'Mostrar ahora'}
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm itg-cmd" onClick={() => command('show')}>
-                  {clean.commands.show}
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm itg-cmd" onClick={() => command('hide')}>
-                  {clean.commands.hide}
-                </button>
-              </div>
-              <span className="cab-hint">
-                El primer botón es el tuyo: actúa sobre la capa en directo. Los otros dos simulan a un moderador escribiendo el comando en el chat.
-              </span>
-            </div>
-
-            <Field label="Fondo de la escena">
-              <div className="cab-seg" role="group" aria-label="Fondo de la escena">
-                {BACKGROUNDS.map((item) => (
-                  <button key={item.id} type="button" aria-pressed={bg === item.id} onClick={() => setBg(item.id)}>
-                    {item.name}
-                  </button>
-                ))}
-              </div>
-            </Field>
-
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn flex-1" onClick={() => copyUrl(false)}>
-                {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'url' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-              </button>
-              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(true)}>
-                {copied === 'demo' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'demo' ? 'URL copiada' : 'Copiar URL con canción de muestra'}</span>
-              </button>
-            </div>
-            <p className="cab-hint">
-              Las canciones, los artistas y las portadas de esta página son inventados. El recuadro punteado «Spotify» es el sitio del logotipo oficial:
-              la capa lo carga cuando se añade el archivo, y hasta entonces no se dibuja ni se imita.
-            </p>
-          </section>
+  const apariencia = (
+    <>
+      <Modulo title="Diseño">
+        <div className="ept-dz" role="group" aria-label="Diseño de la capa">
+          {MUSIC_DESIGNS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={clean.design === item.id}
+              onClick={() => {
+                set('design', item.id);
+                setStatus(`Diseño «${item.name}».`);
+              }}
+            >
+              <b>{item.name}</b>
+              <span>{item.note}</span>
+            </button>
+          ))}
         </div>
+        <Pista>{design.hint}</Pista>
+      </Modulo>
+
+      <Modulo title="Posición y tamaño">
+        <div className="ept-two">
+          <Ajuste label="Posición">
+            <div className="ept-six" role="group" aria-label="Posición">
+              {SIX_POSITIONS.map((item) => (
+                <button key={item.id} type="button" aria-label={item.name} aria-pressed={clean.pos === item.id} onClick={() => set('pos', item.id)} />
+              ))}
+            </div>
+          </Ajuste>
+          <Deslizador
+            label="Tamaño"
+            min={MUSIC_LIMITS.size.min}
+            max={MUSIC_LIMITS.size.max}
+            step={5}
+            value={clean.size}
+            format={(value) => `${value}%`}
+            onChange={(size) => set('size', size)}
+          />
+        </div>
+      </Modulo>
+
+      <Modulo title="Qué se ve">
+        <Opcion label="Portada" checked={settings.art} onChange={(art) => set('art', art)} />
+        <Opcion label="Barra de progreso y tiempo" checked={settings.bar} onChange={(bar) => set('bar', bar)} />
+        <Opcion label="Artista" checked={settings.artist} onChange={(artist) => set('artist', artist)} />
+        <Opcion label="Álbum" checked={settings.album} onChange={(album) => set('album', album)} />
+        <Ajuste label="Color de acento">
+          <div className="ept-fila">
+            <Segmented
+              label="Color de acento"
+              value={clean.accent}
+              options={[
+                { value: 'cover', label: 'El de la portada' },
+                { value: 'fixed', label: 'Fijo' },
+              ]}
+              onChange={(accent) => set('accent', accent)}
+            />
+            <input
+              type="color"
+              className="ept-color"
+              aria-label="Color fijo"
+              value={clean.color}
+              disabled={clean.accent !== 'fixed'}
+              onChange={(e) => set('color', e.target.value)}
+            />
+          </div>
+        </Ajuste>
+        <Pista>
+          El título y el artista de la canción son lo mínimo: sin ellos la capa no tendría sentido. En «Línea» no hay portada. Un archivo local de tu
+          equipo sale sin portada, y si la portada no deja leer su color se usa el fijo.
+        </Pista>
+      </Modulo>
+    </>
+  );
+
+  const ajustes = (
+    <>
+      <Modulo title="Mostrar">
+        <Ajuste label="Cuándo se muestra" hint={showInfo.hint}>
+          <Segmented
+            label="Cuándo se muestra"
+            value={clean.show}
+            options={MUSIC_SHOW.map((item) => ({ value: item.id, label: item.name }))}
+            onChange={(show) => set('show', show)}
+          />
+        </Ajuste>
+        {clean.show === 'cambio' && (
+          <Deslizador
+            label="Segundos en pantalla"
+            min={MUSIC_LIMITS.secs.min}
+            max={MUSIC_LIMITS.secs.max}
+            value={clean.secs}
+            format={(value) => `${value} s`}
+            onChange={(secs) => set('secs', secs)}
+          />
+        )}
+        <Ajuste label="Si pones pausa">
+          <Segmented
+            label="Si pones pausa"
+            value={clean.pause}
+            options={[
+              { value: 'atenuar', label: 'Se queda atenuada' },
+              { value: 'ocultar', label: 'Se oculta' },
+            ]}
+            onChange={(pause) => set('pause', pause)}
+          />
+        </Ajuste>
+      </Modulo>
+
+      <Modulo title="Comandos del chat">
+        <Pista>Solo los aceptan el streamer y los moderadores. Escríbelos en el chat de tu canal.</Pista>
+        <div className="ept-two">
+          <Ajuste label="Mostrar la canción" htmlFor={`${uid}-show`}>
+            <input
+              id={`${uid}-show`}
+              type="text"
+              className="ept-inp ept-mono"
+              maxLength={25}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={DEFAULT_MUSIC_COMMANDS.show}
+              value={settings.commands.show}
+              onChange={(e) => update({ commands: { ...settings.commands, show: e.target.value } })}
+              onBlur={() => update({ commands: clean.commands })}
+            />
+          </Ajuste>
+          <Ajuste label="Ocultarla" htmlFor={`${uid}-hide`}>
+            <input
+              id={`${uid}-hide`}
+              type="text"
+              className="ept-inp ept-mono"
+              maxLength={25}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={DEFAULT_MUSIC_COMMANDS.hide}
+              value={settings.commands.hide}
+              onChange={(e) => update({ commands: { ...settings.commands, hide: e.target.value } })}
+              onBlur={() => update({ commands: clean.commands })}
+            />
+          </Ajuste>
+        </div>
+        <Pista>Los comandos los lee la fuente de OBS que muestra la capa, por el chat de tu canal. No responden en el chat.</Pista>
+      </Modulo>
+
+      <Modulo title="Fuente de OBS">
+        <Opcion
+          label="Mostrar también en «Todo en uno»"
+          checked={settings.inAll}
+          onChange={(inAll) => set('inAll', inAll)}
+          hint="La fuente «Ahora suena» la muestra siempre."
+        />
+        <Nota role="status">
+          {cloud.enabled
+            ? account || 'Comprobando la conexión con Spotify.'
+            : 'La canción real necesita la nube y el servidor de Lalo: sin ellos, la fuente de OBS solo enseña canciones de ejemplo con la URL de muestra. El diseño y los ajustes sí viajan en la URL.'}{' '}
+          <a className="ept-link" href="#integraciones">
+            Integraciones
+          </a>
+        </Nota>
+      </Modulo>
+    </>
+  );
+
+  const fijo = (
+    <Modulo title="Monitor">
+      <Escenario className="itg-stage" data-bg={bg}>
+        <MusicOverlay ref={overlay} settings={clean} onVisible={setVisible} onTimeout={() => setStatus(`Pasaron ${secsText}: la capa se retira hasta la próxima canción.`)} />
+      </Escenario>
+      <Pista role="status">{status}</Pista>
+
+      <Ajuste label="Pruebas">
+        <div className="ept-btns">
+          {TESTS.map((test) => (
+            <Boton key={test.id} pequeno onClick={() => runTest(test.id)}>
+              {test.label}
+            </Boton>
+          ))}
+        </div>
+      </Ajuste>
+
+      <Ajuste
+        label="En directo"
+        hint="El primer botón es el tuyo: actúa sobre la capa en directo. Los otros dos simulan a un moderador escribiendo el comando en el chat."
+      >
+        <div className="ept-btns">
+          <Boton variante="principal" pequeno onClick={liveToggle}>
+            {visible ? 'Ocultar ahora' : 'Mostrar ahora'}
+          </Boton>
+          <Boton pequeno className="ept-mono" onClick={() => command('show')}>
+            {clean.commands.show}
+          </Boton>
+          <Boton pequeno className="ept-mono" onClick={() => command('hide')}>
+            {clean.commands.hide}
+          </Boton>
+        </div>
+      </Ajuste>
+
+      <Ajuste label="Fondo de la escena">
+        <Segmented label="Fondo de la escena" value={bg} options={BACKGROUNDS} onChange={setBg} />
+      </Ajuste>
+
+      <div className="ept-btns">
+        <BotonCopiar principal copiado={copied === 'url'} texto="Copiar URL para OBS" textoCopiado="URL copiada" onClick={() => copyUrl(false)} />
+        <BotonCopiar copiado={copied === 'demo'} texto="Copiar URL con canción de muestra" textoCopiado="URL copiada" onClick={() => copyUrl(true)} />
       </div>
-    </div>
+      <Pista>
+        Las canciones, los artistas y las portadas de esta página son inventados. El recuadro punteado «Spotify» es el sitio del logotipo oficial: la
+        capa lo carga cuando se añade el archivo, y hasta entonces no se dibuja ni se imita.
+      </Pista>
+    </Modulo>
+  );
+
+  return (
+    <VentanaPestanas
+      idBase="musica"
+      etiqueta="Secciones de Ahora suena"
+      barra={<SuiteNav currentApp="musica" channel={channel} saved={saved} />}
+      tabs={MUSIC_TABS}
+      value={tab}
+      onChange={(id) => setTab(id as MusicTab)}
+      paneles={{ ajustes, apariencia }}
+      fijo={fijo}
+    />
   );
 };

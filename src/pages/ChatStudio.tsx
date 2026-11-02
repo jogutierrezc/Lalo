@@ -1,22 +1,25 @@
 /**
  * src/pages/ChatStudio.tsx
  *
- * Estudio de la capa «Chat en vivo» sobre la plantilla común del panel: a la
- * izquierda se ajusta, a la derecha el monitor 16:9 queda siempre a la vista
- * con un chat simulado.
+ * Ventana «Chat» de Tally Studio, con pestañas Ajustes | Apariencia. El
+ * monitor 16:9 con el chat simulado, los botones de simulación y la URL de OBS
+ * forman el panel fijo de la derecha, visible en las dos pestañas.
  *
- * - La plantilla, el movimiento y la colocación se ven al momento en el monitor.
+ * - Apariencia: plantilla, movimiento y colocación; se ven al momento en el monitor.
+ * - Ajustes: qué mensajes y marcas se muestran.
  * - Bajo el monitor hay un botón por cada clase de mensaje y otro para borrar
  *   el último, como haría un moderador.
  * - La marca «VOZ» del chat simulado sale de las reglas reales de Voz del chat.
+ * - La guía cambia de pestaña antes de cada paso (ver pasosConPestana).
  */
 
-import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Check, Copy } from 'lucide-react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { SuiteNav } from '../components/SuiteNav';
-import { Field, Range, Toggle } from '../components/studio/StudioKit';
 import { GuidedTour, TourStep, isTourDone } from '../components/GuidedTour';
 import { ChatOverlayHandle, ChatOverlayView } from '../components/chat/ChatOverlayView';
+import { Ajuste, BotonCopiar, Deslizador, Escenario, Modulo, Nota, Opcion, Pista } from '../components/enpantalla/kit';
+import { VentanaPestanas, pasosConPestana } from '../components/enpantalla/VentanaPestanas';
+import { Boton, Segmented } from '../components/tally-ui';
 import { useChatSettings } from '../hooks/useChatSettings';
 import { useCloudSession } from '../hooks/useCloudSession';
 import {
@@ -37,7 +40,19 @@ import '../styles/chat.css';
 
 const TOUR_ID = 'chat';
 
-const CHAT_TOUR_STEPS: TourStep[] = [
+export type ChatTab = 'ajustes' | 'apariencia';
+export const CHAT_TABS: { id: ChatTab; label: string }[] = [
+  { id: 'ajustes', label: 'Ajustes' },
+  { id: 'apariencia', label: 'Apariencia' },
+];
+
+/** Pestaña donde vive cada módulo marcado por la guía; el monitor está en el panel fijo. */
+export const CHAT_TOUR_TAB: Record<string, ChatTab> = {
+  'chat-template': 'apariencia',
+  'chat-motion': 'apariencia',
+};
+
+export const CHAT_TOUR_STEPS: TourStep[] = [
   {
     badge: 'Bienvenida',
     title: 'Chat en vivo',
@@ -79,6 +94,7 @@ export const ChatStudio: React.FC = () => {
   const cloud = useCloudSession();
   const uid = useId();
 
+  const [tab, setTab] = useState<ChatTab>('ajustes');
   const [tourOpen, setTourOpen] = useState(false);
   const [auto, setAuto] = useState(true);
   const [copied, setCopied] = useState<'url' | 'demo' | null>(null);
@@ -109,6 +125,8 @@ export const ChatStudio: React.FC = () => {
     },
     []
   );
+
+  const tourSteps = useMemo(() => pasosConPestana(CHAT_TOUR_STEPS, CHAT_TOUR_TAB, TOUR_ID, (next) => setTab(next as ChatTab)), []);
 
   const say = (message: string) => {
     setStatus(message);
@@ -195,316 +213,268 @@ export const ChatStudio: React.FC = () => {
   const custom = chatSettings.custom;
   const channel = voice.channel;
 
-  return (
-    <div className="cab" style={{ paddingBottom: tourOpen ? 220 : undefined }}>
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6">
-        <SuiteNav currentApp="chat" channel={channel} saved={saved} onOpenTour={() => setTourOpen(true)} tourAvailable={!tourOpen} />
+  const apariencia = (
+    <>
+      {/* ---------- Plantilla ---------- */}
+      <Modulo title="Plantilla" data-tour="chat-template">
+        <Ajuste label="Plantilla del chat" hint={template.hint}>
+          <Segmented
+            label="Plantilla del chat"
+            value={chatSettings.template}
+            options={CHAT_TEMPLATES.map((item) => ({ value: item.id, label: item.name }))}
+            onChange={(next) => updateSettings({ template: next })}
+          />
+        </Ajuste>
 
-        <div className="grid items-start gap-5 min-[1100px]:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-          <div className="grid gap-5">
-            {/* ---------- Plantilla ---------- */}
-            <section className="cab-mod" data-tour="chat-template">
-              <h2>Plantilla</h2>
-              <div className="cab-field">
-                <div className="cab-seg" role="group" aria-label="Plantilla del chat">
-                  {CHAT_TEMPLATES.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      aria-pressed={chatSettings.template === item.id}
-                      onClick={() => updateSettings({ template: item.id })}
-                    >
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-                <span className="cab-hint">{template.hint}</span>
-              </div>
-
-              {chatSettings.template === 'custom' && (
-                <>
-                  <Field label="Tipografía" htmlFor={`${uid}-font`}>
-                    <select
-                      id={`${uid}-font`}
-                      className="cab-inp"
-                      value={custom.font}
-                      onChange={(e) => updateCustom({ font: e.target.value as ChatFont })}
-                    >
-                      {CHAT_FONTS.map((font) => (
-                        <option key={font.id} value={font.id}>
-                          {font.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <div className="chat-colors">
-                    {(
-                      [
-                        ['bg', 'Fondo del mensaje'],
-                        ['fg', 'Color del texto'],
-                        ['accent', 'Color de destacados'],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <div key={key} className="chat-color">
-                        <input
-                          id={`${uid}-${key}`}
-                          type="color"
-                          className="studio-color"
-                          value={custom[key]}
-                          onChange={(e) => updateCustom({ [key]: e.target.value })}
-                        />
-                        <label htmlFor={`${uid}-${key}`}>{label}</label>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
-                    <Field label="Opacidad del fondo">
-                      <Range
-                        label="Opacidad del fondo"
-                        min={0}
-                        max={1}
-                        step={0.02}
-                        value={custom.opacity}
-                        format={(value) => `${Math.round(value * 100)}%`}
-                        onChange={(opacity) => updateCustom({ opacity })}
-                      />
-                    </Field>
-                    <Field label="Redondeo">
-                      <Range
-                        label="Redondeo de las esquinas"
-                        min={CHAT_LIMITS.radius.min}
-                        max={CHAT_LIMITS.radius.max}
-                        step={0.1}
-                        value={custom.radius}
-                        format={(value) => value.toFixed(1)}
-                        onChange={(radius) => updateCustom({ radius })}
-                      />
-                    </Field>
-                  </div>
-                  <p className="cab-hint">
-                    Si un espectador usa un color de nombre que no se lee sobre tu fondo, la capa lo aclara u oscurece
-                    sola.
-                  </p>
-                </>
-              )}
-            </section>
-
-            {/* ---------- Movimiento ---------- */}
-            <section className="cab-mod" data-tour="chat-motion">
-              <h2>Movimiento</h2>
-              <Field
-                label="Cómo entra, hace sitio y sale cada mensaje"
-                hint={
-                  chatSettings.motion === 'propio'
-                    ? `${template.name}: ${CHAT_SIGNATURE[chatSettings.template]}`
-                    : 'Un movimiento genérico, igual en todas las plantillas. Los destacados conservan el trato de la plantilla.'
-                }
+        {chatSettings.template === 'custom' && (
+          <>
+            <Ajuste label="Tipografía" htmlFor={`${uid}-font`}>
+              <select
+                id={`${uid}-font`}
+                className="ept-inp"
+                value={custom.font}
+                onChange={(e) => updateCustom({ font: e.target.value as ChatFont })}
               >
-                <div className="cab-seg" role="group" aria-label="Movimiento de los mensajes">
-                  {CHAT_MOTIONS.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      aria-pressed={chatSettings.motion === item.id}
-                      onClick={() => {
-                        updateSettings({ motion: item.id });
-                        send('normal');
-                      }}
-                    >
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Intensidad" hint="Cambia cuánto se mueve y cuánto dura. Con «Calma» no hay rebotes.">
-                <div className="cab-seg" role="group" aria-label="Intensidad del movimiento">
-                  {CHAT_ENERGIES.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      aria-pressed={chatSettings.energy === item.id}
-                      onClick={() => {
-                        updateSettings({ energy: item.id });
-                        send('normal');
-                      }}
-                    >
-                      {item.name}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <p className="cab-hint">
-                Si el sistema pide reducir el movimiento, los mensajes solo aparecen y desaparecen, sin desplazarse.
-              </p>
-            </section>
-
-            {/* ---------- Colocación ---------- */}
-            <section className="cab-mod">
-              <h2>Colocación</h2>
-              <Field label="Lado de la pantalla">
-                <div className="cab-seg" role="group" aria-label="Lado de la pantalla">
-                  <button type="button" aria-pressed={chatSettings.side === 'l'} onClick={() => updateSettings({ side: 'l' })}>
-                    Izquierda
-                  </button>
-                  <button type="button" aria-pressed={chatSettings.side === 'r'} onClick={() => updateSettings({ side: 'r' })}>
-                    Derecha
-                  </button>
-                </div>
-              </Field>
-              <div className="grid gap-x-8 gap-y-[18px] sm:grid-cols-2">
-                <Field label="Tamaño del texto">
-                  <Range
-                    label="Tamaño del texto"
-                    min={CHAT_LIMITS.size.min}
-                    max={CHAT_LIMITS.size.max}
-                    step={0.05}
-                    value={chatSettings.size}
-                    format={(value) => `${Math.round(value * 100)}%`}
-                    onChange={(size) => updateSettings({ size })}
-                  />
-                </Field>
-                <Field label="Ancho de la columna">
-                  <Range
-                    label="Ancho de la columna"
-                    min={CHAT_LIMITS.width.min}
-                    max={CHAT_LIMITS.width.max}
-                    value={chatSettings.width}
-                    format={(value) => String(value)}
-                    onChange={(width) => updateSettings({ width })}
-                  />
-                </Field>
-                <Field label="Mensajes a la vez">
-                  <Range
-                    label="Mensajes a la vez"
-                    min={CHAT_LIMITS.maxMessages.min}
-                    max={CHAT_LIMITS.maxMessages.max}
-                    value={chatSettings.maxMessages}
-                    format={(value) => String(value)}
-                    onChange={(maxMessages) => updateSettings({ maxMessages })}
-                  />
-                </Field>
-                <Field label="Tiempo en pantalla" hint="Con 0, cada mensaje se queda hasta que lo empuja otro.">
-                  <Range
-                    label="Segundos en pantalla"
-                    min={CHAT_LIMITS.seconds.min}
-                    max={CHAT_LIMITS.seconds.max}
-                    value={chatSettings.seconds}
-                    format={(value) => (value ? `${value} s` : 'Sin límite')}
-                    onChange={(seconds) => updateSettings({ seconds })}
-                  />
-                </Field>
-              </div>
-              <p className="cab-hint">
-                En el monitor el texto se ve algo más grande que en OBS, para poder leerlo a este tamaño.
-              </p>
-            </section>
-
-            {/* ---------- Qué se ve ---------- */}
-            <section className="cab-mod">
-              <h2>Qué se ve</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Toggle label="Insignias (CANAL, MOD, VIP, SUB)" checked={chatSettings.badges} onChange={(badges) => updateSettings({ badges })} />
-                <Toggle
-                  label="Franja en mensajes de suscriptores"
-                  checked={chatSettings.highlightSubs}
-                  onChange={(highlightSubs) => updateSettings({ highlightSubs })}
-                />
-                <Toggle
-                  label="Mensajes con bits en color lleno"
-                  checked={chatSettings.highlightBits}
-                  onChange={(highlightBits) => updateSettings({ highlightBits })}
-                />
-                <Toggle
-                  label="Mensajes de solo emotes más grandes"
-                  checked={chatSettings.bigEmotes}
-                  onChange={(bigEmotes) => updateSettings({ bigEmotes })}
-                />
-                <Toggle
-                  label="Ocultar comandos (empiezan por !)"
-                  checked={chatSettings.hideCommands}
-                  onChange={(hideCommands) => updateSettings({ hideCommands })}
-                />
-                <Toggle label="Ocultar bots conocidos" checked={chatSettings.hideBots} onChange={(hideBots) => updateSettings({ hideBots })} />
-              </div>
-
-              <div className="cab-field">
-                <Toggle
-                  label="Marcar los mensajes que lee la voz"
-                  checked={chatSettings.voiceMark}
-                  onChange={(voiceMark) => updateSettings({ voiceMark })}
-                />
-                <span className="cab-hint">
-                  Una etiqueta «VOZ» en la esquina del mensaje. Ahora la voz está en «{voiceModeName}».{' '}
-                  <a className="studio-link" href="#tts">
-                    Cambiar qué lee la voz
-                  </a>
-                </span>
-              </div>
-
-              <div className="cab-field">
-                <Toggle
-                  label="Mostrar también en «Todo en uno»"
-                  checked={chatSettings.inAll}
-                  onChange={(inAll) => updateSettings({ inAll })}
-                />
-                <span className="cab-hint">
-                  Si usas la fuente «Todo en uno» y no quieres el chat en pantalla, apágalo aquí. La fuente «Chat» lo
-                  muestra siempre.
-                </span>
-              </div>
-              <p className="cab-note">
-                Lo que un moderador borra en Twitch se tacha aquí y sale; un usuario expulsado o silenciado desaparece
-                con todos sus mensajes.
-              </p>
-            </section>
-          </div>
-
-          {/* ---------- Monitor ---------- */}
-          <section className="cab-mod max-[1099px]:order-first min-[1100px]:sticky min-[1100px]:top-4" data-tour="chat-monitor">
-            <h2>Monitor</h2>
-            <div ref={stageRef} className="cab-stage">
-              <ChatOverlayView ref={chatRef} settings={chatSettings} isStudio />
-            </div>
-
-            <div className="cab-field">
-              <span className="cab-label">Simular en el chat</span>
-              <div className="chat-sim">
-                {SAMPLES.map((sample) => (
-                  <button key={sample.kind} type="button" className="cab-btn2 cab-btn-sm" onClick={() => send(sample.kind)}>
-                    {sample.label}
-                  </button>
+                {CHAT_FONTS.map((font) => (
+                  <option key={font.id} value={font.id}>
+                    {font.name}
+                  </option>
                 ))}
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={burst}>
-                  Ráfaga de 20
-                </button>
-                <button type="button" className="cab-btn2 cab-btn-sm" onClick={removeLast}>
-                  Borrar el último (moderación)
-                </button>
-              </div>
-              <Toggle label="Chat automático" checked={auto} onChange={setAuto} />
+              </select>
+            </Ajuste>
+            <div className="chat-colors">
+              {(
+                [
+                  ['bg', 'Fondo del mensaje'],
+                  ['fg', 'Color del texto'],
+                  ['accent', 'Color de destacados'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="chat-color">
+                  <input
+                    id={`${uid}-${key}`}
+                    type="color"
+                    className="ept-color"
+                    value={custom[key]}
+                    onChange={(e) => updateCustom({ [key]: e.target.value })}
+                  />
+                  <label htmlFor={`${uid}-${key}`}>{label}</label>
+                </div>
+              ))}
             </div>
+            <div className="ept-two">
+              <Deslizador
+                label="Opacidad del fondo"
+                min={0}
+                max={1}
+                step={0.02}
+                value={custom.opacity}
+                format={(value) => `${Math.round(value * 100)}%`}
+                onChange={(opacity) => updateCustom({ opacity })}
+              />
+              <Deslizador
+                label="Redondeo"
+                min={CHAT_LIMITS.radius.min}
+                max={CHAT_LIMITS.radius.max}
+                step={0.1}
+                value={custom.radius}
+                format={(value) => value.toFixed(1)}
+                onChange={(radius) => updateCustom({ radius })}
+              />
+            </div>
+            <Pista>
+              Si un espectador usa un color de nombre que no se lee sobre tu fondo, la capa lo aclara u oscurece sola.
+            </Pista>
+          </>
+        )}
+      </Modulo>
 
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="cab-btn flex-1" onClick={() => copyUrl(false)}>
-                {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'url' ? 'URL copiada' : 'Copiar URL para OBS'}</span>
-              </button>
-              <button type="button" className="cab-btn2 flex-1" onClick={() => copyUrl(true)}>
-                {copied === 'demo' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                <span>{copied === 'demo' ? 'URL copiada' : 'Copiar URL con chat de muestra'}</span>
-              </button>
-            </div>
-            <p className="cab-hint" role="status">
-              {status ||
-                (channel
-                  ? 'El chat de aquí es simulado. La URL con chat de muestra sirve para colocar la capa en OBS; al terminar, cámbiala por la normal.'
-                  : 'Falta tu canal: escríbelo en Inicio antes de copiar la URL.')}
-            </p>
-          </section>
+      {/* ---------- Movimiento ---------- */}
+      <Modulo title="Movimiento" data-tour="chat-motion">
+        <Ajuste
+          label="Cómo entra, hace sitio y sale cada mensaje"
+          hint={
+            chatSettings.motion === 'propio'
+              ? `${template.name}: ${CHAT_SIGNATURE[chatSettings.template]}`
+              : 'Un movimiento genérico, igual en todas las plantillas. Los destacados conservan el trato de la plantilla.'
+          }
+        >
+          <Segmented
+            label="Movimiento de los mensajes"
+            value={chatSettings.motion}
+            options={CHAT_MOTIONS.map((item) => ({ value: item.id, label: item.name }))}
+            onChange={(next) => {
+              updateSettings({ motion: next });
+              send('normal');
+            }}
+          />
+        </Ajuste>
+        <Ajuste label="Intensidad" hint="Cambia cuánto se mueve y cuánto dura. Con «Calma» no hay rebotes.">
+          <Segmented
+            label="Intensidad del movimiento"
+            value={chatSettings.energy}
+            options={CHAT_ENERGIES.map((item) => ({ value: item.id, label: item.name }))}
+            onChange={(next) => {
+              updateSettings({ energy: next });
+              send('normal');
+            }}
+          />
+        </Ajuste>
+        <Pista>Si el sistema pide reducir el movimiento, los mensajes solo aparecen y desaparecen, sin desplazarse.</Pista>
+      </Modulo>
+
+      {/* ---------- Colocación ---------- */}
+      <Modulo title="Colocación">
+        <Ajuste label="Lado de la pantalla">
+          <Segmented
+            label="Lado de la pantalla"
+            value={chatSettings.side}
+            options={[
+              { value: 'l', label: 'Izquierda' },
+              { value: 'r', label: 'Derecha' },
+            ]}
+            onChange={(side) => updateSettings({ side })}
+          />
+        </Ajuste>
+        <div className="ept-two">
+          <Deslizador
+            label="Tamaño del texto"
+            min={CHAT_LIMITS.size.min}
+            max={CHAT_LIMITS.size.max}
+            step={0.05}
+            value={chatSettings.size}
+            format={(value) => `${Math.round(value * 100)}%`}
+            onChange={(size) => updateSettings({ size })}
+          />
+          <Deslizador
+            label="Ancho de la columna"
+            min={CHAT_LIMITS.width.min}
+            max={CHAT_LIMITS.width.max}
+            value={chatSettings.width}
+            format={(value) => String(value)}
+            onChange={(width) => updateSettings({ width })}
+          />
+          <Deslizador
+            label="Mensajes a la vez"
+            min={CHAT_LIMITS.maxMessages.min}
+            max={CHAT_LIMITS.maxMessages.max}
+            value={chatSettings.maxMessages}
+            format={(value) => String(value)}
+            onChange={(maxMessages) => updateSettings({ maxMessages })}
+          />
+          <Deslizador
+            label="Tiempo en pantalla"
+            hint="Con 0, cada mensaje se queda hasta que lo empuja otro."
+            min={CHAT_LIMITS.seconds.min}
+            max={CHAT_LIMITS.seconds.max}
+            value={chatSettings.seconds}
+            format={(value) => (value ? `${value} s` : 'Sin límite')}
+            onChange={(seconds) => updateSettings({ seconds })}
+          />
         </div>
-      </div>
+        <Pista>En el monitor el texto se ve algo más grande que en OBS, para poder leerlo a este tamaño.</Pista>
+      </Modulo>
+    </>
+  );
 
-      {tourOpen && <GuidedTour steps={CHAT_TOUR_STEPS} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Chat" />}
-    </div>
+  const ajustes = (
+    <Modulo title="Qué se ve">
+      <Opcion label="Insignias (CANAL, MOD, VIP, SUB)" checked={chatSettings.badges} onChange={(badges) => updateSettings({ badges })} />
+      <Opcion
+        label="Franja en mensajes de suscriptores"
+        checked={chatSettings.highlightSubs}
+        onChange={(highlightSubs) => updateSettings({ highlightSubs })}
+      />
+      <Opcion
+        label="Mensajes con bits en color lleno"
+        checked={chatSettings.highlightBits}
+        onChange={(highlightBits) => updateSettings({ highlightBits })}
+      />
+      <Opcion
+        label="Mensajes de solo emotes más grandes"
+        checked={chatSettings.bigEmotes}
+        onChange={(bigEmotes) => updateSettings({ bigEmotes })}
+      />
+      <Opcion
+        label="Ocultar comandos (empiezan por !)"
+        checked={chatSettings.hideCommands}
+        onChange={(hideCommands) => updateSettings({ hideCommands })}
+      />
+      <Opcion label="Ocultar bots conocidos" checked={chatSettings.hideBots} onChange={(hideBots) => updateSettings({ hideBots })} />
+      <Opcion
+        label="Marcar los mensajes que lee la voz"
+        checked={chatSettings.voiceMark}
+        onChange={(voiceMark) => updateSettings({ voiceMark })}
+        hint={
+          <>
+            Una etiqueta «VOZ» en la esquina del mensaje. Ahora la voz está en «{voiceModeName}».{' '}
+            <a className="ept-link" href="#tts">
+              Cambiar qué lee la voz
+            </a>
+          </>
+        }
+      />
+      <Opcion
+        label="Mostrar también en «Todo en uno»"
+        checked={chatSettings.inAll}
+        onChange={(inAll) => updateSettings({ inAll })}
+        hint="Si usas la fuente «Todo en uno» y no quieres el chat en pantalla, apágalo aquí. La fuente «Chat» lo muestra siempre."
+      />
+      <Nota>
+        Lo que un moderador borra en Twitch se tacha aquí y sale; un usuario expulsado o silenciado desaparece con todos sus mensajes.
+      </Nota>
+    </Modulo>
+  );
+
+  const fijo = (
+    <Modulo title="Monitor" data-tour="chat-monitor">
+      <Escenario ref={stageRef}>
+        <ChatOverlayView ref={chatRef} settings={chatSettings} isStudio />
+      </Escenario>
+
+      <Ajuste label="Simular en el chat">
+        <div className="chat-sim">
+          {SAMPLES.map((sample) => (
+            <Boton key={sample.kind} pequeno onClick={() => send(sample.kind)}>
+              {sample.label}
+            </Boton>
+          ))}
+          <Boton pequeno onClick={burst}>
+            Ráfaga de 20
+          </Boton>
+          <Boton pequeno onClick={removeLast}>
+            Borrar el último (moderación)
+          </Boton>
+        </div>
+      </Ajuste>
+      <Opcion label="Chat automático" checked={auto} onChange={setAuto} />
+
+      <div className="ept-btns">
+        <BotonCopiar principal copiado={copied === 'url'} texto="Copiar URL para OBS" textoCopiado="URL copiada" onClick={() => copyUrl(false)} />
+        <BotonCopiar copiado={copied === 'demo'} texto="Copiar URL con chat de muestra" textoCopiado="URL copiada" onClick={() => copyUrl(true)} />
+      </div>
+      <Pista role="status">
+        {status ||
+          (channel
+            ? 'El chat de aquí es simulado. La URL con chat de muestra sirve para colocar la capa en OBS; al terminar, cámbiala por la normal.'
+            : 'Falta tu canal: escríbelo en Inicio antes de copiar la URL.')}
+      </Pista>
+    </Modulo>
+  );
+
+  return (
+    <VentanaPestanas
+      idBase={TOUR_ID}
+      etiqueta="Secciones de Chat"
+      barra={<SuiteNav currentApp="chat" channel={channel} saved={saved} onOpenTour={() => setTourOpen(true)} tourAvailable={!tourOpen} />}
+      tabs={CHAT_TABS}
+      value={tab}
+      onChange={(id) => setTab(id as ChatTab)}
+      paneles={{ ajustes, apariencia }}
+      fijo={fijo}
+      guiaAbierta={tourOpen}
+    >
+      {tourOpen && <GuidedTour steps={tourSteps} onClose={() => setTourOpen(false)} id={TOUR_ID} appName="Chat" />}
+    </VentanaPestanas>
   );
 };

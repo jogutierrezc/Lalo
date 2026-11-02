@@ -1,0 +1,690 @@
+/* ==========================================================================
+   src/styles/enpantalla-tally.css
+
+   Hoja propia de «En pantalla» y «Conexiones» (Chat, Raids, Ahora suena,
+   Studio, Ko-fi, Alertas de juego e Integraciones) con la identidad Tally:
+   ventana con pestañas, formulario a la izquierda y panel fijo (monitor y
+   pruebas) a la derecha. Rojo solo para «en vivo» y la acción principal;
+   errores con borde discontinuo; texto claro sobre onyx, nunca negro.
+   Movimiento: cubic-bezier(0.23, 1, 0.32, 1), hasta 300 ms, :active a
+   scale(.97), hover solo con puntero fino y «reducir movimiento» respetado.
+   ========================================================================== */
+
+.ept {
+  --ept-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  container: ept / inline-size;
+  background: #1b1f24;
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+  font-size: 0.875rem;
+}
+.ept[data-guia] {
+  padding-bottom: 220px;
+}
+.ept-top {
+  flex: none;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--tally-line);
+}
+.ept-top:empty {
+  display: none;
+}
+.ept > .tui-tabs {
+  flex: none;
+}
+
+/* Cuerpo: formulario + panel fijo */
+.ept-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 38%);
+  min-height: 0;
+}
+.ept-body[data-solo] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ept-main {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.ept-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 16px;
+}
+.ept-panel[hidden] {
+  display: none;
+}
+.ept-fixed {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--tally-line);
+  background: var(--tally-onyx);
+}
+.ept-fixed > h3 {
+  margin: 0;
+  font-family: var(--tally-disp);
+  font-size: 0.9375rem;
+  letter-spacing: -0.01em;
+}
+@container ept (max-width: 700px) {
+  .ept-body {
+    display: block;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  .ept-main,
+  .ept-fixed {
+    overflow: visible;
+  }
+  .ept-fixed {
+    border-left: 0;
+    border-top: 1px solid var(--tally-line);
+  }
+}
+
+/* ---------- Campos ---------- */
+.ept-ajuste {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.ept-ajuste > .ept-l {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.ept-hint {
+  margin: 0;
+  color: var(--tally-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.ept-nota {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--tally-line);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.03);
+  color: var(--tally-ink-dim);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.ept-nota[data-tono='aviso'] {
+  border-color: rgb(255 176 32 / 0.45);
+  color: var(--tally-warn);
+}
+.ept-nota[data-tono='error'] {
+  border: 1px dashed var(--tally-error-line);
+  color: var(--tally-error);
+}
+.ept-inp {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--tally-off);
+  border-radius: 8px;
+  background: var(--tally-dark);
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+  font-size: 0.875rem;
+  transition: border-color 140ms ease;
+}
+.ept-inp::placeholder {
+  color: var(--tally-muted);
+}
+.ept-inp:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 1px;
+}
+.ept-inp:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ept-mono {
+  font-family: var(--tally-mono);
+  font-size: 0.8125rem;
+}
+.ept-color {
+  width: 48px;
+  min-height: 36px;
+  padding: 2px;
+  border: 1px solid var(--tally-off);
+  border-radius: 8px;
+  background: var(--tally-dark);
+  cursor: pointer;
+}
+.ept-color:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ept-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 14px 18px;
+}
+.ept-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ept-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ept-btns > .tui-btn[aria-pressed='true'] {
+  border-color: var(--tally-white);
+  background: #2a3037;
+}
+.ept-link {
+  color: var(--tally-white);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.ept-link:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ept-link:hover {
+    color: var(--tally-red-ink);
+  }
+}
+
+/* Interruptor con su texto */
+.ept-opc {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+.ept-opc-t {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.ept-opc-t > label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ept-opc .tui-switch {
+  margin-top: 1px;
+}
+
+/* ---------- Tarjetas (kit) dentro de las ventanas ---------- */
+.ept .tui-card {
+  background: var(--tally-onyx);
+}
+.ept .tui-card-h {
+  font-size: 0.875rem;
+}
+
+/* ---------- Monitor ---------- */
+.ept-stage {
+  position: relative;
+  display: flex;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  padding: 3.5%;
+  overflow: hidden;
+  container-type: inline-size;
+  border: 1px solid var(--tally-line);
+  border-radius: 8px;
+}
+.ept-stage:not([data-bg='claro']):not([data-bg='ruido']) {
+  background:
+    radial-gradient(60% 80% at 72% 18%, #2f4254 0, transparent 60%),
+    radial-gradient(42% 52% at 18% 74%, #38413f 0, transparent 65%),
+    linear-gradient(180deg, #131920, #0a0d11);
+}
+
+/* ---------- Selector de diseño y de posición ---------- */
+.ept-dz {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 138px), 1fr));
+  gap: 8px;
+}
+.ept-dz button {
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  padding: 10px 12px;
+  border: 1px solid var(--tally-line);
+  border-radius: 8px;
+  background: var(--tally-dark);
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 160ms var(--ept-ease);
+}
+.ept-dz button b {
+  font-family: var(--tally-disp);
+  font-size: 0.8125rem;
+}
+.ept-dz button span {
+  color: var(--tally-muted);
+  font-size: 0.75rem;
+}
+.ept-dz button:active {
+  transform: scale(0.97);
+}
+.ept-dz button[aria-pressed='true'] {
+  border-color: var(--tally-white);
+  background: #2a3037;
+  box-shadow: inset 3px 0 0 var(--tally-red);
+}
+.ept-dz button:focus-visible,
+.ept-six button:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 2px;
+}
+.ept-six {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 5px;
+}
+.ept-six button {
+  position: relative;
+  height: 28px;
+  border: 1px solid var(--tally-off);
+  border-radius: 6px;
+  background: var(--tally-dark);
+  cursor: pointer;
+  transition: border-color 140ms ease, transform 160ms var(--ept-ease);
+}
+.ept-six button::after {
+  content: '';
+  position: absolute;
+  inset: 8px 10px;
+  border-radius: 2px;
+  background: var(--tally-off);
+}
+.ept-six button:active {
+  transform: scale(0.97);
+}
+.ept-six button[aria-pressed='true'] {
+  border-color: var(--tally-white);
+}
+.ept-six button[aria-pressed='true']::after {
+  background: var(--tally-red);
+}
+
+/* ---------- Lista de fuentes de OBS ---------- */
+.ept-filas {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ept-filas li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--tally-line);
+  border-radius: 8px;
+}
+.ept-filas li > span {
+  font-weight: 600;
+}
+.ept-url {
+  display: block;
+  padding: 8px 10px;
+  border: 1px dashed var(--tally-off);
+  border-radius: 8px;
+  background: var(--tally-dark);
+  font-family: var(--tally-mono);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* ---------- Alertas de juego: filas ---------- */
+.ept-grp {
+  margin: 0;
+  color: var(--tally-muted);
+  font-family: var(--tally-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ept-als {
+  display: grid;
+  gap: 8px;
+}
+.ept-al {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--tally-line);
+  border-radius: 8px;
+  background: var(--tally-dark);
+}
+.ept-al-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+.ept-al-t {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.ept-al-t b {
+  font-size: 0.875rem;
+}
+.ept-al-a {
+  display: flex;
+  gap: 8px;
+}
+.ept-al-b {
+  display: grid;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--tally-line);
+}
+
+/* ---------- Fichas de servicio (Integraciones y pestañas «Conexión») ---------- */
+.ept-ig {
+  display: grid;
+  gap: 18px;
+  padding: 0;
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+}
+.ept-ficha .ic-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ept-ficha .ic-h h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-family: var(--tally-disp);
+  font-size: 0.9375rem;
+}
+.ept-ficha .ic-m {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--tally-line);
+  border-radius: 8px;
+  background: var(--tally-onyx-2);
+  font-family: var(--tally-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.ept-ficha .ic-st {
+  padding: 3px 9px;
+  border: 1px solid var(--tally-line);
+  border-radius: 6px;
+  color: var(--tally-muted);
+  font-family: var(--tally-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ept-ficha .ic-st[data-s='on'] {
+  border-color: rgb(61 220 151 / 0.4);
+  background: transparent;
+  color: var(--tally-ok);
+}
+.ept-ficha .ic-st[data-s='soon'] {
+  border-color: #5a626b;
+  color: var(--tally-white);
+}
+.ept-ficha .ic-st[data-s='warn'] {
+  border-color: rgb(255 176 32 / 0.45);
+  background: transparent;
+  color: var(--tally-warn);
+}
+.ept-ficha .ic-tag {
+  justify-self: start;
+  padding: 2px 8px;
+  border: 1px solid var(--tally-line);
+  border-radius: 6px;
+  color: var(--tally-muted);
+  font-family: var(--tally-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ept-ficha .ic-who {
+  font-family: var(--tally-mono);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.ept-ficha .ic-perm {
+  border: 1px dashed var(--tally-off);
+  border-radius: 8px;
+}
+.ept-ficha .ic-perm li b {
+  border: 1px solid var(--tally-line);
+  border-radius: 4px;
+  color: var(--tally-muted);
+}
+.ept-ficha .ic-perm li[data-y] b {
+  border-color: rgb(61 220 151 / 0.5);
+  color: var(--tally-ok);
+}
+.ept-ficha .ic-addr {
+  border: 1px dashed var(--tally-off);
+  border-radius: 8px;
+  background: var(--tally-dark);
+}
+.ept-ficha p,
+.ept-ficha ul,
+.ept-ficha ol {
+  margin: 0;
+}
+.ept-hechos {
+  display: grid;
+  gap: 8px;
+  max-width: 82ch;
+  margin: 0;
+  padding-left: 1.1em;
+  list-style: disc;
+  color: var(--tally-ink-dim);
+  font-size: 0.8125rem;
+}
+.ept-hechos b {
+  color: var(--tally-white);
+}
+.ept-lede {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--tally-muted);
+}
+.ept-det {
+  border: 1px solid var(--tally-line);
+  border-radius: 12px;
+  background: var(--tally-onyx);
+}
+.ept-det > summary {
+  padding: 12px 18px;
+  font-family: var(--tally-disp);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ept-det > summary:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+.ept-det > .ept-hechos {
+  padding: 0 18px 16px 34px;
+}
+
+/* ---------- Piezas heredadas dentro de las fichas (botones y campos de Cabina) ---------- */
+.ept .cab-btn,
+.ept .cab-btn2,
+.ept a.cab-btn,
+.ept a.cab-btn2 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--tally-off);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 140ms var(--ept-ease), background-color 140ms ease;
+}
+.ept .cab-btn {
+  border-color: var(--tally-red);
+  background: var(--tally-red);
+  color: #fff;
+}
+.ept .cab-btn-sm {
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: 0.75rem;
+}
+.ept .cab-btn:active:not(:disabled),
+.ept .cab-btn2:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.ept .cab-btn:disabled,
+.ept .cab-btn2:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ept .cab-btn:focus-visible,
+.ept .cab-btn2:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ept .cab-btn2:hover:not(:disabled) {
+    background: #2a3037;
+  }
+  .ept .cab-btn:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+}
+.ept .cab-inp {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--tally-off);
+  border-radius: 8px;
+  background: var(--tally-dark);
+  color: var(--tally-white);
+  font-family: var(--tally-ui);
+  font-size: 0.875rem;
+}
+.ept .cab-inp:focus-visible {
+  outline: 2px solid var(--tally-red);
+  outline-offset: 1px;
+}
+.ept .cab-field {
+  display: grid;
+  gap: 6px;
+}
+.ept .cab-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.ept .cab-hint {
+  margin: 0;
+  color: var(--tally-muted);
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.ept .cab-note {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--tally-line);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.03);
+  color: var(--tally-ink-dim);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.ept .cab-mono {
+  font-family: var(--tally-mono);
+}
+.ept .studio-link {
+  color: var(--tally-white);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Studio dentro de la ventana ---------- */
+.ept-studio-wrap {
+  container: eptst / inline-size;
+}
+.ept-studio-wrap .st-ed {
+  border-color: var(--tally-line);
+  border-radius: 8px;
+  background: var(--tally-onyx);
+}
+@container eptst (max-width: 1100px) {
+  .ept-studio-wrap .st-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ept-studio-wrap .st-left,
+  .ept-studio-wrap .st-right {
+    border: 0;
+    border-top: 1px solid var(--tally-line);
+  }
+  .ept-studio-wrap .st-mid {
+    order: -1;
+  }
+}
+
+/* ---------- Guía: lo que la guía marca no debe quedar tapado por el desplazamiento ---------- */
+[data-tour] {
+  scroll-margin: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ept-dz button,
+  .ept-six button,
+  .ept .cab-btn,
+  .ept .cab-btn2,
+  .ept-inp {
+    transition: none;
+  }
+}

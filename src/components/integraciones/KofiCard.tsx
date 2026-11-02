@@ -26,7 +26,8 @@ const STATE_LABEL: Record<KofiStatus['state'], string> = {
   connected: 'Conectado',
 };
 
-export const KofiCard: React.FC = () => {
+/** `enVentana`: la ficha está dentro de la ventana de Ko-fi y no necesita el enlace «Ajustar las alertas». */
+export const KofiCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false }) => {
   const cloud = useCloudSession();
   const uid = useId();
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
@@ -264,9 +265,11 @@ export const KofiCard: React.FC = () => {
             >
               Desconectar
             </button>
-            <a className="cab-btn2 cab-btn-sm" href="#kofi">
-              Ajustar las alertas
-            </a>
+            {!enVentana && (
+              <a className="cab-btn2 cab-btn-sm" href="#kofi">
+                Ajustar las alertas
+              </a>
+            )}
           </div>
         </>
       )}
