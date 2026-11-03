@@ -55,7 +55,7 @@ export const Narrador: React.FC<NarradorProps> = ({ paso, texto }) => {
         <div>
           <b>Chispa te explica</b>
           <span role="status">
-            {estado === 'cargando' ? 'Preparando la voz' : estado === 'sonando' ? 'Hablando' : 'Voz por defecto de Lalo'}
+            {estado === 'cargando' ? 'Preparando la voz' : estado === 'sonando' ? 'Hablando' : 'Voz por defecto de Tally Studio'}
           </span>
         </div>
       </div>

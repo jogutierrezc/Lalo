@@ -89,7 +89,7 @@ export const Legal: React.FC = () => {
 
   useEffect(() => {
     const previo = document.title;
-    document.title = `${doc.titulo} | Lalo Stream Suite`;
+    document.title = `${doc.titulo} | Tally Studio`;
     return () => {
       document.title = previo;
     };
@@ -129,13 +129,13 @@ export const Legal: React.FC = () => {
       <div className="lg-page">
         <header className="lg-top">
           <div>
-            <p className="cab-label">Lalo Stream Suite</p>
+            <p className="cab-label">Tally Studio</p>
             <p className="lg-marca">Términos y políticas</p>
           </div>
           <div className="lg-top-actions">
             <ThemeSwitch />
             <a className="cab-btn2 cab-btn-sm" href="#dashboard">
-              Ir a Lalo
+              Ir a Tally Studio
             </a>
           </div>
         </header>

@@ -1,7 +1,7 @@
 /**
  * server/integrations/spotify.ts
  *
- * Lo que Lalo habla con Spotify: configuración, intercambio y renovación de
+ * Lo que Tally Studio habla con Spotify: configuración, intercambio y renovación de
  * permisos, y la lectura de «qué suena ahora» reducida a lo que usa la capa.
  *
  * Spotify (comprobado en developer.spotify.com el 2026-10-04):

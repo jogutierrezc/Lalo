@@ -15,7 +15,7 @@ export type ResultadoCanje =
 
 export const INVITE_PROBLEM: Record<Exclude<InviteStatus, 'valid'>, string> = {
   not_found: 'No existe ningún código así. Revisa que esté bien escrito.',
-  expired: 'Este código ha caducado. Pide uno nuevo a quien administra Lalo.',
+  expired: 'Este código ha caducado. Pide uno nuevo a quien administra Tally Studio.',
   used_up: 'Este código ya se usó todas las veces que permitía. Pide uno nuevo.',
   revoked: 'Este código fue anulado. Pide uno nuevo.',
 };
@@ -50,7 +50,7 @@ export function outcomeMessage(outcome: ResultadoCanje | null): string | null {
     case 'same_profile':
       return 'Ese código es de esta misma cuenta: no hay nada que recuperar.';
     case 'not_pending':
-      return 'Esta cuenta de Twitch ya tiene un perfil en Lalo. La recuperación solo sirve para una cuenta nueva.';
+      return 'Esta cuenta de Twitch ya tiene un perfil en Tally Studio. La recuperación solo sirve para una cuenta nueva.';
     default:
       return 'Ese código de recuperación no existe. Revisa que esté bien escrito.';
   }

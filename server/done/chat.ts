@@ -141,10 +141,10 @@ export async function askDone(stores: Stores, env: Env, deps: DoneDeps, actor: A
   if (settings.threadEnabled && named) {
     await stores.done
       .threadSave(profile.id, threadViewerKey(named), { user: message.slice(0, LUX_THREAD_CONTENT_MAX), assistant: out.text.slice(0, LUX_THREAD_CONTENT_MAX) }, nowMs)
-      .catch(() => console.error('[Lalo done] no se pudo guardar el hilo del espectador'));
+      .catch(() => console.error('[Tally Studio done] no se pudo guardar el hilo del espectador'));
   }
   await stores.done.insertReply({ profile_id: profile.id, viewer, prompt: message, reply: out.text, model: run.model }).catch(() => {
-    console.error('[Lalo done] no se pudo guardar el registro de la respuesta');
+    console.error('[Tally Studio done] no se pudo guardar el registro de la respuesta');
   });
   await enqueueSpeech(stores.done, profile.id, { text: out.text, emotion: out.emotion, gesture }, viewer, 'chat');
   return { status: 200, body: { reply: out.text, emotion: out.emotion, gesture, intent, model: run.model, modelNote: run.fellBack } };
@@ -313,7 +313,7 @@ export async function claimOutbox(stores: Stores, env: Env, deps: DoneDeps, acto
   await touchBot(stores.lux, actor.profile.id, nowMs);
   if (blocked(actor)) return [];
   await flushEvents(stores, env, deps, actor, nowMs).catch((err: unknown) => {
-    console.error('[Lalo done] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
+    console.error('[Tally Studio done] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
   });
   const items = await stores.done.outboxClaim(actor.profile.id, 3, new Date(nowMs).toISOString());
   // El bot en la nube decide la voz después de enviar (si el limitador devuelve el mensaje, no suena dos veces)

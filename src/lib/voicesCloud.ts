@@ -3,7 +3,7 @@
  *
  * Lado del navegador del catálogo de voces: leerlo de Supabase (con las cinco
  * voces fijas como respaldo), las acciones del administrador y las llamadas al
- * servidor de Lalo para crear y eliminar, que son las que tocan Fish Audio.
+ * servidor de Tally Studio para crear y eliminar, que son las que tocan Fish Audio.
  */
 
 import { isCloudEnabled, supabase } from './supabase';
@@ -101,7 +101,7 @@ export function voiceRpcProblem(err: unknown): string {
   return `No se pudo guardar el cambio: ${message || 'error desconocido'}`;
 }
 
-// ---------- Servidor de Lalo: crear y eliminar ----------
+// ---------- Servidor de Tally Studio: crear y eliminar ----------
 
 export class VoiceApiError extends Error {
   code: string;
@@ -180,7 +180,7 @@ export async function createVoiceRequest(
       }
     };
     xhr.onerror = () =>
-      reject(new VoiceApiError('No se pudo conectar con el servidor de Lalo. Revisa tu conexión.', 'offline', 0));
+      reject(new VoiceApiError('No se pudo conectar con el servidor de Tally Studio. Revisa tu conexión.', 'offline', 0));
     xhr.send(new Blob([body as unknown as BlobPart], { type: 'application/octet-stream' }));
   });
 }
@@ -203,7 +203,7 @@ export async function importElevenVoiceRequest(input: {
       body: JSON.stringify(input),
     });
   } catch {
-    throw new VoiceApiError('No se pudo conectar con el servidor de Lalo. Revisa tu conexión.', 'offline', 0);
+    throw new VoiceApiError('No se pudo conectar con el servidor de Tally Studio. Revisa tu conexión.', 'offline', 0);
   }
   let parsed: unknown = null;
   if ((res.headers.get('content-type') ?? '').includes('application/json')) parsed = await res.json().catch(() => null);
@@ -228,7 +228,7 @@ export async function deleteVoiceRequest(id: string, catalogOnly = false): Promi
       body: JSON.stringify({ id, catalogOnly }),
     });
   } catch {
-    throw new VoiceApiError('No se pudo conectar con el servidor de Lalo. Revisa tu conexión.', 'offline', 0);
+    throw new VoiceApiError('No se pudo conectar con el servidor de Tally Studio. Revisa tu conexión.', 'offline', 0);
   }
   let parsed: unknown = null;
   if ((res.headers.get('content-type') ?? '').includes('application/json')) parsed = await res.json().catch(() => null);

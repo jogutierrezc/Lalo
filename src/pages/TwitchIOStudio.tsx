@@ -9,7 +9,7 @@
  * bot. A la derecha queda fijo «Probar» en las dos pestañas, para ensayar un
  * comando sin salir del panel (prueba local: no se envía nada a Twitch).
  *
- * El bot en la nube es el bot global «Lalo»: el streamer solo concede en Twitch
+ * El bot en la nube es el bot global «Tally Studio»: el streamer solo concede en Twitch
  * el permiso channel:bot. Sin sesión de la nube, la lista se guarda solo en este
  * navegador, como antes.
  *
@@ -69,7 +69,7 @@ const TWITCHIO_TOUR_STEPS: TourStep[] = [
     tab: 'conexion',
     badge: 'Bot en la nube',
     title: 'Conéctalo en tres pasos',
-    body: 'Das permiso al bot de Lalo una sola vez en Twitch y responde en tu chat desde el servidor. No instalas nada.',
+    body: 'Das permiso al bot de Tally Studio una sola vez en Twitch y responde en tu chat desde el servidor. No instalas nada.',
   },
   {
     target: 'bot-comandos',
@@ -197,7 +197,7 @@ export const TwitchIOStudio: React.FC = () => {
         error: '',
       }));
   const showList = !cloudOn || cloudReady;
-  const botName = twitchIOSettings.botUsername || 'LaloBot';
+  const botName = twitchIOSettings.botUsername || 'TallyBot';
   const activeCount = items.filter((item) => item.enabled).length;
   const inScript = scriptCommands(commands, prefix);
   const script = buildPythonScript({ ...twitchIOSettings, prefix, welcomeMessage, commands }, luxChat ?? undefined);
@@ -490,7 +490,7 @@ export const TwitchIOStudio: React.FC = () => {
             <section className="cab-mod" data-tour="bot-nube">
               <h2>Bot en la nube</h2>
               <p className="cab-hint">
-                El bot de Lalo responde en tu chat desde el servidor: sin Python y sin dejar el equipo encendido. Solo das un
+                El bot de Tally Studio responde en tu chat desde el servidor: sin Python y sin dejar el equipo encendido. Solo das un
                 permiso en Twitch.
               </p>
 
@@ -567,7 +567,7 @@ export const TwitchIOStudio: React.FC = () => {
                       onChange={(event) => void changeSender(event.target.value === 'global' ? 'global' : 'streamer')}
                     >
                       <option value="streamer">Con el nombre del streamer</option>
-                      {(bot.connection?.globalAvailable || bot.settings.senderMode === 'global') && <option value="global">Con la cuenta Lalo</option>}
+                      {(bot.connection?.globalAvailable || bot.settings.senderMode === 'global') && <option value="global">Con la cuenta Tally Studio</option>}
                     </select>
                     <p className="cab-hint">{senderModeHint(bot.settings.senderMode)}</p>
                   </div>
@@ -647,14 +647,14 @@ export const TwitchIOStudio: React.FC = () => {
                       1. Instala Python y, en una terminal, ejecuta <code className="cab-mono">{PIP_COMMAND}</code>
                     </li>
                     <li>
-                      2. Copia el script y guárdalo como <code className="cab-mono">lalo_bot.py</code>
+                      2. Copia el script y guárdalo como <code className="cab-mono">tally_bot.py</code>
                     </li>
                     <li>
                       3. En tu copia, cambia <code className="cab-mono">{TOKEN_PLACEHOLDER}</code> por el token de la
                       cuenta del bot. El token va solo en ese archivo: no se escribe en este panel.
                     </li>
                     <li>
-                      4. Ejecuta <code className="cab-mono">python lalo_bot.py</code> y déjalo abierto durante el directo
+                      4. Ejecuta <code className="cab-mono">python tally_bot.py</code> y déjalo abierto durante el directo
                     </li>
                   </ol>
 

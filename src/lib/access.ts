@@ -39,14 +39,14 @@ export interface InviteMessageInput {
   expires?: string | null;
 }
 
-export const INVITE_SUBJECT = 'Tu invitación a Lalo Stream Suite';
+export const INVITE_SUBJECT = 'Tu invitación a Tally Studio';
 
 /** Mensaje corto para pegar en un chat o un correo. */
 export function buildInviteMessage({ origin, code, planName, expires }: InviteMessageInput): string {
   const lines = [
     'Hola:',
     '',
-    'Te invito a Lalo Stream Suite. Abre este enlace y entra con tu cuenta de Twitch:',
+    'Te invito a Tally Studio. Abre este enlace y entra con tu cuenta de Twitch:',
     buildInviteLink(origin, code),
     '',
     `Si te pide el código de afiliado, es este: ${code.trim().toUpperCase()}`,

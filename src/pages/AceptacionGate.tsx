@@ -20,7 +20,7 @@ export const AceptacionCargando: React.FC = () => (
     pulso="aceptacion-cargando"
     lateral={
       <div>
-        <p className="cab-label">Lalo Stream Suite</p>
+        <p className="cab-label">Tally Studio</p>
         <h1>Tu directo, tu mesa de control</h1>
       </div>
     }
@@ -43,7 +43,7 @@ export const AceptacionGate: React.FC<{ aceptacion: EstadoAceptacion }> = ({ ace
       lateral={
         <>
           <div>
-            <p className="cab-label">Lalo Stream Suite</p>
+            <p className="cab-label">Tally Studio</p>
             <h1>{aceptacion.renovacion ? 'Hay términos nuevos' : 'Términos y políticas'}</h1>
           </div>
           <ul>

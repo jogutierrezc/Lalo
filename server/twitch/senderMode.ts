@@ -1,7 +1,7 @@
 /**
  * server/twitch/senderMode.ts
  *
- * Quién escribe en el chat de un canal: la cuenta del bot global «Lalo» ('global', TWITCH_BOT_USER_ID)
+ * Quién escribe en el chat de un canal: la cuenta del bot global «Tally Studio» ('global', TWITCH_BOT_USER_ID)
  * o la PROPIA cuenta del streamer ('streamer'). Todo con token de aplicación, sin guardar ningún token
  * de usuario. Piezas puras (más el antieco, que usa la base de cooldowns de botDb.ts) para que
  * suscripciones, procesador del chat, cola y envío decidan igual.
@@ -37,7 +37,7 @@ const ECHO_VIEWER = 'echo';
 
 const TWITCH_ID = /^\d{1,20}$/;
 
-/** Id de Twitch de la cuenta global Lalo, o '' si no está configurada. */
+/** Id de Twitch de la cuenta global Tally Studio, o '' si no está configurada. */
 export function globalBotId(env: Env): string {
   const id = (env.TWITCH_BOT_USER_ID ?? '').trim();
   return TWITCH_ID.test(id) ? id : '';

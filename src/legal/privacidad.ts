@@ -26,7 +26,7 @@ export const PRIVACIDAD: DocumentoLegal = {
       titulo: '1. Quién responde por tus datos',
       bloques: [
         p(
-          `El responsable del tratamiento es ${d.operador}, que opera Lalo Stream Suite. Para cualquier asunto sobre tus datos personales, ${fraseContacto(d)}.${
+          `El responsable del tratamiento es ${d.operador}, que opera Tally Studio. Para cualquier asunto sobre tus datos personales, ${fraseContacto(d)}.${
             d.direccionPostal ? ` Dirección: ${d.direccionPostal}.` : ''
           }`
         ),
@@ -40,7 +40,7 @@ export const PRIVACIDAD: DocumentoLegal = {
         ul(
           '**Identidad de Twitch**: el identificador de tu cuenta de Twitch, tu nombre de canal, tu nombre visible y la dirección de tu foto de perfil. Twitch nos los entrega cuando entras con tu cuenta y se actualizan cada vez que vuelves a entrar.',
           '**Correo de tu cuenta de Twitch**, si Twitch lo entrega al iniciar sesión. Queda en el servicio de autenticación junto con tu sesión; no se muestra a otros streamers.',
-          '**Datos de la cuenta en Lalo**: rol, estado (pendiente, activa o suspendida), plan, fecha de alta, fecha de la última visita, fecha en que terminaste la bienvenida, y la versión y la fecha en que aceptaste estos documentos.',
+          '**Datos de la cuenta en Tally Studio**: rol, estado (pendiente, activa o suspendida), plan, fecha de alta, fecha de la última visita, fecha en que terminaste la bienvenida, y la versión y la fecha en que aceptaste estos documentos.',
           '**Clave privada de tus fuentes de OBS**: va dentro de las direcciones que pegas en OBS. Quien la tenga puede ver tus capas, no cambiarlas. Puedes generar una nueva en Mi cuenta.',
           '**Configuración de los módulos**: lo que ajustas en voz del chat, alertas, metas, ruleta, batallas, recompensas, bot y chat. Incluye las listas de palabras y de usuarios bloqueados que escribas, que pueden contener nombres de usuario de tus espectadores.',
           '**Archivos que subes**: imágenes, vídeos y sonidos, con su nombre, tipo, tamaño y fecha.',
@@ -49,7 +49,7 @@ export const PRIVACIDAD: DocumentoLegal = {
         ),
         h3('De quien administra la Plataforma'),
         ul(
-          'El correo con el que entra. La contraseña la custodia el servicio de autenticación; Lalo no la ve ni la guarda en sus tablas.'
+          'El correo con el que entra. La contraseña la custodia el servicio de autenticación; Tally Studio no la ve ni la guarda en sus tablas.'
         ),
         h3('De los espectadores del chat'),
         ul(
@@ -114,7 +114,7 @@ export const PRIVACIDAD: DocumentoLegal = {
           '**Vercel**: alojamiento de la app y de sus funciones de servidor.',
           '**Twitch**: inicio de sesión y chat. Twitch trata tus datos y los de tus espectadores según sus propias condiciones.',
           '**Fish Audio**: síntesis de voz. Recibe el texto que se va a leer y el identificador de la voz elegida.',
-          '**Riot Games**: si vinculas tu cuenta de Riot, nuestro servidor le envía tu Riot ID y el identificador de tu cuenta para consultar tus datos de juego. Riot trata esos datos según sus propias condiciones. Lalo Stream Suite no está respaldada por Riot Games.',
+          '**Riot Games**: si vinculas tu cuenta de Riot, nuestro servidor le envía tu Riot ID y el identificador de tu cuenta para consultar tus datos de juego. Riot trata esos datos según sus propias condiciones. Tally Studio no está respaldada por Riot Games.',
           '**Google Fonts**: sirve las tipografías de la app; al cargarlas, tu navegador se conecta con sus servidores.'
         ),
         p(
@@ -155,7 +155,7 @@ export const PRIVACIDAD: DocumentoLegal = {
         p(
           `Para ejercerlos, ${fraseContacto(
             d
-          )} desde el correo de tu cuenta o indicando tu canal de Twitch, y cuéntanos qué necesitas. Podemos pedirte que confirmes que la cuenta es tuya. También puedes hacer parte de esto tú mismo: borrar archivos y generar una clave nueva en Mi cuenta, y retirar el acceso de Lalo desde las conexiones de tu cuenta de Twitch.`
+          )} desde el correo de tu cuenta o indicando tu canal de Twitch, y cuéntanos qué necesitas. Podemos pedirte que confirmes que la cuenta es tuya. También puedes hacer parte de esto tú mismo: borrar archivos y generar una clave nueva en Mi cuenta, y retirar el acceso de Tally Studio desde las conexiones de tu cuenta de Twitch.`
         ),
         p(
           'Los plazos de respuesta y la autoridad ante la que puedes reclamar dependen de tu país. Están en el [Marco por país](legal:paises).'

@@ -15,7 +15,7 @@ vídeos y sonidos que suben los streamers.
   tiene su carpeta dentro.
 - No hay botón de «conectar»: se configura una vez con variables en el
   servidor. Para apagarlo se quitan las variables.
-- Cuando un streamer sube un archivo, el servidor de Lalo comprueba su plan y
+- Cuando un streamer sube un archivo, el servidor de Tally Studio comprueba su plan y
   le da un permiso de unos minutos para ese archivo, con ese tamaño y ese tipo.
   El navegador lo sube directo a R2. Después el servidor pregunta a R2 el
   tamaño real, y si rompe un límite lo borra.
@@ -44,7 +44,7 @@ vídeos y sonidos que suben los streamers.
 
    Guárdalos en un gestor de contraseñas. No van en el repositorio.
 
-No uses un token «Admin»: Lalo solo necesita leer, escribir y listar objetos
+No uses un token «Admin»: Tally Studio solo necesita leer, escribir y listar objetos
 de ese bucket.
 
 ## 3. Activar el acceso público
@@ -155,7 +155,7 @@ proyecto de pruebas y copia cualquier error tal cual.
   tipo y el tamaño del archivo. La documentación de Cloudflare confirma que el
   tipo firmado se exige; del tamaño no dice nada. Aunque R2 no lo exigiera, el
   servidor vuelve a medir el archivo al terminar y lo borra si se pasa.
-- **Que el servidor llega al bucket con la forma de dirección que usa.** Lalo
+- **Que el servidor llega al bucket con la forma de dirección que usa.** Tally Studio
   llama a `https://<cuenta>.r2.cloudflarestorage.com/<bucket>/<archivo>`. La
   documentación da el dominio, pero no dice de forma expresa que el bucket
   pueda ir en la ruta. Si el paso «Subir» falla con un 404 teniendo bien el
@@ -181,15 +181,15 @@ Por encima: 0,015 USD por GB al mes, 4,50 USD por millón de operaciones de
 clase A y 0,36 USD por millón de clase B.
 
 La consola usa 10 GB como capacidad por defecto. Se cambia en **Límites,
-Capacidad total**. Ese número es solo para los cálculos de Lalo: no cambia nada
-en Cloudflare. Lo «usado» es la suma de los archivos registrados en Lalo,
+Capacidad total**. Ese número es solo para los cálculos de Tally Studio: no cambia nada
+en Cloudflare. Lo «usado» es la suma de los archivos registrados en Tally Studio,
 porque R2 no informa del tamaño total del bucket por esta vía.
 
 ## 9. Lo que queda sin cubrir
 
 - **Archivos sueltos.** Si un streamer cierra la pestaña justo entre el final
   de la subida y su confirmación, el archivo queda en el bucket sin registro:
-  ocupa sitio en R2 y no cuenta para nadie en Lalo. Se ven en el panel de R2.
+  ocupa sitio en R2 y no cuenta para nadie en Tally Studio. Se ven en el panel de R2.
   Una regla de ciclo de vida del bucket no los distingue de los buenos, así
   que hoy se limpian a mano.
 - **Cuentas borradas.** Borrar un usuario en Supabase quita sus registros,

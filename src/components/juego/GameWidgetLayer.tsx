@@ -3,7 +3,7 @@
  *
  * Lado de OBS de «Alertas de juego». Va montada en el widget y:
  *
- * - Pregunta al servidor de Lalo cada medio minuto por la «foto» de la cuenta de
+ * - Pregunta al servidor de Tally Studio cada medio minuto por la «foto» de la cuenta de
  *   Riot del streamer, con la clave privada `k` de la URL. El servidor es quien
  *   habla con Riot; aquí nunca llega la clave de Riot ni el PUUID.
  * - Compara la foto con la anterior (utils/gameAlerts.ts) y manda a la placa las

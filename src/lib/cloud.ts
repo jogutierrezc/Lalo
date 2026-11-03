@@ -1,7 +1,7 @@
 /**
  * src/lib/cloud.ts
  *
- * Operaciones de la nube de Lalo sobre Supabase: entrar con Twitch, canjear
+ * Operaciones de la nube de Tally Studio sobre Supabase: entrar con Twitch, canjear
  * códigos, consultar el uso y las acciones del portal de administración.
  * Todas fallan con un Error legible si la nube no está configurada.
  */
@@ -70,7 +70,7 @@ export function getPendingCode(): PendingCode | null {
  * rompe la entrada).
  *   - moderator:read:followers: saber de los seguidores nuevos.
  *   - user:write:chat: enviar mensajes al chat.
- *   - channel:bot: que el bot (cuenta Lalo) entre en el chat del canal y escriba como bot.
+ *   - channel:bot: que el bot (cuenta Tally Studio) entre en el chat del canal y escriba como bot.
  *   - user:read:chat y user:bot: bot en la nube con el nombre del streamer (modo «streamer»):
  *     EventSub channel.chat.message y Send Chat Message con la propia cuenta del streamer.
  *   - bits:read: saber cuándo se usan Bits (cheers y Power-ups) y leer la lista

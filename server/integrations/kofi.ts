@@ -12,7 +12,7 @@
  *   POST /api/kofi/reset-goal     (sesión) pone a cero lo recaudado de la meta
  *
  * Ko-fi no tiene inicio de sesión para apps: cada streamer pega en su Ko-fi una
- * dirección de Lalo y pega en Lalo la clave de verificación que Ko-fi le da.
+ * dirección de Tally Studio y pega en Tally Studio la clave de verificación que Ko-fi le da.
  *
  * El webhook es público y escribe con la clave de servicio, así que:
  *   - <id> son 32 bytes aleatorios. En la base se guarda su huella (para buscar)
@@ -123,7 +123,7 @@ export async function handleKofiHook(id: string, req: IntegrationRequest, env: E
     });
     return OK;
   } catch (err) {
-    console.error('[Lalo integraciones] kofi/hook: no se pudo guardar un aviso:', err instanceof Error ? err.message : 'error desconocido');
+    console.error('[Tally Studio integraciones] kofi/hook: no se pudo guardar un aviso:', err instanceof Error ? err.message : 'error desconocido');
     return fail(500, 'store_failed', 'No se pudo guardar el aviso.');
   }
 }

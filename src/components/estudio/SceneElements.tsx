@@ -113,7 +113,7 @@ const MediaEl: React.FC<{ layer: StudioLayer; mode: SceneMode }> = ({ layer, mod
   );
 };
 
-/** Dibuja un elemento básico. Devuelve null si la capa es de Lalo (ver LaloBoxes). */
+/** Dibuja un elemento básico. Devuelve null si la capa es de Tally Studio (ver LaloBoxes). */
 export const BasicElement: React.FC<{ layer: StudioLayer; mode: SceneMode }> = ({ layer, mode }) => {
   switch (layer.type) {
     case 'text':

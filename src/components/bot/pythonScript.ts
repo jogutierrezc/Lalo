@@ -129,7 +129,7 @@ export function buildPythonScript(settings: TwitchIOSettings, lux: LuxChatSettin
   const doneAlias = done.alias && doneWord !== DONE_COMMAND_DEFAULT;
   const prefix = settings.prefix.trim() || '!';
   const channel = cleanChannel(settings.channel) || CHANNEL_PLACEHOLDER;
-  const botName = settings.botUsername.trim() || 'LaloBot';
+  const botName = settings.botUsername.trim() || 'TallyBot';
   const handlers = scriptCommands(settings.commands, prefix).map(commandHandler);
   // El generador nunca escribe una palabra inválida: si llega una, vale la de por defecto.
   const luxCheck = validateChatWord(lux.word);
@@ -139,7 +139,7 @@ export function buildPythonScript(settings: TwitchIOSettings, lux: LuxChatSettin
   const luxName = luxDisplayName(lux.name, luxWord);
 
   return `"""
-Bot de chat para Lalo Stream Suite.
+Bot de chat para Tally Studio.
 Hecho con TwitchIO (https://github.com/TwitchIO/TwitchIO),
 de PythonistaGuild y EvieePy, con licencia MIT.
 
@@ -159,7 +159,7 @@ PREFIX = ${pyString(prefix)}
 BOT_NAME = ${pyString(botName)}
 WELCOME = ${pyString(settings.welcomeMessage.trim())}
 LALO_URL = "http://localhost:3001/api/twitchio/event"
-# Lux (personaje IA): la clave de OBS de tu panel de Lalo, en Cuenta.
+# Lux (personaje IA): la clave de OBS de tu panel de Tally Studio, en Cuenta.
 LUX_URL = "http://localhost:3001/api/lux/chat"
 LUX_KEY = "TU_CLAVE_OBS"
 LUX_BOT_VERSION = ${LUX_BOT_VERSION}
@@ -170,7 +170,7 @@ LUX_ALIAS = ${luxAlias ? 'True' : 'False'}
 LUX_NAME = ${pyString(luxName)}
 # Segundos que espera la IA antes de responder a un comando del chat (0 = responde en cuanto llega la petición).
 LUX_REPLY_DELAY = 0
-# La IA aprende del chat (si lo tienes activado en Lalo): cada media hora manda los mensajes juntos para resumirlos.
+# La IA aprende del chat (si lo tienes activado en Tally Studio): cada media hora manda los mensajes juntos para resumirlos.
 # Los mensajes se guardan solo en la memoria de este script y se borran al enviarlos.
 LUX_DIGEST_EVERY = 1800
 LUX_LINES_MAX = 200
@@ -310,7 +310,7 @@ async def lux_ask(message, text):
         print("No se pudo hablar con " + LUX_NAME + ": " + str(error))
         return
     if not isinstance(data, dict):
-        print("Respuesta rara del servidor de Lalo: " + str(data)[:200])
+        print("Respuesta rara del servidor de Tally Studio: " + str(data)[:200])
         return
     if data.get("reply"):
         await asyncio.sleep(LUX_REPLY_DELAY)
@@ -567,7 +567,7 @@ async def done_summary_loop():
             warn_once("No se pudo enviar el resumen del chat a " + DONE_NAME + ": " + str(error))
 
 
-class LaloBot(commands.Bot):
+class TallyBot(commands.Bot):
     def __init__(self):
         # case_insensitive: en el chat se escribe !Hola o !HOLA igual que !hola (el móvil pone la primera en mayúscula).
         super().__init__(token=TOKEN, prefix=PREFIX, initial_channels=[CHANNEL], case_insensitive=True)
@@ -592,7 +592,7 @@ class LaloBot(commands.Bot):
 
     async def event_raw_usernotice(self, channel, tags):
         # Suscripciones y raids llegan por el chat (IRC). Los seguidores nuevos y el inicio del directo NO: los recibe el servidor
-        # de Lalo por EventSub y deja el saludo en la cola de mensajes (lux_outbox_loop), así que el bot no los apunta.
+        # de Tally Studio por EventSub y deja el saludo en la cola de mensajes (lux_outbox_loop), así que el bot no los apunta.
         kind = tags.get("msg-id", "")
         user = tags.get("display-name") or tags.get("login") or ""
         if kind in ("sub", "resub"):
@@ -627,7 +627,7 @@ class LaloBot(commands.Bot):
                         "data": {"user": message.author.name, "text": text},
                     })
             except aiohttp.ClientError as error:
-                print(f"No se pudo avisar al panel de Lalo: {error}")
+                print(f"No se pudo avisar al panel de Tally Studio: {error}")
         try:
             if content.lower() == PREFIX + "doneon" or content.lower() == PREFIX + "doneoff":
                 await done_switch(message, content.lower() == PREFIX + "doneon")
@@ -645,7 +645,7 @@ class LaloBot(commands.Bot):
         await self.handle_commands(message)
 ${handlers.length ? `\n${handlers.join('\n\n')}\n` : ''}
 
-bot = LaloBot()
+bot = TallyBot()
 bot.run()
 `;
 }

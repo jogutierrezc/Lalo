@@ -3,7 +3,7 @@
  *
  * Inscripción de un torneo: `#torneo/<slug>`. Página pública, se abre sin
  * iniciar sesión (como `#legal`). Es lo primero que ve gente que no conoce
- * Lalo: arriba el torneo (logo, nombre, quién organiza y sus datos), a un lado
+ * Tally Studio: arriba el torneo (logo, nombre, quién organiza y sus datos), a un lado
  * el formulario y al otro las plazas de la llave con los equipos que ya están
  * dentro, y debajo los patrocinadores.
  *
@@ -65,7 +65,7 @@ const readRoute = (): SignupRoute => parseSignupRoute(window.location.hash) ?? {
 // ---------- Muestra (solo desarrollo) ----------
 
 const DEMO: PublicTournament = {
-  name: 'Copa Lalo',
+  name: 'Copa Tally',
   game: 'League of Legends',
   organizer: 'laloplay_',
   teamSize: 5,
@@ -122,7 +122,7 @@ const Stop: React.FC<{ title: string; children: React.ReactNode; action?: React.
 const Foot: React.FC = () => (
   <footer className="ins-foot">
     <p>
-      Inscripción hecha con <a href="#dashboard">Lalo Stream Suite</a>, que no está respaldada por Riot Games. <a href="#legal/privacidad">Privacidad</a>
+      Inscripción hecha con <a href="#dashboard">Tally Studio</a>, que no está respaldada por Riot Games. <a href="#legal/privacidad">Privacidad</a>
     </p>
   </footer>
 );
@@ -414,7 +414,7 @@ export const TournamentSignup: React.FC = () => {
 
   useEffect(() => {
     const previous = document.title;
-    document.title = tournament ? `${tournament.name}: inscripción | Lalo Stream Suite` : 'Inscripción | Lalo Stream Suite';
+    document.title = tournament ? `${tournament.name}: inscripción | Tally Studio` : 'Inscripción | Tally Studio';
     return () => {
       document.title = previous;
     };
@@ -503,7 +503,7 @@ export const TournamentSignup: React.FC = () => {
         {load.kind === 'not_found' && <Stop title={REGISTER_MESSAGES.not_found.title}>{REGISTER_MESSAGES.not_found.text}</Stop>}
         {load.kind === 'no_cloud' && (
           <Stop title="La inscripción no está disponible aquí">
-            Esta instalación de Lalo no tiene la nube encendida, y la inscripción por enlace la necesita. Avisa a quien te pasó el enlace.
+            Esta instalación de Tally Studio no tiene la nube encendida, y la inscripción por enlace la necesita. Avisa a quien te pasó el enlace.
           </Stop>
         )}
         {load.kind === 'error' && (

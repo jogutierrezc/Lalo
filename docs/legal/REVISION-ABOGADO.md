@@ -1,4 +1,4 @@
-# Revisión legal pendiente: Lalo Stream Suite
+# Revisión legal pendiente: Tally Studio
 
 Estado: **borrador**. Nada de lo publicado en la página legal (`#legal`) es un texto
 definitivo ni asesoría legal. Lo redactó un asistente que no es abogado, a partir de
@@ -97,7 +97,7 @@ Documento nuevo, escrito a partir del código. Por validar:
   Colombia hace falta una autorización previa, expresa e informada separada, y si en
   México basta el consentimiento tácito con el aviso de privacidad.
 - **Espectadores.** Los nombres y los mensajes del chat de personas que no tienen
-  cuenta en Lalo se muestran, se leen en voz alta y se envían al proveedor de voz.
+  cuenta en Tally Studio se muestran, se leen en voz alta y se envían al proveedor de voz.
   Las listas de usuarios bloqueados que escribe el streamer se guardan en la
   configuración de su cuenta. Confirmar la base legal y si el operador actúa como
   responsable o como encargado del streamer.

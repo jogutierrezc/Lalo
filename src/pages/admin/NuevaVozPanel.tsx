@@ -7,7 +7,7 @@
  *   2. Nombre y descripción.
  *   3. Permiso: de quién es la voz y la confirmación. Es obligatorio, lo pide la
  *      política de voces de la app (src/legal/voces.ts), y se guarda con la voz.
- *   4. Crear: el audio va al servidor de Lalo, que crea el modelo en Fish Audio
+ *   4. Crear: el audio va al servidor de Tally Studio, que crea el modelo en Fish Audio
  *      y guarda la voz, oculta, en el catálogo.
  */
 

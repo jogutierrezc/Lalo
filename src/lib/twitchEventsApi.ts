@@ -79,7 +79,7 @@ export async function fetchCustomPowerups(token: string, info: Pick<TokenInfo, '
   }
 }
 
-// ---------- Suscripciones (servidor de Lalo) ----------
+// ---------- Suscripciones (servidor de Tally Studio) ----------
 
 export interface SubscriptionRow {
   type: string;

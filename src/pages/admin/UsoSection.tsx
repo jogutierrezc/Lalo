@@ -1,7 +1,7 @@
 /**
  * src/pages/admin/UsoSection.tsx
  *
- * Telemetría operativa de Lalo: cuántos streamers tienen sus fuentes abiertas
+ * Telemetría operativa de Tally Studio: cuántos streamers tienen sus fuentes abiertas
  * en OBS, qué módulos se usan de verdad en la plataforma, cuánto consume cada
  * motor de voz (Fish Audio y ElevenLabs) y el estado de los topes diarios.
  */

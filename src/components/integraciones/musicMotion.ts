@@ -8,7 +8,7 @@
  *
  * La portada nunca se gira, se escala ni se recorta por su cuenta: solo cambia
  * su opacidad o se mueve con la pieza entera. Lo que gira en «Disco» es un
- * disco dibujado por Lalo.
+ * disco dibujado por Tally Studio.
  */
 
 import type { MusicDesign } from '../../types/music';

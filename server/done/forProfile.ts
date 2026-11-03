@@ -14,7 +14,7 @@ import { cleanName } from '../lux/proactive.js';
 import type { DoneSettings } from '../../src/lib/doneTypes.js';
 
 const logError = (what: string, err: unknown): void => {
-  console.error(`[Lalo done] ${what}:`, err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
+  console.error(`[Tally Studio done] ${what}:`, err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
 };
 
 type Overrides = Partial<DoneDeps>;

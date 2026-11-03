@@ -41,7 +41,7 @@ export interface Aceptacion {
 }
 
 const AVISO_LOCAL =
-  'No se pudo guardar tu aceptación en tu cuenta. La recordamos en este navegador, pero se te volverá a pedir en otro. Avisa a quien administra Lalo: falta aplicar una actualización de la base de datos.';
+  'No se pudo guardar tu aceptación en tu cuenta. La recordamos en este navegador, pero se te volverá a pedir en otro. Avisa a quien administra Tally Studio: falta aplicar una actualización de la base de datos.';
 
 function leerLocal(perfilId: string): VersionesAceptadas {
   try {

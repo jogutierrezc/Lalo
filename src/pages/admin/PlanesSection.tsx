@@ -188,7 +188,7 @@ export const PlanesSection: React.FC<{ data: AdminData }> = ({ data }) => {
           </div>
         </div>
         <p className="cab-hint">
-          Define cuánto cuesta cada plan para 1, 3, 6 y 12 meses. Al sincronizar, Lalo crea en PayPal un plan de facturación por cada precio activo y guarda su
+          Define cuánto cuesta cada plan para 1, 3, 6 y 12 meses. Al sincronizar, Tally Studio crea en PayPal un plan de facturación por cada precio activo y guarda su
           identificador. Un precio ya sincronizado no se edita: se crea uno nuevo y el anterior se archiva, así quien ya está suscrito conserva su tarifa.
         </p>
         {loadError && (
@@ -313,7 +313,7 @@ export const PlanesSection: React.FC<{ data: AdminData }> = ({ data }) => {
           <>
             <PlanNumber label="Espacio del almacenamiento (GB)" value={Math.max(1, Math.round(storage.capacityBytes / GB))} onCommit={saveCapacity} />
             <p className="cab-hint">
-              Es el espacio que tienes contratado para los archivos de todos los streamers. Lalo lo usa para calcular
+              Es el espacio que tienes contratado para los archivos de todos los streamers. Tally Studio lo usa para calcular
               cuánto queda libre; no cambia nada en Cloudflare. Por defecto son 10 GB, lo que incluye la capa gratuita de
               R2.
             </p>

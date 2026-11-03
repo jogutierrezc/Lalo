@@ -8,7 +8,7 @@
  *
  * La voz por defecto no se puede ocultar ni eliminar. Las voces nuevas nacen
  * ocultas. Ocultar y cambiar la voz por defecto van por RPC de Supabase; crear
- * y eliminar van por el servidor de Lalo, que es quien habla con Fish Audio.
+ * y eliminar van por el servidor de Tally Studio, que es quien habla con Fish Audio.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -288,7 +288,7 @@ export const VocesSection: React.FC<{ data: AdminData }> = ({ data }) => {
                         {asking.error && <span>{asking.error}</span>}
                         {asking.canCatalogOnly && (
                           <span>
-                            Puedes quitarla solo del catálogo de Lalo. El modelo se quedará en Fish Audio y habrá que
+                            Puedes quitarla solo del catálogo de Tally Studio. El modelo se quedará en Fish Audio y habrá que
                             borrarlo desde su web.
                           </span>
                         )}

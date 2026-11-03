@@ -1,7 +1,7 @@
 /**
  * src/lib/supabase.ts
  *
- * Cliente de Supabase para la nube de Lalo Stream Suite (configuración y medios
+ * Cliente de Supabase para la nube de Tally Studio (configuración y medios
  * por streamer). Si faltan las variables de entorno, `supabase` es null y la
  * app sigue funcionando solo con localStorage, como hasta ahora.
  */

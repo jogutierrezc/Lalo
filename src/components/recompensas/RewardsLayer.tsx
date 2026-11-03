@@ -181,7 +181,7 @@ export const RewardsLayer = forwardRef<RewardsLayerHandle, RewardsLayerProps>(
       const current = (): RewardsSettings => settingsRef.current ?? getSettingsRef.current?.() ?? loadRewardsSettings();
       const say = (message: string) => {
         onLogRef.current?.(message);
-        if (!studioRef.current) console.info('[Lalo recompensas]', message);
+        if (!studioRef.current) console.info('[Tally Studio recompensas]', message);
       };
       const counts = () => onCountsRef.current?.(queueRef.current.length, activeRef.current.size);
       const later = (item: Item, fn: () => void, ms: number) => {
@@ -463,7 +463,7 @@ export const RewardsLayer = forwardRef<RewardsLayerHandle, RewardsLayerProps>(
       if (!test && !canActivate(reward.audience, input.role ?? 'viewer')) {
         const line = `${input.user} no puede activar «${reward.name}»: es solo para ${AUDIENCE_TEXT[reward.audience]}.`;
         onLogRef.current?.(line);
-        if (!studioRef.current) console.info('[Lalo recompensas]', line);
+        if (!studioRef.current) console.info('[Tally Studio recompensas]', line);
         return { ok: false, reason: 'not_allowed', rewardId: reward.id };
       }
       const bits = typeof input.bits === 'number' ? input.bits : null;

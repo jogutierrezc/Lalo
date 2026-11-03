@@ -160,7 +160,7 @@ export function trackSteps(status: BillingStatus | null, planName: string, month
     {
       id: 'received',
       title: 'Dinero recibido en PayPal',
-      detail: received ? 'PayPal confirma el abono a Lalo' : 'PayPal aún no lo confirma',
+      detail: received ? 'PayPal confirma el abono a Tally Studio' : 'PayPal aún no lo confirma',
       state: stateOf(2),
     },
     {
@@ -179,7 +179,7 @@ export interface PaypalReturn {
 }
 
 /**
- * Lee el regreso de PayPal. Lalo navega con #, así que el aviso puede venir en
+ * Lee el regreso de PayPal. Tally Studio navega con #, así que el aviso puede venir en
  * la dirección normal (?paypal=ok) o dentro del hash (#cuenta?paypal=ok).
  */
 export function readPaypalReturn(search: string, hash: string): PaypalReturn | null {
@@ -205,7 +205,7 @@ export function isSafeApproveUrl(url: string): boolean {
   }
 }
 
-/** Cada cuánto se pregunta a Lalo si ya llegó el aviso de PayPal, y hasta cuándo. */
+/** Cada cuánto se pregunta a Tally Studio si ya llegó el aviso de PayPal, y hasta cuándo. */
 export const POLL_EVERY_MS = 3000;
 export const POLL_MAX_MS = 60000;
 

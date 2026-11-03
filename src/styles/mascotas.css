@@ -1,7 +1,7 @@
 /* ==========================================================================
    Mascotas
    La capa (.ptl) se mide en em: a 1920 px de ancho, 1 em son 40 px. El texto
-   usa los dos estilos de las alertas de Lalo (Bocadillo y Rótulo). Al final,
+   usa los dos estilos de las alertas de Tally Studio (Bocadillo y Rótulo). Al final,
    lo poco que la página del panel añade al lenguaje Cabina (.cab-*).
    ========================================================================== */
 
@@ -91,7 +91,7 @@
   visibility: visible;
 }
 
-/* ---------- Personajes de Lalo: tinta gruesa, color plano, una sombra y una luz ---------- */
+/* ---------- Personajes de Tally Studio: tinta gruesa, color plano, una sombra y una luz ---------- */
 .pt-svg {
   --pt-c: #ffb347;
   --pt-ink: #1d1a3a;

@@ -8,7 +8,7 @@
  *   GET                                  ajustes + comandos + estado de la conexión
  *   POST { action: 'status' }            lo mismo que GET
  *   POST { action: 'saveSettings', settings: { enabled?, prefix?, welcomeMessage?, senderMode? } }
- *        senderMode: 'streamer' (el bot escribe con el nombre del streamer) o 'global' (cuenta Lalo, solo si hay
+ *        senderMode: 'streamer' (el bot escribe con el nombre del streamer) o 'global' (cuenta Tally Studio, solo si hay
  *        TWITCH_BOT_USER_ID). Cambiarlo apaga el bot y quita la escucha anterior: hay que pulsar Conectar otra vez.
  *   POST { action: 'saveCommand', command: { id?, name, response, permission?, enabled?, position? } }
  *   POST { action: 'deleteCommand', id }
@@ -57,7 +57,7 @@ import {
 import { supabaseChatLines, type ChatLinesDb } from './botChatLines.js';
 import { STREAMER_SCOPES, globalBotId } from './senderMode.js';
 
-/** Permiso que el streamer concede a Lalo para que el bot (cuenta global) entre en su chat. */
+/** Permiso que el streamer concede a Tally Studio para que el bot (cuenta global) entre en su chat. */
 export const BOT_SCOPE = 'channel:bot';
 /** Modos de envío que acepta el panel. */
 export const SENDER_MODES: readonly BotSenderMode[] = ['global', 'streamer'];
@@ -81,7 +81,7 @@ export interface BotChatPort {
   status(twitchUserId: string, mode?: BotSenderMode): Promise<BotChatStatus>;
   /**
    * Da de alta la suscripción (idempotente) y quita la del otro modo. `no_permission` = falta el permiso: channel:bot del
-   * streamer y la autorización de la cuenta Lalo (modo global), o user:read:chat, user:write:chat y user:bot del streamer (modo streamer).
+   * streamer y la autorización de la cuenta Tally Studio (modo global), o user:read:chat, user:write:chat y user:bot del streamer (modo streamer).
    */
   subscribe(twitchUserId: string, mode?: BotSenderMode): Promise<{ outcome: BotConnectOutcome; detail: string }>;
   /** Quita la suscripción, sea del modo que sea. true si quedó sin ella. */
@@ -168,7 +168,7 @@ export interface BotConnection {
   chat: BotChatStatus;
   /** Paso 3: el streamer lo tiene encendido. */
   enabled: boolean;
-  /** El servidor tiene la cuenta Lalo (TWITCH_BOT_USER_ID): solo entonces se ofrece el modo global. */
+  /** El servidor tiene la cuenta Tally Studio (TWITCH_BOT_USER_ID): solo entonces se ofrece el modo global. */
   globalAvailable: boolean;
 }
 
@@ -232,7 +232,7 @@ const DB_ERROR_TEXT: Record<string, string> = {
   duplicate: 'Ya tienes un comando con ese nombre.',
   not_found: 'Ese comando no existe.',
   sender_mode: 'El modo de envío debe ser «global» o «streamer».',
-  sender_global: 'La cuenta Lalo no está disponible en este servidor: usa el nombre del streamer.',
+  sender_global: 'La cuenta Tally Studio no está disponible en este servidor: usa el nombre del streamer.',
   id: 'El identificador del comando no es válido.',
 };
 
@@ -241,7 +241,7 @@ async function clearLines(deps: BotDeps, env: Env, profileId: string): Promise<v
   try {
     await deps.lines(env)?.clear(profileId);
   } catch (err) {
-    console.error('[Lalo bot] no se pudieron borrar las líneas del chat:', err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
+    console.error('[Tally Studio bot] no se pudieron borrar las líneas del chat:', err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
   }
 }
 
@@ -295,7 +295,7 @@ export async function handleBot(req: ApiRequest, env: Env = process.env, overrid
       const current = await db.settings(caller.profileId);
       if (!current) patch.senderMode = DEFAULT_BOT_SETTINGS.senderMode;
 
-      // Modo de envío: solo 'global' o 'streamer'; 'global' únicamente si el servidor tiene la cuenta Lalo
+      // Modo de envío: solo 'global' o 'streamer'; 'global' únicamente si el servidor tiene la cuenta Tally Studio
       let modeChanged = false;
       if (input.senderMode !== undefined) {
         if (typeof input.senderMode !== 'string' || !(SENDER_MODES as readonly string[]).includes(input.senderMode)) {
@@ -378,7 +378,7 @@ export async function handleBot(req: ApiRequest, env: Env = process.env, overrid
       const result = await chat.subscribe(caller.twitchUserId, mode);
       if (result.outcome === 'skipped') {
         // El detalle puede nombrar variables del servidor: va al registro, no al cliente
-        console.error('[Lalo bot] la escucha del chat no está disponible:', result.detail.slice(0, 200));
+        console.error('[Tally Studio bot] la escucha del chat no está disponible:', result.detail.slice(0, 200));
         return fail(503, 'chat_unavailable', 'El bot en la nube todavía no está disponible en este servidor.');
       }
       const ok = result.outcome === 'created' || result.outcome === 'already';
@@ -407,7 +407,7 @@ export async function handleBot(req: ApiRequest, env: Env = process.env, overrid
       return fail(503, 'migration_missing', 'Falta aplicar la migración 0039 (bot de Twitch) en Supabase.');
     }
     // Sin el mensaje de Supabase: puede nombrar tablas o columnas. Solo el código, si lo hay
-    console.error('[Lalo bot] error:', err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
+    console.error('[Tally Studio bot] error:', err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
     return fail(502, 'server_error', 'No se pudo completar la operación. Prueba de nuevo en un momento.');
   }
 }

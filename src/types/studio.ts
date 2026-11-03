@@ -51,7 +51,7 @@ export interface LayerTypeInfo {
   name: string;
   w: number;
   h: number;
-  /** Capa de Lalo: sus ajustes viven en su propia página del panel. */
+  /** Capa de Tally Studio: sus ajustes viven en su propia página del panel. */
   page?: { href: string; label: string };
 }
 
@@ -228,7 +228,7 @@ export const DEFAULT_RANDOM: Record<'alert' | 'raid', RandomProps> = {
 };
 
 export const typeInfo = (type: LayerType): LayerTypeInfo => LAYER_TYPES.find((item) => item.id === type) || LAYER_TYPES[0];
-/** Capa de Lalo: la que tiene su propia página de ajustes en el panel. */
+/** Capa de Tally Studio: la que tiene su propia página de ajustes en el panel. */
 export const isLaloLayer = (type: LayerType): type is LaloLayerType => Boolean(typeInfo(type).page);
 export const hasRandom = (type: LayerType): type is 'alert' | 'raid' => type === 'alert' || type === 'raid';
 

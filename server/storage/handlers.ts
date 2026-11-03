@@ -110,7 +110,7 @@ export async function identify(req: ApiRequest, env: Env): Promise<Context | Api
   const missing = missingSupabaseEnv(env);
   if (missing.length > 0) {
     // Qué variables faltan solo va al registro del servidor: al cliente no se le dan nombres de configuración
-    console.error('[Lalo almacenamiento] Faltan variables de Supabase en el servidor:', missing.join(', '));
+    console.error('[Tally Studio almacenamiento] Faltan variables de Supabase en el servidor:', missing.join(', '));
     return fail(503, 'server_not_configured', 'Al servidor le falta configuración para comprobar quién eres.');
   }
   const token = header(req, 'authorization').replace(/^Bearer\s+/i, '').trim();
@@ -130,7 +130,7 @@ export async function identify(req: ApiRequest, env: Env): Promise<Context | Api
     .maybeSingle();
   if (profile.error) {
     // El mensaje de Supabase puede nombrar tablas o columnas: solo al registro, sin secretos
-    console.error('[Lalo almacenamiento] No se pudo leer el perfil:', profile.error.code ?? 'error');
+    console.error('[Tally Studio almacenamiento] No se pudo leer el perfil:', profile.error.code ?? 'error');
     return fail(502, 'profile_read', 'No se pudo leer tu perfil. Prueba de nuevo en un momento.');
   }
   if (!profile.data) return fail(403, 'no_profile', 'Esta cuenta no tiene perfil.');
@@ -544,7 +544,7 @@ export async function handleApi(route: ApiRoute, req: ApiRequest, env: Env = pro
         return await deleteMedia(ctx, req, env);
     }
   } catch (err) {
-    console.error(`[Lalo almacenamiento] ${route}`, err);
+    console.error(`[Tally Studio almacenamiento] ${route}`, err);
     return fail(500, 'server_error', 'El servidor tuvo un error inesperado.');
   }
 }

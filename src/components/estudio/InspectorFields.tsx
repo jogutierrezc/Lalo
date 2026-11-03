@@ -426,7 +426,7 @@ export const TypeFields: React.FC<TypeFieldsProps> = ({ layer, onChange, onDone,
     );
   }
 
-  // Capas de Lalo que llegaron con las fases (mascota, juego, música, Ko-fi, recompensa, ruleta...):
+  // Capas de Tally Studio que llegaron con las fases (mascota, juego, música, Ko-fi, recompensa, ruleta...):
   // su caja registra una prueba que repite su entrada o enseña otra muestra
   if (TESTABLE.includes(layer.type)) {
     return (

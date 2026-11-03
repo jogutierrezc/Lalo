@@ -94,7 +94,7 @@ export const Studio: React.FC = () => {
   const deleted = useUndo<{ settings: StudioSettings; sceneId: string }>();
   const channel = loadSettings().channel;
 
-  // Los ajustes de las capas de Lalo se leen de sus módulos y se refrescan si llega sincronización de la nube u otra pestaña
+  // Los ajustes de las capas de Tally Studio se leen de sus módulos y se refrescan si llega sincronización de la nube u otra pestaña
   const readSceneData = useCallback(
     (): SceneData => ({
       chat: loadChatSettings(),

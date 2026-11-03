@@ -92,7 +92,7 @@ export type WidgetAppType =
 const VOICE_ONLY_APPS: WidgetAppType[] = ['roulette', 'raid', 'polls', 'goals', 'scene', 'kofi', 'pets', 'game', 'tournament'];
 
 /**
- * Construye la URL completa y parametrizada para cualquier herramienta de Lalo Stream Suite en OBS Studio.
+ * Construye la URL completa y parametrizada para cualquier herramienta de Tally Studio en OBS Studio.
  */
 export function buildSuiteWidgetUrl(
   origin: string,

@@ -1,7 +1,7 @@
 /**
  * src/types/pets.ts
  *
- * Ajustes del módulo «Mascotas»: el personaje (uno de Lalo o las imágenes que
+ * Ajustes del módulo «Mascotas»: el personaje (uno de Tally Studio o las imágenes que
  * sube el streamer), su voz, cómo se mueve y dónde sale, y a qué reacciona.
  * Se guardan en este navegador y, con cuenta abierta, en la nube. Lo leído (de
  * localStorage, de la nube o de la URL) pasa siempre por normalizePetsSettings.
@@ -28,7 +28,7 @@ export type PetReply = 'frases' | 'ia';
 export type PetBrain = 'frases' | 'ia';
 export type PetProvider = 'gemini' | 'openai' | 'anthropic';
 
-/** Personajes de Lalo, con el color con el que se presentan. El dibujo vive en components/mascotas/petArt.ts. */
+/** Personajes de Tally Studio, con el color con el que se presentan. El dibujo vive en components/mascotas/petArt.ts. */
 export const PET_KINDS: { id: Exclude<PetKind, 'custom'>; name: string; color: string; about: string }[] = [
   { id: 'chispa', name: 'Chispa', color: '#ffb347', about: 'Una llamita con mucha energía' },
   { id: 'eco', name: 'Eco', color: '#6cc7ff', about: 'Un bocadillo con patas: la voz del chat' },

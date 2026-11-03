@@ -57,7 +57,7 @@ export function createSubscriptionChatPort(options: ChatPortDeps = {}): BotChatP
   // El entorno se lee en cada llamada: en Vercel las variables ya están, y así las pruebas pueden cambiarlas
   const configOf = (): Config | null => readEventsConfig(options.env ?? process.env).config;
 
-  /** user_id de la suscripción: el propio streamer en modo streamer, la cuenta Lalo en modo global ('' si no está configurada). */
+  /** user_id de la suscripción: el propio streamer en modo streamer, la cuenta Tally Studio en modo global ('' si no está configurada). */
   const chatUserOf = (twitchUserId: string, mode: BotSenderMode, config: Config): string => (mode === 'streamer' ? twitchUserId : config.botUserId);
 
   return {

@@ -45,7 +45,7 @@ export const TOURNAMENT_SIZES: { id: TournamentSize; name: string }[] = [
 ];
 export const TOURNAMENT_STYLES: { id: TournamentStyle; name: string; about: string }[] = [
   { id: 'grieta', name: 'Grieta', about: 'Placas talladas, dorado sobre azul noche. El mismo estilo de las alertas de juego.' },
-  { id: 'cabina', name: 'Cabina', about: 'El rótulo de emisión de Lalo, igual que el resto de tus capas.' },
+  { id: 'cabina', name: 'Cabina', about: 'El rótulo de emisión de Tally Studio, igual que el resto de tus capas.' },
   { id: 'estadio', name: 'Estadio', about: 'Cortes en diagonal y tipografía inclinada, como una retransmisión de esports.' },
   { id: 'cartel', name: 'Cartel', about: 'Papel claro, tinta gruesa y esquinas redondas, como el bocadillo de la mascota.' },
 ];
@@ -159,7 +159,7 @@ export const DEFAULT_TOURNAMENT_COLOR = '#3ddcff';
 export const DEFAULT_TOURNAMENT_SETTINGS: TournamentSettings = {
   enabled: true,
   inAll: false,
-  name: 'Copa Lalo',
+  name: 'Copa Tally',
   game: 'League of Legends',
   size: 8,
   teamSize: 5,

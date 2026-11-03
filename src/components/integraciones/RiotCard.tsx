@@ -2,9 +2,9 @@
  * src/components/integraciones/RiotCard.tsx
  *
  * Ficha de Riot Games en «Integraciones»: el streamer escribe su Riot ID
- * (nombre#etiqueta), elige su servidor y Lalo lo vincula para que «Alertas de
+ * (nombre#etiqueta), elige su servidor y Tally Studio lo vincula para que «Alertas de
  * juego» muestre lo que pasa en su cuenta de League of Legends. No hay inicio
- * de sesión de Riot ni contraseña: el servidor de Lalo resuelve el Riot ID con
+ * de sesión de Riot ni contraseña: el servidor de Tally Studio resuelve el Riot ID con
  * su propia clave, que nunca llega aquí.
  *
  * Lleva el aviso de no afiliación que pide Riot, en inglés y en español. Ni
@@ -23,9 +23,9 @@ type Load = { kind: 'loading' } | { kind: 'ready'; status: RiotStatus } | { kind
 
 /** Texto oficial de Riot para productos de terceros, con el nombre del producto. No se traduce ni se recorta. */
 export const RIOT_DISCLAIMER_EN =
-  "Lalo Stream Suite isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.";
+  "Tally Studio isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.";
 export const RIOT_DISCLAIMER_ES =
-  'Lalo Stream Suite no está respaldada por Riot Games y no refleja los puntos de vista ni las opiniones de Riot Games ni de nadie que participe oficialmente en la producción o la gestión de las propiedades de Riot Games. Riot Games y todas las propiedades asociadas son marcas comerciales o marcas registradas de Riot Games, Inc.';
+  'Tally Studio no está respaldada por Riot Games y no refleja los puntos de vista ni las opiniones de Riot Games ni de nadie que participe oficialmente en la producción o la gestión de las propiedades de Riot Games. Riot Games y todas las propiedades asociadas son marcas comerciales o marcas registradas de Riot Games, Inc.';
 
 const DEFAULT_PLATFORM = 'la1';
 
@@ -38,7 +38,7 @@ export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
   const [platform, setPlatform] = useState(DEFAULT_PLATFORM);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  // La política de uso se acepta aquí, al vincular: no entra en la aceptación general de Lalo
+  // La política de uso se acepta aquí, al vincular: no entra en la aceptación general de Tally Studio
   const [accepted, setAccepted] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -108,7 +108,7 @@ export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
         <>
           <p>{intro}</p>
           <p className="cab-note">
-            Este despliegue no tiene la nube encendida, así que no hay cuenta de Lalo a la que vincular un Riot ID. La placa se puede probar con datos de
+            Este despliegue no tiene la nube encendida, así que no hay cuenta de Tally Studio a la que vincular un Riot ID. La placa se puede probar con datos de
             ejemplo en{' '}
             <a className="studio-link" href="#juego">
               Alertas de juego
@@ -118,7 +118,7 @@ export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
         </>
       )}
 
-      {cloud.enabled && load.kind === 'loading' && <p className="cab-hint">Preguntando al servidor de Lalo.</p>}
+      {cloud.enabled && load.kind === 'loading' && <p className="cab-hint">Preguntando al servidor de Tally Studio.</p>}
 
       {cloud.enabled && load.kind === 'problem' && (
         <>
@@ -138,7 +138,7 @@ export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
         <>
           <p>{intro}</p>
           <p className="cab-note" role="status">
-            Todavía no se puede vincular: al servidor de Lalo le falta configuración ({status.missing.join(', ')}). La añade quien administra Lalo.
+            Todavía no se puede vincular: al servidor de Tally Studio le falta configuración ({status.missing.join(', ')}). La añade quien administra Tally Studio.
             Mientras tanto, la placa se puede probar con datos de ejemplo en{' '}
             <a className="studio-link" href="#juego">
               Alertas de juego
@@ -166,7 +166,7 @@ export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
               value={riotId}
               onChange={(e) => setRiotId(e.target.value)}
             />
-            <span className="cab-hint">Es el nombre que ves en el cliente de Riot, con la etiqueta de detrás de la almohadilla. Por ejemplo: Lalo#LAN.</span>
+            <span className="cab-hint">Es el nombre que ves en el cliente de Riot, con la etiqueta de detrás de la almohadilla. Por ejemplo: Tally#LAN.</span>
           </div>
           <div className="cab-field">
             <label className="cab-label" htmlFor={`${uid}-platform`}>
@@ -211,7 +211,7 @@ export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
             </button>
           </div>
           <p className="cab-hint">
-            No hay inicio de sesión de Riot: Lalo busca la cuenta por su Riot ID, que es un dato público. Vincula solo tu propia cuenta.
+            No hay inicio de sesión de Riot: Tally Studio busca la cuenta por su Riot ID, que es un dato público. Vincula solo tu propia cuenta.
           </p>
         </form>
       )}
@@ -257,7 +257,7 @@ export const RiotCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
             </p>
           )}
           <p className="cab-hint">
-            Lalo guarda en su servidor tu Riot ID, tu servidor y el identificador que Riot da a esa cuenta. Al desvincular se borran. Las alertas no llegan
+            Tally Studio guarda en su servidor tu Riot ID, tu servidor y el identificador que Riot da a esa cuenta. Al desvincular se borran. Las alertas no llegan
             al instante: Riot informa al terminar la partida y la capa pregunta cada medio minuto.
           </p>
           <div className="ic-row">

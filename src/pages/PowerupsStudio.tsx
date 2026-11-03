@@ -8,7 +8,7 @@
  *   de Bits y de canjes. Twitch solo deja verlo un rato después de entrar; si ya
  *   no se puede, se ofrece volver a autorizar.
  * - Canal de eventos: enciende, consulta y apaga las suscripciones de Twitch del
- *   propio canal (las crea el servidor de Lalo).
+ *   propio canal (las crea el servidor de Tally Studio).
  * - Lista: los Power-ups personalizados leídos de Twitch (se guardan para poder
  *   editar más tarde) y los tres de serie. A cada uno se le asigna una acción.
  * - Pruebas: cada botón envía un evento de ejemplo por el mismo camino que uno
@@ -190,7 +190,7 @@ export const PowerupsStudio: React.FC = () => {
             : 'Hecho. Twitch tarda unos segundos en comprobar la conexión: pulsa «Volver a consultar».',
         );
       }
-      if (action === 'delete') say('Canal de eventos apagado. Lalo ya no recibe avisos de Twitch de tu canal.');
+      if (action === 'delete') say('Canal de eventos apagado. Tally Studio ya no recibe avisos de Twitch de tu canal.');
     },
     [say, updateSettings],
   );
@@ -248,7 +248,7 @@ export const PowerupsStudio: React.FC = () => {
     kind: 'bits' | 'powerup' | 'points',
     payload: Record<string, unknown>,
     what: string,
-    idle = 'Lalo no hace nada con este',
+    idle = 'Tally Studio no hace nada con este',
   ) => {
     const event = parseTwitchEvent(kind, payload, true);
     if (!event) return;
@@ -376,7 +376,7 @@ export const PowerupsStudio: React.FC = () => {
           </Field>
 
           <p className="cab-hint" role="status">
-            {status || 'Pulsa «Probar» en un Power-up. Lo que haría Lalo sale aquí y, si tienes fuentes abiertas, también en ellas.'}
+            {status || 'Pulsa «Probar» en un Power-up. Lo que haría Tally Studio sale aquí y, si tienes fuentes abiertas, también en ellas.'}
           </p>
           <p className="cab-note">
             Lo que hace cada Power-up sale en la fuente «Recompensas» o en «Todo en uno». La voz habla en «Voz del chat» o en «Todo en uno».
@@ -389,7 +389,7 @@ export const PowerupsStudio: React.FC = () => {
           <h2>Permiso de Twitch</h2>
           {!cloud.enabled ? (
             <p className="cab-note">
-              Los Power-ups necesitan una cuenta de Lalo conectada con Twitch, y este despliegue no tiene la nube encendida. Puedes preparar las
+              Los Power-ups necesitan una cuenta de Tally Studio conectada con Twitch, y este despliegue no tiene la nube encendida. Puedes preparar las
               acciones y probarlas en el monitor; en directo no llegará nada.
             </p>
           ) : !withTwitch ? (
@@ -413,7 +413,7 @@ export const PowerupsStudio: React.FC = () => {
                     {permission === 'unknown' && <span className="cab-chip">Sin comprobar</span>}
                   </p>
                   <ul className="pu-bullets">
-                    <li>Lalo necesita leer los Bits para saber cuándo alguien usa un Power-up y cuál.</li>
+                    <li>Tally Studio necesita leer los Bits para saber cuándo alguien usa un Power-up y cuál.</li>
                     <li>Solo lee: no puede gastar Bits, ni crear o cambiar tus Power-ups.</li>
                     {permission === 'missing' && (
                       <li>
@@ -421,7 +421,7 @@ export const PowerupsStudio: React.FC = () => {
                         {EVENT_SCOPES.filter((item) => missing.includes(item.scope))
                           .map((item) => item.what)
                           .join(' y ')}
-                        . Conectaste tu cuenta antes de que Lalo lo pidiera.
+                        . Conectaste tu cuenta antes de que Tally Studio lo pidiera.
                       </li>
                     )}
                   </ul>
@@ -439,8 +439,8 @@ export const PowerupsStudio: React.FC = () => {
               )}
               {wrongApp && (
                 <p className="cab-error" role="alert">
-                  La entrada con Twitch usa una aplicación de Twitch distinta de la del servidor de Lalo. Así el canal de eventos no puede funcionar.
-                  Quien administra Lalo debe poner el mismo Client ID en los dos sitios.
+                  La entrada con Twitch usa una aplicación de Twitch distinta de la del servidor de Tally Studio. Así el canal de eventos no puede funcionar.
+                  Quien administra Tally Studio debe poner el mismo Client ID en los dos sitios.
                 </p>
               )}
             </>
@@ -449,11 +449,11 @@ export const PowerupsStudio: React.FC = () => {
         <section className="cab-mod">
           <h2>Canal de eventos</h2>
           <p className="cab-hint">
-            Twitch no avisa de los Power-ups por el chat. Con el canal encendido, Twitch avisa al servidor de Lalo y de ahí llega a tus fuentes de OBS
+            Twitch no avisa de los Power-ups por el chat. Con el canal encendido, Twitch avisa al servidor de Tally Studio y de ahí llega a tus fuentes de OBS
             en pocos segundos.
           </p>
           {!withTwitch ? (
-            <p className="cab-note">Disponible con una cuenta de Lalo conectada con Twitch.</p>
+            <p className="cab-note">Disponible con una cuenta de Tally Studio conectada con Twitch.</p>
           ) : (
             <>
               {subs.kind === 'loading' && <p className="cab-hint">Consultando a Twitch.</p>}
@@ -518,7 +518,7 @@ export const PowerupsStudio: React.FC = () => {
         <section className="cab-mod">
           <h2>Lo que no se puede hacer</h2>
           <ul className="pu-bullets">
-            <li>Crear, borrar o cambiar el precio de un Power-up desde Lalo. Twitch aún no lo permite: se hace en el panel de Twitch.</li>
+            <li>Crear, borrar o cambiar el precio de un Power-up desde Tally Studio. Twitch aún no lo permite: se hace en el panel de Twitch.</li>
             <li>
               Devolver los Bits o marcar un canje como cumplido o cancelado. Por eso la espera y los límites por directo conviene ponerlos en Twitch,
               que impide el canje antes de cobrar.
@@ -533,7 +533,7 @@ export const PowerupsStudio: React.FC = () => {
           <h2>Tus Power-ups y lo que lanzan</h2>
           <div className="cab-field">
             <Toggle label="Reaccionar a los Power-ups" checked={settings.enabled} onChange={(enabled) => updateSettings({ enabled })} />
-            <span className="cab-hint">Apagado, Lalo no hace nada con ningún Power-up. Las pruebas de esta página siguen funcionando.</span>
+            <span className="cab-hint">Apagado, Tally Studio no hace nada con ningún Power-up. Las pruebas de esta página siguen funcionando.</span>
           </div>
 
           {clean.cached.length === 0 && (
@@ -590,7 +590,7 @@ export const PowerupsStudio: React.FC = () => {
                     {needsReward && (
                       <select
                         className="cab-inp"
-                        aria-label={`Recompensa de Lalo para ${item.title}`}
+                        aria-label={`Recompensa de Tally Studio para ${item.title}`}
                         value={picks.some((reward) => reward.id === rule.rewardId) ? rule.rewardId : ''}
                         onChange={(e) => updateRule(item.id, { rewardId: e.target.value })}
                       >
@@ -626,9 +626,9 @@ export const PowerupsStudio: React.FC = () => {
                         : 'El sonido, el vídeo y la placa son los de esa recompensa, con sus esperas y su cola. ')}
                     {needsText && 'Puedes escribir {user}, {powerup}, {bits} y {message}. '}
                     {item.builtin
-                      ? 'Twitch ya hace su propio efecto. Lo de Lalo va encima.'
+                      ? 'Twitch ya hace su propio efecto. Lo de Tally Studio va encima.'
                       : `${item.prompt ? `Descripción en Twitch: «${item.prompt}». ` : ''}${
-                          item.inputRequired ? 'El texto que escriba el espectador llega a Lalo: sale en {message} y la voz puede leerlo. ' : ''
+                          item.inputRequired ? 'El texto que escriba el espectador llega a Tally Studio: sale en {message} y la voz puede leerlo. ' : ''
                         }${item.paused ? 'Mientras esté en pausa nadie puede canjearlo.' : ''}`}
                   </p>
                 </li>

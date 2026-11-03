@@ -236,7 +236,7 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
       // Sin almacenamiento: vale para esta visita
     }
     setCierre(
-      'No se pudo guardar en tu cuenta que terminaste la bienvenida. Lo recordamos en este navegador, pero puede volver a salir en otro. Avisa a quien administra Lalo: falta aplicar una actualización de la base de datos.'
+      'No se pudo guardar en tu cuenta que terminaste la bienvenida. Lo recordamos en este navegador, pero puede volver a salir en otro. Avisa a quien administra Tally Studio: falta aplicar una actualización de la base de datos.'
     );
     setBusy(false);
   };
@@ -293,7 +293,7 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
               </dl>
             </div>
             <p className="cab-hint">
-              Si cambias tu nombre o tu foto en Twitch, Lalo los actualiza la próxima vez que entres.{' '}
+              Si cambias tu nombre o tu foto en Twitch, Tally Studio los actualiza la próxima vez que entres.{' '}
               <b>Nada de esto se comparte con otros streamers.</b>
             </p>
             {notice && (
@@ -350,8 +350,8 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
               <TituloPaso>Tu código de invitación</TituloPaso>
               <p className="cab-hint">
                 {abierta
-                  ? `La cuenta de ${nombre} puede entrar sin código. Si tienes uno, escríbelo: te da más plan. Empieza por LALO-.`
-                  : `La cuenta de ${nombre} aún no está registrada en Lalo. Escribe el código que te dio quien administra Lalo. Empieza por LALO-.`}
+                  ? `La cuenta de ${nombre} puede entrar sin código. Si tienes uno, escríbelo: te da más plan. Empieza por TALLY-.`
+                  : `La cuenta de ${nombre} aún no está registrada en Tally Studio. Escribe el código que te dio quien administra Tally Studio. Empieza por TALLY-.`}
               </p>
               <div className="cab-field">
                 <label className="cab-label" htmlFor={`${uid}-code`}>
@@ -363,7 +363,7 @@ export const Bienvenida: React.FC<BienvenidaProps> = ({ onTerminar, onRecuperar,
                   value={code}
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="LALO-"
+                  placeholder="TALLY-"
                   onChange={(e) => setCode(e.target.value.toUpperCase())}
                 />
               </div>

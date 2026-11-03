@@ -137,7 +137,7 @@ export async function startWidgetCloud(key: string): Promise<() => void> {
     lastVersion = await readVersion();
     await pullBundle(key, false);
   } catch (err) {
-    console.error('[Lalo] No se pudo leer la configuración de la nube:', err);
+    console.error('[Tally Studio] No se pudo leer la configuración de la nube:', err);
   }
 
   let inFlight = false;
@@ -157,7 +157,7 @@ export async function startWidgetCloud(key: string): Promise<() => void> {
       try {
         if (await pullBundle(key, true)) lastVersion = version;
       } catch (err) {
-        console.error('[Lalo] No se pudo actualizar la configuración:', err);
+        console.error('[Tally Studio] No se pudo actualizar la configuración:', err);
       }
     } finally {
       inFlight = false;

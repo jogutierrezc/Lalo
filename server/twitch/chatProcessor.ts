@@ -4,7 +4,7 @@
  * El bot de chat en la nube: convierte cada mensaje que llega por EventSub
  * (channel.chat.message, ver eventsub.ts) en la respuesta del bot, sin script de Python.
  * Es el ChatHandler que se pasa a handleEventsub. Replica lo que hace el script de
- * src/components/bot/pythonScript.ts, con la cuenta global «Lalo» (TWITCH_BOT_USER_ID) o,
+ * src/components/bot/pythonScript.ts, con la cuenta global «Tally Studio» (TWITCH_BOT_USER_ID) o,
  * en modo streamer, con la propia cuenta del streamer (senderMode.ts); token de aplicación
  * y ningún token de usuario guardado.
  *
@@ -112,7 +112,7 @@ const defaultDone: ChatDone = {
 export interface ChatProcessorDeps {
   done?: ChatDone;
   db?: (env: Env) => BotDb | null;
-  /** Perfil (cuenta activa de Lalo) dueño del canal de Twitch, o null. */
+  /** Perfil (cuenta activa de Tally Studio) dueño del canal de Twitch, o null. */
   profileId?: (broadcasterId: string, env: Env) => Promise<string | null>;
   limiter?: (env: Env) => SendLimiter | null;
   lux?: ChatLux;
@@ -204,7 +204,7 @@ export function fillResponse(response: string, user: string, channel: string): s
 }
 
 const logError = (what: string, err: unknown): void => {
-  console.error(`[Lalo bot] ${what}:`, err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
+  console.error(`[Tally Studio bot] ${what}:`, err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
 };
 
 // ---------- El procesador ----------
@@ -222,7 +222,7 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
 
   /** Lo que se sabe de un mensaje que sí es de un canal con el bot en la nube encendido. */
   interface Gate {
-    /** Cuenta que escribe en este canal (sender_id): la cuenta Lalo o, en modo streamer, el propio streamer. */
+    /** Cuenta que escribe en este canal (sender_id): la cuenta Tally Studio o, en modo streamer, el propio streamer. */
     botUserId: string;
     senderMode: BotSenderMode;
     db: BotDb;
@@ -231,7 +231,7 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
   }
 
   async function gate(event: ChatMessageEvent, env: Env): Promise<Gate | null> {
-    // Los mensajes de la cuenta global Lalo nunca se atienden, sea cual sea el modo del canal
+    // Los mensajes de la cuenta global Tally Studio nunca se atienden, sea cual sea el modo del canal
     if (isOwnBotMessage(event, globalBotId(env))) return null;
 
     const db = getDb(env);
@@ -309,7 +309,7 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
     const notice = typeof answer.body.notice === 'string' ? answer.body.notice : '';
     if (reply) await say(reply);
     else if (notice) await say(notice);
-    else console.info(`[Lalo bot] Done no respondió: ${typeof answer.body.skipped === 'string' ? answer.body.skipped : `estado ${answer.status}`}`);
+    else console.info(`[Tally Studio bot] Done no respondió: ${typeof answer.body.skipped === 'string' ? answer.body.skipped : `estado ${answer.status}`}`);
     return true;
   }
 
@@ -348,7 +348,7 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
         logError('no se pudo enviar al chat', err);
         return;
       }
-      if (result.status !== 'sent') console.warn(`[Lalo bot] mensaje no enviado: ${result.status}`);
+      if (result.status !== 'sent') console.warn(`[Tally Studio bot] mensaje no enviado: ${result.status}`);
     };
 
     // ----- Done -----
@@ -400,9 +400,9 @@ export function createChatProcessor(deps: ChatProcessorDeps = {}): ChatHandler {
           await send(reply);
         } else if (typeof answer.body.skipped === 'string') {
           // Apagada con !luxoff, sin Mi AI en la cuenta, tiempo de espera...: no se escribe nada
-          console.info(`[Lalo bot] Mi AI no respondió: ${answer.body.skipped}`);
+          console.info(`[Tally Studio bot] Mi AI no respondió: ${answer.body.skipped}`);
         } else {
-          console.error(`[Lalo bot] Mi AI no respondió: ${typeof answer.body.error === 'string' ? answer.body.error : `estado ${answer.status}`}`);
+          console.error(`[Tally Studio bot] Mi AI no respondió: ${typeof answer.body.error === 'string' ? answer.body.error : `estado ${answer.status}`}`);
         }
         return;
       }

@@ -1,8 +1,8 @@
-COMANDOS DE LA VOZ DEL CHAT · LALO STREAM SUITE
+COMANDOS DE LA VOZ DEL CHAT · TALLY STUDIO
 ================================================
 
 Se escriben en el chat de Twitch del canal.
-Sacados del código de Lalo el 5 de octubre de 2026 (src/utils/moderation.ts).
+Sacados del código de Tally Studio el 5 de octubre de 2026 (src/utils/moderation.ts).
 
 
 1. PARA QUE LA VOZ LEA UN MENSAJE (cualquier espectador con permiso)
@@ -89,12 +89,12 @@ Sacados del código de Lalo el 5 de octubre de 2026 (src/utils/moderation.ts).
 3. A TENER EN CUENTA
 --------------------
 
-  - Los comandos de moderación solo los obedece Lalo si quien escribe es el
+  - Los comandos de moderación solo los obedece Tally Studio si quien escribe es el
     streamer o lleva la insignia de moderador en ese mensaje.
   - El nombre de usuario puede ir con o sin @.
-  - Si un moderador escribe "!s pausa", Lalo lo toma como la orden de pausar,
+  - Si un moderador escribe "!s pausa", Tally Studio lo toma como la orden de pausar,
     no como un mensaje para leer.
-  - Lalo no responde en el chat: la confirmación se ve y se oye en el directo.
+  - Tally Studio no responde en el chat: la confirmación se ve y se oye en el directo.
   - Otras capas tienen sus propios comandos (saludo de raid, ruleta, «Ahora
     suena», batallas, mascota). No están en esta lista: se ven y se cambian
     en la página de cada una.

@@ -65,7 +65,7 @@ export const ImportarElevenVoz: React.FC<{ available: boolean; onCreated: (resul
         <input id={`${uid}-id`} className="cab-inp cab-mono" value={voiceId} autoComplete="off" spellCheck={false} onChange={(e) => setVoiceId(e.target.value)} />
       </div>
       <div className="cab-field">
-        <label className="cab-label" htmlFor={`${uid}-name`}>Nombre en Lalo (opcional)</label>
+        <label className="cab-label" htmlFor={`${uid}-name`}>Nombre en Tally Studio (opcional)</label>
         <input id={`${uid}-name`} className="cab-inp" value={name} maxLength={18} onChange={(e) => setName(e.target.value)} />
       </div>
       <div className="cab-field">
@@ -87,7 +87,7 @@ export const ImportarElevenVoz: React.FC<{ available: boolean; onCreated: (resul
       )}
       <label className="flex items-start gap-2">
         <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-        <span>Confirmo que tengo derecho a usar esta voz en Lalo.</span>
+        <span>Confirmo que tengo derecho a usar esta voz en Tally Studio.</span>
       </label>
       <div>
         <button type="button" className="cab-btn2" disabled={!ready} onClick={submit}>

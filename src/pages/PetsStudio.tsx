@@ -4,7 +4,7 @@
  * Página «Mascotas» sobre la plantilla común del panel: a la izquierda se
  * ajusta, en pestañas, y a la derecha el monitor 16:9 queda siempre a la vista.
  *
- * - Personaje: uno de los de Lalo (con color) o el propio, con una imagen en
+ * - Personaje: uno de los de Tally Studio (con color) o el propio, con una imagen en
  *   reposo y otra hablando. Nombre y voz.
  * - Activadores: a qué reacciona, con qué frases y cada cuánto.
  * - En pantalla: dónde sale, cómo se mueve y cómo se ve el texto.
@@ -136,7 +136,7 @@ export const PetsStudio: React.FC = () => {
       updateSettings({ idleImage: toImage(next), kind: 'custom' });
       return;
     }
-    // Sin imagen de reposo no hay personaje propio: se vuelve a uno de Lalo
+    // Sin imagen de reposo no hay personaje propio: se vuelve a uno de Tally Studio
     if (settings.talkImage?.mediaId) release(settings.talkImage.mediaId);
     Object.values(settings.emotionImages).forEach((image) => image?.mediaId && release(image.mediaId));
     updateSettings({ idleImage: null, talkImage: null, emotionImages: {}, kind: settings.kind === 'custom' ? 'chispa' : settings.kind });
@@ -247,7 +247,7 @@ export const PetsStudio: React.FC = () => {
             <span className="cab-hint">Apagada no hace nada aunque esté en OBS. Las pruebas de esta página siguen funcionando.</span>
           </div>
           <div className="cab-field">
-            <span className="cab-label">Personajes de Lalo</span>
+            <span className="cab-label">Personajes de Tally Studio</span>
             <div className="pt-gal">
               {PET_KINDS.map((item) => (
                 <button
@@ -294,14 +294,14 @@ export const PetsStudio: React.FC = () => {
                 />
               ))}
             </div>
-            <span className="cab-hint">Tiñe al personaje de Lalo, las chispas y la etiqueta del rótulo. La sombra y la luz se ajustan solas.</span>
+            <span className="cab-hint">Tiñe al personaje de Tally Studio, las chispas y la etiqueta del rótulo. La sombra y la luz se ajustan solas.</span>
           </div>
         </section>
 
         <section className="cab-mod">
           <h2>Tu propio personaje</h2>
           <p className="cab-hint">
-            PNG, GIF, WebP o SVG con fondo transparente. Con una sola imagen, el personaje se mueve al hablar. Con dos, Lalo las alterna al ritmo de
+            PNG, GIF, WebP o SVG con fondo transparente. Con una sola imagen, el personaje se mueve al hablar. Con dos, Tally Studio las alterna al ritmo de
             la voz; si la de hablar es un GIF, se ve mientras dure la frase.
           </p>
           <Field label="En reposo">
@@ -310,7 +310,7 @@ export const PetsStudio: React.FC = () => {
               accept={IMAGE_TYPES}
               value={toValue(settings.idleImage)}
               cloudOn={cloudOn}
-              emptyHint="Sin imagen: se usa un personaje de Lalo."
+              emptyHint="Sin imagen: se usa un personaje de Tally Studio."
               onChange={setIdleImage}
               onRelease={release}
             />

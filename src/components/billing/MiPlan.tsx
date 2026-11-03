@@ -357,7 +357,7 @@ export const MiPlan: React.FC = () => {
                   value={codeValue}
                   autoComplete="off"
                   spellCheck={false}
-                  placeholder="LALO-"
+                  placeholder="TALLY-"
                   onChange={(e) => setCodeValue(e.target.value.toUpperCase())}
                 />
               </div>

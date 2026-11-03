@@ -19,7 +19,7 @@ export const TERMINOS: DocumentoLegal = {
       titulo: '1. Aceptación y naturaleza del servicio',
       bloques: [
         p(
-          `Lalo Stream Suite (en adelante, la «Plataforma»), operada por ${d.operador}, proporciona herramientas de software como servicio orientadas a la creación, gestión y transmisión de contenido digital. Al registrarte o utilizar la Plataforma, aceptas vincularte a estos Términos y a las políticas que los acompañan: la de [voces e inteligencia artificial](legal:voces), la de [contenido generado por el usuario](legal:contenido) y el procedimiento de [notificación y retirada](legal:retirada).`
+          `Tally Studio (en adelante, la «Plataforma»), operada por ${d.operador}, proporciona herramientas de software como servicio orientadas a la creación, gestión y transmisión de contenido digital. Al registrarte o utilizar la Plataforma, aceptas vincularte a estos Términos y a las políticas que los acompañan: la de [voces e inteligencia artificial](legal:voces), la de [contenido generado por el usuario](legal:contenido) y el procedimiento de [notificación y retirada](legal:retirada).`
         ),
         p(
           'Cómo tratamos los datos personales se explica en [Privacidad y tratamiento de datos](legal:privacidad). Lo que cambia según vivas en Colombia, México o Estados Unidos está en el [Marco por país](legal:paises).'

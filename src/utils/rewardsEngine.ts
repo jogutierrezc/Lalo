@@ -41,7 +41,7 @@ export type RewardTriggerResult =
   | { ok: true; rewardId: string }
   | { ok: false; reason: 'no_layer' | 'disabled' | 'no_match' | 'not_allowed' | 'discarded'; rewardId?: string };
 
-/** Recompensa de Lalo enlazada a una recompensa de puntos de Twitch, o null. */
+/** Recompensa de Tally Studio enlazada a una recompensa de puntos de Twitch, o null. */
 export function findRewardByTwitchId(settings: Pick<RewardsSettings, 'rewards'>, twitchRewardId: string | null | undefined): CustomRewardItem | null {
   return matchPointsReward(settings.rewards, twitchRewardId);
 }

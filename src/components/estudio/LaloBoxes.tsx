@@ -1,7 +1,7 @@
 /**
  * src/components/estudio/LaloBoxes.tsx
  *
- * Las capas de Lalo (chat, metas, alertas y saludo de raid) dentro de la caja
+ * Las capas de Tally Studio (chat, metas, alertas y saludo de raid) dentro de la caja
  * de una escena. Cada una usa su componente de siempre; el CSS de Studio
  * (src/styles/estudio.css) hace que la caja sea su «pantalla» y que su tamaño
  * de letra salga del ancho de la caja.
@@ -325,7 +325,7 @@ const RaidBox: React.FC<BoxProps> = ({ layer, mode, data, registry, demo, onSpea
   );
 };
 
-/** Dibuja una capa de Lalo dentro de su caja. */
+/** Dibuja una capa de Tally Studio dentro de su caja. */
 export const LaloBox: React.FC<BoxProps> = (props) => {
   switch (props.layer.type) {
     case 'chat':

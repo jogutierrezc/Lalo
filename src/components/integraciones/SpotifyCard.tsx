@@ -22,8 +22,8 @@ const RETURN_MESSAGES: Record<string, string> = {
   denied: 'No se conectó nada: cancelaste el permiso en Spotify.',
   bad_state: 'La conexión caducó o no empezó en este navegador. Pulsa «Conectar con Spotify» otra vez.',
   not_allowed:
-    'Spotify no deja leer esta cuenta: todavía no está en la lista de usuarios de la app de Lalo. Pide a quien administra Lalo que añada tu correo de Spotify y vuelve a conectar.',
-  not_configured: 'Al servidor de Lalo le falta configuración para conectar con Spotify.',
+    'Spotify no deja leer esta cuenta: todavía no está en la lista de usuarios de la app de Tally Studio. Pide a quien administra Tally Studio que añada tu correo de Spotify y vuelve a conectar.',
+  not_configured: 'Al servidor de Tally Studio le falta configuración para conectar con Spotify.',
   error: 'No se pudo completar la conexión con Spotify. Prueba otra vez en un momento.',
 };
 
@@ -90,7 +90,7 @@ export const SpotifyCard: React.FC = () => {
       setMessage('El permiso ya no vale. Vuelve a conectar la cuenta.');
       return void refresh();
     }
-    if (code === 'forbidden') return setMessage('Spotify no deja leer esta cuenta. Puede que no esté en la lista de usuarios de la app de Lalo, o que la app haya perdido Premium.');
+    if (code === 'forbidden') return setMessage('Spotify no deja leer esta cuenta. Puede que no esté en la lista de usuarios de la app de Tally Studio, o que la app haya perdido Premium.');
     if (code === 'rate_limited') return setMessage('Spotify pide esperar un momento antes de volver a preguntar.');
     if (code !== 'ok') return setMessage('Spotify no respondió. Prueba otra vez en un momento.');
     if (!reading.track) return setMessage('Spotify responde que ahora no suena nada (o suena un anuncio).');
@@ -114,7 +114,7 @@ export const SpotifyCard: React.FC = () => {
         <>
           <p>Conecta tu cuenta para que la capa «Ahora suena» muestre en pantalla la canción que estás escuchando.</p>
           <p className="cab-note">
-            Este despliegue no tiene la nube encendida, así que no hay cuenta de Lalo a la que conectar Spotify. Los seis diseños se pueden probar con
+            Este despliegue no tiene la nube encendida, así que no hay cuenta de Tally Studio a la que conectar Spotify. Los seis diseños se pueden probar con
             canciones de ejemplo en{' '}
             <a className="studio-link" href="#musica">
               Ahora suena
@@ -124,7 +124,7 @@ export const SpotifyCard: React.FC = () => {
         </>
       )}
 
-      {cloud.enabled && load.kind === 'loading' && <p className="cab-hint">Preguntando al servidor de Lalo.</p>}
+      {cloud.enabled && load.kind === 'loading' && <p className="cab-hint">Preguntando al servidor de Tally Studio.</p>}
 
       {cloud.enabled && load.kind === 'problem' && (
         <>
@@ -144,7 +144,7 @@ export const SpotifyCard: React.FC = () => {
         <>
           <p>Conecta tu cuenta para que la capa «Ahora suena» muestre en pantalla la canción que estás escuchando.</p>
           <p className="cab-note" role="status">
-            Todavía no se puede conectar: al servidor de Lalo le falta configuración ({status.missing.join(', ')}). La añade quien administra Lalo.
+            Todavía no se puede conectar: al servidor de Tally Studio le falta configuración ({status.missing.join(', ')}). La añade quien administra Tally Studio.
             Mientras tanto, la capa se puede probar con canciones de ejemplo en{' '}
             <a className="studio-link" href="#musica">
               Ahora suena
@@ -171,7 +171,7 @@ export const SpotifyCard: React.FC = () => {
 
       {status?.configured && !connected && asking && (
         <>
-          <p>Lalo pide un solo permiso. Lo aceptas en la página de Spotify: Lalo nunca ve tu contraseña.</p>
+          <p>Tally Studio pide un solo permiso. Lo aceptas en la página de Spotify: Tally Studio nunca ve tu contraseña.</p>
           <ul className="ic-perm">
             <li data-y="">
               <b>SÍ</b>
@@ -221,7 +221,7 @@ export const SpotifyCard: React.FC = () => {
             </li>
           </ul>
           <p className="cab-hint">
-            Lalo guarda este permiso cifrado en su servidor para que OBS pueda leer la canción. Spotify lo hace caducar a los 6 meses
+            Tally Studio guarda este permiso cifrado en su servidor para que OBS pueda leer la canción. Spotify lo hace caducar a los 6 meses
             {status.expiresAt ? ` (hacia el ${formatDay(status.expiresAt)})` : ''}: entonces esta ficha te pedirá volver a conectar. Al desconectar se borra.
           </p>
           <div className="ic-row">
@@ -249,7 +249,7 @@ export const SpotifyCard: React.FC = () => {
             Plazas ocupadas: <b>{status.seats} de {status.seatsMax}</b>.{' '}
           </>
         )}
-        Mientras la app de Spotify de Lalo esté en modo desarrollo, solo pueden conectarse cinco cuentas, y quien administra Lalo tiene que añadir antes
+        Mientras la app de Spotify de Tally Studio esté en modo desarrollo, solo pueden conectarse cinco cuentas, y quien administra Tally Studio tiene que añadir antes
         el correo de Spotify de cada una.
       </p>
     </ServiceCard>

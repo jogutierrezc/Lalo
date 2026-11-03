@@ -2,8 +2,8 @@
  * src/components/integraciones/KofiCard.tsx
  *
  * Ficha de Ko-fi en «Integraciones». Ko-fi no tiene inicio de sesión para apps:
- * el streamer copia aquí su dirección personal de Lalo, la pega en su Ko-fi y
- * pega en Lalo la clave de verificación que Ko-fi le da.
+ * el streamer copia aquí su dirección personal de Tally Studio, la pega en su Ko-fi y
+ * pega en Tally Studio la clave de verificación que Ko-fi le da.
  *
  * Estados: sin conectar, conectando (dirección creada, falta la clave),
  * esperando el primer aviso y conectado.
@@ -119,7 +119,7 @@ export const KofiCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
         <>
           <p>Recibe en pantalla las donaciones, membresías, pedidos y comisiones de tu Ko-fi.</p>
           <p className="cab-note">
-            Este despliegue no tiene la nube encendida, así que no hay cuenta de Lalo a la que Ko-fi pueda avisar. Las alertas se pueden probar con
+            Este despliegue no tiene la nube encendida, así que no hay cuenta de Tally Studio a la que Ko-fi pueda avisar. Las alertas se pueden probar con
             avisos de ejemplo en{' '}
             <a className="studio-link" href="#kofi">
               Ko-fi
@@ -129,7 +129,7 @@ export const KofiCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
         </>
       )}
 
-      {cloud.enabled && load.kind === 'loading' && <p className="cab-hint">Preguntando al servidor de Lalo.</p>}
+      {cloud.enabled && load.kind === 'loading' && <p className="cab-hint">Preguntando al servidor de Tally Studio.</p>}
 
       {cloud.enabled && load.kind === 'problem' && (
         <>
@@ -149,7 +149,7 @@ export const KofiCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
         <>
           <p>Recibe en pantalla las donaciones, membresías, pedidos y comisiones de tu Ko-fi.</p>
           <p className="cab-note" role="status">
-            Todavía no se puede conectar: al servidor de Lalo le falta configuración ({status.missing.join(', ')}). La añade quien administra Lalo.
+            Todavía no se puede conectar: al servidor de Tally Studio le falta configuración ({status.missing.join(', ')}). La añade quien administra Tally Studio.
             Mientras tanto, las alertas se pueden probar con avisos de ejemplo en{' '}
             <a className="studio-link" href="#kofi">
               Ko-fi
@@ -174,7 +174,7 @@ export const KofiCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
         <>
           <ol className="ic-steps">
             <li>
-              Copia tu dirección personal de Lalo. Es privada: quien la tenga podría intentar enviar avisos falsos.
+              Copia tu dirección personal de Tally Studio. Es privada: quien la tenga podría intentar enviar avisos falsos.
               {address}
             </li>
             <li>En Ko-fi, entra en Más, API y webhooks, y pégala en el campo de la dirección del webhook.</li>
@@ -206,7 +206,7 @@ export const KofiCard: React.FC<{ enVentana?: boolean }> = ({ enVentana = false 
           <p>Conectado. Último aviso recibido: {formatWhen(status.lastEventAt)}.</p>
           {address}
           <p className="cab-hint">
-            Lalo guarda cifradas en su servidor tu dirección y tu clave de verificación. No guarda correos ni direcciones de envío de quien te apoya.
+            Tally Studio guarda cifradas en su servidor tu dirección y tu clave de verificación. No guarda correos ni direcciones de envío de quien te apoya.
           </p>
         </>
       )}

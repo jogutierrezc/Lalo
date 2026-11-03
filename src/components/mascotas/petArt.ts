@@ -1,7 +1,7 @@
 /**
  * src/components/mascotas/petArt.ts
  *
- * El dibujo de los personajes de Lalo, como texto SVG. Todo es contenido fijo
+ * El dibujo de los personajes de Tally Studio, como texto SVG. Todo es contenido fijo
  * de este archivo: aquí no entra nada del chat, de Twitch ni de los ajustes.
  *
  * - Lienzo de 200 × 200. Tinta gruesa, color plano, una sombra y una luz: las

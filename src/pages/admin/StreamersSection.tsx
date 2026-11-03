@@ -495,7 +495,7 @@ export const StreamersSection: React.FC<{ data: AdminData; ownId: string | null 
                     </div>
                   )}
                   <span className="cab-hint">
-                    Al activarlo, el streamer ve las voces de ElevenLabs visibles. Si supera el tope diario, Lalo pasa automáticamente a Fish Audio ese día.
+                    Al activarlo, el streamer ve las voces de ElevenLabs visibles. Si supera el tope diario, Tally Studio pasa automáticamente a Fish Audio ese día.
                   </span>
                 </div>
                 </>

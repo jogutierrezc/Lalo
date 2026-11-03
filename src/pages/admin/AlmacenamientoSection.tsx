@@ -346,7 +346,7 @@ export const AlmacenamientoSection: React.FC<{ data: AdminData }> = ({ data }) =
             <p className="cab-hint">
               Capacidad total: {formatBytes(split.capacity)}. Prometido a las cuentas activas según su plan:{' '}
               {formatBytes(overview.totals.storage_committed_bytes)}. Lo usado es la suma de los archivos registrados en
-              Lalo; Cloudflare no informa del total del bucket por esta vía.{' '}
+              Tally Studio; Cloudflare no informa del total del bucket por esta vía.{' '}
               <a className="studio-link" href={adminHref('precios')}>
                 Cambiar la capacidad
               </a>

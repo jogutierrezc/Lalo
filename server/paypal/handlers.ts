@@ -81,10 +81,10 @@ async function cancelInPaypal(client: PaypalClient, paypalId: string, reason: st
 function paypalFailure(err: unknown, where: string): IntegrationResult {
   if (err instanceof MigrationMissingError) return fail(503, 'migration_missing', 'Falta aplicar una migración de cobro (0046 a 0051) en Supabase.');
   if (err instanceof PaypalError) {
-    console.error(`[Lalo paypal] ${where}: PayPal ${err.status} ${err.name}`);
+    console.error(`[Tally Studio paypal] ${where}: PayPal ${err.status} ${err.name}`);
     return fail(502, 'paypal_error', 'PayPal no pudo completar la operación. Prueba de nuevo en un momento.');
   }
-  console.error(`[Lalo paypal] ${where}:`, err instanceof Error ? err.message : 'error desconocido');
+  console.error(`[Tally Studio paypal] ${where}:`, err instanceof Error ? err.message : 'error desconocido');
   return fail(502, 'server_error', 'El servidor no pudo completar la operación. Prueba de nuevo en un momento.');
 }
 
@@ -211,7 +211,7 @@ async function subscribe(req: IntegrationRequest, env: Env, db: PaypalDb, client
       if (err instanceof PaypalError && err.status === 404) {
         remoteStatus = 'CANCELLED';
       } else {
-        console.error('[Lalo paypal] subscribe: no se pudo consultar un intento pendiente:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
+        console.error('[Tally Studio paypal] subscribe: no se pudo consultar un intento pendiente:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
         return fail(503, 'pending_check_failed', PENDING_CHECK_FAILED_MESSAGE);
       }
     }
@@ -225,7 +225,7 @@ async function subscribe(req: IntegrationRequest, env: Env, db: PaypalDb, client
     try {
       await cancelInPaypal(client, row.paypal_subscription_id, 'Intento de pago abandonado');
     } catch (err) {
-      console.error('[Lalo paypal] subscribe: no se pudo cancelar en PayPal un intento abandonado:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
+      console.error('[Tally Studio paypal] subscribe: no se pudo cancelar en PayPal un intento abandonado:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
     }
   }
 
@@ -233,7 +233,7 @@ async function subscribe(req: IntegrationRequest, env: Env, db: PaypalDb, client
     plan_id: price.paypal_plan_id,
     custom_id: profileId,
     application_context: {
-      brand_name: 'Lalo',
+      brand_name: 'Tally Studio',
       user_action: 'SUBSCRIBE_NOW',
       shipping_preference: 'NO_SHIPPING',
       // En el flujo 'sdk' no hace falta, pero se manda si hay origen por si PayPal lo pide
@@ -250,7 +250,7 @@ async function subscribe(req: IntegrationRequest, env: Env, db: PaypalDb, client
   }
   const approveOk = approveHost === 'paypal.com' || approveHost.endsWith('.paypal.com');
   if (!PAYPAL_ID.test(subscriptionId) || (flow === 'redirect' && !approveOk)) {
-    console.error('[Lalo paypal] subscribe: respuesta inesperada de PayPal');
+    console.error('[Tally Studio paypal] subscribe: respuesta inesperada de PayPal');
     return fail(502, 'paypal_error', 'PayPal no devolvió una suscripción válida. Prueba de nuevo.');
   }
 
@@ -270,7 +270,7 @@ async function subscribe(req: IntegrationRequest, env: Env, db: PaypalDb, client
     try {
       await cancelInPaypal(client, subscriptionId, 'Suscripción duplicada');
     } catch (cancelErr) {
-      console.error('[Lalo paypal] subscribe: no se pudo cancelar una suscripción duplicada:', cancelErr instanceof PaypalError ? `${cancelErr.status} ${cancelErr.name}` : 'error');
+      console.error('[Tally Studio paypal] subscribe: no se pudo cancelar una suscripción duplicada:', cancelErr instanceof PaypalError ? `${cancelErr.status} ${cancelErr.name}` : 'error');
     }
     return fail(409, 'already_subscribed', BLOCK_MESSAGES.active);
   }
@@ -308,13 +308,13 @@ async function cancel(db: PaypalDb, client: PaypalClient, profileId: string, now
   let firstError: unknown = null;
   for (const sub of live) {
     try {
-      await cancelInPaypal(client, sub.paypal_subscription_id, 'Cancelada por el streamer desde Lalo');
+      await cancelInPaypal(client, sub.paypal_subscription_id, 'Cancelada por el streamer desde Tally Studio');
       await db.updateSubscription(sub.paypal_subscription_id, { status: 'cancelled' });
       cancelled += 1;
     } catch (err) {
       failed += 1;
       firstError ??= err;
-      console.error('[Lalo paypal] cancel: no se pudo cancelar una suscripción:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
+      console.error('[Tally Studio paypal] cancel: no se pudo cancelar una suscripción:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
     }
   }
   // Si no se pudo cancelar ninguna, error para que el streamer reintente
@@ -389,8 +389,8 @@ async function adminSync(env: Env, db: PaypalDb, client: PaypalClient): Promise<
   const pending = prices.filter((p) => p.active && !p.paypal_plan_id);
   if (pending.length > 0 && !productId) {
     const product = await client.request<{ id?: string }>('POST', '/v1/catalogs/products', {
-      name: 'Lalo',
-      description: 'Planes de Lalo para streamers',
+      name: 'Tally Studio',
+      description: 'Planes de Tally Studio para streamers',
       type: 'SERVICE',
       category: 'SOFTWARE',
     });
@@ -406,7 +406,7 @@ async function adminSync(env: Env, db: PaypalDb, client: PaypalClient): Promise<
       const planName = plans.find((p) => p.id === row.plan_id)?.name ?? row.plan_id;
       const created = await client.request<{ id?: string; status?: string }>('POST', '/v1/billing/plans', {
         product_id: productId,
-        name: `Lalo ${planName} - ${row.months} ${row.months === 1 ? 'mes' : 'meses'}`.slice(0, 120),
+        name: `Tally Studio ${planName} - ${row.months} ${row.months === 1 ? 'mes' : 'meses'}`.slice(0, 120),
         status: 'ACTIVE',
         billing_cycles: [
           {
@@ -429,7 +429,7 @@ async function adminSync(env: Env, db: PaypalDb, client: PaypalClient): Promise<
       await db.updatePrice(row.id, { paypal_plan_id: created.id });
     } catch (err) {
       failed += 1;
-      console.error('[Lalo paypal] admin-sync: no se pudo crear un plan:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
+      console.error('[Tally Studio paypal] admin-sync: no se pudo crear un plan:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
     }
   }
   await db.putSetting(SYNC_ENV_SETTING, mode);
@@ -465,7 +465,7 @@ async function cancelAfterReversal(db: PaypalDb, client: PaypalClient, saleId: s
     const sub = await db.subscriptionBySale(saleId);
     if (sub) await cancelInPaypal(client, sub.paypal_subscription_id, 'Reverso o contracargo de un pago');
   } catch (err) {
-    console.error('[Lalo paypal] webhook: reverso aplicado pero no se pudo cancelar en PayPal:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
+    console.error('[Tally Studio paypal] webhook: reverso aplicado pero no se pudo cancelar en PayPal:', err instanceof PaypalError ? `${err.status} ${err.name}` : 'error');
   }
 }
 
@@ -514,19 +514,19 @@ async function webhook(req: IntegrationRequest, deps: Deps, db: PaypalDb, client
   // Un aviso que no se puede aplicar todavía (p. ej. la fila de la suscripción aún no existe) no se marca como hecho
   const retryLater = async (reason: string): Promise<IntegrationResult> => {
     await db.releaseEvent(eventId).catch(() => undefined);
-    console.error(`[Lalo paypal] webhook: ${reason}; PayPal reintentará`);
+    console.error(`[Tally Studio paypal] webhook: ${reason}; PayPal reintentará`);
     return fail(503, 'not_ready', 'Aún no se puede aplicar el aviso. Reintenta.');
   };
 
   try {
     switch (transition.kind) {
       case 'ignore':
-        if (transition.reason === 'bad_refund_amount') console.error('[Lalo paypal] webhook: reembolso con importe no válido; no se trata como reembolso');
+        if (transition.reason === 'bad_refund_amount') console.error('[Tally Studio paypal] webhook: reembolso con importe no válido; no se trata como reembolso');
         break;
       case 'payment': {
         // La suscripción manda: una venta en otra moneda o sin importe acredita el periodo igual, pero no se guarda un importe comparable
         const usable = transition.amount !== null && transition.currency === BILLING_CURRENCY;
-        if (!usable) console.error('[Lalo paypal] webhook: venta con importe o moneda no utilizables; se acredita el periodo igual');
+        if (!usable) console.error('[Tally Studio paypal] webhook: venta con importe o moneda no utilizables; se acredita el periodo igual');
         // Sin id de venta no hay forma de evitar el doble crédito por otro event.id: se usa el id del evento
         const result = await db.applyPayment({
           saleId: clipId(transition.saleId || `event-${eventId}`),
@@ -544,7 +544,7 @@ async function webhook(req: IntegrationRequest, deps: Deps, db: PaypalDb, client
         let amount: number | null = null;
         if (transition.kind === 'refund') {
           if (transition.currency === BILLING_CURRENCY) amount = transition.amount;
-          else console.error('[Lalo paypal] webhook: reembolso con importe o moneda no utilizables; no cuenta para totales');
+          else console.error('[Tally Studio paypal] webhook: reembolso con importe o moneda no utilizables; no cuenta para totales');
         }
         const result = await db.reverseSale({
           saleId: clipId(transition.saleId),
@@ -557,7 +557,7 @@ async function webhook(req: IntegrationRequest, deps: Deps, db: PaypalDb, client
         if (result === 'unknown_sale') {
           // Pasadas 72 h la venta no va a aparecer (p. ej. anterior a 0050 sin backfill): se da por hecho en vez de un 503 eterno
           if (now.getTime() - eventTime.getTime() > UNKNOWN_SALE_GIVE_UP_MS) {
-            console.error('[Lalo paypal] webhook: reembolso o reverso de una venta no registrada con más de 72 h; se descarta');
+            console.error('[Tally Studio paypal] webhook: reembolso o reverso de una venta no registrada con más de 72 h; se descarta');
             break;
           }
           return await retryLater('reembolso o reverso de una venta no registrada');

@@ -5,7 +5,7 @@
  * su plan y la clave privada que va en sus URL de OBS.
  *
  * Las subidas van directas al almacenamiento con un permiso que da el servidor
- * de Lalo después de comprobar el plan. Aquí se hace la misma comprobación
+ * de Tally Studio después de comprobar el plan. Aquí se hace la misma comprobación
  * antes, solo para avisar pronto: quien decide es el servidor.
  */
 
@@ -373,7 +373,7 @@ export const Account: React.FC = () => {
                     </span>
                   </span>
                   <span className="cab-hint">
-                    Si en un directo muy largo llegas al tope diario, Lalo pasa automáticamente a Fish Audio el resto del
+                    Si en un directo muy largo llegas al tope diario, Tally Studio pasa automáticamente a Fish Audio el resto del
                     día para que tu stream nunca se quede mudo.
                   </span>
                 </div>

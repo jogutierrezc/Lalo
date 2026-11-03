@@ -3,9 +3,9 @@
  *
  * Sitio de la marca del servicio (Spotify o Ko-fi) dentro de una capa.
  *
- * Lalo no dibuja ni imita logotipos ajenos. Mientras no exista el archivo
+ * Tally Studio no dibuja ni imita logotipos ajenos. Mientras no exista el archivo
  * oficial, el sitio muestra el nombre en texto dentro de un recuadro punteado.
- * Cuando quien administra Lalo añada el archivo oficial en
+ * Cuando quien administra Tally Studio añada el archivo oficial en
  *   public/marcas/spotify.svg   y   public/marcas/kofi.svg
  * el sitio lo carga solo y lo muestra tal cual, sin recortarlo ni recolorearlo.
  *

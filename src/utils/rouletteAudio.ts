@@ -1,7 +1,7 @@
 /**
  * src/utils/rouletteAudio.ts
  *
- * Sintetizador de audio mecánico para la Ruleta de Castigos de Lalo Stream Suite.
+ * Sintetizador de audio mecánico para la Ruleta de Castigos de Tally Studio.
  *
  * Implementado bajo los principios de artesanía de Emil Kowalski:
  * - Cero dependencias externas (Web Audio API nativo).
