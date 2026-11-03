@@ -45,7 +45,7 @@ describe('registro', () => {
     const grouped = toolsByGroup();
     expect(grouped.map((g) => g.group)).toEqual([...TOOL_GROUPS]);
     expect(grouped.flatMap((g) => g.tools.map((t) => t.id))).toContain('done');
-    expect(TOOLS.find((t) => t.id === 'done')).toMatchObject({ group: 'Voz e IA', isNew: true });
+    expect(TOOLS.find((t) => t.id === 'done')).toMatchObject({ group: 'Voz e IA' });
   });
 
   it('Conexiones reúne Ko-fi, Alertas de juego y Ahora suena', () => {

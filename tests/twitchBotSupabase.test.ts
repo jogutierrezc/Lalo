@@ -75,12 +75,18 @@ describe('supabaseBotDb: actualizaciones parciales', () => {
 
   it('un cambio de prefijo y saludo no toca enabled', async () => {
     nextData = { enabled: true, prefix: '?', welcome_message: 'hola', sender_mode: 'global' };
-    const db = supabaseBotDb(env)!;
+    const db = supabaseBotDb({ ...env, TWITCH_BOT_USER_ID: '555' })!;
     const saved = await db.saveSettings(PROFILE, { prefix: '?', welcomeMessage: 'hola' });
     const row = calls[0].steps.find(([name]) => name === 'upsert')![1][0] as Record<string, unknown>;
     expect(Object.keys(row).sort()).toEqual(['prefix', 'profile_id', 'updated_at', 'welcome_message']);
     // Devuelve los ajustes completos, leídos de la base
     expect(saved).toEqual({ enabled: true, prefix: '?', welcomeMessage: 'hola', senderMode: 'global' });
+  });
+
+  it('con modo «global» y sin cuenta Lalo configurada, los ajustes salen en modo streamer', async () => {
+    nextData = { enabled: true, prefix: '!', welcome_message: '', sender_mode: 'global' };
+    const saved = await supabaseBotDb(env)!.saveSettings(PROFILE, { enabled: true });
+    expect(saved.senderMode).toBe('streamer');
   });
 
   it('un prefijo inválido no llega a la base', async () => {
