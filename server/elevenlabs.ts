@@ -18,8 +18,29 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { profileIdOfReadKey, verifyReadKey } from './done/readKey.js';
 
 export type Env = Record<string, string | undefined>;
+
+/**
+ * El overlay de Done solo tiene la clave de LECTURA (`dr.<perfil>.<hmac>`, server/done/readKey.ts). Para sintetizar con la voz del
+ * creador se cambia aquí por su widget_key; una clave normal pasa tal cual. Una clave de lectura falsa se queda vacía (sin acceso).
+ */
+export async function resolveTtsKey(key: string, env: Env): Promise<string> {
+  const id = profileIdOfReadKey(key ?? '');
+  if (!id) return key;
+  const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
+  const service = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  if (!url || !service) return '';
+  try {
+    const db = createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data } = await db.from('profiles').select('widget_key').eq('id', id).maybeSingle();
+    const widgetKey = (data as { widget_key?: string } | null)?.widget_key;
+    return widgetKey && verifyReadKey(key, id, widgetKey) ? widgetKey : '';
+  } catch {
+    return '';
+  }
+}
 type FetchLike = typeof fetch;
 
 const API = 'https://api.elevenlabs.io';
@@ -138,6 +159,7 @@ export async function elevenAllowed(
   widgetKey: string,
   env: Env
 ): Promise<boolean> {
+  widgetKey = await resolveTtsKey(widgetKey, env);
   const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
   const service = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   if (!url || !service) return false;
@@ -177,7 +199,8 @@ export async function elevenQuotaCheckAndRecord(
   chars: number,
   env: Env
 ): Promise<ElevenQuotaCheckResult> {
-  const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
+  widgetKey = await resolveTtsKey(widgetKey, env);
+  const url =(env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
   const service = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   if (!url || !service) return { allowed: false, reason: 'not_enabled' };
 
@@ -247,6 +270,7 @@ export async function recordFishTtsUsage(
   chars: number,
   env: Env
 ): Promise<void> {
+  widgetKey = await resolveTtsKey(widgetKey, env);
   const url = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim();
   const service = (env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   if (!url || !service || chars <= 0) return;

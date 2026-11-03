@@ -348,3 +348,290 @@
   padding: 0 8px;
   font-size: 0.8125rem;
 }
+
+/* ==========================================================================
+   Invitaciones, códigos con plan temporal, planes nuevos y suscripciones
+   Solo se animan transform y opacidad. Objetivos de 44px, scale(.97) al pulsar.
+   ========================================================================== */
+.adm-view .cab-btn:active:not(:disabled),
+.adm-view .cab-btn2:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.adm-view .cab-btn,
+.adm-view .cab-btn2 {
+  min-height: 44px;
+}
+.adm-view .cab .cab-btn-sm,
+.adm-view .cab-btn-sm {
+  min-height: 44px;
+}
+
+/* Interruptor de invitaciones */
+.adm-sw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 18px;
+}
+.adm-sw {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.adm-sw::before {
+  content: '';
+  position: absolute;
+  inset: 5px 0;
+  border: 1px solid var(--cb-line);
+  border-radius: 99px;
+  background: var(--cb-off, var(--cb-surface));
+  transition: background-color 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
+}
+.adm-sw .adm-sw-knob {
+  position: absolute;
+  top: 9px;
+  left: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--cb-mut);
+  transition: transform 0.28s var(--ease-out), background-color 0.2s var(--ease-out);
+}
+.adm-sw[aria-checked='true']::before {
+  background: var(--ui, var(--cb-fg));
+  border-color: var(--ui, var(--cb-fg));
+}
+.adm-sw[aria-checked='true'] .adm-sw-knob {
+  transform: translateX(28px);
+  background: #fff;
+}
+.adm-sw:active:not([aria-disabled='true']) .adm-sw-knob {
+  transform: scale(0.97);
+}
+.adm-sw[aria-checked='true']:active:not([aria-disabled='true']) .adm-sw-knob {
+  transform: translateX(28px) scale(0.97);
+}
+.adm-sw[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: progress;
+}
+.adm-sw:focus-visible {
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+  border-radius: 99px;
+}
+.adm-efecto {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  font-size: 0.9375rem;
+  animation: adm-rise 0.35s var(--ease-out) both;
+}
+
+/* Meses de plan: botones de radio que parecen un selector segmentado */
+.adm-meses {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--cb-line);
+  border-radius: 5px;
+  background: var(--cb-bg);
+}
+.adm-meses label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border-radius: 3px;
+  color: var(--cb-mut);
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.14s var(--ease-out);
+}
+.adm-meses label:active {
+  transform: scale(0.97);
+}
+.adm-meses input[type='radio'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.adm-meses label:has(input:checked) {
+  background: var(--ui, var(--cb-fg));
+  color: var(--ui-ink, var(--cb-panel));
+}
+.adm-meses label:has(input:focus-visible) {
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+}
+.adm-meses .adm-otro input[type='number'] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.adm-meses .adm-otro input[type='number']::placeholder {
+  color: var(--cb-mut);
+}
+.adm-meses .adm-otro:has(input:not(:placeholder-shown)) {
+  background: var(--ui, var(--cb-fg));
+  color: var(--ui-ink, var(--cb-panel));
+}
+.adm-meses .adm-otro:focus-within {
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+}
+.adm-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+.adm-form-wide {
+  grid-column: 1 / -1;
+}
+.adm-resumen {
+  font-size: 0.9375rem;
+  color: var(--cb-mut);
+}
+.adm-resumen b {
+  color: var(--cb-fg);
+  font-weight: 700;
+}
+.adm-cod-plan {
+  display: grid;
+  gap: 2px;
+}
+.adm-cod-plan small {
+  color: var(--cb-mut);
+}
+
+/* Planes: archivado y formulario de plan nuevo */
+.adm-plan-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.adm-size {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px;
+  gap: 6px;
+}
+
+/* Suscripciones */
+.adm-tot {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
+}
+.adm-tot button {
+  display: grid;
+  gap: 4px;
+  min-height: 64px;
+  padding: 10px 14px;
+  border: 1px solid var(--cb-line);
+  border-radius: 3px;
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s var(--ease-out), border-color 0.15s ease, background-color 0.15s ease;
+}
+.adm-tot button:active {
+  transform: scale(0.97);
+}
+.adm-tot button[aria-pressed='true'] {
+  border-color: var(--cb-fg);
+  background: var(--cb-panel);
+}
+.adm-tot b {
+  font-size: 1.5rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.adm-tot span {
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+@media (hover: hover) and (pointer: fine) {
+  .adm-tot button:hover {
+    border-color: var(--cb-mut);
+  }
+}
+.adm-sub-table table {
+  min-width: 720px;
+}
+.adm-sub-table tbody tr {
+  animation: adm-rise 0.3s var(--ease-out) both;
+}
+.cab-chip[data-tone='code'] {
+  background: var(--cb-surface);
+  color: var(--cb-fg);
+  border: 1px solid var(--cb-line);
+}
+.adm-origen {
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: var(--cb-mut);
+}
+.adm-empty {
+  padding: 22px 12px;
+  text-align: center;
+}
+
+@keyframes adm-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adm-sw::before,
+  .adm-sw .adm-sw-knob,
+  .adm-meses label,
+  .adm-tot button {
+    transition: none;
+  }
+  .adm-efecto,
+  .adm-sub-table tbody tr {
+    animation: none;
+  }
+}
+@media (max-width: 520px) {
+  .adm-meses {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Contenedor con scroll de la tabla de suscripciones: se alcanza con el teclado */
+.adm-sub-table:focus-visible {
+  outline: 2px solid var(--cb-fg);
+  outline-offset: 2px;
+}

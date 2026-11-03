@@ -10,8 +10,10 @@
  * se enseña como activo cuando el servidor dice `hasAccess: true`.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useCloudSession } from '../../hooks/useCloudSession';
+import { fetchOwnPlan } from '../../lib/cloud';
+import { outcomeMessage } from '../../lib/accesoMensajes';
 import { billingCancel, billingCatalog, billingConfirm, billingStatus } from '../../lib/billingApi';
 import {
   POLL_EVERY_MS,
@@ -74,7 +76,14 @@ function cleanReturnUrl() {
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 export const MiPlan: React.FC = () => {
-  const { refresh } = useCloudSession();
+  const { refresh, profile, redeem } = useCloudSession();
+  const codeId = useId();
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeValue, setCodeValue] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeMsg, setCodeMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [ownPlanName, setOwnPlanName] = useState<string | null>(null);
+  const codeInputRef = useRef<HTMLInputElement | null>(null);
   const [catalog, setCatalog] = useState<BillingCatalog | null>(null);
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -165,6 +174,52 @@ export const MiPlan: React.FC = () => {
     };
   }, [loadAll, follow]);
 
+  // Nombre del plan de la cuenta, para el plan que viene de un código
+  const profilePlan = profile?.plan_id ?? null;
+  const profileExpires = profile?.plan_expires_at ?? null;
+  useEffect(() => {
+    if (!profileExpires) {
+      setOwnPlanName(null);
+      return;
+    }
+    let alive = true;
+    fetchOwnPlan().then((own) => {
+      if (alive) setOwnPlanName(own?.name ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [profilePlan, profileExpires]);
+
+  const openCode = () => {
+    setCodeOpen(true);
+    setCodeMsg(null);
+    window.setTimeout(() => codeInputRef.current?.focus(), 0);
+  };
+
+  const redeemCode = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const clean = codeValue.trim();
+    if (!clean) {
+      setCodeMsg({ ok: false, text: 'Escribe tu código para canjearlo.' });
+      return;
+    }
+    setCodeBusy(true);
+    setCodeMsg(null);
+    const result = await redeem('invite', clean);
+    const problem = outcomeMessage(result);
+    if (!aliveRef.current.on) return;
+    setCodeBusy(false);
+    if (problem) {
+      setCodeMsg({ ok: false, text: problem });
+      return;
+    }
+    setCodeValue('');
+    setCodeOpen(false);
+    setCodeMsg({ ok: true, text: 'Código canjeado. Tu plan ya está activo.' });
+    loadAll();
+  };
+
   const closeWindow = () => {
     // Al cerrar se corta el seguimiento y se vuelve a leer lo que haya
     aliveRef.current.on = false;
@@ -181,6 +236,14 @@ export const MiPlan: React.FC = () => {
     const alive = { on: true };
     aliveRef.current = alive;
     follow(null, { planName: track?.planName ?? pending?.planName ?? '', months: track?.months ?? pending?.months ?? 1 }, alive);
+  };
+
+  // PayPal aprobó la suscripción desde los botones: se confirma y se siguen los pasos con datos reales
+  const approved = (subscriptionId: string, info: { planName: string; months: number }) => {
+    aliveRef.current.on = false;
+    const alive = { on: true };
+    aliveRef.current = alive;
+    follow(subscriptionId, info, alive);
   };
 
   const cancel = async () => {
@@ -202,6 +265,8 @@ export const MiPlan: React.FC = () => {
   const text = statusText(status);
   const offersPayment = catalog?.enabled === true && catalog.plans.length > 0;
   const showChoose = offersPayment && canSubscribe(sub);
+  // Plan que viene de un código: vale mientras no haya una suscripción de pago con acceso
+  const codeUntil = !status?.hasAccess && profileExpires && new Date(profileExpires).getTime() > Date.now() ? profileExpires : null;
 
   return (
     <section className="cab-mod md:col-span-2" aria-labelledby="mi-plan-titulo">
@@ -223,7 +288,7 @@ export const MiPlan: React.FC = () => {
           <div className="bil-estado">
             <div className="cab-field">
               <span className="cab-label">Plan</span>
-              <span>{sub && (status?.hasAccess || sub.status === 'pending') ? sub.planName : 'Gratis'}</span>
+              <span>{sub && (status?.hasAccess || sub.status === 'pending') ? sub.planName : codeUntil && ownPlanName ? ownPlanName : 'Gratis'}</span>
             </div>
             <div className="cab-field">
               <span className="cab-label">Estado</span>
@@ -251,6 +316,11 @@ export const MiPlan: React.FC = () => {
             )}
           </div>
           <p className="cab-hint">{text.detail}</p>
+          {codeUntil && (
+            <p className="cab-note" role="status">
+              Plan {ownPlanName ?? 'de pago'} por código, hasta {formatDateEs(codeUntil)}. Si te suscribes con PayPal, el pago manda sobre el código.
+            </p>
+          )}
 
           {!offersPayment && !sub && <p className="cab-hint">El cobro con PayPal todavía no está disponible en este despliegue.</p>}
 
@@ -266,6 +336,46 @@ export const MiPlan: React.FC = () => {
               </button>
             )}
           </div>
+
+          {!codeOpen && (
+            <p>
+              <button type="button" className="studio-link bil-codigo" aria-expanded={false} onClick={openCode}>
+                Tengo un código
+              </button>
+            </p>
+          )}
+          {codeOpen && (
+            <form className="grid gap-3" onSubmit={redeemCode} aria-label="Canjear un código">
+              <div className="cab-field max-w-md">
+                <label className="cab-label" htmlFor={codeId}>
+                  Código de invitación
+                </label>
+                <input
+                  id={codeId}
+                  ref={codeInputRef}
+                  className="cab-inp cab-mono"
+                  value={codeValue}
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="LALO-"
+                  onChange={(e) => setCodeValue(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" className="cab-btn" disabled={codeBusy}>
+                  {codeBusy ? 'Canjeando' : 'Canjear código'}
+                </button>
+                <button type="button" className="cab-btn2" disabled={codeBusy} onClick={() => setCodeOpen(false)}>
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          )}
+          {codeMsg && (
+            <p className={codeMsg.ok ? 'cab-note' : 'cab-error'} role={codeMsg.ok ? 'status' : 'alert'}>
+              {codeMsg.text}
+            </p>
+          )}
 
           {confirmCancel && (
             <div className="cab-note grid gap-3" role="group" aria-label="Confirmar la cancelación">
@@ -287,7 +397,7 @@ export const MiPlan: React.FC = () => {
         </>
       )}
 
-      {open && <CheckoutWindow catalog={catalog ?? NO_CATALOG} status={status} track={track} onClose={closeWindow} onRecheck={recheck} />}
+      {open && <CheckoutWindow catalog={catalog ?? NO_CATALOG} status={status} track={track} onClose={closeWindow} onRecheck={recheck} onApproved={approved} />}
     </section>
   );
 };

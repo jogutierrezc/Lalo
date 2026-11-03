@@ -3,6 +3,9 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/integraciones.ts": { "maxDuration": 30 }
+  },
   "crons": [
     { "path": "/api/paypal/expire", "schedule": "5 4 * * *" }
   ],
@@ -17,6 +20,7 @@
     { "source": "/api/riot/:action", "destination": "/api/integraciones?g=riot&a=:action" },
     { "source": "/api/integrations/:action", "destination": "/api/integraciones?g=integrations&a=:action" },
     { "source": "/api/lux/:action", "destination": "/api/integraciones?g=lux&a=:action" },
+    { "source": "/api/done/:action", "destination": "/api/integraciones?g=done&a=:action" },
     { "source": "/api/paypal/:action", "destination": "/api/integraciones?g=paypal&a=:action" },
     { "source": "/api/twitch/bot", "destination": "/api/integraciones?g=twitch-bot&a=bot" },
     { "source": "/api/health", "destination": "/api/version?health=1" },

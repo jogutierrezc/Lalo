@@ -7,6 +7,7 @@
  *   /api/spotify/<acción>         ver spotifyRoutes.ts
  *   /api/kofi/<acción o id>       ver kofi.ts (un id largo es el webhook)
  *   /api/riot/<acción>            ver riotRoutes.ts
+ *   /api/done/<acción>            Done AI (chat, speech, model, settings, memory, say, release), ver done/handlers.ts
  *   /api/paypal/<acción>          cobro con suscripciones de PayPal, ver paypal/handlers.ts
  *   /api/twitch/bot               bot de chat en la nube del streamer (grupo «twitch-bot»), ver twitch/botHandlers.ts
  *   /api/integrations/status      (solo administrador) qué le falta al servidor
@@ -20,6 +21,7 @@ import { readSpotifyConfig, redirectUri } from './spotify.js';
 import { SPOTIFY_ACTIONS, SPOTIFY_SEATS, handleSpotify, type SpotifyAction } from './spotifyRoutes.js';
 import { elevenKeySlot } from '../elevenlabs.js';
 import { LUX_ACTIONS, handleLux, type LuxAction } from '../lux/handlers.js';
+import { DONE_ACTIONS, handleDone, type DoneAction } from '../done/handlers.js';
 import { PAYPAL_ACTIONS, handlePaypal, type PaypalAction } from '../paypal/handlers.js';
 import { handleBot, setBotChatPort } from '../twitch/botHandlers.js';
 import { createSubscriptionChatPort } from '../twitch/botChatPort.js';
@@ -84,6 +86,7 @@ export async function handleIntegration(
   }
   if (group === 'riot' && RIOT_ACTIONS.includes(part as RiotAction)) return handleRiot(part as RiotAction, req, env, deps);
   if (group === 'lux' && LUX_ACTIONS.includes(part as LuxAction)) return handleLux(part as LuxAction, req, env);
+  if (group === 'done' && DONE_ACTIONS.includes(part as DoneAction)) return handleDone(part as DoneAction, req, env);
   if (group === 'paypal' && PAYPAL_ACTIONS.includes(part as PaypalAction)) return handlePaypal(part as PaypalAction, req, env, deps);
   if (group === 'twitch-bot' && part === 'bot') return handleBot(req, env);
   if (group === 'integrations' && part === 'status') return adminStatus(req, env, deps);

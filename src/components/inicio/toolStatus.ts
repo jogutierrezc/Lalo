@@ -6,23 +6,9 @@
  * estado y la fila no muestra etiqueta.
  */
 
-export type ToolId =
-  | 'tts'
-  | 'alertas'
-  | 'recompensas'
-  | 'metas'
-  | 'ruleta'
-  | 'encuestas'
-  | 'chat'
-  | 'raid'
-  | 'twitchio'
-  | 'studio'
-  | 'powerups'
-  | 'mascotas'
-  | 'torneos'
-  | 'musica'
-  | 'kofi'
-  | 'juego';
+import type { ToolId } from '../../lib/tools';
+
+export type { ToolId };
 
 export interface ToolStatus {
   text: string;

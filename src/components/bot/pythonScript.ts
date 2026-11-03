@@ -14,6 +14,15 @@ import { LUX_BOT_VERSION } from '../../../server/lux/release';
 import { LUX_CHAT_WORD_DEFAULT, validateChatWord } from '../../../server/lux/chatCommands';
 import { luxDisplayName } from '../../../server/lux/displayName';
 import { cleanCommandName } from '../../../server/twitch/commandNames';
+import { SPEAK_COMMAND } from '../../../server/chat/sharedRules';
+import { DONE_COMMAND_DEFAULT, validateDoneCommandWord } from '../../lib/doneSettings';
+import { DONE_BOT_VERSION } from '../../../server/done/release';
+
+/** Palabra de Lux que el script va a usar (la misma validación de más abajo), para que Done no la pise. */
+const luxWordOf = (lux: LuxChatSettings): string => {
+  const check = validateChatWord(lux.word);
+  return check.ok ? check.word : LUX_CHAT_WORD_DEFAULT;
+};
 
 // Se sigue exportando desde aquí: el panel y las pruebas lo importan de este módulo
 export { cleanCommandName };
@@ -103,7 +112,21 @@ function commandHandler(command: TwitchIOCommand, index: number): string {
   return lines.join('\n');
 }
 
-export function buildPythonScript(settings: TwitchIOSettings, lux: LuxChatSettings = DEFAULT_LUX_CHAT): string {
+/** Comando de Done en el chat tal como lo guarda el panel de Done. */
+export interface DoneChatSettings {
+  /** Palabra con la que el público llama a Done (por defecto «done»). */
+  word: string;
+  /** Si !done sigue valiendo como alias de la palabra. */
+  alias: boolean;
+}
+
+export const DEFAULT_DONE_CHAT: DoneChatSettings = { word: DONE_COMMAND_DEFAULT, alias: true };
+
+export function buildPythonScript(settings: TwitchIOSettings, lux: LuxChatSettings = DEFAULT_LUX_CHAT, done: DoneChatSettings = DEFAULT_DONE_CHAT): string {
+  // Lo mismo que Lux: una palabra inválida o reservada nunca entra en el script (vale la de por defecto)
+  const doneCheck = validateDoneCommandWord(done.word, [luxWordOf(lux)]);
+  const doneWord = doneCheck.ok ? doneCheck.value : DONE_COMMAND_DEFAULT;
+  const doneAlias = done.alias && doneWord !== DONE_COMMAND_DEFAULT;
   const prefix = settings.prefix.trim() || '!';
   const channel = cleanChannel(settings.channel) || CHANNEL_PLACEHOLDER;
   const botName = settings.botUsername.trim() || 'LaloBot';
@@ -167,6 +190,17 @@ LUX_EVENT_WINDOW_FAST = 20
 lux_events = []
 # Cola de mensajes que escribes desde el panel de Mi AI ("Decir en el chat").
 LUX_OUTBOX_EVERY = 4
+# Done (personaje IA con voz y gestos): usa la misma clave de OBS. El servidor decide el cooldown, el aviso de espera y el aviso de fallo
+# (reglas compartidas con el bot en la nube): aquí solo se escribe lo que devuelve en "reply" o en "notice".
+DONE_URL = "http://localhost:3001/api/done/chat"
+DONE_BOT_VERSION = ${DONE_BOT_VERSION}
+DONE_WORD = ${pyString(doneWord)}
+DONE_ALIAS = ${doneAlias ? 'True' : 'False'}
+DONE_NAME = "Done"
+DONE_OUTBOX_EVERY = 4
+DONE_SUMMARY_EVERY = 1800
+# Voz del chat (!s): comando de la plataforma, el mismo que lee el bot en la nube.
+SPEAK_CMD = ${pyString(SPEAK_COMMAND)}
 # Twitch admite 500 caracteres por mensaje.
 CHAT_LIMIT = 500
 printed_once = set()
@@ -394,6 +428,14 @@ async def lux_event_loop(bot):
             continue
         if isinstance(data, dict) and data.get("reply"):
             await chat_send(channel, data["reply"])
+        # Los mismos eventos van a Done (si el creador los tiene activados en sus ajustes de Done).
+        try:
+            done_data = await done_post({"command": "event", "events": batch})
+        except (aiohttp.ClientError, ValueError, asyncio.TimeoutError) as error:
+            print("No se pudo avisar a " + DONE_NAME + " del evento: " + str(error))
+            continue
+        if isinstance(done_data, dict) and done_data.get("reply"):
+            await chat_send(channel, done_data["reply"])
 
 
 async def lux_outbox_loop(bot):
@@ -421,6 +463,110 @@ async def lux_outbox_loop(bot):
                 print("No se pudo confirmar el mensaje del panel: " + str(error))
 
 
+async def done_post(payload):
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(DONE_URL, json={"k": LUX_KEY, **payload}) as response:
+            return await response.json(content_type=None)
+
+
+def done_text(content):
+    """Si el mensaje va dirigido a Done (!palabra, o !done si el alias está activo), devuelve lo que escribió el espectador. Si no, None."""
+    head = content.lower()
+    words = [DONE_WORD]
+    if DONE_ALIAS and DONE_WORD != "done":
+        words.append("done")
+    for word in words:
+        call = PREFIX + word
+        if head == call or head.startswith(call + " "):
+            return content[len(call):].strip()
+    return None
+
+
+async def done_ask(message, text):
+    if not text:
+        await chat_send(message.channel, "@" + message.author.name + " escribe tu mensaje después de " + PREFIX + DONE_WORD + ".")
+        return
+    try:
+        data = await done_post({"command": "ask", "viewer": message.author.name, "message": text, "source": "bot"})
+    except (aiohttp.ClientError, ValueError, asyncio.TimeoutError) as error:
+        print("No se pudo hablar con " + DONE_NAME + ": " + str(error))
+        return
+    if not isinstance(data, dict):
+        return
+    if data.get("reply"):
+        await chat_send(message.channel, data["reply"])
+    elif data.get("notice"):
+        # Aviso de espera o de fallo de la IA: el servidor ya aplicó el límite de frecuencia.
+        await chat_send(message.channel, data["notice"])
+    elif data.get("skipped") or data.get("failed"):
+        print(DONE_NAME + " no respondió a " + message.author.name + ": " + str(data.get("skipped") or data.get("failed")))
+    else:
+        print(DONE_NAME + " no respondió a " + message.author.name + ": " + str(data.get("error") or data))
+
+
+async def done_switch(message, turn_on):
+    if not is_privileged(message.author):
+        await chat_send(message.channel, "@" + message.author.name + " solo el canal o los moderadores pueden hacerlo.")
+        return
+    try:
+        await done_post({"command": "on" if turn_on else "off", "privileged": True})
+    except (aiohttp.ClientError, ValueError, asyncio.TimeoutError) as error:
+        print("No se pudo cambiar " + DONE_NAME + ": " + str(error))
+        return
+    await chat_send(message.channel, DONE_NAME + " responderá en el chat." if turn_on else DONE_NAME + " dejará de responder en el chat.")
+
+
+async def done_outbox_loop(bot):
+    """Publica en el chat los mensajes de Done que escribes desde el panel y sus saludos a eventos. Confirma cada envío."""
+    while True:
+        await asyncio.sleep(DONE_OUTBOX_EVERY)
+        channel = bot.get_channel(CHANNEL)
+        if channel is None:
+            continue
+        try:
+            data = await done_post({"command": "outbox"})
+        except (aiohttp.ClientError, ValueError, asyncio.TimeoutError) as error:
+            warn_once("No se pudo leer la cola de mensajes de Done: " + str(error))
+            continue
+        if not isinstance(data, dict) or data.get("error"):
+            continue
+        for item in data.get("items") or []:
+            sent = await chat_send(channel, item.get("text", ""))
+            try:
+                await done_post({"command": "outbox_done", "id": item.get("id"), "ok": sent})
+            except (aiohttp.ClientError, ValueError, asyncio.TimeoutError) as error:
+                print("No se pudo confirmar el mensaje de Done: " + str(error))
+
+
+async def done_spontaneous_loop(bot):
+    """Comentarios espontáneos de Done: el servidor decide si toca (ajuste del creador; desactivados por defecto)."""
+    while True:
+        await asyncio.sleep(LUX_SPONT_CHECK)
+        channel = bot.get_channel(CHANNEL)
+        if channel is None or len(spont_lines) < LUX_SPONT_MIN_SEEN:
+            continue
+        try:
+            data = await done_post({"command": "spontaneous", "lines": list(spont_lines)})
+        except (aiohttp.ClientError, ValueError, asyncio.TimeoutError) as error:
+            warn_once("No se pudo pedir un comentario a " + DONE_NAME + ": " + str(error))
+            continue
+        if isinstance(data, dict) and data.get("reply"):
+            await chat_send(channel, data["reply"])
+
+
+async def done_summary_loop():
+    """Resumen del chat de Done (si el creador activó aprender del chat)."""
+    while True:
+        await asyncio.sleep(DONE_SUMMARY_EVERY)
+        if not lux_lines:
+            continue
+        try:
+            await done_post({"command": "summary", "messages": list(lux_lines)})
+        except (aiohttp.ClientError, ValueError, asyncio.TimeoutError) as error:
+            warn_once("No se pudo enviar el resumen del chat a " + DONE_NAME + ": " + str(error))
+
+
 class LaloBot(commands.Bot):
     def __init__(self):
         # case_insensitive: en el chat se escribe !Hola o !HOLA igual que !hola (el móvil pone la primera en mayúscula).
@@ -434,6 +580,10 @@ class LaloBot(commands.Bot):
         asyncio.ensure_future(lux_spontaneous_loop(self))
         asyncio.ensure_future(lux_event_loop(self))
         asyncio.ensure_future(lux_outbox_loop(self))
+        print(DONE_NAME + " responde a " + PREFIX + DONE_WORD + (" y " + PREFIX + "done" if DONE_ALIAS and DONE_WORD != "done" else ""))
+        asyncio.ensure_future(done_outbox_loop(self))
+        asyncio.ensure_future(done_spontaneous_loop(self))
+        asyncio.ensure_future(done_summary_loop())
 
     async def event_raw_data(self, data):
         # Twitch avisa aquí de lo que rechaza (mensaje repetido, demasiado rápido, sin permiso...): se muestra en la terminal.
@@ -468,7 +618,7 @@ class LaloBot(commands.Bot):
                 spont_lines.append({"viewer": message.author.name, "text": content[:300]})
                 if len(spont_lines) > LUX_SPONT_LINES_MAX:
                     del spont_lines[0]
-        if content.startswith(PREFIX + "s "):
+        if content.lower().startswith(PREFIX + SPEAK_CMD + " "):
             text = content.split(" ", 1)[1]
             try:
                 async with aiohttp.ClientSession() as session:
@@ -479,7 +629,11 @@ class LaloBot(commands.Bot):
             except aiohttp.ClientError as error:
                 print(f"No se pudo avisar al panel de Lalo: {error}")
         try:
-            if content == PREFIX + "luxon" or content == PREFIX + "luxoff":
+            if content.lower() == PREFIX + "doneon" or content.lower() == PREFIX + "doneoff":
+                await done_switch(message, content.lower() == PREFIX + "doneon")
+            elif done_text(content) is not None:
+                await done_ask(message, done_text(content))
+            elif content == PREFIX + "luxon" or content == PREFIX + "luxoff":
                 await lux_switch(message, content == PREFIX + "luxon")
             else:
                 text = lux_text(content)

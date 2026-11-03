@@ -1778,7 +1778,7 @@ function libraryApi(db: LuxDb): LibraryDb | null {
 }
 
 /** Modelos de Riot Games: los GLB de los personajes con model_origin 'riot'. Su id es el del personaje. */
-function riotModels(characters: LuxCharacter[]): LibraryModel[] {
+export function riotModels(characters: LuxCharacter[]): LibraryModel[] {
   return characters
     .filter((character) => character.modelOrigin === 'riot' && character.modelKey)
     .map((character) => {
