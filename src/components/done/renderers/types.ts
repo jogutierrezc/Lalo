@@ -18,5 +18,7 @@ export interface ActorApi {
   setMouth(level: number): void;
   /** Cara de «pensando» mientras llega la respuesta. */
   setThinking(on: boolean): void;
+  /** Ajusta el lienzo al tamaño que tiene ahora en pantalla (cambia al mover S/M/L o al abrir un panel). */
+  resize?(): void;
   dispose(): void;
 }

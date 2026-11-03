@@ -67,6 +67,7 @@ export async function createLuxActor(options: LuxActorOptions): Promise<ActorApi
       }
     },
     setThinking: () => undefined,
+    resize: () => proc.resize(),
     dispose: () => proc.dispose(),
   };
 }

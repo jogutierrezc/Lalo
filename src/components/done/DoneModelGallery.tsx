@@ -8,7 +8,7 @@
  * entra en pantalla; al pasar el cursor, el personaje saluda.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box } from 'lucide-react';
 import { Boton, Pill } from '../tally-ui';
 import { doneModelOp, doneUploadModel } from '../../lib/doneClient';
@@ -22,7 +22,7 @@ import type { ActorApi } from './renderers/types';
 
 const TONE = { aprobado: 'ok', pendiente: 'warn', privado: 'neutral' } as const;
 
-const Thumb: React.FC<{ entry: CatalogEntry; widgetKey: string; hot: boolean }> = ({ entry, widgetKey, hot }) => {
+const Thumb: React.FC<{ entry: CatalogEntry; widgetKey: string; hot: boolean; retry: number; onResult: (id: string, ok: boolean) => void }> = ({ entry, widgetKey, hot, retry, onResult }) => {
   const host = useRef<HTMLDivElement>(null);
   const actor = useRef<ActorApi>(null);
   const [poster, setPoster] = useState<string | null>(null);
@@ -34,11 +34,13 @@ const Thumb: React.FC<{ entry: CatalogEntry; widgetKey: string; hot: boolean }> 
     const el = host.current;
     if (!el) return;
     let cancelled = false;
+    setFailed(false);
     const ask = () =>
       posterFor(entry, widgetKey).then((url) => {
         if (cancelled) return;
         if (url) setPoster(url);
         else setFailed(true);
+        onResult(entry.id, Boolean(url));
       });
     if (typeof IntersectionObserver === 'undefined') {
       void ask();
@@ -57,7 +59,7 @@ const Thumb: React.FC<{ entry: CatalogEntry; widgetKey: string; hot: boolean }> 
       cancelled = true;
       io.disconnect();
     };
-  }, [entry, widgetKey, poster]);
+  }, [entry, widgetKey, poster, retry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const live = hot && !prefersReducedMotion() && (entry.kind === 'svg' || Boolean(widgetKey || entry.kind === 'lux'));
   const wave = () => void actor.current?.gesture('wave');
@@ -65,7 +67,7 @@ const Thumb: React.FC<{ entry: CatalogEntry; widgetKey: string; hot: boolean }> 
   return (
     <div className="done-card-th" ref={host}>
       {entry.kind === 'svg' && entry.palette && !live && <span dangerouslySetInnerHTML={{ __html: charThumbSvg(entry.palette) }} />}
-      {entry.kind !== 'svg' && !live && (poster ? <img src={poster} alt="" /> : failed ? <Box size={36} aria-hidden="true" color="#9aa1ab" /> : <span className="done-hint">Cargando…</span>)}
+      {entry.kind !== 'svg' && !live && (poster ? <img src={poster} alt="" /> : failed ? <Box size={36} aria-hidden="true" color="#9aa1ab" role="img" aria-label="Sin vista previa" /> : <span className="done-hint">Cargando…</span>)}
       {live && <CharacterView ref={actor} spec={entry} widgetKey={widgetKey} reducedMotion={false} onReady={wave} />}
     </div>
   );
@@ -89,8 +91,19 @@ export const DoneModelGallery: React.FC<Props> = ({ catalog, library, selectedId
   const [progress, setProgress] = useState<number | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(new Set());
   const input = useRef<HTMLInputElement>(null);
 
+  const onPoster = useCallback((id: string, ok: boolean) => {
+    setFailedIds((prev) => {
+      if (prev.has(id) === !ok) return prev;
+      const next = new Set(prev);
+      if (ok) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
   const shown = filterCatalog(catalog, filter, query);
   const selected = catalog.find((e) => e.id === selectedId);
 
@@ -144,6 +157,13 @@ export const DoneModelGallery: React.FC<Props> = ({ catalog, library, selectedId
 
       {error && <p className="done-note-dash" data-tone="bad" role="alert">No se pudo leer la biblioteca: {error}</p>}
 
+      {failedIds.size > 0 && (
+        <p className="done-note-dash" data-tone="bad" role="status">
+          No se pudo generar la vista previa de {failedIds.size === 1 ? 'un personaje' : `${failedIds.size} personajes`}. Suele ser la red o el modelo.{' '}
+          <button type="button" className="done-link" onClick={() => setRetry((n) => n + 1)}>Reintentar</button>
+        </p>
+      )}
+
       <div className="done-gal-grid" role="group" aria-label="Personajes">
         {shown.map((entry) => (
           <div key={entry.id} className="done-card-wrap">
@@ -165,7 +185,7 @@ export const DoneModelGallery: React.FC<Props> = ({ catalog, library, selectedId
               onFocus={() => setHot(entry.id)}
               onBlur={() => setHot((h) => (h === entry.id ? null : h))}
             >
-              <Thumb entry={entry} widgetKey={widgetKey} hot={hot === entry.id} />
+              <Thumb entry={entry} widgetKey={widgetKey} hot={hot === entry.id} retry={retry} onResult={onPoster} />
               <b>{entry.name}</b>
               <small>{entry.detail}</small>
               <span className="done-card-meta">

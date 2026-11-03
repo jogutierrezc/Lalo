@@ -5,7 +5,8 @@
  * chat real), con un chat simulado, las 10 emociones, los 11 gestos y los eventos de ejemplo.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useId, useRef, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { Boton, Segmented } from '../tally-ui';
 import type { DoneSettings, DoneSpeech } from '../../lib/doneTypes';
 import { DoneOverlayView, type DoneOverlayHandle, type OverlayStep } from './DoneOverlayView';
@@ -59,6 +60,8 @@ export const DonePreview: React.FC<Props> = ({ settings, spec, widgetKey, channe
   const [tab, setTab] = useState<PanelTab>('chat');
   const [bg, setBg] = useState<'game' | 'clear'>('game');
   const [debug, setDebug] = useState(false);
+  const [open, setOpen] = useState(false);
+  const accId = useId();
   const [step, setStep] = useState<OverlayStep>(0);
   const [queued, setQueued] = useState(0);
   const [who, setWho] = useState('lunaplay');
@@ -122,6 +125,15 @@ export const DonePreview: React.FC<Props> = ({ settings, spec, widgetKey, channe
         onSpeechStart={onSpeechStart}
         onFallback={onFallback}
       />
+      <div className="done-acc">
+        <button type="button" className="done-acc-btn" aria-expanded={open} aria-controls={`${accId}-body`} id={`${accId}-btn`} onClick={() => setOpen((v) => !v)}>
+          <span>Probar a Done</span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </button>
+        {/* Cerrado, el contenido no recibe foco ni lo leen los lectores de pantalla */}
+        <div className="done-acc-body" id={`${accId}-body`} role="region" aria-labelledby={`${accId}-btn`} data-open={open ? '1' : '0'} inert={!open}>
+          <div>
+            <div className="done-acc-in">
       <div className="done-pipe" aria-label="Flujo de una respuesta">
         {STEPS.map((s) => (
           <div key={s.n} className="done-pstep" data-on={step === s.n || (step === 4 && s.n === 3) ? '1' : '0'} data-done={step > s.n ? '1' : '0'}>
@@ -213,6 +225,10 @@ export const DonePreview: React.FC<Props> = ({ settings, spec, widgetKey, channe
             <p className="done-hint">Los eventos desactivados en la pestaña Eventos no se disparan.</p>
           </>
         )}
+      </div>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   );

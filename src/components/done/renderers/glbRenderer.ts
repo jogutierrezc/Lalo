@@ -50,6 +50,7 @@ export async function createGlbActor(options: GlbActorOptions): Promise<ActorApi
     setMouth: (level) => mascota.setMouth(level),
     // El GLB no tiene cara de «pensando»: se queda en reposo (Idle1_Base).
     setThinking: () => undefined,
+    resize: () => mascota.resize(),
     dispose: () => mascota.dispose(),
   };
 }

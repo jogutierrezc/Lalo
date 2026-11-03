@@ -14,6 +14,8 @@ const POSTER_SIZE = 256;
 const POSTER_TIMEOUT_MS = 15000;
 /** Lo que se espera tras cargar para que el modelo ya esté en su pose de reposo. */
 const SETTLE_MS = 350;
+/** Tras un tiempo agotado, lo que se espera a que el render tardío suelte el lienzo compartido antes de seguir con el siguiente. */
+const LATE_GRACE_MS = 10000;
 
 const cache = new Map<string, Promise<string | null>>();
 const canvases: Partial<Record<'glb' | 'lux', HTMLCanvasElement>> = {};
@@ -37,14 +39,17 @@ function sharedCanvas(kind: 'glb' | 'lux'): HTMLCanvasElement {
 
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
-async function render(spec: CharacterSpec, widgetKey: string): Promise<string | null> {
+/** `late.dead` se activa cuando el tiempo se agotó: el render que llega tarde se libera sin pintar. */
+async function render(spec: CharacterSpec, widgetKey: string, late: { dead: boolean }): Promise<string | null> {
   const noGestures: DoneGesture[] | null = null;
   if (spec.kind === 'lux') {
     const { createLuxActor } = await import('./renderers/luxRenderer');
     const canvas = sharedCanvas('lux');
     const actor = await createLuxActor({ canvas, reduceMotion: true, allowedGestures: noGestures, fps: 5 });
     try {
+      if (late.dead) return null;
       await wait(SETTLE_MS);
+      if (late.dead) return null;
       actor.proc.renderOnce();
       return canvas.toDataURL('image/webp', 0.85);
     } finally {
@@ -56,7 +61,9 @@ async function render(spec: CharacterSpec, widgetKey: string): Promise<string | 
     const canvas = sharedCanvas('glb');
     const actor = await createGlbActor({ canvas, modelId: spec.modelId, widgetKey, reduceMotion: true, allowedGestures: noGestures });
     try {
+      if (late.dead) return null;
       await wait(SETTLE_MS * 2);
+      if (late.dead) return null;
       return canvas.toDataURL('image/webp', 0.85);
     } finally {
       actor.dispose();
@@ -74,10 +81,20 @@ export function posterFor(spec: CharacterSpec, widgetKey: string): Promise<strin
   const key = `${spec.id}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const job = chain.then(() =>
-    Promise.race([render(spec, widgetKey).catch(() => null), wait(POSTER_TIMEOUT_MS).then(() => null)])
-  );
-  chain = job.catch(() => null);
+  const late = { dead: false };
+  let work: Promise<string | null> = Promise.resolve(null);
+  const job = chain.then(() => {
+    work = render(spec, widgetKey, late).catch(() => null);
+    return Promise.race([
+      work,
+      wait(POSTER_TIMEOUT_MS).then(() => {
+        late.dead = true;
+        return null;
+      }),
+    ]);
+  });
+  // Las peticiones comparten un solo lienzo: si una se agotó, la siguiente espera a que esa suelte el lienzo (con tope).
+  chain = job.then(() => (late.dead ? Promise.race([work, wait(LATE_GRACE_MS)]) : undefined)).catch(() => null);
   // Un fallo no se guarda: la siguiente vez que la tarjeta entre en pantalla se reintenta.
   const guarded = job.then((value) => {
     if (value === null) cache.delete(key);

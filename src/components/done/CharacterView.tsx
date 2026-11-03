@@ -125,8 +125,14 @@ export const CharacterView = forwardRef<ActorApi, CharacterViewProps>(function C
       );
     }
 
+    // El lienzo 3D no se redimensiona solo: si el contenedor cambia (S/M/L, ventana, panel que se abre), se ajusta.
+    // Un lienzo que se montó con tamaño 0 (contenedor oculto) se queda en 1 px hasta que se avisa aquí.
+    const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => actorRef.current?.resize?.());
+    watch?.observe(host);
+
     return () => {
       cancelled = true;
+      watch?.disconnect();
       actorRef.current = null;
       actor?.dispose();
       host.innerHTML = '';

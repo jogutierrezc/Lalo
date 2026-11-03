@@ -56,22 +56,64 @@
 .done-think i { width: 0.8cqw; height: 0.8cqw; border-radius: 50%; background: #c3c8cf; }
 
 /* ---------- Ventana ---------- */
-.done-win { container-type: inline-size; display: grid; grid-template-rows: auto 1fr; min-height: 0; height: 100%; background: var(--tally-dark); color: var(--tally-white); font-family: var(--tally-ui); }
-.done-win-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px 0; }
-.done-win-head .sp { flex: 1; }
+.done-win { container-type: inline-size; display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; height: 100%; background: var(--tally-dark); color: var(--tally-white); font-family: var(--tally-ui); }
+
+/* Franja de estado del bot */
+.done-bot { display: flex; align-items: center; gap: 8px 20px; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--tally-line); }
+.done-bot-step { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #c3c8cf; }
+.done-bot-step i { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--tally-warn); transition: background-color 160ms ease; }
+.done-bot-step[data-ok='1'] i { background: var(--tally-ok); }
+.done-bot .sp { flex: 1; }
+.done-bot-msg { flex-basis: 100%; margin: 0; font-size: 12.5px; color: var(--tally-muted); }
+.done-bot-msg[data-tone='bad'] { color: var(--tally-error); }
 .done-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 5px; background: rgb(61 220 151 / 0.12); color: var(--tally-ok); }
 .done-status[data-state='saving'], .done-status[data-state='loading'] { background: #262c33; color: #c3c8cf; }
 .done-status[data-state='error'] { background: transparent; color: var(--tally-error); border: 1px dashed var(--tally-error-line); }
 .done-status button { font: inherit; color: inherit; background: none; border: 0; text-decoration: underline; cursor: pointer; padding: 0; }
-.done-win-main { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); min-height: 0; }
-.done-win-form { padding: 16px; display: grid; gap: 16px; align-content: start; overflow: auto; border-right: 1px solid var(--tally-line); min-height: 0; }
-/* La barra de pestañas se queda arriba al desplazar el formulario (si no, se pierde al bajar por la galería) */
-.done-tabs-sticky { position: sticky; top: 0; z-index: 5; margin: -16px -16px 0; padding: 16px 16px 8px; background: var(--tally-dark); border-bottom: 1px solid var(--tally-line); }
-.done-win-prev { padding: 16px; display: grid; gap: 12px; align-content: start; background: #14171a; overflow: auto; min-height: 0; }
-@container (max-width: 820px) {
-  .done-win-main { grid-template-columns: 1fr; }
-  .done-win-form { border-right: 0; border-bottom: 1px solid var(--tally-line); overflow: visible; }
+.done-bot a.tui-btn { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* La barra de pestañas se queda arriba al desplazar (fuera del área que se desplaza) */
+.done-tabs-sticky { position: sticky; top: 0; z-index: 5; padding: 0 6px; background: var(--tally-dark); border-bottom: 1px solid var(--tally-line); }
+.done-tabs-sticky .tui-tabs { border-bottom: 0; }
+
+/* Ajustes anchos a la izquierda; vista previa compacta y fija a la derecha. --prev-w es el ancho del escenario (la columna suma el relleno). */
+.done-win-main { --prev-w: 340px; display: grid; grid-template-columns: minmax(0, 1fr) calc(var(--prev-w) + 28px); align-items: start; min-height: 0; max-height: 100%; overflow: auto; }
+.done-win-main[data-size='S'] { --prev-w: 260px; }
+.done-win-main[data-size='L'] { --prev-w: 440px; }
+.done-win-form { padding: 16px 20px 28px; min-width: 0; border-right: 1px solid var(--tally-line); }
+.done-win-form .tui-tabpanel { display: block; }
+.done-side { position: sticky; top: 0; align-self: start; display: grid; gap: 12px; padding: 14px; align-content: start; min-width: 0; background: #14171a; }
+.done-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.done-side-head strong { font-family: var(--tally-disp); font-size: 13px; font-weight: 600; }
+.done-side .done-stage { min-width: 0; }
+
+.done-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; }
+.done-group { display: grid; gap: 14px; align-content: start; min-width: 0; padding-block: 4px 22px; }
+.done-group[data-wide] { grid-column: 1 / -1; }
+.done-group[data-rule] { border-top: 1px solid var(--tally-line); padding-top: 18px; }
+.done-group > h3 { margin: 0; font-family: var(--tally-disp); font-size: 13px; font-weight: 600; color: var(--tally-white); }
+.done-group .done-grid { gap: 14px 40px; }
+
+/* Probar a Done: acordeón con CSS */
+.done-acc { border: 1px solid var(--tally-line); border-radius: 10px; min-width: 0; }
+.done-acc-btn { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: 0; background: none; color: var(--tally-white); cursor: pointer; font: inherit; font-weight: 700; font-size: 13px; border-radius: 10px; transition: background-color 140ms ease; }
+.done-acc-btn svg { transition: transform 200ms var(--tally-ease); }
+.done-acc-btn[aria-expanded='true'] svg { transform: rotate(180deg); }
+.done-acc-btn:focus-visible { outline: 2px solid var(--tally-red); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .done-acc-btn:hover { background: #20252b; } }
+.done-acc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 220ms var(--tally-ease); }
+.done-acc-body[data-open='1'] { grid-template-rows: 1fr; }
+.done-acc-body > div { overflow: hidden; min-height: 0; }
+.done-acc-in { padding: 4px 12px 12px; display: grid; gap: 10px; }
+
+@container (max-width: 960px) {
+  .done-win-main { grid-template-columns: 1fr; overflow: visible; max-height: none; }
+  .done-win-form { border-right: 0; border-top: 1px solid var(--tally-line); order: 2; }
+  .done-side { position: static; order: 1; grid-template-columns: 220px minmax(0, 1fr); align-items: start; }
+  .done-side-head { grid-column: 1 / -1; }
+  .done-grid { grid-template-columns: 1fr; }
 }
+@container (max-width: 560px) { .done-side { grid-template-columns: 1fr; } }
 .done-field { display: grid; gap: 7px; }
 .done-field > label, .done-field > .done-lbl { font-size: 13px; font-weight: 600; }
 .done-hint { color: var(--tally-muted); font-size: 12.5px; margin: 0; }
@@ -118,6 +160,8 @@
 .done-card small { color: var(--tally-muted); font-size: 11px; }
 .done-card-meta { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .done-card-acts { display: flex; gap: 4px; flex-wrap: wrap; }
+.done-link { font: inherit; color: inherit; background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+.done-link:focus-visible { outline: 2px solid var(--tally-red); outline-offset: 2px; }
 .done-empty { color: var(--tally-muted); font-size: 13px; margin: 0; }
 
 /* ---------- Memoria ---------- */
@@ -149,4 +193,6 @@
 .done-msg[data-sys='1'] { color: var(--tally-muted); font-size: 12.5px; }
 .done-send { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 8px; }
 @media (max-width: 560px) { .done-pipe { grid-template-columns: 1fr 1fr; } .done-send { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { .done-chip, .done-card, .done-pill-btn, .done-pstep, .done-charwrap { transition: none; } }
+.done-acc .done-pipe { grid-template-columns: 1fr 1fr; }
+.done-acc .done-panel { min-height: 0; }
+@media (prefers-reduced-motion: reduce) { .done-chip, .done-card, .done-pill-btn, .done-pstep, .done-charwrap, .done-acc-btn, .done-acc-btn svg, .done-acc-body, .done-bot-step i { transition: none; } }

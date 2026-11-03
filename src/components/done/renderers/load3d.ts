@@ -8,6 +8,7 @@
  */
 
 import gsap from 'gsap';
+import { publicModuleUrl } from './publicUrl';
 
 /** Misma URL y versión que public/lux/overlay.html. */
 export const THREE_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
@@ -38,7 +39,7 @@ export function loadThree(): Promise<void> {
 
 /** Importa un módulo de public/ en tiempo de ejecución (Vite no lo empaqueta: se sirve tal cual). */
 export function importPublic<T>(path: string): Promise<T> {
-  return import(/* @vite-ignore */ path) as Promise<T>;
+  return import(/* @vite-ignore */ publicModuleUrl(path)) as Promise<T>;
 }
 
 export const MASCOTA_MODULE = '/lux/mascota/mascota.js';
