@@ -31,6 +31,7 @@ export type AdminSection =
   | 'voces'
   | 'almacenamiento'
   | 'integraciones'
+  | 'migrar'
   | 'acceso';
 
 /** Rutas antiguas que siguen funcionando: llevan a la sección nueva que absorbió su contenido. */
@@ -88,6 +89,7 @@ export const ADMIN_GROUPS: AdminGroup[] = [
     label: 'Sistema',
     sections: [
       { id: 'integraciones', label: 'Integraciones' },
+      { id: 'migrar', label: 'Migrar datos' },
       { id: 'acceso', label: 'Mi acceso' },
     ],
   },

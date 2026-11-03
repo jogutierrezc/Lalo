@@ -21,6 +21,7 @@
     { "source": "/api/integrations/:action", "destination": "/api/integraciones?g=integrations&a=:action" },
     { "source": "/api/lux/:action", "destination": "/api/integraciones?g=lux&a=:action" },
     { "source": "/api/done/:action", "destination": "/api/integraciones?g=done&a=:action" },
+    { "source": "/api/migrate/:action", "destination": "/api/integraciones?g=migrate&a=:action" },
     { "source": "/api/paypal/:action", "destination": "/api/integraciones?g=paypal&a=:action" },
     { "source": "/api/twitch/bot", "destination": "/api/integraciones?g=twitch-bot&a=bot" },
     { "source": "/api/health", "destination": "/api/version?health=1" },

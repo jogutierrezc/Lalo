@@ -88,7 +88,46 @@ con un código de afiliado válido podría activarse como streamer sin Twitch
 
 ## 4. Ejecutar las migraciones
 
-Hazlo **antes** del primer inicio de sesión. Van **en este orden exacto**:
+Hazlo **antes** del primer inicio de sesión.
+
+### Opción rápida (proyecto nuevo): un solo archivo
+
+Pega y ejecuta **`supabase/baseline/0001_lalo_baseline.sql`** en el SQL Editor
+(o `supabase db push` con ese archivo como única migración). Une las 54
+migraciones en el orden correcto. Se comprobó en un Postgres embebido (pglite,
+con roles, `auth` y `storage` simulados): deja exactamente las mismas tablas,
+columnas, funciones, políticas, triggers e índices que ejecutar las 54 una a
+una. No se ha probado en un proyecto Supabase real. Es para una base **vacía**:
+no se puede ejecutar dos veces.
+
+Cuando añadas una migración nueva en `supabase/migrations/`, regenera el
+baseline con `node scripts/build-supabase-baseline.mjs`.
+
+### Pasar también los datos a un proyecto nuevo
+
+Con el esquema ya creado en el proyecto nuevo (baseline), entra como administrador en
+**Consola, Sistema, Migrar datos** (`#admin/migrar`):
+
+1. **Exportar datos**: marca las tablas y descarga un `.sql` (una sentencia por línea). Incluye, si quieres,
+   las cuentas de acceso con sus identidades de Twitch, para que cada streamer conserve su cuenta. No incluye
+   contraseñas (quien entra con correo y clave debe restablecerla) ni los archivos de R2 (siguen en su bucket).
+2. **Importar datos**: elige ese archivo, pon la referencia del proyecto nuevo y un token de acceso personal
+   (supabase.com/dashboard/account/tokens). Cada tabla del archivo queda como en el origen: se vacía y se carga.
+   Se aplica por lotes, cada lote en una transacción y sin disparadores.
+
+El servidor solo ejecuta sentencias con el formato exacto de la exportación (INSERT de datos, el DELETE de
+tabla completa y el reajuste de secuencias); cualquier otra línea hace que se rechace el archivo. Código en
+`server/migration/` y `src/pages/admin/MigrarSection.tsx`. Para que las claves cifradas de integraciones sigan
+sirviendo, el servidor nuevo necesita el mismo `INTEGRATIONS_ENC_KEY`.
+
+> **Sin probar contra Supabase real:** el formato y el viaje de ida y vuelta se comprobaron en un Postgres
+> embebido (idéntico tras exportar e importar, incluidos ids con huecos, textos con comillas y saltos de línea,
+> jsonb y arrays). Falta probar el OpenAPI de PostgREST y la API de gestión (`/v1/projects/{ref}/database/query`).
+
+### Opción detallada: migración por migración
+
+Si prefieres aplicarlas una a una, van **en este orden exacto**
+(`0018_elevenlabs` antes que `0018_tournament_intro`; no existe la `0011`):
 
 1. `supabase/migrations/0001_lalo_init.sql`
 2. `supabase/migrations/0002_widget_version.sql`

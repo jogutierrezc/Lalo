@@ -25,14 +25,14 @@ describe('grupos del menú', () => {
     expect(ADMIN_GROUPS[0].sections.map((s) => s.label)).toEqual(['Bandeja de pagos', 'Facturación', 'Suscripciones', 'Planes y precios', 'Códigos y regalos']);
     expect(ADMIN_GROUPS[1].sections.map((s) => s.id)).toEqual(['cuentas', 'uso']);
     expect(ADMIN_GROUPS[2].sections.map((s) => s.id)).toEqual(['voces', 'almacenamiento']);
-    expect(ADMIN_GROUPS[3].sections.map((s) => s.id)).toEqual(['integraciones', 'acceso']);
+    expect(ADMIN_GROUPS[3].sections.map((s) => s.id)).toEqual(['integraciones', 'migrar', 'acceso']);
   });
 
   it('Resumen queda arriba como inicio y cada sección sale una sola vez', () => {
     expect(ADMIN_SECTIONS[0]).toEqual(ADMIN_HOME);
     const ids = ADMIN_SECTIONS.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toHaveLength(12);
+    expect(ids).toHaveLength(13);
   });
 });
 

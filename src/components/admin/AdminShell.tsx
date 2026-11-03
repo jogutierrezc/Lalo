@@ -22,6 +22,7 @@ import {
   BarChart3,
   CreditCard,
   FileText,
+  DatabaseBackup,
   HardDrive,
   Inbox,
   KeyRound,
@@ -65,6 +66,7 @@ import { StreamersSection } from '../../pages/admin/StreamersSection';
 import { VocesPersonajesSection } from '../../pages/admin/VocesPersonajesSection';
 import { AccesoSection } from '../../pages/admin/AccesoSection';
 import { IntegracionesSection } from '../../pages/admin/IntegracionesSection';
+import { MigrarSection } from '../../pages/admin/MigrarSection';
 import { BandejaSection } from '../../pages/admin/BandejaSection';
 import { FacturacionSection } from '../../pages/admin/FacturacionSection';
 import { useAdminBillingSummary, useAdminInbox } from '../../pages/admin/useAdminBilling';
@@ -83,6 +85,7 @@ const ICONS: Record<AdminSection, React.ComponentType<{ className?: string }>> =
   voces: Mic,
   almacenamiento: HardDrive,
   integraciones: Plug,
+  migrar: DatabaseBackup,
   acceso: KeyRound,
 };
 
@@ -320,6 +323,7 @@ export const AdminShell: React.FC = () => {
           {section === 'voces' && <VocesPersonajesSection data={data} tab={route.tab} />}
           {section === 'almacenamiento' && <AlmacenamientoSection data={data} />}
           {section === 'integraciones' && <IntegracionesSection data={data} />}
+          {section === 'migrar' && <MigrarSection />}
           {section === 'acceso' && <AccesoSection />}
         </main>
       </div>

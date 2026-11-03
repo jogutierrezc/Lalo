@@ -48,6 +48,8 @@ app.use(
 // cuerpo tal como llegó. La misma lógica que api/twitch/eventsub.ts
 app.post('/api/twitch/eventsub', express.raw({ type: () => true, limit: MAX_BODY_BYTES }), eventsubNodeHandler);
 
+// Importar datos manda lotes de SQL de hasta ~1 MB: esta ruta lleva su propio tope, antes del general
+app.use('/api/migrate', express.json({ limit: '4mb' }));
 app.use(express.json({ limit: '16kb' }));
 
 // Endpoint de verificación de salud
@@ -139,6 +141,7 @@ app.all('/api/riot/:action', (req, res) => integrationNodeHandler('riot', req.pa
 app.all('/api/lux/:action', (req, res) => integrationNodeHandler('lux', req.params.action, req, res));
 app.all('/api/done/:action', (req, res) => integrationNodeHandler('done', req.params.action, req, res));
 app.all('/api/paypal/:action', (req, res) => integrationNodeHandler('paypal', req.params.action, req, res));
+app.all('/api/migrate/:action', (req, res) => integrationNodeHandler('migrate', req.params.action, req, res));
 app.all('/api/integrations/:action', (req, res) => integrationNodeHandler('integrations', req.params.action, req, res));
 
 interface TTSRequestBody {

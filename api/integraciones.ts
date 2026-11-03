@@ -10,6 +10,7 @@
  *   /api/riot/<acción>         status, link, unlink, state
  *   /api/twitch/bot            bot de chat en la nube del streamer (grupo twitch-bot)
  *   /api/paypal/<acción>       cobro con suscripciones de PayPal (grupo paypal)
+ *   /api/migrate/<acción>      exportar e importar datos en SQL (plan, export, import; solo administrador)
  *   /api/integrations/status   estado del servidor para el administrador
  *
  * La lógica vive en server/integrations/, compartida con el servidor local.
@@ -27,7 +28,7 @@ import { routeFromRequest } from '../server/apiRoute.js';
 const first = (value: unknown): string => (Array.isArray(value) ? String(value[0] ?? '') : typeof value === 'string' ? value : '');
 
 export default async function handler(req: any, res: any): Promise<void> {
-  const route = routeFromRequest(req, ['spotify', 'kofi', 'riot', 'integrations', 'lux', 'done', 'twitch-bot', 'paypal']);
+  const route = routeFromRequest(req, ['spotify', 'kofi', 'riot', 'integrations', 'lux', 'done', 'twitch-bot', 'paypal', 'migrate']);
   let [group, part] = route.split('/');
   const path = String(req.url ?? '').split('?')[0];
   if (group === 'kofi' || (!group && path.includes('/api/kofi/'))) {
