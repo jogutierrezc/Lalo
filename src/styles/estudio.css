@@ -3,7 +3,7 @@
    1) La escena (.es-*): la pinta SceneView igual en el editor y en OBS. Las
       capas van en porcentajes de 1920 × 1080 y todo lo demás en em; en el
       lienzo 1em son 32 px (1/60 del ancho).
-   2) Las capas de Lalo dentro de una caja: la caja pasa a ser su «pantalla» y
+   2) Las capas de Tally Studio dentro de una caja: la caja pasa a ser su «pantalla» y
       su tamaño de letra sale del ancho de la caja.
    3) El editor (.st-*), en el lenguaje Cabina del panel.
    ========================================================================== */
@@ -139,7 +139,7 @@
   text-align: center;
 }
 
-/* ---------- 2. Capas de Lalo dentro de una caja ---------- */
+/* ---------- 2. Capas de Tally Studio dentro de una caja ---------- */
 
 /* Aviso: toda la caja o, con posición aleatoria, un punto dentro de la zona */
 .es-spot {

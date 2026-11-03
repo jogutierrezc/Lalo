@@ -684,12 +684,12 @@ export const Widget: React.FC = () => {
           enqueueManualMessage(event.data.text, event.data.user || 'Streamer');
         }
         if (event.data?.type === 'SETTINGS_UPDATE' && event.data.settings) {
-          console.log('[Lalo Widget] Configuración actualizada dinámicamente desde el Dashboard.');
+          console.log('[Tally Studio Widget] Configuración actualizada dinámicamente desde el Dashboard.');
           // Lo envía el panel o la nube: es lo último que eligió el streamer y manda sobre la URL
           setSettings((prev) => resolveWidgetSettings({ ...prev, ...event.data.settings }, getURLParam, true));
         }
         if (event.data?.type === 'FORCE_RELOAD' || event.data?.type === 'RELOAD') {
-          console.log('[Lalo Widget] Orden de recarga remota recibida vía BroadcastChannel.');
+          console.log('[Tally Studio Widget] Orden de recarga remota recibida vía BroadcastChannel.');
           window.location.reload();
         }
       };
@@ -1835,7 +1835,7 @@ export const Widget: React.FC = () => {
     };
   }, [stopSpeakingAnimation]);
 
-  // Lo que necesita una escena de Studio para pintar las capas de Lalo
+  // Lo que necesita una escena de Studio para pintar las capas de Tally Studio
   const sceneGoalId = currentGoalEvent?.goalId;
   const sceneData = useMemo<SceneData>(
     () => ({ chat: chatSettings, raid: raidSettings, goals: goalsSettings, alerts: alertsSettings, goalEventId: sceneGoalId }),

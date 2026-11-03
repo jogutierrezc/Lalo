@@ -160,7 +160,7 @@ export const GameStudio: React.FC = () => {
       <Nota>
         {cloudOn
           ? 'Las alertas reales salen de tu cuenta de Riot: vincúlala en esta pestaña. Llegan al terminar la partida o al consultarla, no al instante.'
-          : 'Las alertas reales necesitan una cuenta de Lalo con la nube encendida y tu Riot ID vinculado en esta pestaña. Sin eso, la fuente solo enseña las pruebas y las alertas de muestra.'}
+          : 'Las alertas reales necesitan una cuenta de Tally Studio con la nube encendida y tu Riot ID vinculado en esta pestaña. Sin eso, la fuente solo enseña las pruebas y las alertas de muestra.'}
       </Nota>
     </>
   );

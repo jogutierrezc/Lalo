@@ -1,7 +1,7 @@
 /**
  * server/twitch/chatSend.ts
  *
- * Escribe en el chat de Twitch desde el servidor con el bot global "Lalo" o, en modo streamer
+ * Escribe en el chat de Twitch desde el servidor con el bot global "Tally Studio" o, en modo streamer
  * (senderMode.ts), con la propia cuenta del streamer: lo único que cambia es el sender_id.
  * Usa el token de APLICACIÓN (appToken de clips.ts) y no guarda tokens de usuario. Si el emisor
  * es el dueño del canal no hace falta channel:bot; sí user:write:chat y user:bot del emisor.

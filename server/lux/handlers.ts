@@ -237,7 +237,7 @@ const bodyOf = (req: IntegrationRequest): Record<string, unknown> => (req.body &
 
 /** Traduce los fallos de los proveedores a respuestas del panel. Nunca incluye la clave ni el texto de la petición. */
 function nvidiaFailure(err: NvidiaError): IntegrationResult {
-  console.error(`[Lalo lux] nvidia: ${err.code} (${err.status})`);
+  console.error(`[Tally Studio lux] nvidia: ${err.code} (${err.status})`);
   switch (err.code) {
     case 'no_key':
       return fail(503, 'no_key', 'No hay clave de NVIDIA guardada. Configúrala en el panel de administración, en Integraciones.');
@@ -316,7 +316,7 @@ async function modelChoice(db: LuxDb, provider: LuxProvider, character: LuxChara
 async function recordUsage(db: LuxDb, profile: LuxProfile, nowMs: number, choice: PickResult): Promise<void> {
   if (choice.cost <= 0 || !db.addUsage) return;
   await db.addUsage(profile.id, monthOf(nowMs), choice.cost).catch(() => {
-    console.error('[Lalo lux] no se pudo registrar el consumo de créditos');
+    console.error('[Tally Studio lux] no se pudo registrar el consumo de créditos');
   });
 }
 
@@ -715,7 +715,7 @@ async function config(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise
     // Sin aprendizaje ni comentarios, nada del chat debe quedar guardado (migración 0041)
     if (!check.value.chatLearning && !check.value.spontaneousEnabled) {
       await (deps.clearChatLines ?? defaultClearChatLines)(caller.id, env).catch(() => {
-        console.error('[Lalo lux] no se pudieron borrar las líneas del chat guardadas');
+        console.error('[Tally Studio lux] no se pudieron borrar las líneas del chat guardadas');
       });
     }
     return { status: 200, body: { settings: check.value } };
@@ -760,7 +760,7 @@ async function proactiveText(
     });
   } catch (err) {
     if (!(err instanceof NvidiaError)) throw err;
-    console.error(`[Lalo lux] texto propio: la IA falló (${err.code})`);
+    console.error(`[Tally Studio lux] texto propio: la IA falló (${err.code})`);
     return { ok: false, result: { status: 200, body: { skipped: 'ai_failed' } } };
   }
   await recordUsage(db, profile, nowMs, choice);
@@ -916,7 +916,7 @@ async function reply(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<
 
     // Registro de la respuesta: si falla, la respuesta igualmente se entrega.
     await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply: clipped, model }).catch(() => {
-      console.error('[Lalo lux] no se pudo guardar el registro de la respuesta');
+      console.error('[Tally Studio lux] no se pudo guardar el registro de la respuesta');
     });
     // Desde el panel solo se manda a OBS si el streamer lo pide (botón «Hablar en el overlay»).
     if (raw.speak === true) {
@@ -953,7 +953,7 @@ async function loadThread(db: LuxDb, profileId: string, enabled: boolean, viewer
   try {
     return await db.threadRecent(profileId, threadViewerKey(viewer), nowMs);
   } catch {
-    console.error('[Lalo lux] no se pudo leer el hilo del espectador');
+    console.error('[Tally Studio lux] no se pudo leer el hilo del espectador');
     return [];
   }
 }
@@ -965,7 +965,7 @@ async function saveThread(db: LuxDb, profileId: string, enabled: boolean, viewer
   try {
     await db.threadSave(profileId, threadViewerKey(viewer), { user: message.slice(0, LUX_THREAD_CONTENT_MAX), assistant: answer.slice(0, LUX_THREAD_CONTENT_MAX) }, nowMs);
   } catch {
-    console.error('[Lalo lux] no se pudo guardar el hilo del espectador');
+    console.error('[Tally Studio lux] no se pudo guardar el hilo del espectador');
   }
 }
 
@@ -1053,7 +1053,7 @@ async function askInChat(
   const canSing = isSong && current.voiceEngine === 'elevenlabs';
 
   await db.insertReply({ profile_id: profile.id, viewer, prompt: message, reply, model }).catch(() => {
-    console.error('[Lalo lux] no se pudo guardar el registro de la respuesta del chat');
+    console.error('[Tally Studio lux] no se pudo guardar el registro de la respuesta del chat');
   });
   // En directo, lo que Lux responde en el chat también se oye en OBS.
   if (isSong) {
@@ -1173,7 +1173,7 @@ async function runSpontaneous(db: LuxDb, env: Env, deps: LuxDeps, profile: LuxPr
   if (!made.ok) return made.result;
   await enqueueSpeech(db, profile.id, made.reply, made.emotion, 'idle', current);
   await db.insertReply({ profile_id: profile.id, viewer: null, prompt: '(comentario espontáneo)', reply: made.reply, model: made.model }).catch(() => {
-    console.error('[Lalo lux] no se pudo guardar el registro del comentario espontáneo');
+    console.error('[Tally Studio lux] no se pudo guardar el registro del comentario espontáneo');
   });
   return { status: 200, body: { reply: made.reply, emotion: made.emotion, model: made.model } };
 }
@@ -1228,7 +1228,7 @@ async function chat(req: IntegrationRequest, env: Env, deps: LuxDeps): Promise<I
       // Seguidores nuevos e inicio del directo (EventSub): si ya toca saludarlos, el saludo entra en la cola
       // y sale en esta misma respuesta. Un fallo aquí nunca debe impedir que el bot reciba el resto.
       await flushChannelEvents(db, env, deps, profile, current, nowMs).catch((err: unknown) => {
-        console.error('[Lalo lux] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
+        console.error('[Tally Studio lux] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
       });
       const items = await db.outboxClaim(profile.id, 3, new Date(nowMs).toISOString());
       for (const item of items) {
@@ -1326,7 +1326,7 @@ export async function luxSwitchForProfile(profileId: string, on: boolean, env: E
     await db.saveSettingsRow(rowFromSettings(profileId, { ...current, chatEnabled: on }));
     return on;
   } catch (err) {
-    console.error('[Lalo lux] no se pudo cambiar el chat de Lux:', err instanceof Error ? err.message : 'error desconocido');
+    console.error('[Tally Studio lux] no se pudo cambiar el chat de Lux:', err instanceof Error ? err.message : 'error desconocido');
     return null;
   }
 }
@@ -1374,7 +1374,7 @@ export async function luxProactiveStatusForProfile(profileId: string, env: Env =
       },
     };
   } catch (err) {
-    console.error('[Lalo lux] no se pudo leer el estado del aprendizaje:', err instanceof Error ? err.message : 'error desconocido');
+    console.error('[Tally Studio lux] no se pudo leer el estado del aprendizaje:', err instanceof Error ? err.message : 'error desconocido');
     return null;
   }
 }
@@ -1448,7 +1448,7 @@ export async function luxOutboxForProfile(
     const current = settingsFromRow(await db.settingsRow(profile.id));
     // Seguidores nuevos e inicio del directo: si ya toca saludarlos, el saludo entra en la cola y sale en esta misma vuelta
     await flushChannelEvents(db, env, deps, profile, current, nowMs).catch((err: unknown) => {
-      console.error('[Lalo lux] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
+      console.error('[Tally Studio lux] saludo a eventos del canal:', err instanceof Error ? err.message : 'error desconocido');
     });
     const items = await db.outboxClaim(profile.id, 3, new Date(nowMs).toISOString());
     if (items.length > 0 && db.outboxPrune) {
@@ -1474,7 +1474,7 @@ export async function luxOutboxForProfile(
     }
     return result;
   } catch (err) {
-    console.error('[Lalo lux] cola de mensajes en la nube:', err instanceof Error ? err.message : 'error desconocido');
+    console.error('[Tally Studio lux] cola de mensajes en la nube:', err instanceof Error ? err.message : 'error desconocido');
     return result;
   }
 }
@@ -1619,7 +1619,7 @@ async function enqueueSpeech(db: LuxDb, profileId: string, text: string, emotion
       voice_engine: s.voiceEngine,
       play_after: delayMs > 0 ? new Date(Date.now() + delayMs).toISOString() : null,
     })
-    .catch(() => console.error('[Lalo lux] no se pudo encolar la voz para el overlay'));
+    .catch(() => console.error('[Tally Studio lux] no se pudo encolar la voz para el overlay'));
   if (db.pruneSpeech) {
     await db.pruneSpeech(profileId, new Date(Date.now() - 10 * 60_000).toISOString()).catch(() => undefined);
   }

@@ -20,7 +20,7 @@ export const RETIRADA: DocumentoLegal = {
       titulo: null,
       bloques: [
         p(
-          'Respetamos la propiedad intelectual de terceros y exigimos a nuestros usuarios que hagan lo mismo. Si crees que un modelo, texto o contenido alojado públicamente en Lalo Stream Suite infringe tus derechos de autor, derechos conexos o derechos de imagen, puedes enviar una notificación.'
+          'Respetamos la propiedad intelectual de terceros y exigimos a nuestros usuarios que hagan lo mismo. Si crees que un modelo, texto o contenido alojado públicamente en Tally Studio infringe tus derechos de autor, derechos conexos o derechos de imagen, puedes enviar una notificación.'
         ),
       ],
     },
@@ -36,7 +36,7 @@ export const RETIRADA: DocumentoLegal = {
         ol(
           'Una firma electrónica o física de la persona autorizada para actuar en nombre del titular de los derechos.',
           'Una descripción detallada de la obra protegida o del derecho que se alega infringido.',
-          'La ubicación exacta dentro de Lalo Stream Suite donde se encuentra el material (nombre de la voz, canal o identificador de usuario).',
+          'La ubicación exacta dentro de Tally Studio donde se encuentra el material (nombre de la voz, canal o identificador de usuario).',
           'Tus datos de contacto: dirección, teléfono y correo electrónico.',
           'Una declaración de buena fe de que el uso cuestionado no está autorizado por el titular, su agente o la ley.',
           'Una declaración de que la información de la notificación es veraz y exacta, y de que eres el titular del derecho o actúas con su autorización.'
@@ -67,7 +67,7 @@ export const RETIRADA: DocumentoLegal = {
         ),
         h3('Colombia'),
         p(
-          'El derecho de autor y los derechos conexos se rigen por la Ley 23 de 1982 y por la Decisión Andina 351 de 1993. Las notificaciones sobre contenidos en Lalo Stream Suite se tramitan con el procedimiento general de esta página. Enviarnos una notificación no te impide acudir a las autoridades o a los jueces colombianos.'
+          'El derecho de autor y los derechos conexos se rigen por la Ley 23 de 1982 y por la Decisión Andina 351 de 1993. Las notificaciones sobre contenidos en Tally Studio se tramitan con el procedimiento general de esta página. Enviarnos una notificación no te impide acudir a las autoridades o a los jueces colombianos.'
         ),
         h3('México'),
         p(

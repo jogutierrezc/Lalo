@@ -431,7 +431,7 @@ export async function handleVoicesApi(
     if (route === 'voices/eleven-import') return await importElevenVoice(ctx, req, env, doFetch);
     return await deleteVoice(ctx, req, env, doFetch);
   } catch (err) {
-    console.error(`[Lalo voces] ${route}`, describe(err));
+    console.error(`[Tally Studio voces] ${route}`, describe(err));
     return fail(500, 'server_error', 'El servidor tuvo un error inesperado.');
   }
 }

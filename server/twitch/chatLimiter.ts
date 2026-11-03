@@ -29,7 +29,7 @@ export function createDbLimiter(db: LimiterRpc, options: { accountMax?: number; 
       try {
         const { data, error } = await db.rpc('take_twitch_bot_send', { p_bot_id: botId, p_channel_id: channelId, p_account_max: accountMax, p_channel_max: channelMax });
         if (error) {
-          console.error(`[Lalo bot] limitador: Supabase ${error.code ?? 'error'}`);
+          console.error(`[Tally Studio bot] limitador: Supabase ${error.code ?? 'error'}`);
           return closed;
         }
         const result = data as { ok?: unknown; waitMs?: unknown; scope?: unknown } | null;
@@ -38,7 +38,7 @@ export function createDbLimiter(db: LimiterRpc, options: { accountMax?: number; 
         const scope: LimitScope = result?.scope === 'channel' ? 'channel' : 'account';
         return { ok: false, waitMs, scope };
       } catch {
-        console.error('[Lalo bot] limitador: no se pudo consultar la base de datos');
+        console.error('[Tally Studio bot] limitador: no se pudo consultar la base de datos');
         return closed;
       }
     },

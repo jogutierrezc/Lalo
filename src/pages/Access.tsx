@@ -2,13 +2,13 @@
  * src/pages/Access.tsx
  *
  * Pantalla de acceso y primera parte de la bienvenida de streamers: los pasos
- * que ocurren antes de ir a Twitch. Los streamers no tienen contraseña en Lalo.
+ * que ocurren antes de ir a Twitch. Los streamers no tienen contraseña en Tally Studio.
  *
  * Hay dos caminos con los mismos pasos en distinto orden (ver src/lib/recorrido.ts):
  *   - Empezar con Twitch: Entrar, Conectar Twitch (qué pedimos) y a Twitch.
  *   - Empezar con el código: Entrar, Código de invitación, Conectar Twitch y a Twitch.
  * El código se comprueba antes de ir a Twitch y se canjea al volver. Un enlace
- * de invitación (?codigo=LALO-...) abre el paso del código ya escrito. Lo que
+ * de invitación (?codigo=TALLY-...) abre el paso del código ya escrito. Lo que
  * pasa después de Twitch está en src/pages/Bienvenida.tsx.
  *
  * Fuera del recorrido siguen igual la recuperación de cuenta y la entrada del
@@ -219,7 +219,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
           <>
             <h2>Cuenta suspendida</h2>
             <p className="cab-error" role="alert">
-              La cuenta de {who} está suspendida. Habla con quien administra Lalo.
+              La cuenta de {who} está suspendida. Habla con quien administra Tally Studio.
             </p>
             <button type="button" className="cab-btn2" onClick={signOut}>
               Cerrar sesión
@@ -230,7 +230,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
             <h2>Falta el rol de administrador</h2>
             <p className="cab-hint">
               Has entrado como {session?.user.email || 'una cuenta con correo'}, pero esta cuenta todavía no es
-              administradora de Lalo. No necesita código de invitación: eso es solo para streamers.
+              administradora de Tally Studio. No necesita código de invitación: eso es solo para streamers.
             </p>
             <div className="acc-case">
               <b>Cómo darle el rol</b>
@@ -261,7 +261,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
           <form onSubmit={enterAsAdmin}>
             <h2>Administración</h2>
             <p className="cab-hint">
-              Solo para quien administra Lalo. Los streamers entran con Twitch y no tienen clave aquí.
+              Solo para quien administra Tally Studio. Los streamers entran con Twitch y no tienen clave aquí.
             </p>
             <div className="cab-field">
               <label className="cab-label" htmlFor={`${uid}-mail`}>
@@ -309,7 +309,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
         ) : step === 'entrar' ? (
           <>
             <TituloPaso>Tu directo, tu mesa de control</TituloPaso>
-            <p className="cab-hint">Lalo no guarda contraseñas: Twitch confirma que eres tú.</p>
+            <p className="cab-hint">Tally Studio no guarda contraseñas: Twitch confirma que eres tú.</p>
             {notice && (
               <p className="cab-error" role="alert">
                 {notice}
@@ -336,9 +336,9 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
           </>
         ) : step === 'permisos' ? (
           <>
-            <TituloPaso>Qué le pide Lalo a Twitch</TituloPaso>
+            <TituloPaso>Qué le pide Tally Studio a Twitch</TituloPaso>
             <div className="rec-caja">
-              <b>Lalo pide</b>
+              <b>Tally Studio pide</b>
               <ul className="rec-pide">
                 <li>
                   <span>
@@ -362,7 +362,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
                   <span>
                     <b>Escribir en tu chat</b>
                     <span>
-                      Lalo puede escribir en tu chat con el bot y con las herramientas de LSS AI, que están en beta y
+                      Tally Studio puede escribir en tu chat con el bot y con las herramientas de LSS AI, que están en beta y
                       siguen en desarrollo.
                     </span>
                   </span>
@@ -391,7 +391,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
               </ul>
             </div>
             <div className="rec-caja">
-              <b>Lalo no pide</b>
+              <b>Tally Studio no pide</b>
               <ul className="rec-pide" data-tipo="no">
                 <li>
                   <span>
@@ -423,7 +423,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
             <p className="cab-hint">
               {invited && code === invited
                 ? 'Este código venía en tu enlace de invitación. Compruébalo y sigue con Twitch.'
-                : 'Te lo da quien administra Lalo. Empieza por LALO-.'}
+                : 'Te lo da quien administra Tally Studio. Empieza por TALLY-.'}
             </p>
             <div className="cab-field">
               <label className="cab-label" htmlFor={`${uid}-code`}>
@@ -435,7 +435,7 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
                 value={code}
                 autoComplete="off"
                 spellCheck={false}
-                placeholder="LALO-"
+                placeholder="TALLY-"
                 onChange={(e) => {
                   setCode(e.target.value.toUpperCase());
                   setValidPlan(null);
@@ -478,13 +478,13 @@ export const Access: React.FC<AccessProps> = ({ inicio, onVolver }) => {
             <div className="acc-case">
               <b>Olvidé mi contraseña de Twitch</b>
               <p className="cab-hint">
-                Se recupera en Twitch, no aquí. Cuando vuelvas a entrar en Twitch, entrarás en Lalo.
+                Se recupera en Twitch, no aquí. Cuando vuelvas a entrar en Twitch, entrarás en Tally Studio.
               </p>
             </div>
             <div className="acc-case">
               <b>Perdí esa cuenta de Twitch o cambié de canal</b>
               <p className="cab-hint">
-                Pide un código de recuperación a quien administra Lalo. Con él tu configuración y tus archivos pasan
+                Pide un código de recuperación a quien administra Tally Studio. Con él tu configuración y tus archivos pasan
                 a tu cuenta nueva.
               </p>
               <button type="button" className="cab-btn2" onClick={() => go('recovery-code')}>

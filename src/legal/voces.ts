@@ -20,7 +20,7 @@ export const VOCES: DocumentoLegal = {
       titulo: '1. Naturaleza sintética',
       bloques: [
         p(
-          'Las voces, audios y modelos generativos disponibles o creados a través de Lalo Stream Suite son generados mediante algoritmos de inteligencia artificial. No son grabaciones reales de individuos, actores de doblaje o figuras públicas.'
+          'Las voces, audios y modelos generativos disponibles o creados a través de Tally Studio son generados mediante algoritmos de inteligencia artificial. No son grabaciones reales de individuos, actores de doblaje o figuras públicas.'
         ),
       ],
     },
@@ -29,7 +29,7 @@ export const VOCES: DocumentoLegal = {
       titulo: '2. Voces de referencia',
       bloques: [
         p(
-          'Las voces del catálogo son voces de referencia: están modeladas y adaptadas para evocar un estilo o un arquetipo reconocible, y buscan sonar auténticas dentro de ese estilo. No son la voz de ninguna persona ni de ningún personaje concreto, y no pretenden sustituir a sus intérpretes. Lalo Stream Suite respeta los derechos de las actrices y los actores de voz y de los titulares de las obras; por eso los nombres de las voces son genéricos y no hacen referencia a personajes ni a marcas.'
+          'Las voces del catálogo son voces de referencia: están modeladas y adaptadas para evocar un estilo o un arquetipo reconocible, y buscan sonar auténticas dentro de ese estilo. No son la voz de ninguna persona ni de ningún personaje concreto, y no pretenden sustituir a sus intérpretes. Tally Studio respeta los derechos de las actrices y los actores de voz y de los titulares de las obras; por eso los nombres de las voces son genéricos y no hacen referencia a personajes ni a marcas.'
         ),
       ],
     },
@@ -46,7 +46,7 @@ export const VOCES: DocumentoLegal = {
       id: 'prohibidos',
       titulo: '4. Usos prohibidos',
       bloques: [
-        p('Queda estrictamente prohibido utilizar el motor de generación de voz de Lalo Stream Suite para:'),
+        p('Queda estrictamente prohibido utilizar el motor de generación de voz de Tally Studio para:'),
         ul(
           'Generar contenido difamatorio, discursos de odio o material discriminatorio.',
           'Cometer fraude, suplantación de identidad (phishing) o extorsión.',

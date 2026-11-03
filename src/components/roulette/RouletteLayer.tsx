@@ -184,7 +184,7 @@ export const RouletteLayer = forwardRef<RouletteLayerHandle, RouletteLayerProps>
   if (!engine.current) {
     const say = (message: string) => {
       onLogRef.current?.(message);
-      console.info('[Lalo ruleta]', message);
+      console.info('[Tally Studio ruleta]', message);
     };
     const later = (fn: () => void, ms: number) => {
       timersRef.current.push(setTimeout(fn, ms));

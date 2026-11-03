@@ -51,7 +51,7 @@
  *         -F http://localhost:3001/api/twitch/eventsub -s <el secreto>
  *       twitch event trigger channel.channel_points_custom_reward_redemption.add \
  *         -F http://localhost:3001/api/twitch/eventsub -s <el secreto> -t <id de Twitch de tu canal>
- *     El evento solo se guarda si ese id es el de una cuenta activa de Lalo. Puede
+ *     El evento solo se guarda si ese id es el de una cuenta activa de Tally Studio. Puede
  *     que la CLI aún no sepa simular channel.bits.use ni los Power-ups personalizados.
  *   - De verdad solo se prueba desplegado: Twitch exige una dirección https
  *     pública. Se enciende desde «Power-ups» → «Canal de eventos».
@@ -150,7 +150,7 @@ export function createDeduper(max = 1000, ttlMs = MAX_AGE_MS + MAX_FUTURE_MS): D
   };
 }
 
-// ---------- Del aviso de Twitch a lo que guarda Lalo ----------
+// ---------- Del aviso de Twitch a lo que guarda Tally Studio ----------
 
 export type EventKind = 'bits' | 'powerup' | 'points' | 'follow' | 'stream_online';
 
@@ -187,7 +187,7 @@ function viewer(event: Record<string, unknown>): { user: string; login: string }
 const BITS_TYPES = ['cheer', 'power_up', 'custom_power_up'] as const;
 const BUILTIN_TYPES = ['message_effect', 'celebration', 'gigantify_an_emote'] as const;
 
-/** Reduce un evento de Twitch a lo que Lalo guarda. null si el tipo no se usa o el evento no tiene la forma esperada. */
+/** Reduce un evento de Twitch a lo que Tally Studio guarda. null si el tipo no se usa o el evento no tiene la forma esperada. */
 export function normalizeEvent(type: string, event: unknown): NormalizedEvent | null {
   if (!isObject(event)) return null;
   const broadcasterId = typeof event.broadcaster_user_id === 'string' && TWITCH_ID.test(event.broadcaster_user_id) ? event.broadcaster_user_id : '';
@@ -336,7 +336,7 @@ export function normalizeChatMessage(event: unknown): ChatMessageEvent | null {
   return result;
 }
 
-/** ¿Lo escribió la cuenta Lalo? El bot recibe sus propios mensajes y no debe responderse a sí mismo. */
+/** ¿Lo escribió la cuenta Tally Studio? El bot recibe sus propios mensajes y no debe responderse a sí mismo. */
 export function isOwnBotMessage(event: Pick<ChatMessageEvent, 'chatterId'>, botUserId: string): boolean {
   return botUserId !== '' && event.chatterId === botUserId;
 }
@@ -513,7 +513,7 @@ export async function handleEventsub(input: WebhookInput, env: Env = process.env
 
   if (messageType === 'revocation') {
     // Twitch retiró la suscripción (permiso revocado, demasiados fallos...). El panel lo ve al listar las suscripciones
-    console.warn(`[Lalo eventos] Twitch retiró una suscripción: ${type.slice(0, 80)} (${String(subscription.status).slice(0, 60)})`);
+    console.warn(`[Tally Studio eventos] Twitch retiró una suscripción: ${type.slice(0, 80)} (${String(subscription.status).slice(0, 60)})`);
     return json(200, 'revoked');
   }
 
@@ -532,7 +532,7 @@ export async function handleEventsub(input: WebhookInput, env: Env = process.env
       try {
         await onChatMessage(chat, env);
       } catch (err) {
-        console.error('[Lalo eventos] No se pudo procesar un mensaje del chat:', err instanceof Error ? err.message : 'error desconocido');
+        console.error('[Tally Studio eventos] No se pudo procesar un mensaje del chat:', err instanceof Error ? err.message : 'error desconocido');
       }
     })();
     try {
@@ -565,14 +565,14 @@ export async function handleEventsub(input: WebhookInput, env: Env = process.env
       try {
         await deliver(result.slice(3), event, env);
       } catch (err) {
-        console.error('[Lalo eventos] No se pudo preparar el saludo de Mi AI:', err instanceof Error ? err.message : 'error desconocido');
+        console.error('[Tally Studio eventos] No se pudo preparar el saludo de Mi AI:', err instanceof Error ? err.message : 'error desconocido');
       }
     }
     return json(200, outcome);
   } catch (err) {
     // Que Twitch lo reintente: se olvida el id para que el reintento no se tome por repetido
     deduper.forget(messageId);
-    console.error('[Lalo eventos] No se pudo guardar un evento:', err instanceof Error ? err.message : 'error desconocido');
+    console.error('[Tally Studio eventos] No se pudo guardar un evento:', err instanceof Error ? err.message : 'error desconocido');
     return json(500, 'store_failed');
   }
 }

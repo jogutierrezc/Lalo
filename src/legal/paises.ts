@@ -27,7 +27,7 @@ export const PAISES: DocumentoLegal = {
         titulo: null,
         bloques: [
           p(
-            `Lalo Stream Suite la opera ${d.operador} desde Colombia y se puede usar desde Colombia, México y Estados Unidos. Este documento resume, para cada uno de esos países, qué ley rige el contrato, qué derechos conservas siempre y a quién acudir. Es un resumen para orientarte; no sustituye a la ley ni es asesoría legal.`
+            `Tally Studio la opera ${d.operador} desde Colombia y se puede usar desde Colombia, México y Estados Unidos. Este documento resume, para cada uno de esos países, qué ley rige el contrato, qué derechos conservas siempre y a quién acudir. Es un resumen para orientarte; no sustituye a la ley ni es asesoría legal.`
           ),
           p(
             'En los tres países vale lo mismo: los [Términos de servicio](legal:terminos) se rigen por la ley colombiana, pero eso no te quita los derechos de consumidor y de protección de datos que la ley de tu país declara irrenunciables.'

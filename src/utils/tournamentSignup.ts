@@ -45,7 +45,7 @@ export function draftSlug(raw: string): string {
     .slice(0, SLUG_LIMITS.max);
 }
 
-/** Slug propuesto a partir del nombre del torneo: «Copa Lalo» da «copa-lalo». */
+/** Slug propuesto a partir del nombre del torneo: «Copa Tally» da «copa-tally». */
 export function proposeSlug(name: string): string {
   const slug = draftSlug(name).replace(/-+$/, '');
   return SLUG_RE.test(slug) ? slug : slug ? `torneo-${slug}`.slice(0, SLUG_LIMITS.max).replace(/-+$/, '') : 'mi-torneo';
@@ -110,7 +110,7 @@ export interface SignupErrors {
 
 export type SignupCheck = { ok: true; value: SignupForm } | { ok: false; errors: SignupErrors };
 
-const RIOT_ID_HELP = 'Un Riot ID es nombre#etiqueta, como Lalo#LAN. El nombre lleva de 3 a 16 caracteres y la etiqueta de 3 a 5 letras o números.';
+const RIOT_ID_HELP = 'Un Riot ID es nombre#etiqueta, como Tally#LAN. El nombre lleva de 3 a 16 caracteres y la etiqueta de 3 a 5 letras o números.';
 
 function riotIdProblem(value: string): string | null {
   if (FORBIDDEN.test(value)) return 'El Riot ID no puede llevar < > ni corchetes. Quítalos.';

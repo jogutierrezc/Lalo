@@ -18,7 +18,7 @@ export const CONTENIDO: DocumentoLegal = {
       titulo: '1. Propiedad de tu contenido',
       bloques: [
         p(
-          'Tú conservas todos los derechos de propiedad sobre los textos, configuraciones y audios generados que crees utilizando Lalo Stream Suite.'
+          'Tú conservas todos los derechos de propiedad sobre los textos, configuraciones y audios generados que crees utilizando Tally Studio.'
         ),
       ],
     },

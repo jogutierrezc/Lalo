@@ -171,7 +171,7 @@ describe('suscripción channel.chat.message', () => {
     const result = await createOne(chatWanted, '1337', config('555'), { fetch: fetcher, now: () => 1 });
     expect(result.outcome).toBe('no_permission');
     expect(result.detail).toContain('channel:bot');
-    expect(result.detail).toContain('Lalo');
+    expect(result.detail).toContain('Tally Studio');
   });
 
   it('modo streamer: user_id es el propio streamer y no hace falta TWITCH_BOT_USER_ID', async () => {

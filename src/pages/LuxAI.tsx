@@ -137,7 +137,7 @@ const CHARACTER_NOTE: Record<NonNullable<LuxCharacterView['modelNote']>, string>
 function linkText(state: EventLinkState): string {
   switch (state) {
     case 'on':
-      return 'conectado: Twitch avisa a Lalo.';
+      return 'conectado: Twitch avisa a Tally Studio.';
     case 'off':
       return 'falta encender el «Canal de eventos» en Power-ups.';
     case 'permission':

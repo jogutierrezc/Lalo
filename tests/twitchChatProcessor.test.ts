@@ -624,7 +624,7 @@ describe('limitador y fallos de envío', () => {
     const { handler, net } = setup({ limiter: closed, commands: { [PROFILE_A]: [command('hola', 'hi')] } });
     await expect(handler(message('!hola'), env)).resolves.toBeUndefined();
     expect(net.sent).toHaveLength(0);
-    expect(warn).toHaveBeenCalledWith('[Lalo bot] mensaje no enviado: rate_limited');
+    expect(warn).toHaveBeenCalledWith('[Tally Studio bot] mensaje no enviado: rate_limited');
   });
 
   it.each([401, 403, 429, 500])('un fallo %i de Twitch no lanza ni filtra el token', async (status) => {

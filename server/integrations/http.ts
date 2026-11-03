@@ -83,6 +83,6 @@ export function failureOf(err: unknown, where: string): IntegrationResult {
   if (err instanceof MigrationMissingError) {
     return fail(503, 'migration_missing', 'Falta aplicar la migración 0013 (integraciones) en Supabase.');
   }
-  console.error(`[Lalo integraciones] ${where}:`, err instanceof Error ? err.message : 'error desconocido');
+  console.error(`[Tally Studio integraciones] ${where}:`, err instanceof Error ? err.message : 'error desconocido');
   return fail(502, 'server_error', 'El servidor no pudo completar la operación. Prueba de nuevo en un momento.');
 }

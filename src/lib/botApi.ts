@@ -15,7 +15,7 @@ import { botErrorMessage, isUuid, serverId } from '../utils/botCloud';
 
 const PATH = '/api/twitch/bot';
 
-/** Con qué cuenta escribe el bot: el nombre del streamer ('streamer') o la cuenta Lalo ('global'). */
+/** Con qué cuenta escribe el bot: el nombre del streamer ('streamer') o la cuenta Tally Studio ('global'). */
 export type BotSenderModeView = 'global' | 'streamer';
 
 export interface BotSettingsView {
@@ -52,7 +52,7 @@ export interface BotConnectionView {
   twitchLogin: string;
   chat: BotChatStatus;
   enabled: boolean;
-  /** El servidor tiene la cuenta Lalo: solo entonces se ofrece «Con la cuenta Lalo». */
+  /** El servidor tiene la cuenta Tally Studio: solo entonces se ofrece «Con la cuenta Tally Studio». */
   globalAvailable: boolean;
 }
 

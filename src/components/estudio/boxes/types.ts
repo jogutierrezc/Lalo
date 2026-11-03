@@ -1,7 +1,7 @@
 /**
  * src/components/estudio/boxes/types.ts
  *
- * El contrato de una capa de Lalo dentro de una escena de Studio. Lo comparten
+ * El contrato de una capa de Tally Studio dentro de una escena de Studio. Lo comparten
  * LaloBoxes.tsx (chat, metas, alertas, raid) y las cajas de cada fase
  * (fase1.tsx, fase2.tsx, fase3.tsx).
  *

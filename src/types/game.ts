@@ -9,7 +9,7 @@
  * localStorage, de la nube o de la URL) pasa siempre por normalizeGameSettings.
  *
  * Aquí no hay nada de la cuenta de Riot: el Riot ID y el servidor los guarda el
- * servidor de Lalo. Estos ajustes los lee cualquiera que tenga la URL de OBS.
+ * servidor de Tally Studio. Estos ajustes los lee cualquiera que tenga la URL de OBS.
  */
 
 import { queueCloudPush } from '../lib/cloudConfig';
@@ -96,7 +96,7 @@ export const GAME_ENERGIES: { id: GameEnergy; name: string }[] = [
 ];
 export const GAME_ANNOUNCERS: { id: GameAnnouncer; name: string; hint: string }[] = [
   { id: 'nadie', name: 'Nadie', hint: 'La alerta solo sale en pantalla.' },
-  { id: 'voz', name: 'La voz', hint: 'La lee la cola de voz de Lalo, detrás de lo que esté esperando.' },
+  { id: 'voz', name: 'La voz', hint: 'La lee la cola de voz de Tally Studio, detrás de lo que esté esperando.' },
   { id: 'mascota', name: 'La mascota', hint: 'La dice tu mascota, con su voz y su bocadillo, si está en la misma fuente de OBS («Todo en uno»). Si no está, la lee la voz.' },
 ];
 export const GAME_VOICE_SOURCES: { id: GameVoiceSource; name: string }[] = [

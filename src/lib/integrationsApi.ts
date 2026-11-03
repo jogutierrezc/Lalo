@@ -1,7 +1,7 @@
 /**
  * src/lib/integrationsApi.ts
  *
- * Llamadas del navegador a las rutas de integraciones del servidor de Lalo
+ * Llamadas del navegador a las rutas de integraciones del servidor de Tally Studio
  * (server/integrations/). Las del panel van con la sesión de Supabase; las de
  * las capas de OBS, con la clave privada de widget.
  *
@@ -205,7 +205,7 @@ export async function riotStatus(): Promise<ApiOutcome<RiotStatus>> {
 }
 
 /**
- * Vincula un Riot ID («nombre#etiqueta») de ese servidor a la cuenta de Lalo de quien llama.
+ * Vincula un Riot ID («nombre#etiqueta») de ese servidor a la cuenta de Tally Studio de quien llama.
  * `policy` es la versión de la política de uso que el streamer acaba de aceptar en la ficha.
  */
 export async function riotLink(riotId: string, platform: string, policy: string): Promise<ApiOutcome<RiotStatus>> {

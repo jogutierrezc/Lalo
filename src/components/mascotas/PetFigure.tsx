@@ -1,10 +1,10 @@
 /**
  * src/components/mascotas/PetFigure.tsx
  *
- * El dibujo de la mascota: uno de los personajes de Lalo (el SVG de petArt.ts,
+ * El dibujo de la mascota: uno de los personajes de Tally Studio (el SVG de petArt.ts,
  * con sus ojos `.pt-e` y su boca `.pt-m`) o las imágenes que subió el streamer.
  *
- * - Personaje de Lalo: se pinta con la cara neutral. La capa cambia la cara de
+ * - Personaje de Tally Studio: se pinta con la cara neutral. La capa cambia la cara de
  *   emoción por su cuenta (sustituye el grupo data-p="face"), sin volver a
  *   pintar el personaje, para no cortar sus animaciones.
  * - Personaje propio: todas las imágenes están cargadas y la capa enseña una u

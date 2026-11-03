@@ -1,4 +1,4 @@
-# Supabase — puesta en marcha de Lalo Stream Suite
+# Supabase — puesta en marcha de Tally Studio
 
 Guía para el dueño del proyecto (admin). Deja listo el backend: base de datos,
 inicio de sesión con Twitch, bucket de medios y variables de entorno.

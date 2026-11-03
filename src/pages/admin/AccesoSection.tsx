@@ -83,7 +83,7 @@ export const AccesoSection: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
             />
             <span id={`${uid}-hint`} className="cab-hint">
-              Al menos {PASSWORD_MIN} caracteres. Guárdala en un gestor de contraseñas: Lalo no tiene «olvidé mi clave»
+              Al menos {PASSWORD_MIN} caracteres. Guárdala en un gestor de contraseñas: Tally Studio no tiene «olvidé mi clave»
               para el administrador.
             </span>
           </div>
@@ -138,7 +138,7 @@ export const AccesoSection: React.FC = () => {
       )}
 
       <p className="cab-hint">
-        Si algún día quieres usar Lalo en tu propio canal, entra con Twitch como un streamer más: será otra cuenta, con su
+        Si algún día quieres usar Tally Studio en tu propio canal, entra con Twitch como un streamer más: será otra cuenta, con su
         propio plan.
       </p>
     </section>

@@ -1,7 +1,7 @@
 /**
  * src/types/powerups.ts
  *
- * Ajustes del módulo «Power-ups»: qué hace Lalo cuando alguien usa un Power-up
+ * Ajustes del módulo «Power-ups»: qué hace Tally Studio cuando alguien usa un Power-up
  * del canal, la lista de Power-ups personalizados leída de Twitch (guardada para
  * poder editar más tarde sin volver a preguntar) y el estado del canal de
  * eventos.
@@ -12,7 +12,7 @@
 
 import { queueCloudPush } from '../lib/cloudConfig';
 
-/** Qué hace Lalo con un Power-up. `sound` y `video` lanzan una recompensa de Lalo, que es quien tiene el archivo. */
+/** Qué hace Tally Studio con un Power-up. `sound` y `video` lanzan una recompensa de Tally Studio, que es quien tiene el archivo. */
 export type PowerupAction = 'none' | 'sound' | 'video' | 'plate' | 'voice';
 
 export const POWERUP_ACTIONS: { id: PowerupAction; name: string }[] = [
@@ -33,7 +33,7 @@ export type BuiltinPowerupId = (typeof BUILTIN_POWERUPS)[number]['id'];
 
 export interface PowerupRule {
   action: PowerupAction;
-  /** Recompensa de Lalo que pone el sonido o el vídeo (acciones `sound` y `video`). */
+  /** Recompensa de Tally Studio que pone el sonido o el vídeo (acciones `sound` y `video`). */
   rewardId: string;
   /** Qué dice la voz o el aviso. {user}, {powerup}, {bits} y {message} se sustituyen. */
   template: string;
@@ -52,7 +52,7 @@ export interface CachedPowerup {
 }
 
 export interface PowerupsSettings {
-  /** Apagado, Lalo no reacciona a ningún Power-up (las metas siguen contando los Bits). */
+  /** Apagado, Tally Studio no reacciona a ningún Power-up (las metas siguen contando los Bits). */
   enabled: boolean;
   /** Regla de cada Power-up: la clave es el id de Twitch o el id del de serie. */
   rules: Record<string, PowerupRule>;
@@ -63,7 +63,7 @@ export interface PowerupsSettings {
   scopes: string[] | null;
   /** El streamer encendió el canal de eventos: las capas de OBS preguntan por eventos nuevos. */
   channelActive: boolean;
-  /** Los canjes de puntos que no piden texto también disparan su recompensa de Lalo. */
+  /** Los canjes de puntos que no piden texto también disparan su recompensa de Tally Studio. */
   pointsViaChannel: boolean;
 }
 

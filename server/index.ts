@@ -54,7 +54,7 @@ app.use(express.json({ limit: '16kb' }));
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
-    service: 'Lalo TTS Server',
+    service: 'Tally Studio TTS Server',
     timestamp: new Date().toISOString(),
   });
 });
@@ -214,5 +214,5 @@ app.get('*', (req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[Lalo TTS Server] Servidor backend escuchando en http://localhost:${PORT}`);
+  console.log(`[Tally Studio TTS Server] Servidor backend escuchando en http://localhost:${PORT}`);
 });

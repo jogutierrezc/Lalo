@@ -12,7 +12,7 @@
  * shipping. La página oficial de ayuda no se pudo abrir (error 403): por eso
  * aquí se tolera cualquier campo ausente o con otro tipo.
  *
- * De todo eso Lalo solo conserva el tipo, el nombre, el mensaje, la cantidad,
+ * De todo eso Tally Studio solo conserva el tipo, el nombre, el mensaje, la cantidad,
  * la moneda y el nivel. El correo, la dirección de envío, los artículos y los
  * identificadores de pago se descartan aquí mismo.
  */
@@ -111,7 +111,7 @@ export function kofiAmount(value: unknown): number {
   return Math.min(1_000_000, Math.round(n * 100) / 100);
 }
 
-/** Del JSON de Ko-fi a lo que Lalo usa. null si falta la clave o el identificador del mensaje. */
+/** Del JSON de Ko-fi a lo que Tally Studio usa. null si falta la clave o el identificador del mensaje. */
 export function normalizeKofiPayload(data: unknown): KofiHookPayload | null {
   if (!isObject(data)) return null;
   const token = typeof data.verification_token === 'string' ? data.verification_token.trim() : '';
@@ -297,7 +297,7 @@ export interface KofiDecision {
 }
 
 /**
- * Qué hace Lalo con un aviso. `blocked` es true si el mensaje tiene una palabra
+ * Qué hace Tally Studio con un aviso. `blocked` es true si el mensaje tiene una palabra
  * bloqueada: entonces ni se ve ni se lee.
  */
 export function decideKofi(event: KofiEvent, rules: KofiRuleSet, holdSeconds: number, blocked: boolean): KofiDecision {

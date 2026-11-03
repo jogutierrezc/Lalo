@@ -6,7 +6,7 @@
  *   'creator'  la propia cuenta del creador (senderMode 'streamer' de senderMode.ts: token de aplicación, el creador ya
  *              concedió user:write:chat y user:bot). Cada trozo se anota para descartar su eco. Si Twitch responde
  *              no_permission o auth_failed (el creador no concedió el permiso), se registra el motivo y se cae a la cuenta global.
- *   'bot'      la cuenta global «Lalo» (TWITCH_BOT_USER_ID); si no está configurada, la cuenta con la que escribe el canal.
+ *   'bot'      la cuenta global «Tally Studio» (TWITCH_BOT_USER_ID); si no está configurada, la cuenta con la que escribe el canal.
  *
  * Lo comparten el procesador del chat y el trabajo de fondo. No lanza; no registra tokens ni textos.
  */
@@ -59,19 +59,19 @@ export function createDoneSender(input: DoneSenderInput): DoneSend {
       if (input.writeAs === 'creator') {
         result = await attempt(input.broadcasterId, true, text);
         if ((result.status === 'no_permission' || result.status === 'auth_failed') && result.messageIds.length === 0 && globalId && globalId !== input.broadcasterId) {
-          console.warn(`[Lalo done] no se pudo escribir con la cuenta del creador (${result.status}): se usa la cuenta global`);
+          console.warn(`[Tally Studio done] no se pudo escribir con la cuenta del creador (${result.status}): se usa la cuenta global`);
           result = await attempt(globalId, false, text);
         }
       } else {
         result = await attempt(globalId, false, text);
       }
       if (result.status === 'sent') return true;
-      console.warn(`[Lalo done] mensaje no enviado: ${result.status}`);
+      console.warn(`[Tally Studio done] mensaje no enviado: ${result.status}`);
       // Solo se reintenta si no salió ningún trozo: si ya salió una parte, repetir el mensaje entero la duplicaría
       if (result.status === 'rate_limited' && result.messageIds.length === 0) return 'retry';
       return false;
     } catch (err) {
-      console.error('[Lalo done] no se pudo enviar al chat:', err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
+      console.error('[Tally Studio done] no se pudo enviar al chat:', err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
       return false;
     }
   };

@@ -1,9 +1,9 @@
 # Bot de chat en la nube: puesta en marcha
 
-Guía para quien despliega Lalo (no para el streamer). El bot de chat de Twitch deja de ser un script de Python en el
+Guía para quien despliega Tally Studio (no para el streamer). El bot de chat de Twitch deja de ser un script de Python en el
 ordenador de cada streamer y pasa a vivir en el servidor, con un **token de aplicación** y **ningún token de usuario guardado**. Cada
 canal elige con qué cuenta escribe: **el nombre del propio streamer** (por defecto en perfiles nuevos, ver «Modo streamer») o **una cuenta
-de bot global, «Lalo»** (secciones 1 y 2).
+de bot global, «Tally Studio»** (secciones 1 y 2).
 
 Qué hace el servidor, y dónde está:
 
@@ -32,21 +32,21 @@ Nueva para el bot en la nube:
 
 | Variable | Para qué |
 | --- | --- |
-| `TWITCH_BOT_USER_ID` | Solo para el modo «cuenta Lalo». **Id numérico** de Twitch de la cuenta Lalo (no su nombre de usuario). Es el `user_id` de la suscripción y el `sender_id` de los mensajes; también sirve para que el bot no se conteste a sí mismo. Sin ella, el servidor responde **503 `chat_unavailable`** con el mensaje «El bot en la nube todavía no está disponible en este servidor» al pulsar Conectar (el nombre de la variable solo sale en el registro del servidor, nunca al cliente) y no se escribe nada. |
+| `TWITCH_BOT_USER_ID` | Solo para el modo «cuenta Tally Studio». **Id numérico** de Twitch de la cuenta Tally Studio (no su nombre de usuario). Es el `user_id` de la suscripción y el `sender_id` de los mensajes; también sirve para que el bot no se conteste a sí mismo. Sin ella, el servidor responde **503 `chat_unavailable`** con el mensaje «El bot en la nube todavía no está disponible en este servidor» al pulsar Conectar (el nombre de la variable solo sale en el registro del servidor, nunca al cliente) y no se escribe nada. |
 
 La clave de NVIDIA de Mi AI sigue en el almacén cifrado de siempre (`INTEGRATIONS_ENC_KEY`); el bot en la nube la usa
 igual que el panel.
 
-Para sacar el id numérico de la cuenta Lalo: `GET https://api.twitch.tv/helix/users?login=<nombre>` con un token de
+Para sacar el id numérico de la cuenta Tally Studio: `GET https://api.twitch.tv/helix/users?login=<nombre>` con un token de
 aplicación y el `Client-Id` (endpoint «Get Users» de la referencia de Twitch). No lo he ejecutado desde aquí.
 
-## 2. Crear y autorizar la cuenta Lalo (una sola vez)
+## 2. Crear y autorizar la cuenta Tally Studio (una sola vez)
 
-1. Crea (o usa) la cuenta de Twitch «Lalo», con el correo verificado.
-2. En la consola de desarrolladores de Twitch, en la aplicación de Lalo, añade en «OAuth Redirect URLs» una dirección que
+1. Crea (o usa) la cuenta de Twitch «Tally Studio», con el correo verificado.
+2. En la consola de desarrolladores de Twitch, en la aplicación de Tally Studio, añade en «OAuth Redirect URLs» una dirección que
    controles. Para esto basta `http://localhost:3000` (Twitch suele admitir `http://localhost` para desarrollo; compruébalo en la consola): no hace falta que
    haya nada escuchando.
-3. Con la sesión de la cuenta **Lalo** abierta en el navegador, abre esta dirección (flujo de código de autorización,
+3. Con la sesión de la cuenta **Tally Studio** abierta en el navegador, abre esta dirección (flujo de código de autorización,
    documentado en `https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/`), cambiando `CLIENT_ID` y el redirect por
    el registrado:
 
@@ -59,7 +59,7 @@ aplicación y el `Client-Id` (endpoint «Get Users» de la referencia de Twitch)
 **No hace falta cambiar ese código por un token ni guardarlo.** Lo que necesita EventSub con webhook es que la cuenta ya haya
 concedido esos permisos a la aplicación (lo dice la documentación de EventSub: los tipos con permiso de usuario exigen que el
 usuario lo haya autorizado para el Client-Id). Eso queda registrado en Twitch al pulsar «Autorizar». Si más adelante revocas
-la autorización de la aplicación desde la configuración de conexiones de la cuenta Lalo, el bot deja de funcionar.
+la autorización de la aplicación desde la configuración de conexiones de la cuenta Tally Studio, el bot deja de funcionar.
 
 Permisos pedidos: `user:read:chat` (recibir el chat), `user:write:chat` (escribir) y `user:bot` (que la cuenta actúe como bot).
 Los tres están en la referencia de EventSub (`channel.chat.message`) y de «Send Chat Message».
@@ -70,7 +70,7 @@ Los tres están en la referencia de EventSub (`channel.chat.message`) y de «Sen
 ## 2 bis. Modo streamer (sin cuenta bot)
 
 El bot escribe con la **propia cuenta de cada streamer**: los mensajes de la IA y de los comandos salen con su nombre. No hace
-falta `TWITCH_BOT_USER_ID` ni la cuenta Lalo, y sigue sin guardarse ningún token de usuario.
+falta `TWITCH_BOT_USER_ID` ni la cuenta Tally Studio, y sigue sin guardarse ningún token de usuario.
 
 **Qué cambia respecto al modo global**
 
@@ -141,7 +141,7 @@ Si falta alguna, el panel responde «falta aplicar la migración» o el bot se c
 
 ## 4. Cada streamer: volver a iniciar sesión
 
-En modo global, la suscripción pide el permiso `channel:bot` **del streamer** (que Lalo entre en su chat). Ya está en `TWITCH_SCOPES`
+En modo global, la suscripción pide el permiso `channel:bot` **del streamer** (que Tally Studio entre en su chat). Ya está en `TWITCH_SCOPES`
 (`src/lib/cloud.ts`), pero quien inició sesión antes de añadirlo no lo concedió. Hasta que cierre sesión y vuelva a entrar con
 Twitch, «Conectar» en la tarjeta «Bot en la nube» responde «falta permiso» (403 de Twitch) y el panel se lo pide de nuevo.
 
@@ -153,12 +153,12 @@ chat y los comentarios espontáneos; con él apagado no toca nada y el script si
 
 ## 5. Cómo probarlo con un canal de prueba
 
-1. Variables puestas, migraciones aplicadas, cuenta Lalo autorizada, despliegue hecho (Twitch necesita una dirección https
+1. Variables puestas, migraciones aplicadas, cuenta Tally Studio autorizada, despliegue hecho (Twitch necesita una dirección https
    pública: en local no llega).
-2. Entra con un canal de prueba (tu propia cuenta) en Lalo y vuelve a iniciar sesión si es de antes de `channel:bot`.
+2. Entra con un canal de prueba (tu propia cuenta) en Tally Studio y vuelve a iniciar sesión si es de antes de `channel:bot`.
 3. «Bot en la nube» → Conectar. El estado debe pasar de «pendiente» a «activo» (Twitch verifica la dirección con un
    `webhook_callback_verification`). Si queda en «error», mira `GET /api/twitch/subscriptions` y los registros de Vercel.
-4. Crea un comando de prueba y escríbelo en el chat del canal: debe contestar la cuenta Lalo, una vez.
+4. Crea un comando de prueba y escríbelo en el chat del canal: debe contestar la cuenta Tally Studio, una vez.
 5. Mi AI: `!lux hola` (o tu palabra); `!luxoff` y `!luxon` solo funcionan para el canal y los moderadores.
 6. Cola: en Mi AI → «Decir en el chat», envía un texto. Debe salir en segundos y pasar a «enviado» en el panel.
 7. Saludos: pasa a «seguir» con otra cuenta (activando el saludo a seguidores en Mi AI). El de inicio de directo sale al
@@ -207,7 +207,7 @@ Todo el código tiene pruebas con bases, `fetch` y limitadores falsos (`tests/tw
 
 - Las migraciones 0039–0041 (la función `push_twitch_bot_chat_line`, el candado asesor del limitador, las políticas RLS, `purge_twitch_bot_data` y su programación con `pg_cron`). **No están aplicadas en ninguna base.**
 - Las consultas de actualización parcial (`upsert` solo con las columnas que cambian) y el filtro `.or(...)` de la cola reclamada contra PostgREST real (solo se comprobó la forma de la consulta con un cliente falso).
-- El alta de `channel.chat.message` con token de aplicación y la autorización de la cuenta Lalo por el flujo de la sección 2.
+- El alta de `channel.chat.message` con token de aplicación y la autorización de la cuenta Tally Studio por el flujo de la sección 2.
 - La verificación del webhook y los reintentos de Twitch con la ruta desplegada; `revocation` solo se registra en el log.
 - El envío real con `helix/chat/messages`, incluidos `drop_reason`, 401 con renovación del token y 429.
 - El límite de 20 mensajes/30 s y el comportamiento del limitador con varias instancias de Vercel a la vez.

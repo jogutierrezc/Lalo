@@ -2,7 +2,7 @@
  * src/components/torneo/TournamentIntro.tsx
  *
  * La presentación de la página de inscripción: lo que ve quien abre
- * `#torneo/<slug>` antes del formulario. Axo, el ajolote de Lalo, da la
+ * `#torneo/<slug>` antes del formulario. Axo, el ajolote de Tally Studio, da la
  * bienvenida, explica cómo se juega con lo que configuró el streamer y desea
  * suerte, en seis pasos. Sin voz ni sonido.
  *
@@ -1024,7 +1024,7 @@ export const TournamentIntro: React.FC<TournamentIntroProps> = ({ tournament, st
               <i />
             </span>
             <div className="tpi-float">
-              <AxoFigure ref={figRef} className="tpi-fig" emotion={mood} label="Axo, el guía de Lalo" />
+              <AxoFigure ref={figRef} className="tpi-fig" emotion={mood} label="Axo, el guía de Tally Studio" />
             </div>
           </div>
           <span className="tpi-mood">

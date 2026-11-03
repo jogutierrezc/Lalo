@@ -9,7 +9,7 @@
  * - El saludo a un canal (!so) cuando la fuente no tiene la capa del saludo de
  *   raid: no hay placa, pero la voz lo anuncia.
  * - El aviso de una predicción (!prediccion ...): la voz invita al chat a
- *   participar. Lalo no crea ni lee la predicción de Twitch: solo la anuncia.
+ *   participar. Tally Studio no crea ni lee la predicción de Twitch: solo la anuncia.
  *
  * Solo llegan aquí mensajes del streamer y de sus moderadores.
  */

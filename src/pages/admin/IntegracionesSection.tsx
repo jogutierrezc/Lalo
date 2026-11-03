@@ -2,7 +2,7 @@
  * src/pages/admin/IntegracionesSection.tsx
  *
  * Sección «Integraciones» de la consola del administrador: fichas de estado de
- * los servicios que usa el servidor de Lalo. Solo dicen si cada cosa está
+ * los servicios que usa el servidor de Tally Studio. Solo dicen si cada cosa está
  * configurada y qué variable falta; nunca enseñan una clave.
  *
  * El administrador no emite, así que aquí no se conecta ninguna cuenta: eso lo
@@ -193,7 +193,7 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
   return (
     <div className="grid gap-5">
       <p className="ig-lede">
-        Estado de los servicios que usa el servidor de Lalo. Aquí no se conecta ninguna cuenta: cada streamer conecta su Spotify y su Ko-fi desde su
+        Estado de los servicios que usa el servidor de Tally Studio. Aquí no se conecta ninguna cuenta: cada streamer conecta su Spotify y su Ko-fi desde su
         página «Integraciones». Las claves viven en las variables de entorno del servidor y nunca se muestran.
       </p>
 
@@ -234,7 +234,7 @@ export const IntegracionesSection: React.FC<{ data: AdminData }> = ({ data }) =>
               </>
             )}
             Mientras la app de Spotify esté en modo desarrollo solo pueden conectarse cinco cuentas. El correo de Spotify de cada streamer se añade a
-            mano en el panel de desarrolladores de Spotify (apartado de usuarios de la app): Lalo no puede hacerlo ni lleva esa lista. La cuenta dueña de
+            mano en el panel de desarrolladores de Spotify (apartado de usuarios de la app): Tally Studio no puede hacerlo ni lleva esa lista. La cuenta dueña de
             la app necesita Premium; si lo pierde, la integración deja de funcionar.
           </p>
         </ServiceCard>

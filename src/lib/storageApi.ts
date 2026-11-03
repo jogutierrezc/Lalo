@@ -2,7 +2,7 @@
  * src/lib/storageApi.ts
  *
  * Lado del navegador del almacenamiento de archivos (Cloudflare R2): llama a
- * las rutas del servidor de Lalo con la sesión de Supabase y sube el archivo
+ * las rutas del servidor de Tally Studio con la sesión de Supabase y sube el archivo
  * directo a R2 con la URL firmada que le dan.
  *
  * Las claves de R2 nunca llegan aquí. Lo único público es la dirección base de
@@ -59,7 +59,7 @@ async function call<T>(path: string, method: 'GET' | 'POST', body?: unknown): Pr
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new StorageApiError('No se pudo conectar con el servidor de Lalo. Revisa tu conexión.', 'offline', 0);
+    throw new StorageApiError('No se pudo conectar con el servidor de Tally Studio. Revisa tu conexión.', 'offline', 0);
   }
 
   let parsed: unknown = null;

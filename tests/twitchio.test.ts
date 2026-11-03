@@ -47,14 +47,14 @@ describe('TwitchIO Module (PythonistaGuild)', () => {
   describe('TwitchIO Settings & Defaults', () => {
     it('debe tener una configuración por defecto con créditos y comandos base', () => {
       expect(DEFAULT_TWITCHIO_SETTINGS.prefix).toBe('!');
-      expect(DEFAULT_TWITCHIO_SETTINGS.botUsername).toBe('LaloBot');
+      expect(DEFAULT_TWITCHIO_SETTINGS.botUsername).toBe('TallyBot');
       expect(DEFAULT_TWITCHIO_SETTINGS.channel).toBe('laloplay_');
 
       // Comandos base configurados
       const cmdNames = DEFAULT_TWITCHIO_SETTINGS.commands.map((c) => c.name);
       expect(cmdNames).toContain('s');
       expect(cmdNames).toContain('alerta');
-      expect(cmdNames).toContain('lalo');
+      expect(cmdNames).toContain('tally');
       expect(cmdNames).toContain('reload');
 
       // EventSub subscriptions por defecto
@@ -95,7 +95,7 @@ describe('TwitchIO Module (PythonistaGuild)', () => {
       localStorage.setItem(TWITCHIO_STORAGE_KEY, 'corrupt{{{');
       const loaded = loadTwitchIOSettings();
       expect(loaded.prefix).toBe('!');
-      expect(loaded.botUsername).toBe('LaloBot');
+      expect(loaded.botUsername).toBe('TallyBot');
     });
   });
 });

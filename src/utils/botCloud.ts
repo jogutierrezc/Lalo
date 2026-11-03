@@ -113,7 +113,7 @@ export function reinsertRow<T extends { key: string; name: string; position: num
 /** Mensajes claros y estables para los errores 503 del servidor del bot. */
 export function botErrorMessage(code: string, fallback: string): string {
   if (code === 'chat_unavailable') return 'El bot en la nube todavía no está disponible en este servidor. Inténtalo más adelante.';
-  if (code === 'migration_missing') return 'Al servidor le falta aplicar una actualización de la base de datos del bot. Avisa a quien administra Lalo.';
+  if (code === 'migration_missing') return 'Al servidor le falta aplicar una actualización de la base de datos del bot. Avisa a quien administra Tally Studio.';
   return fallback;
 }
 
@@ -121,7 +121,7 @@ export function botErrorMessage(code: string, fallback: string): string {
 export function senderModeHint(mode: 'global' | 'streamer'): string {
   return mode === 'streamer'
     ? 'Los mensajes del bot salen con tu nombre. Twitch te pide aceptar tres permisos (leer el chat, escribir y actuar como bot).'
-    : 'Los mensajes salen con la cuenta Lalo. Twitch te pide dejarla entrar en tu chat.';
+    : 'Los mensajes salen con la cuenta Tally Studio. Twitch te pide dejarla entrar en tu chat.';
 }
 
 /** Aviso tras cambiar de cuenta de envío: el bot queda apagado y hay que conectar de nuevo. */

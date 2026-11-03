@@ -95,7 +95,7 @@ export const MusicStudio: React.FC = () => {
     spotifyStatus().then((result) => {
       if (!alive) return;
       if (!result.ok) return setAccount(result.message);
-      if (!result.data.configured) return setAccount(`Al servidor de Lalo le falta configuración para Spotify (${result.data.missing.join(', ')}).`);
+      if (!result.data.configured) return setAccount(`Al servidor de Tally Studio le falta configuración para Spotify (${result.data.missing.join(', ')}).`);
       setAccount(
         result.data.state === 'connected'
           ? `Spotify conectado${result.data.accountName ? ` como ${result.data.accountName}` : ''}: en OBS la capa enseña lo que suena de verdad.`
@@ -343,7 +343,7 @@ export const MusicStudio: React.FC = () => {
         <Nota role="status">
           {cloud.enabled
             ? account || 'Comprobando la conexión con Spotify.'
-            : 'La canción real necesita la nube y el servidor de Lalo: sin ellos, la fuente de OBS solo enseña canciones de ejemplo con la URL de muestra. El diseño y los ajustes sí viajan en la URL.'}{' '}
+            : 'La canción real necesita la nube y el servidor de Tally Studio: sin ellos, la fuente de OBS solo enseña canciones de ejemplo con la URL de muestra. El diseño y los ajustes sí viajan en la URL.'}{' '}
           <a className="ept-link" href="#integraciones">
             Integraciones
           </a>

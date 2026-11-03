@@ -2,7 +2,7 @@
  * src/types/roulette.ts
  *
  * Modelo de datos, preajustes y utilidades matemáticas para la Ruleta de Castigos y Retos
- * de Lalo Stream Suite.
+ * de Tally Studio.
  *
  * Diseñado con estética de hardware Cabina Broadcast, física de rotación con GSAP
  * y principios de diseño de Emil Kowalski e Impeccable.

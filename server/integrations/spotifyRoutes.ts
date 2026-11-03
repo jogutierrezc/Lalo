@@ -13,7 +13,7 @@
  * Seguridad de la conexión: el `state` va firmado, caduca a los diez minutos y
  * lleva el perfil de quien la empezó. Además se compara con una cookie que solo
  * tiene el navegador que la empezó, así nadie puede hacer que otra persona
- * conecte su Spotify a una cuenta de Lalo ajena. La vuelta siempre redirige a
+ * conecte su Spotify a una cuenta de Tally Studio ajena. La vuelta siempre redirige a
  * una dirección fija de la configuración.
  *
  * SIN PROBAR contra Spotify ni contra Supabase reales.
@@ -191,7 +191,7 @@ export async function handleSpotify(action: SpotifyAction, req: IntegrationReque
     return { status: 200, body: nowBody(result, deps.now()) };
   } catch (err) {
     if (action === 'callback') {
-      console.error('[Lalo integraciones] spotify/callback:', err instanceof Error ? err.message : 'error desconocido');
+      console.error('[Tally Studio integraciones] spotify/callback:', err instanceof Error ? err.message : 'error desconocido');
       return { status: 302, body: {}, redirect: `${config ? config.returnTo : '/#integraciones'}?spotify=error` };
     }
     return failureOf(err, `spotify/${action}`);

@@ -1,7 +1,7 @@
 /**
  * server/integrations/riot.ts
  *
- * Lo que Lalo habla con Riot Games para «Alertas de juego» (League of Legends):
+ * Lo que Tally Studio habla con Riot Games para «Alertas de juego» (League of Legends):
  * resolver un Riot ID, y armar la «foto» de la cuenta del streamer (rango,
  * partida en curso, última partida terminada y maestría) que la capa de OBS
  * compara con la anterior para decidir qué alertas salen.

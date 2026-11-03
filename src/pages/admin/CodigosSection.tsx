@@ -309,7 +309,7 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
           </p>
         )}
         <p className="cab-hint">
-          «Nota interna» es solo para ti: no se envía ni aparece en la invitación. Lalo no guarda correos.
+          «Nota interna» es solo para ti: no se envía ni aparece en la invitación. Tally Studio no guarda correos.
         </p>
       </form>
 
@@ -387,7 +387,7 @@ export const CodigosSection: React.FC<{ data: AdminData }> = ({ data }) => {
           </div>
           <p className="cab-note">
             «Enviar por correo» abre tu propio programa de correo con el mensaje escrito; el envío lo haces tú desde ahí.
-            Lalo no manda correos. Si no se abre nada, este equipo no tiene un programa de correo configurado: copia la
+            Tally Studio no manda correos. Si no se abre nada, este equipo no tiene un programa de correo configurado: copia la
             invitación y pégala donde quieras.
           </p>
         </section>

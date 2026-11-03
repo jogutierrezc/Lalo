@@ -4,7 +4,7 @@
  * Lo que el script de Python hacía con bucles (lux_outbox_loop, lux_digest_loop y lux_spontaneous_loop) y el
  * servidor no puede hacer solo, porque no recuerda entre peticiones. Dos piezas, solo para los canales con el
  * bot en la nube encendido (twitch_bot_settings.enabled), con la cuenta del modo de envío del canal
- * (cuenta Lalo o el propio streamer, ver senderMode.ts):
+ * (cuenta Tally Studio o el propio streamer, ver senderMode.ts):
  *
  *   1. La cola de mensajes. El servidor envía él mismo, con sendChatMessage y el limitador, lo que el streamer
  *      escribe en Mi AI («Decir en el chat») y los saludos de seguidor y directo (server/lux/channelEvents.ts):
@@ -191,7 +191,7 @@ const defaultTwitchUserId = async (profileId: string, env: Env): Promise<string 
 };
 
 const logError = (what: string, err: unknown): void => {
-  console.error(`[Lalo bot] ${what}:`, err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
+  console.error(`[Tally Studio bot] ${what}:`, err instanceof Error ? err.message.slice(0, 200) : 'error desconocido');
 };
 
 /** Quita el prefijo y el «!»: lo que empieza así es un comando, no conversación. */
@@ -228,7 +228,7 @@ function senderFor(
         sleep: deps.sleep,
         pauseMs: deps.pauseMs,
       });
-      if (result.status !== 'sent') console.warn(`[Lalo bot] mensaje no enviado: ${result.status}`);
+      if (result.status !== 'sent') console.warn(`[Tally Studio bot] mensaje no enviado: ${result.status}`);
       if (result.status === 'sent') return true;
       // Solo se reintenta si no salió ningún trozo: si ya salió una parte, repetir el mensaje entero la duplicaría
       if (result.status === 'rate_limited' && result.messageIds.length === 0) return 'retry';
@@ -254,7 +254,7 @@ export async function pushOutboxNow(profileId: string, env: Env = process.env, d
     if (!settings || !settings.enabled) return;
     const broadcasterId = await (deps.twitchUserId ?? defaultTwitchUserId)(profileId, env);
     if (!broadcasterId) return;
-    // Quién escribe: la cuenta Lalo, o el propio streamer en modo streamer
+    // Quién escribe: la cuenta Tally Studio, o el propio streamer en modo streamer
     const botUserId = senderIdFor(settings, broadcasterId, env);
     if (!botUserId) return;
     const send = senderFor(deps, env, botUserId, broadcasterId, echoMarkerFor(settings.senderMode, db, profileId));
@@ -321,7 +321,7 @@ export interface BackgroundInput {
   /** Dueño del canal, con el bot en la nube ya comprobado como encendido y de envío global. */
   profileId: string;
   prefix: string;
-  /** Cuenta que escribe en el canal (sender_id): la cuenta Lalo o el propio streamer. */
+  /** Cuenta que escribe en el canal (sender_id): la cuenta Tally Studio o el propio streamer. */
   botUserId: string;
   /** Por defecto 'global'. En 'streamer' el procesador ya descartó el eco del bot, y los mensajes del streamer sí cuentan. */
   senderMode?: BotSenderMode;

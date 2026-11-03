@@ -43,7 +43,7 @@ export const MUSIC_DESIGNS: { id: MusicDesign; name: string; note: string; hint:
     id: 'disco',
     name: 'Disco',
     note: 'Un disco gira junto a la portada',
-    hint: 'La portada se queda quieta: lo que gira y asoma es un disco dibujado por Lalo. Al cambiar, el disco se guarda y vuelve a salir.',
+    hint: 'La portada se queda quieta: lo que gira y asoma es un disco dibujado por Tally Studio. Al cambiar, el disco se guarda y vuelve a salir.',
   },
   {
     id: 'linea',

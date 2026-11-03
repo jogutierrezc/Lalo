@@ -61,7 +61,7 @@
   animation-duration: 9s, 3.6s;
 }
 
-/* Un efecto que Lalo aún no conoce: el color de acento de la plantilla */
+/* Un efecto que Tally Studio aún no conoce: el color de acento de la plantilla */
 .ch-row[data-fx='generic'] {
   --ch-fx-c: var(--ch-acc);
   --ch-fx-ink: var(--ch-acc-ink);

@@ -479,7 +479,7 @@ describe('guardar el enlace con y sin la migración 0018', () => {
     expect(calls[1]).not.toHaveProperty('intro_on');
     expect(calls[1]).not.toHaveProperty('rules');
     // Lo demás va igual que siempre
-    expect(calls[1]).toMatchObject({ profile_id: PROFILE, slug: 'copa-lalo', name: 'Copa Lalo', signup_open: true, style: 'grieta' });
+    expect(calls[1]).toMatchObject({ profile_id: PROFILE, slug: 'copa-lalo', name: 'Copa Tally', signup_open: true, style: 'grieta' });
   });
 
   it('otros fallos no se disfrazan: slug cogido, sin conexión o sin nube', async () => {

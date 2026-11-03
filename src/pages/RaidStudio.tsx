@@ -367,7 +367,7 @@ export const RaidStudio: React.FC = () => {
         </Nota>
         <Nota>
           Sin esta capa en OBS, «{clean.commands.so} canal» no se pierde: la fuente de la voz lo anuncia en voz alta. Y con «!prediccion» más un
-          texto, la voz avisa al chat de que hay una predicción abierta (Lalo solo la anuncia: la predicción se crea en Twitch).
+          texto, la voz avisa al chat de que hay una predicción abierta (Tally Studio solo la anuncia: la predicción se crea en Twitch).
         </Nota>
       </Modulo>
     </>

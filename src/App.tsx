@@ -1,7 +1,7 @@
 /**
  * src/App.tsx
  *
- * Enrutador principal de Lalo Stream Suite.
+ * Enrutador principal de Tally Studio.
  * Soporta navegación por hash y rutas limpias para OBS:
  *   - #catalogo / #suite / raíz: Catálogo general de herramientas
  *   - #tts / #ajustes: Mesa de configuración de Text-to-Speech

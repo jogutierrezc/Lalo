@@ -1,7 +1,7 @@
 # Regla CORS del bucket privado de modelos (R2_MODELS_BUCKET)
 
 Sin esta regla el navegador no puede enviar el GLB a R2 desde el panel de Mi AI. La
-regla solo permite `PUT` desde las direcciones de Lalo; no abre lecturas, así que el
+regla solo permite `PUT` desde las direcciones de Tally Studio; no abre lecturas, así que el
 bucket sigue siendo privado. El JSON está en `docs/r2-cors-modelos.json`.
 
 Hay que aplicarla **a mano en Cloudflare** (no lo hace el código). Es un cambio
@@ -10,7 +10,7 @@ en producción: lo aplica jagc.
 ## Antes de aplicarla
 
 Cambia `https://TU-APP.vercel.app` en el JSON por la dirección real del panel
-de Lalo (sin barra final). Los dos `localhost` son para desarrollo; quítalos si
+de Tally Studio (sin barra final). Los dos `localhost` son para desarrollo; quítalos si
 no quieres que el bucket acepte subidas desde tu equipo.
 
 ## Pasos en el panel de Cloudflare

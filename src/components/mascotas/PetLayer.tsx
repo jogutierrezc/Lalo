@@ -648,12 +648,12 @@ export const PetLayer = forwardRef<PetLayerHandle, PetLayerProps>(
       engine.current?.setIdle();
     }, [settings.idle, settings.kind]);
 
-    // Cada personaje de Lalo tiene su gesto: se rehace al cambiar de personaje
+    // Cada personaje de Tally Studio tiene su gesto: se rehace al cambiar de personaje
     useEffect(() => {
       engine.current?.setGestures();
     }, [settings.kind]);
 
-    // Parpadeo de los personajes de Lalo
+    // Parpadeo de los personajes de Tally Studio
     useEffect(() => {
       let call: gsap.core.Tween | null = null;
       const blink = () => {

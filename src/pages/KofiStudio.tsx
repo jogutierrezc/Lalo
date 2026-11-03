@@ -90,7 +90,7 @@ export const KofiStudio: React.FC = () => {
       if (!alive) return;
       if (!result.ok) return setConnection(result.message);
       const s = result.data;
-      if (!s.configured) return setConnection(`Al servidor de Lalo le falta configuración para Ko-fi (${s.missing.join(', ')}).`);
+      if (!s.configured) return setConnection(`Al servidor de Tally Studio le falta configuración para Ko-fi (${s.missing.join(', ')}).`);
       stage.current?.setState({ raised: s.raised, recent: s.recent });
       setConnection(
         s.state === 'connected'
@@ -193,7 +193,7 @@ export const KofiStudio: React.FC = () => {
       <Nota role="status">
         {account
           ? connection || 'Comprobando la conexión con Ko-fi.'
-          : 'Los avisos reales necesitan la nube y el servidor de Lalo publicado: Ko-fi tiene que poder llegar a una dirección pública. Sin ellos, las fuentes solo enseñan avisos de ejemplo con la URL de muestra. El diseño y los ajustes sí viajan en la URL.'}
+          : 'Los avisos reales necesitan la nube y el servidor de Tally Studio publicado: Ko-fi tiene que poder llegar a una dirección pública. Sin ellos, las fuentes solo enseñan avisos de ejemplo con la URL de muestra. El diseño y los ajustes sí viajan en la URL.'}
       </Nota>
     </>
   );
@@ -308,7 +308,7 @@ export const KofiStudio: React.FC = () => {
         </div>
         <Pista>
           Solo suman los tipos de aviso con «Sumar a la meta» activado, y solo los apoyos en la moneda de la meta; los demás se anotan sin sumar. Lo
-          recaudado lo lleva el servidor de Lalo, una vez por aviso.
+          recaudado lo lleva el servidor de Tally Studio, una vez por aviso.
         </Pista>
       </Modulo>
 

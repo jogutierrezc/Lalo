@@ -1,11 +1,11 @@
-COMANDOS PARA MODERADORES · LALO STREAM SUITE
+COMANDOS PARA MODERADORES · TALLY STUDIO
 ==============================================
 
 Se escriben en el chat del canal. Solo funcionan si los escribe el streamer
 o alguien con la insignia de moderador.
 
 Cuando un comando funciona, en el directo sale una placa «Moderación» con tu
-nombre y suena un timbre. Lalo no contesta en el chat: la confirmación se ve
+nombre y suena un timbre. Tally Studio no contesta en el chat: la confirmación se ve
 en el stream, con el retraso normal del directo.
 
 REGLA DE ORO: el comando va solo en el mensaje, tal como está aquí.
@@ -96,7 +96,7 @@ REGLA DE ORO: el comando va solo en el mensaje, tal como está aquí.
 7. SI ALGO VA MAL
 -----------------
 
-  !actualizar              Recarga la fuente de Lalo en OBS.
+  !actualizar              Recarga la fuente de Tally Studio en OBS.
 
 
 8. CON EL COMANDO DE LA VOZ DELANTE
@@ -122,4 +122,4 @@ NOTAS PARA EL STREAMER
   - Cada comando necesita su capa abierta en OBS: los de la ruleta, la fuente
     de la ruleta; los de música, «Ahora suena»; !clip y !cortar, el saludo de
     raid. Con «Todo en uno» van todos.
-  - La lista sale del código de Lalo del 5 de octubre de 2026.
+  - La lista sale del código de Tally Studio del 5 de octubre de 2026.

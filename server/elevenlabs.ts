@@ -114,7 +114,7 @@ export function elevenModel(env: Env): string {
   return (env.ELEVENLABS_MODEL_ID ?? '').trim() || DEFAULT_ELEVEN_MODEL;
 }
 
-// Etiquetas canónicas de Lalo (las de Fish) → etiquetas de ElevenLabs v3
+// Etiquetas canónicas de Tally Studio (las de Fish) → etiquetas de ElevenLabs v3
 const TAGS: Record<string, string> = {
   happy: 'happy',
   whispering: 'whispers',

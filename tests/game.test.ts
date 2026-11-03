@@ -520,9 +520,9 @@ describe('registro del módulo', () => {
 
   it('el aviso de no afiliación es el texto oficial, con el nombre del producto, y tiene traducción', () => {
     expect(RIOT_DISCLAIMER_EN).toBe(
-      "Lalo Stream Suite isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc."
+      "Tally Studio isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc."
     );
-    expect(RIOT_DISCLAIMER_ES).toContain('Lalo Stream Suite no está respaldada por Riot Games');
+    expect(RIOT_DISCLAIMER_ES).toContain('Tally Studio no está respaldada por Riot Games');
     expect(RIOT_DISCLAIMER_ES).toContain('Riot Games, Inc.');
   });
 });

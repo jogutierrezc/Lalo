@@ -51,12 +51,12 @@ export async function fetchPrivateModel(env: Env, key: string): Promise<ModelByt
     const res = await getObject(config, key);
     if (res.status === 404) return { ok: false, reason: 'missing' };
     if (!res.ok) {
-      console.error(`[Lalo lux] modelo: R2 respondió ${res.status}`);
+      console.error(`[Tally Studio lux] modelo: R2 respondió ${res.status}`);
       return { ok: false, reason: 'error' };
     }
     return { ok: true, bytes: new Uint8Array(await res.arrayBuffer()) };
   } catch {
-    console.error('[Lalo lux] modelo: no se pudo leer del bucket privado');
+    console.error('[Tally Studio lux] modelo: no se pudo leer del bucket privado');
     return { ok: false, reason: 'error' };
   }
 }

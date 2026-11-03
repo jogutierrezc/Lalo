@@ -25,7 +25,7 @@ import { loadSettings } from '../types/settings';
 import { EVENT_SCOPES, missingScopes } from '../utils/twitchEvents';
 import '../styles/integraciones.css';
 
-/** Twitch: la cuenta con la que se entró en Lalo y qué puede leer Lalo de ella. */
+/** Twitch: la cuenta con la que se entró en Tally Studio y qué puede leer Tally Studio de ella. */
 const TwitchCard: React.FC = () => {
   const cloud = useCloudSession();
   const account = cloud.enabled && cloud.profile?.status === 'active' ? cloud.profile : null;
@@ -63,7 +63,7 @@ const TwitchCard: React.FC = () => {
   if (!cloud.enabled) {
     return (
       <ServiceCard mark="TW" name="Twitch" status="Sin la nube">
-        <p>Con la nube encendida, aquí aparece la cuenta de Twitch con la que entras en Lalo y los permisos que le has dado.</p>
+        <p>Con la nube encendida, aquí aparece la cuenta de Twitch con la que entras en Tally Studio y los permisos que le has dado.</p>
         <p className="cab-hint">Sin la nube, las capas leen el chat de tu canal sin iniciar sesión: basta con escribir el nombre del canal en Inicio.</p>
       </ServiceCard>
     );
@@ -71,7 +71,7 @@ const TwitchCard: React.FC = () => {
   if (!withTwitch) {
     return (
       <ServiceCard mark="TW" name="Twitch" status="Sin conectar">
-        <p>Esta cuenta de Lalo no está conectada a un canal de Twitch.</p>
+        <p>Esta cuenta de Tally Studio no está conectada a un canal de Twitch.</p>
       </ServiceCard>
     );
   }
@@ -85,7 +85,7 @@ const TwitchCard: React.FC = () => {
       <ul className="ic-perm">
         <li data-y="">
           <b>SÍ</b>
-          <span>Identificarte en Lalo con tu cuenta de Twitch</span>
+          <span>Identificarte en Tally Studio con tu cuenta de Twitch</span>
         </li>
         {EVENT_SCOPES.map((item) => {
           const granted = missing !== null && !missing.includes(item.scope);
@@ -126,7 +126,7 @@ export const Integraciones: React.FC = () => {
         <SuiteNav currentApp="integraciones" channel={voice.channel} />
 
         <p className="ig-lede">
-          Conecta cuentas de otros servicios. Cada ficha dice con qué cuenta está conectada, qué puede leer Lalo y cómo desconectarla. Las capas que
+          Conecta cuentas de otros servicios. Cada ficha dice con qué cuenta está conectada, qué puede leer Tally Studio y cómo desconectarla. Las capas que
           usan estos servicios se ajustan en «Ahora suena», «Ko-fi» y «Alertas de juego».
         </p>
 
@@ -138,7 +138,7 @@ export const Integraciones: React.FC = () => {
 
           <ServiceCard mark="LF" name="Last.fm" status="Próximamente" tone="soon">
             <p>
-              Un puente para quien no usa Spotify. Apple Music y YouTube Music pueden enviar lo que escuchas a Last.fm (scrobbling), y Lalo leería de
+              Un puente para quien no usa Spotify. Apple Music y YouTube Music pueden enviar lo que escuchas a Last.fm (scrobbling), y Tally Studio leería de
               ahí la canción para la misma capa.
             </p>
             <p className="cab-hint">Pendiente de verificar: cómo se activa el envío a Last.fm desde cada servicio y con qué retraso llega.</p>
@@ -164,7 +164,7 @@ export const Integraciones: React.FC = () => {
               ). No permite controlar la reproducción ni ver listas o biblioteca.
             </li>
             <li>
-              <b>Por qué se guarda algo en el servidor:</b> el navegador de OBS no tiene sesión, así que no puede hablar con Spotify. El servidor de Lalo
+              <b>Por qué se guarda algo en el servidor:</b> el navegador de OBS no tiene sesión, así que no puede hablar con Spotify. El servidor de Tally Studio
               guarda cifrado tu permiso y es quien pregunta. OBS solo recibe título, artista, álbum, portada y tiempos.
             </li>
             <li>
@@ -172,21 +172,21 @@ export const Integraciones: React.FC = () => {
               entre 1 y 10 segundos en verse.
             </li>
             <li>
-              <b>Ko-fi:</b> pegas en tu Ko-fi una dirección personal de Lalo, y Ko-fi envía ahí cada pago con una clave de verificación que solo
-              conocéis tú y Lalo. Lalo comprueba la clave y descarta lo que no coincida.
+              <b>Ko-fi:</b> pegas en tu Ko-fi una dirección personal de Tally Studio, y Ko-fi envía ahí cada pago con una clave de verificación que solo
+              conocéis tú y Tally Studio. Tally Studio comprueba la clave y descarta lo que no coincida.
             </li>
             <li>
               <b>Privacidad en Ko-fi:</b> si el apoyo no es público, sale como «Alguien», sin mensaje, y la voz no lo lee. El correo y la dirección de
               envío que manda Ko-fi no se guardan ni se muestran nunca.
             </li>
             <li>
-              <b>Riot Games:</b> escribes tu Riot ID y eliges tu servidor; no hay contraseña ni inicio de sesión de Riot. El servidor de Lalo guarda tu
+              <b>Riot Games:</b> escribes tu Riot ID y eliges tu servidor; no hay contraseña ni inicio de sesión de Riot. El servidor de Tally Studio guarda tu
               Riot ID, tu servidor y el identificador que Riot da a esa cuenta, y con su propia clave pregunta por tu rango, tu partida en curso, tu
               última partida y tu maestría. De cada partida solo se leen tus datos, nunca los de rivales o compañeros.
             </li>
             <li>
               <b>Retraso en Riot:</b> Riot no avisa de los cambios y publica el resultado al terminar la partida. La capa pregunta cada medio minuto,
-              así que una alerta puede tardar entre uno y dos minutos. Las partidas y el rango no se guardan en la base de datos de Lalo.
+              así que una alerta puede tardar entre uno y dos minutos. Las partidas y el rango no se guardan en la base de datos de Tally Studio.
             </li>
           </ul>
         </section>

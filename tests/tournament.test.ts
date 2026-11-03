@@ -425,7 +425,7 @@ describe('torneos: normalización', () => {
       sponsors: 'muchos',
       commands: { winner: '!x', undo: '!x', main: '!y' },
     });
-    expect(odd).toMatchObject({ size: 8, teamSize: 5, style: 'grieta', color: DEFAULT_TOURNAMENT_SETTINGS.color, victorySec: 15, name: 'Copa Lalo', sponsors: [] });
+    expect(odd).toMatchObject({ size: 8, teamSize: 5, style: 'grieta', color: DEFAULT_TOURNAMENT_SETTINGS.color, victorySec: 15, name: 'Copa Tally', sponsors: [] });
     expect(odd.voiceId).toBe(ANNOUNCER_VOICE_ID);
     // Dos comandos iguales no se distinguirían
     expect(odd.commands).toEqual(DEFAULT_TOURNAMENT_COMMANDS);

@@ -8,12 +8,12 @@
  *   POST /api/riot/accept     (sesión) acepta la versión nueva de la política con la cuenta ya vinculada: { policy }
  *
  * La política de uso de la integración (src/legal/riot.ts) solo se pide aquí,
- * al vincular: no forma parte de la aceptación general de Lalo. `policy` tiene
+ * al vincular: no forma parte de la aceptación general de Tally Studio. `policy` tiene
  * que ser la versión vigente; se guarda con su fecha junto a la cuenta.
  *   POST /api/riot/unlink     (sesión) borra lo guardado
  *   GET  /api/riot/state?k=   (clave privada de widget) la foto de la cuenta, para la capa de OBS
  *
- * No hay inicio de sesión de Riot (RSO): el streamer escribe su Riot ID y Lalo
+ * No hay inicio de sesión de Riot (RSO): el streamer escribe su Riot ID y Tally Studio
  * lo resuelve con account-v1. Es un dato público; nada impide escribir el de
  * otra persona, y el RSO lo cerraría más adelante.
  *
@@ -192,7 +192,7 @@ export async function handleRiot(action: RiotAction, req: IntegrationRequest, en
     if ('kind' in account) {
       if (account.kind === 'not_found') return fail(404, 'riot_not_found', 'Riot no conoce ese Riot ID. Revisa el nombre y la etiqueta.');
       if (account.kind === 'limited') return fail(429, 'riot_limited', 'Riot pide esperar un momento. Prueba otra vez en un minuto.');
-      if (account.kind === 'forbidden') return fail(502, 'riot_key', 'La clave de Riot del servidor no vale o caducó. La renueva quien administra Lalo.');
+      if (account.kind === 'forbidden') return fail(502, 'riot_key', 'La clave de Riot del servidor no vale o caducó. La renueva quien administra Tally Studio.');
       return fail(502, 'riot_error', 'Riot no respondió. Prueba otra vez en un momento.');
     }
     const riotId = `${account.gameName}#${account.tagLine}`;

@@ -76,7 +76,7 @@ export const Aceptacion: React.FC<AceptacionProps> = ({ aceptacion, onHecho, acc
       <TituloPaso>{renovacion ? 'Los términos cambiaron' : 'Antes de empezar'}</TituloPaso>
       <p className="cab-hint">
         {renovacion
-          ? 'Hay una versión nueva de estos documentos. Para seguir usando Lalo hace falta aceptarla.'
+          ? 'Hay una versión nueva de estos documentos. Para seguir usando Tally Studio hace falta aceptarla.'
           : 'Cuatro cosas que conviene saber, en claro. El texto completo está en los enlaces.'}
       </p>
 

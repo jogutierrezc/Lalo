@@ -1,8 +1,8 @@
-# Comandos de moderación para la voz del chat · Lalo Stream Suite
+# Comandos de moderación para la voz del chat · Tally Studio
 
-Se escriben en el chat de Twitch del canal. Solo los obedece Lalo si los escribe el **streamer** o alguien con la **insignia de moderador**.
+Se escriben en el chat de Twitch del canal. Solo los obedece Tally Studio si los escribe el **streamer** o alguien con la **insignia de moderador**.
 
-Cuando un comando funciona, en el directo sale una placa «Moderación» con quién lo usó y suena un timbre (y una locución). Lalo **no responde en el chat**: la confirmación se ve y se oye en el stream.
+Cuando un comando funciona, en el directo sale una placa «Moderación» con quién lo usó y suena un timbre (y una locución). Tally Studio **no responde en el chat**: la confirmación se ve y se oye en el stream.
 
 > **Regla de oro:** el comando va solo en el mensaje. `!pausa` funciona; `!pausa porfa` no.
 > Cada comando también vale con el prefijo de la voz y sin la segunda exclamación: `!s pausa` = `!pausa`.
@@ -49,7 +49,7 @@ El usuario puede ir con o sin `@`. Ejemplo: `!silenciar pau_rl 30`
 
 | Comando | Qué hace | Alias |
 |---|---|---|
-| `!actualizar` | Recarga la fuente de Lalo en OBS | `!reload` `!update` `!reiniciar` |
+| `!actualizar` | Recarga la fuente de Tally Studio en OBS | `!reload` `!update` `!reiniciar` |
 
 ---
 
@@ -82,5 +82,5 @@ Etiquetas de emoción (al principio del mensaje): `[feliz]` `[emocionado]` `[tri
 
 - Los nombres de `!s`, `!so`, `!clip`, `!cortar`, `!ruleta`, `!cancion` y similares se pueden cambiar en el panel. Si los cambiaste, corrige esta lista antes de compartirla.
 - Cada comando necesita su capa abierta en OBS (ruleta, «Ahora suena», saludo de raid). Con «Todo en uno» van todos.
-- Si un mod escribe `!s pausa`, Lalo lo toma siempre como la orden de pausar, no como un mensaje para leer.
+- Si un mod escribe `!s pausa`, Tally Studio lo toma siempre como la orden de pausar, no como un mensaje para leer.
 - Fuente: `docs/comandos-para-moderadores.txt`, `docs/comandos-de-la-voz.txt` y `src/utils/staffVoice.ts`.

@@ -10,7 +10,7 @@
  * - Atiende también las pruebas que el panel envía por el bus a las fuentes
  *   abiertas en este mismo navegador (sirve sin cuenta en la nube).
  * - Con cada evento hace lo que el streamer eligió en «Power-ups»: lanzar una
- *   recompensa de Lalo (por la puerta común de src/utils/rewardsEngine.ts), un
+ *   recompensa de Tally Studio (por la puerta común de src/utils/rewardsEngine.ts), un
  *   aviso en pantalla, que la voz lea un mensaje, y poner el total nuevo de las
  *   metas de bits.
  * - Entrega además cada evento a `onEvent`: la ruleta lo usa para girar con los

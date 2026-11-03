@@ -328,7 +328,7 @@ export function fishProblem(action: 'crear' | 'borrar', status: number, body: st
  * Qué significa la respuesta de Fish Audio a un borrado:
  *   - deleted: el modelo se borró.
  *   - not_found / not_owned: el modelo no existe o no es de esta clave. Se quita
- *     solo del catálogo de Lalo.
+ *     solo del catálogo de Tally Studio.
  *   - failed: otro fallo (incluido el 401, que no distingue entre clave mala y
  *     modelo ajeno). No se toca el catálogo sin que el administrador lo decida.
  */

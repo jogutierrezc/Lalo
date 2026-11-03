@@ -30,7 +30,7 @@ export const CloudSetup: React.FC = () => {
         <section className="cab-mod">
           <h2>La nube está apagada</h2>
           <p className="cab-hint">
-            Ahora mismo Lalo guarda todo en este navegador y funciona sin cuentas. Con la nube encendida aparecen la
+            Ahora mismo Tally Studio guarda todo en este navegador y funciona sin cuentas. Con la nube encendida aparecen la
             pantalla de acceso, «Mi cuenta» y el portal de administración (códigos de afiliado, perfiles y planes).
           </p>
           <p className="cab-note">
@@ -105,7 +105,7 @@ export const CloudSetup: React.FC = () => {
             <span className="cab-mono">supabase/README.md</span> de este proyecto.
           </p>
           <p className="cab-hint">
-            Cuando las dos variables tengan valor, esta página desaparece del menú y al abrir Lalo verás la pantalla de
+            Cuando las dos variables tengan valor, esta página desaparece del menú y al abrir Tally Studio verás la pantalla de
             acceso. Si algo de los pasos 2 a 4 quedó a medias, el error aparecerá allí.
           </p>
         </section>

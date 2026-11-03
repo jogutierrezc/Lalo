@@ -3,7 +3,7 @@
  *
  * Lado de OBS de «Ahora suena». Va montada en el widget y:
  *
- * - Pregunta al servidor de Lalo cada cinco segundos qué suena, con la clave
+ * - Pregunta al servidor de Tally Studio cada cinco segundos qué suena, con la clave
  *   privada `k` de la URL. El servidor es quien habla con Spotify; aquí nunca
  *   llega un permiso. Entre preguntas la barra avanza por cálculo local.
  * - Un cambio de canción hace la transición del diseño. Un anuncio o «no suena

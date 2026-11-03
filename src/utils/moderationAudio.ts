@@ -1,7 +1,7 @@
 /**
  * src/utils/moderationAudio.ts
  *
- * Motor de retroalimentación sonora y locución para acciones de moderación en Lalo Stream Suite.
+ * Motor de retroalimentación sonora y locución para acciones de moderación en Tally Studio.
  *
  * Principios de Emil Kowalski:
  * - Cero dependencias externas (Web Audio API nativo + SpeechSynthesis).

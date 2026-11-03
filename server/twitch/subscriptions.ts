@@ -30,8 +30,8 @@
  *     es lo que dice la documentación general de autorización; NO está probado aquí.
  *   - stream.online (v1) solo pide broadcaster_user_id y ningún permiso.
  *   - channel.chat.message (v1) pide condition {broadcaster_user_id, user_id}, donde user_id es la
- *     cuenta de Twitch de Lalo (el bot global, TWITCH_BOT_USER_ID). Con webhook y token de
- *     aplicación, la cuenta Lalo debe haber concedido a la aplicación user:read:chat, user:write:chat
+ *     cuenta de Twitch de Tally Studio (el bot global, TWITCH_BOT_USER_ID). Con webhook y token de
+ *     aplicación, la cuenta Tally Studio debe haber concedido a la aplicación user:read:chat, user:write:chat
  *     y user:bot, y el streamer channel:bot; si no, Twitch responde 403. Sin coste de suscripción
  *     (comprobado en la referencia de EventSub, 2026-10-25). NO está probado contra Twitch real.
  *     Modo streamer (senderMode.ts): user_id es el propio streamer (= broadcaster_user_id); él concede
@@ -53,11 +53,11 @@ export interface WantedSubscription {
   scope: string;
   /** La condición lleva también moderator_user_id, que aquí es el propio canal (autoriza el dueño, no un moderador). */
   moderator?: boolean;
-  /** La condición lleva user_id = la cuenta Lalo (TWITCH_BOT_USER_ID) en vez de moderator_user_id. */
+  /** La condición lleva user_id = la cuenta Tally Studio (TWITCH_BOT_USER_ID) en vez de moderator_user_id. */
   bot?: boolean;
 }
 
-/** Lo que Lalo pide a Twitch para cada canal. */
+/** Lo que Tally Studio pide a Twitch para cada canal. */
 export const WANTED: readonly WantedSubscription[] = [
   { type: EVENT_TYPES.bits, version: '1', scope: 'bits:read' },
   { type: EVENT_TYPES.powerup, version: '1', scope: 'bits:read' },
@@ -68,7 +68,7 @@ export const WANTED: readonly WantedSubscription[] = [
 ];
 
 /**
- * La condición que Twitch exige a cada tipo. En el chat, `botUserId` es el user_id de la suscripción: la cuenta Lalo
+ * La condición que Twitch exige a cada tipo. En el chat, `botUserId` es el user_id de la suscripción: la cuenta Tally Studio
  * (modo global) o el propio streamer (modo streamer, ver senderMode.ts).
  */
 export function conditionFor(wanted: WantedSubscription, twitchUserId: string, botUserId = ''): Record<string, string> {
@@ -96,7 +96,7 @@ export interface Config {
   clientSecret: string;
   secret: string;
   callback: string;
-  /** Id de Twitch de la cuenta Lalo. Vacío si no está configurado: el chat se omite, lo demás sigue. */
+  /** Id de Twitch de la cuenta Tally Studio. Vacío si no está configurado: el chat se omite, lo demás sigue. */
   botUserId: string;
 }
 
@@ -163,7 +163,7 @@ export interface TwitchSubscription {
 const str = (value: unknown): string => (typeof value === 'string' ? value : '');
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** De la lista de Twitch, las suscripciones de Lalo para ese canal y esta dirección. */
+/** De la lista de Twitch, las suscripciones de Tally Studio para ese canal y esta dirección. */
 export function ownSubscriptions(data: unknown, twitchUserId: string, callback: string, botUserId = ''): TwitchSubscription[] {
   if (!Array.isArray(data)) return [];
   return data.filter(isObject).flatMap((item) => {
@@ -176,7 +176,7 @@ export function ownSubscriptions(data: unknown, twitchUserId: string, callback: 
     if (condition.broadcaster_user_id !== twitchUserId) return [];
     // Con moderator_user_id, solo cuenta la que autorizó el propio dueño del canal
     if (wanted.moderator && condition.moderator_user_id !== twitchUserId) return [];
-    // Con user_id, solo cuenta la que lee el chat como la cuenta Lalo (si no se sabe cuál es, vale cualquiera con user_id)
+    // Con user_id, solo cuenta la que lee el chat como la cuenta Tally Studio (si no se sabe cuál es, vale cualquiera con user_id)
     if (wanted.bot && (typeof condition.user_id !== 'string' || (botUserId && condition.user_id !== botUserId))) return [];
     if (transport.method !== 'webhook' || transport.callback !== callback) return [];
     return [
@@ -194,7 +194,7 @@ export function ownSubscriptions(data: unknown, twitchUserId: string, callback: 
 /** true si el tipo es de los del panel de eventos (Power-ups, seguidores, directo); el chat del bot no. */
 const isPanelType = (type: string): boolean => !WANTED.find((entry) => entry.type === type)?.bot;
 
-/** Una fila por tipo que Lalo quiere: la suscripción viva si la hay, si no la más reciente, o `missing`. */
+/** Una fila por tipo que Tally Studio quiere: la suscripción viva si la hay, si no la más reciente, o `missing`. */
 export function summarize(found: readonly TwitchSubscription[]): SubscriptionRow[] {
   // El chat (bot: true) no sale aquí: lo gestiona solo botChatPort desde la tarjeta «Bot en la nube»
   return WANTED.filter((entry) => !entry.bot).map(({ type }) => {
@@ -205,7 +205,7 @@ export function summarize(found: readonly TwitchSubscription[]): SubscriptionRow
 }
 
 /**
- * `chatUserId` filtra la suscripción del chat por su user_id (por defecto, la cuenta Lalo de la configuración).
+ * `chatUserId` filtra la suscripción del chat por su user_id (por defecto, la cuenta Tally Studio de la configuración).
  * Con '' vale cualquiera: sirve para encontrar y quitar la de otro modo de envío.
  */
 export async function listOwn(twitchUserId: string, config: Config, deps: Deps, chatUserId: string = config.botUserId): Promise<TwitchSubscription[]> {
@@ -230,7 +230,7 @@ export async function deleteOne(id: string, config: Config, deps: Deps): Promise
 }
 
 /**
- * `chatUserId`: user_id de la suscripción del chat (por defecto, la cuenta Lalo). Si es el propio canal
+ * `chatUserId`: user_id de la suscripción del chat (por defecto, la cuenta Tally Studio). Si es el propio canal
  * es el modo streamer: el 403 significa que el streamer no concedió user:read:chat, user:write:chat y user:bot.
  */
 export async function createOne(
@@ -241,7 +241,7 @@ export async function createOne(
   chatUserId: string = config.botUserId
 ): Promise<{ outcome: CreateOutcome; detail: string }> {
   if (wanted.bot && !chatUserId) {
-    return { outcome: 'skipped', detail: 'Falta configurar TWITCH_BOT_USER_ID (la cuenta de Twitch de Lalo) en el servidor.' };
+    return { outcome: 'skipped', detail: 'Falta configurar TWITCH_BOT_USER_ID (la cuenta de Twitch de Tally Studio) en el servidor.' };
   }
   const res = await helix(
     'POST',
@@ -261,7 +261,7 @@ export async function createOne(
     return { outcome: 'no_permission', detail: 'Falta que aceptes los permisos del chat (user:read:chat, user:write:chat y user:bot) para tu cuenta.' };
   }
   if (res.status === 403 && wanted.bot) {
-    return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope} del streamer o la autorización de la cuenta Lalo (user:read:chat, user:write:chat y user:bot).` };
+    return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope} del streamer o la autorización de la cuenta Tally Studio (user:read:chat, user:write:chat y user:bot).` };
   }
   if (res.status === 403 && wanted.scope) {
     return { outcome: 'no_permission', detail: `Falta el permiso ${wanted.scope}.` };
@@ -346,7 +346,7 @@ export async function handleSubscriptions(req: ApiRequest, env: Env = process.en
 
     return { status: 200, body: { results, subscriptions: summarize(await listOwn(twitchUserId, config, deps)) } };
   } catch (err) {
-    console.error('[Lalo eventos] suscripciones:', err instanceof Error ? err.message : 'error desconocido');
+    console.error('[Tally Studio eventos] suscripciones:', err instanceof Error ? err.message : 'error desconocido');
     return fail(502, 'twitch_error', 'No se pudo hablar con Twitch. Prueba de nuevo en un momento.');
   }
 }

@@ -274,10 +274,10 @@ export async function handleClipRequest(
     return result;
   } catch (err) {
     if (err instanceof TwitchError) {
-      console.error(`[Lalo cortos] Twitch: ${err.message}`);
+      console.error(`[Tally Studio cortos] Twitch: ${err.message}`);
       return fail(502, 'twitch_error', err.message);
     }
-    console.error('[Lalo cortos] Error inesperado:', err instanceof Error ? err.message : 'desconocido');
+    console.error('[Tally Studio cortos] Error inesperado:', err instanceof Error ? err.message : 'desconocido');
     return fail(502, 'twitch_error', 'No se pudo consultar a Twitch.');
   }
 }

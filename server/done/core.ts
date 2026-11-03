@@ -173,7 +173,7 @@ export async function modelChoice(lux: LuxDb, provider: LuxProvider, character: 
 async function recordUsage(lux: LuxDb, profile: LuxProfile, nowMs: number, choice: PickResult): Promise<void> {
   if (choice.cost <= 0 || !lux.addUsage) return;
   await lux.addUsage(profile.id, monthOf(nowMs), choice.cost).catch(() => {
-    console.error('[Lalo done] no se pudo registrar el consumo de créditos');
+    console.error('[Tally Studio done] no se pudo registrar el consumo de créditos');
   });
 }
 
@@ -217,7 +217,7 @@ export async function runModel(
     return { ok: true, text, model: choice.model, fellBack: choice.fellBack, character };
   } catch (err) {
     if (!(err instanceof NvidiaError)) throw err;
-    console.error(`[Lalo done] la IA falló (${err.code})`);
+    console.error(`[Tally Studio done] la IA falló (${err.code})`);
     return { ok: false, code: err.code };
   }
 }
@@ -240,7 +240,7 @@ export interface Delivered {
 export async function enqueueSpeech(done: DoneDb, profileId: string, out: Delivered, viewer: string | null, kind: DoneKind): Promise<void> {
   await done
     .insertSpeech({ profile_id: profileId, text: out.text, emotion: out.emotion, gesture: out.gesture, viewer, kind })
-    .catch(() => console.error('[Lalo done] no se pudo encolar la voz para el overlay'));
+    .catch(() => console.error('[Tally Studio done] no se pudo encolar la voz para el overlay'));
   await done.pruneSpeech(profileId, new Date(Date.now() - 10 * 60_000).toISOString()).catch(() => undefined);
 }
 

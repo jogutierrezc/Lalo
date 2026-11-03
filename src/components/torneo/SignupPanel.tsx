@@ -154,7 +154,7 @@ export const SignupPanel: React.FC<SignupPanelProps> = ({ signup, name, free, in
   if (status === 'off') {
     return (
       <p className="cab-note">
-        La inscripción por enlace necesita la nube: con tu cuenta de Lalo abierta, cada capitán apunta a su equipo desde una dirección que tú compartes.
+        La inscripción por enlace necesita la nube: con tu cuenta de Tally Studio abierta, cada capitán apunta a su equipo desde una dirección que tú compartes.
         Sin ella, los equipos se escriben aquí debajo, como siempre.
       </p>
     );
@@ -163,7 +163,7 @@ export const SignupPanel: React.FC<SignupPanelProps> = ({ signup, name, free, in
   if (status === 'error') {
     return (
       <p className="cab-note" role="status">
-        No se pudo leer tu enlace de inscripción. Comprueba tu conexión y recarga la página; si acabas de actualizar Lalo, puede faltar aplicar en
+        No se pudo leer tu enlace de inscripción. Comprueba tu conexión y recarga la página; si acabas de actualizar Tally Studio, puede faltar aplicar en
         Supabase la migración 0017. Mientras tanto, los equipos se escriben aquí debajo.
       </p>
     );

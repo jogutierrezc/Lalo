@@ -3,7 +3,7 @@
  *
  * Lógica pura del canal de eventos de Twitch y de los Power-ups, sin DOM ni red
  * para poder probarla: permisos que faltan, lectura de la lista de Power-ups de
- * Twitch, lectura de los eventos que entrega el servidor y qué hace Lalo con
+ * Twitch, lectura de los eventos que entrega el servidor y qué hace Tally Studio con
  * cada uno.
  */
 
@@ -156,10 +156,10 @@ export function parseTwitchEvent(kind: unknown, payload: unknown, test = false):
   return null;
 }
 
-// ---------- Qué hace Lalo con cada evento ----------
+// ---------- Qué hace Tally Studio con cada evento ----------
 
 export type PlannedAction =
-  /** Lanza una recompensa de Lalo por la puerta común (src/utils/rewardsEngine.ts). */
+  /** Lanza una recompensa de Tally Studio por la puerta común (src/utils/rewardsEngine.ts). */
   | { do: 'reward'; input: RewardTriggerInput }
   /** Aviso en pantalla con la placa de avisos de la suite. */
   | { do: 'plate'; tag: string; text: string; user: string }
@@ -335,15 +335,15 @@ export function subscriptionStatusText(status: string): { text: string; good: bo
     case 'webhook_callback_verification_pending':
       return { text: 'Twitch está comprobando la conexión. Vuelve a consultar en unos segundos.', good: true };
     case 'webhook_callback_verification_failed':
-      return { text: 'Twitch no pudo llegar al servidor de Lalo. Avisa a quien lo administra.', good: false };
+      return { text: 'Twitch no pudo llegar al servidor de Tally Studio. Avisa a quien lo administra.', good: false };
     case 'notification_failures_exceeded':
-      return { text: 'Twitch la apagó porque el servidor de Lalo falló demasiadas veces. Enciéndela de nuevo.', good: false };
+      return { text: 'Twitch la apagó porque el servidor de Tally Studio falló demasiadas veces. Enciéndela de nuevo.', good: false };
     case 'authorization_revoked':
       return { text: 'Se retiró el permiso en Twitch. Vuelve a autorizar y enciéndela de nuevo.', good: false };
     case 'user_removed':
       return { text: 'Twitch ya no encuentra el canal.', good: false };
     case 'version_removed':
-      return { text: 'Twitch retiró esta versión del aviso. Hace falta actualizar Lalo.', good: false };
+      return { text: 'Twitch retiró esta versión del aviso. Hace falta actualizar Tally Studio.', good: false };
     case 'missing':
       return { text: 'Apagada', good: false };
     default:

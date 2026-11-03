@@ -59,8 +59,8 @@ export const DEFAULT_TWITCHIO_COMMANDS: TwitchIOCommand[] = [
   },
   {
     id: 'cmd-3',
-    name: 'lalo',
-    response: 'Lalo Stream Suite: TTS con voces clonadas por IA + Alertas de cabina. ¡Todo en vivo!',
+    name: 'tally',
+    response: 'Tally Studio: TTS con voces clonadas por IA + Alertas de cabina. ¡Todo en vivo!',
     permission: 'all',
     cooldown: 15,
     enabled: true,
@@ -88,10 +88,10 @@ export const DEFAULT_TWITCHIO_COMMANDS: TwitchIOCommand[] = [
 
 export const DEFAULT_TWITCHIO_SETTINGS: TwitchIOSettings = {
   channel: 'laloplay_',
-  botUsername: 'LaloBot',
+  botUsername: 'TallyBot',
   prefix: '!',
   autoConnect: true,
-  welcomeMessage: '¡LaloBot conectado a la cabina de {channel} (Powered by TwitchIO)!',
+  welcomeMessage: '¡TallyBot conectado a la cabina de {channel} (Powered by TwitchIO)!',
   commands: DEFAULT_TWITCHIO_COMMANDS,
   eventsub: {
     follows: true,
