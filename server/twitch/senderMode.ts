@@ -43,6 +43,11 @@ export function globalBotId(env: Env): string {
   return TWITCH_ID.test(id) ? id : '';
 }
 
+/** El modo que de verdad se usa: «global» solo vale si hay cuenta Lalo configurada; si no, escribe el propio streamer. */
+export function effectiveSenderMode(mode: BotSenderMode, env: Env): BotSenderMode {
+  return mode === 'global' && !globalBotId(env) ? 'streamer' : mode;
+}
+
 /**
  * Id de la cuenta que escribe y lee el chat de ese canal: el del propio streamer en modo 'streamer',
  * el del bot global en 'global'. '' si no se puede saber (modo global sin TWITCH_BOT_USER_ID, o canal inválido).

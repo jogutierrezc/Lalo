@@ -15,6 +15,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { MigrationMissingError, type Env } from '../integrations/store.js';
 import { cleanCommandName } from './commandNames.js';
+import { effectiveSenderMode } from './senderMode.js';
 import type { CommandPermission } from '../../src/types/twitchio.js';
 
 export const BOT_PERMISSIONS: readonly CommandPermission[] = ['all', 'sub', 'mod', 'broadcaster'];
@@ -182,7 +183,8 @@ export function supabaseBotDb(env: Env): BotDb | null {
     check(error);
     if (!data) return null;
     const row = data as { enabled: boolean; prefix: string; welcome_message: string; sender_mode: BotSenderMode };
-    return { enabled: row.enabled, prefix: row.prefix, welcomeMessage: row.welcome_message, senderMode: row.sender_mode };
+    // Sin cuenta Lalo configurada (TWITCH_BOT_USER_ID), «global» no tiene quién escriba: se usa la cuenta del streamer
+    return { enabled: row.enabled, prefix: row.prefix, welcomeMessage: row.welcome_message, senderMode: effectiveSenderMode(row.sender_mode, env) };
   }
 
   return {
